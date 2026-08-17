@@ -60,14 +60,24 @@ Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day
 
 ---
 
-## 🔴 REMAINING — today (Day 1)
+## ✅ DONE — early today (Tue 18 Aug, before standup)
+
+| ID | Card | Size | Description |
+|---|---|---|---|
+| KEA-28 | ADR-0005 — the two-speed question | M | Evaluated a fast-model / slow-model split for the voice channel. **Outcome: adopt the shape, skip the second model.** Layer 0 knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster, can't fabricate, and loads no competing weights |
+| KEA-29 | Architecture diagrams | M | AI pipeline + backend ER model, published for the team |
+| KEA-30 | Shareable Mac benchmark script | M | `scripts/bench-mac.sh` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
+
+---
+
+## 🔴 CARRIED OVER — from Day 1, still open
 
 Blocked on other people or other machines. None of it is code.
 
 | ID | Card | Size | Description | Blocked on |
 |---|---|---|---|---|
-| KEA-21 | Benchmark both Macs | S | `make bench` on the M4/48 GB and M5/16 GB, three model sizes. Record `eval rate` per model per machine | Physical access |
-| KEA-22 | Confirm the M4 variant | S | Base / Pro / Max — bandwidth differs sharply and sets the voice ceiling | Physical access |
+| KEA-21 | Benchmark both Macs | S | Send `scripts/bench-mac.sh` (KEA-30) to whoever has them. Record words/sec per model per machine | Physical access |
+| KEA-22 | Confirm the M4 variant | S | Base / Pro / Max — bandwidth differs sharply and sets the voice ceiling. The script reports it | Physical access |
 | KEA-23 | Hand `openapi.json` to the frontend | S | They run `npx openapi-typescript`. **Unblocks four people** — do it first | Nothing |
 | KEA-24 | Circulate the four ADRs | S | Get agreement, or get the disagreement early | Team |
 | KEA-25 | Confirm the 7-line demo script | M | Everything downstream derives from it — intents, seeding, golden set | Team |
@@ -76,17 +86,24 @@ Blocked on other people or other machines. None of it is code.
 
 ---
 
-## 📋 TO DO — rest of Sprint 2
+## 🟡 IN PROGRESS / TO DO — today (Tue 18 Aug, Day 2)
 
-### Day 2 — Tue 18 Aug · seed data
+The theme is **replace the placeholders with real data.** Right now five households are
+hand-shaped numbers in a Python file; by tonight they should be a real database.
 
 | ID | Card | Size | Description |
 |---|---|---|---|
-| KEA-30 | Half-hourly data generator | L | Replace the shaped fixtures with generated half-hourly readings. AC: 5 households, 31 days, 48 readings/day |
-| KEA-31 | Map each household to a demo line | S | A finding with no household can't be demoed; a household serving no line is data nobody sees |
-| KEA-32 | SQLAlchemy + Alembic + SQLite | M | AC: `alembic upgrade head` builds the schema from empty |
-| KEA-33 | Bind session → `customer_id` | S | Fake auth is fine; the binding must exist now. Retrofitting identity is painful |
-| KEA-34 | `docker-compose.yml` for the app | M | Ollama stays **native** — Docker on macOS has no Apple GPU access |
+| KEA-31 | Implement the data model | L | Build the schema from the ER diagram: customer, meter, reading, tariff, benchmark, weather_day, conversation, turn, fact_bundle, verification, token_usage, escalation. **AC:** `alembic upgrade head` builds it from empty |
+| KEA-32 | Half-hourly data generator | L | 5 households × 31 days × 48 readings. Each shaped to demo one finding. **AC:** the July household reproduces the published figures through the real pipeline, not just the fixture |
+| KEA-33 | Migrate fixtures → database | M | Swap `app/analytics/fixtures.py` for repository queries. **AC:** all 40 tests still pass |
+| KEA-34 | Map each household to a demo line | S | A finding with no household can't be demoed; a household serving no line is data nobody sees |
+| KEA-35 | Bind session → `customer_id` | S | Fake auth is fine; the binding must exist now. Retrofitting identity is painful |
+| KEA-36 | Persist turns + verification + tokens | M | Start writing the evidence tables from the first real conversation. **This is the cost projection and the "0 fabricated figures" claim** — it doesn't exist retroactively |
+| KEA-37 | `docker-compose.yml` for the app | M | Ollama stays **native** — Docker on macOS has no Apple GPU access |
+
+---
+
+## 📋 TO DO — rest of Sprint 2
 
 ### Day 3 — Wed 19 Aug · walking skeleton
 
