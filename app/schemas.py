@@ -125,7 +125,7 @@ class VerificationReport(BaseModel):
     """Layer 3's output. This is the evidence behind the pitch — log every one."""
 
     passed: bool
-    checked: list[str] = Field(default_factory=list, description="numeric tokens found in the draft")
+    checked: list[str] = Field(default_factory=list, description="numeric tokens in the draft")
     unverified: list[str] = Field(default_factory=list, description="tokens with no matching fact")
     regenerated: bool = False
     fell_back_to_template: bool = False

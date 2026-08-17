@@ -34,6 +34,8 @@ from app.analytics.engine import (
     standing_load_kwh_per_day,
 )
 
+COMPARISON_BASELINE = 6.5  # TODO Day 4: derive from the 37%-more-than-similar-homes figure
+
 DATA = pathlib.Path(__file__).parent / "data" / "july_2026_daily.json"
 
 pytestmark = pytest.mark.skipif(
@@ -67,25 +69,25 @@ def test_standing_load_is_about_2_4_kwh_per_day(july: UsageWindow) -> None:
 
 def test_spike_explains_only_about_a_tenth_of_the_overshoot(july: UsageWindow) -> None:
     """The line that lands in the room: the spike everyone stares at is not the money."""
-    spike_kwh, sustained_kwh = overshoot_attribution(july)
+    spike_kwh, sustained_kwh = overshoot_attribution(july, COMPARISON_BASELINE)
     share = spike_kwh / (spike_kwh + sustained_kwh) * 100
     assert share == pytest.approx(11.0, abs=4.0)
     assert sustained_kwh > spike_kwh * 5
 
 
 def test_annual_standing_load_cost_is_about_290(july: UsageWindow) -> None:
-    bundle = build_why_high(july)
+    bundle = build_why_high(july, COMPARISON_BASELINE)
     annual = bundle.value_index()["standing_load_annual_cost"]
     assert annual == pytest.approx(290.0, abs=40.0)
 
 
 def test_spike_cost_is_small(july: UsageWindow) -> None:
-    bundle = build_why_high(july)
+    bundle = build_why_high(july, COMPARISON_BASELINE)
     assert bundle.value_index()["spike_cost"] < 10.0
 
 
 def test_bundle_forbids_naming_an_appliance(july: UsageWindow) -> None:
     """Half-hourly data cannot identify appliances. Our refusal to name one was
     correct and must survive into the product."""
-    bundle = build_why_high(july)
+    bundle = build_why_high(july, COMPARISON_BASELINE)
     assert any("appliance" in c.lower() for c in bundle.caveats)

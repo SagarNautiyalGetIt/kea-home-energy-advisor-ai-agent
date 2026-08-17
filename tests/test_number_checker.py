@@ -19,7 +19,9 @@ def bundle() -> FactBundle:
         period="July 2026",
         facts=[
             Fact.energy("standing_load", 2.4, "Load running every day", per_day=True),
-            Fact.money("standing_load_annual_cost", 289.60, "Annual cost of that load", per_year=True),
+            Fact.money(
+                "standing_load_annual_cost", 289.60, "Annual cost of that load", per_year=True
+            ),
             Fact.money("spike_cost", 2.60, "Cost of the spike"),
             Fact.percent("spike_share", 11.0, "Share the spike explains"),
         ],

@@ -32,12 +32,16 @@ _H_D = [11.2, 10.9, 11.4, 11.0, 10.8, 11.1, 9.2, 7.4, 5.1, 3.8, 3.2, 3.0, 2.9, 3
 _H_E = [6.1, 6.3, 6.0, 6.2, 6.1, 6.4, 6.0, 6.2, 6.1, 6.3, 6.0, 6.2, 6.1, 6.0,
         6.3, 6.2, 6.1, 6.0, 6.2, 6.3, 6.1, 6.0, 6.2, 6.1, 6.3, 6.0, 6.2, 6.1, 6.0, 6.2, 6.1]
 
-_HOUSEHOLDS: dict[str, tuple[str, list[float]]] = {
-    "H-A": ("High standing load", _H_A),
-    "H-B": ("Cold-snap driven", _H_B),
-    "H-C": ("One-off behavioural spike", _H_C),
-    "H-D": ("Usage collapse (hardship signal)", _H_D),
-    "H-E": ("Candidate for a different tariff", _H_E),
+# (label, daily kWh, what similar homes use per day)
+# The comparison baseline is the retailer's benchmark, not derived from the household —
+# see overshoot_attribution(). These placeholder values are chosen so each household
+# tells its intended story; Day 2 replaces them with real seeded data.
+_HOUSEHOLDS: dict[str, tuple[str, list[float], float]] = {
+    "H-A": ("High standing load", _H_A, 6.5),
+    "H-B": ("Cold-snap driven", _H_B, 7.0),
+    "H-C": ("One-off behavioural spike", _H_C, 4.0),
+    "H-D": ("Usage collapse (hardship signal)", _H_D, 8.0),
+    "H-E": ("Candidate for a different tariff", _H_E, 6.0),
 }
 
 PERIOD = "July 2026"
@@ -46,8 +50,13 @@ PERIOD = "July 2026"
 def get_window(customer_id: str) -> UsageWindow:
     if customer_id not in _HOUSEHOLDS:
         raise KeyError(f"unknown household {customer_id!r}; known: {sorted(_HOUSEHOLDS)}")
-    _, daily = _HOUSEHOLDS[customer_id]
+    _, daily, _baseline = _HOUSEHOLDS[customer_id]
     return UsageWindow(customer_id=customer_id, period=PERIOD, daily_kwh=list(daily))
+
+
+def comparison_baseline(customer_id: str) -> float:
+    """What similar homes use per day. External benchmark, never derived from the house."""
+    return _HOUSEHOLDS[customer_id][2]
 
 
 def label(customer_id: str) -> str:

@@ -42,7 +42,16 @@ async def narrate_verified(
     report = VerificationReport(passed=False)
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        draft = await _generate(provider, bundle, question)
+        try:
+            draft = await _generate(provider, bundle, question)
+        except Exception as exc:  # noqa: BLE001 - any provider failure degrades, never 500s
+            # Model unreachable, throttled, or timed out. A boring correct answer beats
+            # a stack trace, and it means the frontend can integrate before anyone has
+            # a model installed.
+            log.error("provider %s unavailable (%s) — serving template", provider.name, exc)
+            report.fell_back_to_template = True
+            return template_fallback(bundle), report
+
         report = verify(draft, bundle)
         report.regenerated = attempt > 1
 

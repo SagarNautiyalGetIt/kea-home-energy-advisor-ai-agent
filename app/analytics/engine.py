@@ -71,17 +71,35 @@ def spike_days(window: UsageWindow, threshold: float = 1.5) -> list[tuple[int, f
     return [(i, v) for i, v in enumerate(window.daily_kwh) if v > median * threshold]
 
 
-def overshoot_attribution(window: UsageWindow) -> tuple[float, float]:
-    """Split consumption above the standing load into (spike_kwh, sustained_kwh).
+def overshoot_attribution(
+    window: UsageWindow,
+    comparison_baseline_kwh_per_day: float,
+    spike_threshold: float = 1.5,
+) -> tuple[float, float]:
+    """Split the overshoot vs a comparison baseline into (spike_kwh, sustained_kwh).
 
     This is the finding the pitch turns on: the spike everyone stares at is small,
     and the sustained load nobody shows you is where the money actually goes.
+
+    **The baseline must be supplied, not derived from the household itself.** The
+    published 89/11 split is measured against what similar homes use, not against
+    the house's own floor — a house whose every day sits just above its own minimum
+    has almost no "sustained" component by that definition, which is an artefact of
+    the maths rather than a fact about the house. Making the comparison explicit
+    keeps the modelling assumption visible instead of buried.
+
+    Calibrate against the real July measurements on Day 4; test_analytics_july.py
+    holds the published targets.
     """
-    base = standing_load_kwh_per_day(window)
-    above_base = [max(0.0, v - base) for v in window.daily_kwh]
-    median_above = statistics.median(above_base)
-    spike_kwh = sum(max(0.0, v - median_above) for v in above_base)
-    sustained_kwh = sum(above_base) - spike_kwh
+    daily = window.daily_kwh
+    median_daily = statistics.median(daily)
+
+    # A spike is an anomalous day. Its contribution is only the excess over a
+    # normal day for this household — not the whole day's usage.
+    spike_kwh = sum(v - median_daily for v in daily if v > median_daily * spike_threshold)
+
+    total_overshoot = sum(max(0.0, v - comparison_baseline_kwh_per_day) for v in daily)
+    sustained_kwh = max(0.0, total_overshoot - spike_kwh)
     return spike_kwh, sustained_kwh
 
 
@@ -108,9 +126,11 @@ _ILLUSTRATIVE_PRICE = (
 )
 
 
-def build_why_high(window: UsageWindow) -> FactBundle:
+def build_why_high(window: UsageWindow, comparison_baseline_kwh_per_day: float) -> FactBundle:
+    """The flagship answer. `comparison_baseline_kwh_per_day` is what similar homes
+    use — it comes from the retailer's benchmark, not from this household."""
     base = standing_load_kwh_per_day(window)
-    spike_kwh, sustained_kwh = overshoot_attribution(window)
+    spike_kwh, sustained_kwh = overshoot_attribution(window, comparison_baseline_kwh_per_day)
     price = window.unit_price_nzd
     total_overshoot = spike_kwh + sustained_kwh
     spike_share = (spike_kwh / total_overshoot * 100) if total_overshoot else 0.0

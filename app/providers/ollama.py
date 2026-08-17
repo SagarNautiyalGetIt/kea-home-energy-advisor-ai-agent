@@ -52,26 +52,29 @@ class OllamaProvider:
                 "num_predict": max_tokens,
             },
         }
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", f"{self.base_url}/api/generate", json=payload) as r:
-                r.raise_for_status()
-                async for line in r.aiter_lines():
-                    if not line:
-                        continue
-                    try:
-                        chunk = json.loads(line)
-                    except json.JSONDecodeError:
-                        log.warning("ollama: unparseable line %r", line[:120])
-                        continue
-                    if chunk.get("response"):
-                        yield chunk["response"]
-                    if chunk.get("done"):
-                        # Ollama reports usage on the final chunk. Capture it —
-                        # this is the input to the cost projection.
-                        self.last_usage = TokenUsage(
-                            prompt_tokens=chunk.get("prompt_eval_count", 0),
-                            completion_tokens=chunk.get("eval_count", 0),
-                        )
+        url = f"{self.base_url}/api/generate"
+        async with (
+            httpx.AsyncClient(timeout=self._timeout) as client,
+            client.stream("POST", url, json=payload) as r,
+        ):
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    log.warning("ollama: unparseable line %r", line[:120])
+                    continue
+                if chunk.get("response"):
+                    yield chunk["response"]
+                if chunk.get("done"):
+                    # Ollama reports usage on the final chunk. Capture it —
+                    # this is the input to the cost projection.
+                    self.last_usage = TokenUsage(
+                        prompt_tokens=chunk.get("prompt_eval_count", 0),
+                        completion_tokens=chunk.get("eval_count", 0),
+                    )
 
     async def health(self) -> bool:
         try:

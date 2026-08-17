@@ -91,6 +91,7 @@ def build_user_prompt(bundle: FactBundle, question: str) -> str:
 
     parts.append(f"The customer asked: \"{question}\"\n")
     parts.append(f"Your task: {task}\n")
-    parts.append(f"FIGURES (use these exact values, copy them as written):\n{bundle.render_for_prompt()}\n")
+    parts.append("FIGURES (use these exact values, copy them as written):")
+    parts.append(f"{bundle.render_for_prompt()}\n")
     parts.append("ANSWER:")
     return "\n".join(parts)

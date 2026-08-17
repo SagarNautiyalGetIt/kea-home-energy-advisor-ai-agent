@@ -39,7 +39,7 @@ def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
     if intent is Intent.WHAT_WILL_I_PAY:
         return build_what_will_i_pay(window, DAYS_IN_JULY)
     if intent in (Intent.WHY_HIGH, Intent.USING_MORE_THAN_USUAL, Intent.WHAT_COSTS_MOST):
-        return build_why_high(window)
+        return build_why_high(window, fixtures.comparison_baseline(customer_id))
 
     # Hardship and out-of-scope carry no figures on purpose: nothing to fabricate.
     return FactBundle(customer_id=customer_id, intent=intent, period=window.period)
@@ -138,7 +138,8 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     provider = get_provider()
 
     async def event_stream():
-        yield f"event: meta\ndata: {json.dumps({'intent': routing.intent, 'escalate': routing.is_escalation})}\n\n"
+        meta = json.dumps({"intent": routing.intent, "escalate": routing.is_escalation})
+        yield f"event: meta\ndata: {meta}\n\n"
         text, report = await narrate_verified(provider, bundle, req.message)
         for sentence in text.split(". "):
             if sentence.strip():

@@ -60,7 +60,9 @@ _RULES: list[tuple[Intent, re.Pattern[str]]] = [
     ),
     (
         Intent.WHY_HIGH,
-        re.compile(r"\b(why|high|expensive|so much|explain).{0,40}\b(bill|power|usage|charge)", re.I),
+        re.compile(
+            r"\b(why|high|expensive|so much|explain).{0,40}\b(bill|power|usage|charge)", re.I
+        ),
     ),
     (
         Intent.WHY_HIGH,
