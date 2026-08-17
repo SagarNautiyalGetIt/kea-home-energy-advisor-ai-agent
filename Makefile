@@ -28,8 +28,8 @@ pull:  ## download the candidate models (run natively on macOS, NOT in Docker)
 	ollama pull gemma3:4b
 	ollama pull qwen3:4b
 
-bench:  ## measure tokens/sec for each candidate on this machine
-	./scripts/benchmark.sh
+bench:  ## measure words/sec for each candidate model on this machine
+	cd "scripts/Device Benchmarking" && bash bench-mac.sh
 
 spec:  ## write the OpenAPI spec for the frontend to generate types from
 	.venv/bin/python -c "import json, app.main as m; print(json.dumps(m.app.openapi(), indent=2))" > openapi.json

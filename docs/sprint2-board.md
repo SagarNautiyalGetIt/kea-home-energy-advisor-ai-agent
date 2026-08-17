@@ -66,7 +66,7 @@ Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day
 |---|---|---|---|
 | KEA-28 | ADR-0005 — the two-speed question | M | Evaluated a fast-model / slow-model split for the voice channel. **Outcome: adopt the shape, skip the second model.** Layer 0 knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster, can't fabricate, and loads no competing weights |
 | KEA-29 | Architecture diagrams | M | AI pipeline + backend ER model, published for the team |
-| KEA-30 | Shareable Mac benchmark script | M | `scripts/bench-mac.sh` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
+| KEA-30 | Shareable Mac benchmark script | M | `scripts/Device Benchmarking/` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
 
 ---
 
@@ -76,7 +76,7 @@ Blocked on other people or other machines. None of it is code.
 
 | ID | Card | Size | Description | Blocked on |
 |---|---|---|---|---|
-| KEA-21 | Benchmark both Macs | S | Send `scripts/bench-mac.sh` (KEA-30) to whoever has them. Record words/sec per model per machine | Physical access |
+| KEA-21 | Benchmark both Macs | S | Send `scripts/Device Benchmarking/bench-mac.sh` (KEA-30) to whoever has them. Record words/sec per model per machine | Physical access |
 | KEA-22 | Confirm the M4 variant | S | Base / Pro / Max — bandwidth differs sharply and sets the voice ceiling. The script reports it | Physical access |
 | KEA-23 | Hand `openapi.json` to the frontend | S | They run `npx openapi-typescript`. **Unblocks four people** — do it first | Nothing |
 | KEA-24 | Circulate the four ADRs | S | Get agreement, or get the disagreement early | Team |

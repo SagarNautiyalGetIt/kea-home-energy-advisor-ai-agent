@@ -16,7 +16,7 @@ Team HAKAS, MIT Internship 2026. Sprint 2: **17–28 August 2026**.
 make setup                     # venv + deps
 brew install --cask ollama     # macOS: native install, NOT the Docker image
 make pull                      # download the candidate models
-make bench                     # measure tokens/sec on this machine
+make bench                     # measure words/sec on this machine
 make dev                       # API on :8000, docs at /docs
 make test
 ```
@@ -90,7 +90,8 @@ The deck generators are a separate repo at `../mit-deck-build/`.
 ## Status
 
 - [x] Provider seam, schemas, layer 0, layer 3, fixture API
-- [ ] Port the measured July values → `tests/data/july_2026_daily.json` (Day 4)
-- [ ] Seed real half-hourly data for the five households (Day 2)
+- [x] Measured July values ported — analytics validated against real data, not fixtures
+- [x] Device benchmarking kit → `scripts/Device Benchmarking/`
+- [ ] Data model + seeded half-hourly readings (Day 2 — in progress)
 - [ ] Golden set + model bake-off (Day 6)
 - [ ] Voice (Day 8)

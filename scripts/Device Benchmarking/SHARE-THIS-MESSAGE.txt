@@ -1,0 +1,84 @@
+Paste-ready message to send alongside bench-mac.sh.
+Assumes no technical background. Delete this header before sending.
+
+────────────────────────────────────────────────────────────────────────
+
+Hey — need a favour for the Kea project. About 10 minutes per machine,
+mostly just waiting on downloads. If you can run it on BOTH Macs that'd
+be ideal, since the whole point is comparing them.
+
+
+1. INSTALL OLLAMA  (skip if you already have it)
+
+   Paste into Terminal:
+
+       brew install --cask ollama
+
+   Then open Ollama once from your Applications folder. It runs quietly
+   in the menu bar — it needs to be running for the test to work.
+
+   No Homebrew? Download the app from ollama.com instead, drag it to
+   Applications, and open it.
+
+
+2. RUN THE TEST
+
+   Paste into Terminal:
+
+       cd ~/Downloads && bash bench-mac.sh
+
+   If the file ended up somewhere else, or the name looks different after
+   downloading, this will show you what it's actually called:
+
+       ls ~/Downloads | grep bench
+
+
+3. SEND THE RESULTS BACK
+
+   It creates a file in your Downloads called something like
+
+       kea-bench-yourmac-20260818-1430.txt
+
+   Just send me that file. That's all I need.
+
+
+WHAT IT'S DOING
+
+   It downloads three AI models of different sizes and measures how fast
+   each one writes on your machine. We're working out which Mac should
+   run the live demo, and how big a model we can afford before the voice
+   feature starts feeling slow.
+
+   It only reads your hardware specs — chip and memory size. It doesn't
+   touch your files and doesn't send anything anywhere.
+
+
+IF SOMETHING GOES WRONG
+
+   "command not found: ollama"
+       Ollama isn't installed, or hasn't been opened yet. Install it and
+       open the app once from Applications.
+
+   "Ollama is installed but not running"
+       Open Ollama from Applications. Look for its icon in the menu bar
+       at the top of the screen.
+
+   "no such file or directory"
+       Wrong filename. Run:  ls ~/Downloads
+       ...find the file, and use that exact name.
+
+   "permission denied"
+       You typed ./bench-mac.sh — use "bash bench-mac.sh" instead.
+
+   A model says FAILED TO RUN
+       That's fine, and it's actually useful information. It means that
+       model is too big for that machine. Let it finish the others.
+
+
+AFTERWARDS
+
+   The models take about 10 GB. To free it up:
+
+       ollama rm gemma3:4b qwen3:4b gemma3:12b
+
+   Thanks — this genuinely unblocks the build.
