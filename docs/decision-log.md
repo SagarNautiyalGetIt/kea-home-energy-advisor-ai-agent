@@ -11,3 +11,7 @@ Substantial decisions get their own ADR in `docs/adr/`; this is for everything s
 | 2026-08-17 | SQLite over Postgres | Five seeded households; removes a container from a stack that must run on a laptop |
 | 2026-08-17 | Structural integers ≤ 12 exempt from the number-checker | "Two things to note" is prose, not a claim; unit-bearing tokens are always claims |
 | 2026-08-17 | Verify before streaming, not during | Cannot put an unverified figure on screen; revisit sentence-level verification on faster hardware |
+| 2026-08-17 | Ported the 31 measured July values into `tests/data/july_2026_daily.json` | Ran `measure-july-chart.py` from the Iris Vault; the analytics are now validated against real data instead of shaped fixtures |
+| 2026-08-17 | `COMPARISON_BASELINE = 7.06 kWh/day` | Derived from Genesis's own "37% more than similar homes": 300.0 kWh / 1.37 / 31. External benchmark, never derived from the household |
+| 2026-08-17 | Renamed the headline fact to `overshoot_annual_cost` | The published $290/yr is the **whole overshoot** annualised (81 kWh/mo x $0.30 x 12), not the sustained portion alone — see research/analysis.md line 83 |
+| 2026-08-17 | `SPIKE_THRESHOLD = 1.8` | **Open question, not settled.** 1.8x reproduces the published method (11 Jul alone, 10.4%, $2.52). 1.5x also flags Fri 10 Jul and the spike share jumps to 16.4%. The looser detector is arguably more correct but weakens "the spike is only 11%". Team must decide which method we defend |
