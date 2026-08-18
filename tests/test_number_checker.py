@@ -14,7 +14,7 @@ from app.verification.number_checker import extract_tokens, template_fallback, v
 @pytest.fixture
 def bundle() -> FactBundle:
     return FactBundle(
-        customer_id="H-A",
+        customer_id="H-JUL",
         intent=Intent.WHY_HIGH,
         period="July 2026",
         facts=[
@@ -92,5 +92,5 @@ class TestFallback:
         assert verify(text, bundle).passed, "the fallback must never fail its own checker"
 
     def test_empty_bundle_offers_a_human(self) -> None:
-        empty = FactBundle(customer_id="H-A", intent=Intent.OUT_OF_SCOPE, period="July 2026")
+        empty = FactBundle(customer_id="H-JUL", intent=Intent.OUT_OF_SCOPE, period="July 2026")
         assert "someone" in template_fallback(empty).lower()

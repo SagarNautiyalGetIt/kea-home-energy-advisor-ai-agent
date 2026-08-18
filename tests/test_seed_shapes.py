@@ -15,7 +15,8 @@ import datetime as dt
 
 import pytest
 
-from app.db.seed import DAYS, HOUSEHOLDS, _flat, _intervals, _july_daily
+from app.analytics.fixtures import DAYS, HOUSEHOLDS, _flat, _july
+from app.db.seed import _intervals
 
 DAY = dt.date(2026, 7, 1)
 
@@ -59,27 +60,27 @@ class TestDayShape:
 
 class TestHouseholds:
     def test_every_household_has_a_full_month(self):
-        for ref, _, daily, _, _ in HOUSEHOLDS:
-            assert len(daily) == DAYS, f"{ref} has {len(daily)} days, expected {DAYS}"
+        for h in HOUSEHOLDS:
+            assert len(h.daily_kwh) == DAYS, f"{h.ref} has {len(h.daily_kwh)} days"
 
     def test_every_household_serves_a_demo_line(self):
         """A household serving no line is data nobody will see."""
-        for ref, _, _, _, line in HOUSEHOLDS:
-            assert line.strip(), f"{ref} has no demo line"
+        for h in HOUSEHOLDS:
+            assert h.demo_line.strip(), f"{h.ref} has no demo line"
 
     def test_refs_are_unique(self):
-        refs = [h[0] for h in HOUSEHOLDS]
+        refs = [h.ref for h in HOUSEHOLDS]
         assert len(refs) == len(set(refs))
 
     def test_july_household_matches_the_measurement(self):
         """H-JUL is the real Genesis household — it must stay at the measured 300.0 kWh."""
-        july = dict((h[0], h[2]) for h in HOUSEHOLDS)["H-JUL"]
+        july = {h.ref: h.daily_kwh for h in HOUSEHOLDS}["H-JUL"]
         assert sum(july) == pytest.approx(300.0, abs=0.5)
-        assert july == _july_daily()
+        assert july == _july()
 
     def test_each_household_actually_exhibits_its_finding(self):
         """The demo depends on these shapes. If someone tweaks the numbers, this fails."""
-        by_ref = {h[0]: h[2] for h in HOUSEHOLDS}
+        by_ref = {h.ref: h.daily_kwh for h in HOUSEHOLDS}
 
         # H-COLD: a sustained run of high days, not one spike
         cold = by_ref["H-COLD"]

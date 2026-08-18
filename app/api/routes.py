@@ -14,7 +14,15 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.analytics import fixtures
-from app.analytics.engine import build_what_will_i_pay, build_why_high
+from app.analytics.engine import (
+    TariffOption,
+    build_hardship,
+    build_tariff_check,
+    build_weather_check,
+    build_what_costs_most,
+    build_what_will_i_pay,
+    build_why_high,
+)
 from app.config import get_provider
 from app.narration.narrator import narrate_verified
 from app.routing.intents import route
@@ -31,17 +39,50 @@ router = APIRouter()
 
 DAYS_IN_JULY = 31
 
+# Illustrative plans — Kea's real tariffs are not public, and every surface showing a
+# dollar figure has to say so. Standard trades a higher daily charge for a lower unit
+# rate; Low Fixed Charge is the reverse, which is why it suits low users.
+#
+# Break-even is (1.50 - 0.30) / (0.36 - 0.30) = **20 kWh/day**. Below that LFC wins,
+# above it Standard does. That threshold is the whole point of the comparison, so it is
+# calibrated deliberately: NZ's Low Fixed Charge regulation targeted households under
+# ~8,000 kWh/year (~22 kWh/day). An earlier draft used 0.34 for the LFC unit rate, which
+# pushed break-even to 30 kWh/day and made LFC look cheaper for almost everybody — the
+# advice would have been wrong for most of the demo households.
+STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
+LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
+
 
 def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
     """Layer 0's decision selects the layer 1 path. The model has no say in this."""
     window = fixtures.get_window(customer_id)
 
+    baseline = fixtures.comparison_baseline(customer_id)
+
     if intent is Intent.WHAT_WILL_I_PAY:
         return build_what_will_i_pay(window, DAYS_IN_JULY)
-    if intent in (Intent.WHY_HIGH, Intent.USING_MORE_THAN_USUAL, Intent.WHAT_COSTS_MOST):
-        return build_why_high(window, fixtures.comparison_baseline(customer_id))
 
-    # Hardship and out-of-scope carry no figures on purpose: nothing to fabricate.
+    if intent is Intent.WHY_HIGH:
+        return build_why_high(window, baseline)
+
+    if intent is Intent.USING_MORE_THAN_USUAL:
+        # "Was it just the cold snap?" — give the weather its due before anything else.
+        hdd, normal = fixtures.heating_degree_days(customer_id)
+        return build_weather_check(window, hdd, normal)
+
+    if intent is Intent.WHAT_COSTS_MOST:
+        # The honest refusal: we cannot name an appliance, but we can say where the money is.
+        return build_what_costs_most(window, baseline)
+
+    if intent is Intent.TARIFF_CHECK:
+        return build_tariff_check(window, STANDARD_PLAN, LOW_FIXED_PLAN)
+
+    if intent is Intent.HARDSHIP:
+        # No figures at all — nothing to get wrong, and a number has no place here.
+        bundle = build_hardship()
+        return bundle.model_copy(update={"customer_id": customer_id})
+
+    # Out of scope: say so and offer a person. Never improvise.
     return FactBundle(customer_id=customer_id, intent=intent, period=window.period)
 
 

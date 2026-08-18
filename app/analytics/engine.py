@@ -210,3 +210,246 @@ def build_what_will_i_pay(window: UsageWindow, days_in_month: int) -> FactBundle
             "Say that it is an estimate.",
         ],
     )
+
+
+# ───────────────────────────── weather ─────────────────────────────
+
+
+def heating_degree_days(mean_temp_c: float, base_c: float = 18.0) -> float:
+    """How much heating a day called for. NZ convention uses an 18 °C base."""
+    return max(0.0, base_c - mean_temp_c)
+
+
+def weather_attribution(
+    window: UsageWindow,
+    hdd_by_day: list[float],
+    normal_hdd_per_day: float,
+) -> tuple[float, float]:
+    """Split usage into (weather_driven_kwh, everything_else_kwh).
+
+    Answers the question that protects us from the worst possible mistake: telling a family
+    they overspent when the weather did it. The brief flags this as able to undercut our
+    headline finding if we skip it.
+
+    Method: least-squares fit of daily kWh against heating degree days. The slope is how
+    many kWh this house burns per degree-day — its heating sensitivity. Multiply that by
+    how much colder than normal the period actually was, and you have the part of the bill
+    the weather explains.
+
+    Deliberately simple and explainable. A judge can follow "we measured how much extra you
+    use per cold degree, then multiplied by how much colder than usual it was" — which
+    matters more than squeezing out accuracy we can't defend.
+    """
+    if len(hdd_by_day) != len(window.daily_kwh):
+        raise ValueError("need one heating-degree-day figure per day of readings")
+
+    # A month with no temperature variation gives no signal to fit against.
+    if len(set(hdd_by_day)) < 2:
+        return 0.0, window.total_kwh
+
+    fit = statistics.linear_regression(hdd_by_day, window.daily_kwh)
+    kwh_per_degree_day = max(0.0, fit.slope)  # negative would mean cold days use less
+
+    excess_hdd = sum(max(0.0, h - normal_hdd_per_day) for h in hdd_by_day)
+    weather_kwh = min(window.total_kwh, kwh_per_degree_day * excess_hdd)
+    return weather_kwh, window.total_kwh - weather_kwh
+
+
+# ───────────────────────────── tariff ─────────────────────────────
+
+
+@dataclass(frozen=True)
+class TariffOption:
+    name: str
+    unit_price_nzd: float
+    daily_fixed_nzd: float
+
+    def cost_for(self, kwh: float, days: int) -> float:
+        return kwh * self.unit_price_nzd + days * self.daily_fixed_nzd
+
+
+def compare_tariffs(
+    window: UsageWindow,
+    current: TariffOption,
+    alternative: TariffOption,
+) -> tuple[float, float, float]:
+    """Return (current_cost, alternative_cost, annual_saving). Saving is negative if
+    switching would cost more — never present a loss as a gain.
+
+    New Zealand's Low Fixed Charge plan trades a near-zero daily charge for a higher unit
+    rate, so it suits low users and penalises high ones. The Consumer Care Obligations
+    expect retailers to proactively surface a better-suited plan, which makes this closer
+    to a requirement than a feature. The brief ranks it as job #1 of five.
+    """
+    days = len(window.daily_kwh)
+    now = current.cost_for(window.total_kwh, days)
+    alt = alternative.cost_for(window.total_kwh, days)
+    monthly_saving = now - alt
+    return now, alt, monthly_saving * 12
+
+
+# ───────────────────────────── hardship ─────────────────────────────
+
+
+@dataclass(frozen=True)
+class CollapseSignal:
+    """A usage collapse — often someone rationing heat they cannot afford."""
+
+    detected: bool
+    earlier_mean: float
+    recent_mean: float
+    drop_pct: float
+
+
+def detect_usage_collapse(
+    window: UsageWindow,
+    tail_days: int = 7,
+    threshold_pct: float = 40.0,
+) -> CollapseSignal:
+    """Compare the most recent week against the rest of the period.
+
+    Consumer Care Obligations cl. 9.3(c) names "significant consumption changes" as a
+    signal that puts a retailer on notice of possible payment difficulty. Detecting this
+    is the premise of the whole product — and it raises Kea's obligations rather than
+    lowering them, which we say ourselves rather than waiting to be asked.
+
+    **This is a signal, never a diagnosis.** A collapse might be a holiday. It routes to a
+    human; it must never produce an accusation, and the hardship reply carries no figures
+    at all — nothing to get wrong.
+    """
+    daily = window.daily_kwh
+    if len(daily) <= tail_days:
+        return CollapseSignal(False, 0.0, 0.0, 0.0)
+
+    earlier = statistics.fmean(daily[:-tail_days])
+    recent = statistics.fmean(daily[-tail_days:])
+    drop = (earlier - recent) / earlier * 100 if earlier else 0.0
+    return CollapseSignal(drop >= threshold_pct, earlier, recent, drop)
+
+
+def build_weather_check(
+    window: UsageWindow,
+    hdd_by_day: list[float],
+    normal_hdd_per_day: float,
+) -> FactBundle:
+    """"Wasn't that just the cold snap?" — demo line 2.
+
+    Telling a household they overspent when the weather did it is the fastest way to lose
+    their trust, so this answer exists to give the weather its due before anything else.
+    """
+    weather_kwh, other_kwh = weather_attribution(window, hdd_by_day, normal_hdd_per_day)
+    price = window.unit_price_nzd
+    total = window.total_kwh
+    weather_share = (weather_kwh / total * 100) if total else 0.0
+
+    return FactBundle(
+        customer_id=window.customer_id,
+        intent=Intent.USING_MORE_THAN_USUAL,
+        period=window.period,
+        facts=[
+            Fact.percent("weather_share", weather_share,
+                         "Share of your usage the colder weather explains"),
+            Fact.money("weather_cost", weather_kwh * price, "What the extra heating cost"),
+            Fact.money("other_cost", other_kwh * price, "The rest of your usage"),
+            Fact.energy("total_usage", total, f"Total used in {window.period}"),
+        ],
+        caveats=[
+            _NO_APPLIANCE,
+            _ILLUSTRATIVE_PRICE,
+            "This compares against typical temperatures for the period, not against a "
+            "forecast. Say it is an estimate of the weather's share.",
+        ],
+    )
+
+
+def build_what_costs_most(
+    window: UsageWindow,
+    comparison_baseline_kwh_per_day: float,
+) -> FactBundle:
+    """"Which appliance caused it?" — demo line 4, and the honest refusal.
+
+    Half-hourly meter data genuinely cannot identify an appliance. Other products guess.
+    We say we can't, then give the thing we *do* know — which is where the money actually
+    is. Two survey respondents asked exactly this question, so it will come up.
+    """
+    everyday_extra = sustained_overshoot_per_day(window, comparison_baseline_kwh_per_day)
+    floor = standing_load_kwh_per_day(window)
+    price = window.unit_price_nzd
+
+    return FactBundle(
+        customer_id=window.customer_id,
+        intent=Intent.WHAT_COSTS_MOST,
+        period=window.period,
+        facts=[
+            Fact.energy("standing_load", floor, "Running every day, even when you're out",
+                        per_day=True),
+            Fact.money("standing_load_annual", floor * 365 * price,
+                       "What that costs over a year", per_year=True),
+            Fact.energy("sustained_overshoot", everyday_extra,
+                        "Extra you use daily versus similar homes", per_day=True),
+        ],
+        caveats=[
+            "You MUST say plainly that you cannot identify which appliance is responsible, "
+            "and that this is because a meter reads the whole house every half hour rather "
+            "than each appliance. Do not hedge this and do not guess.",
+            _ILLUSTRATIVE_PRICE,
+        ],
+    )
+
+
+def build_tariff_check(
+    window: UsageWindow,
+    current: TariffOption,
+    alternative: TariffOption,
+) -> FactBundle:
+    """Is there a plan that suits this household better?
+
+    The Consumer Care Obligations expect retailers to proactively tell customers about
+    plans that might cost less — so this sits closer to a requirement than a feature.
+    """
+    now, alt, annual_saving = compare_tariffs(window, current, alternative)
+    better = annual_saving > 0
+
+    facts = [
+        Fact.money("current_plan_cost", now, f"Your plan for {window.period}"),
+        Fact.money("alternative_plan_cost", alt, "The other plan would have been"),
+    ]
+    if better:
+        facts.append(
+            Fact.money("annual_saving", annual_saving, "You would save about", per_year=True)
+        )
+
+    return FactBundle(
+        customer_id=window.customer_id,
+        intent=Intent.TARIFF_CHECK,
+        period=window.period,
+        facts=facts,
+        caveats=[
+            _ILLUSTRATIVE_PRICE,
+            "Based on one month of usage. Say that a full year would give a firmer answer."
+            if better
+            else "The other plan is NOT cheaper for this household. Say so plainly — never "
+            "present a switch as a saving when it isn't.",
+        ],
+    )
+
+
+def build_hardship() -> FactBundle:
+    """Someone has said they're struggling to pay.
+
+    Carries **no figures at all** — deliberately. There is nothing to get wrong, and a
+    number has no place in this reply. The job is to acknowledge briefly and hand over to
+    a person; under Consumer Care Obligations Part 6 that handoff is closer to a legal
+    duty than a courtesy.
+    """
+    return FactBundle(
+        customer_id="",
+        intent=Intent.HARDSHIP,
+        period="",
+        facts=[],
+        caveats=[
+            "Acknowledge warmly and briefly. Do NOT quote any figure, do NOT give financial "
+            "advice, do NOT suggest ways to cut usage. Say you are connecting them with "
+            "someone who can help with payment options, and stop there.",
+        ],
+    )

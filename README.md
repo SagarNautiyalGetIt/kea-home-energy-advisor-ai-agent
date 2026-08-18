@@ -101,6 +101,7 @@ The deck generators are a separate repo at `../mit-deck-build/`.
 - [x] Device benchmarking kit → `scripts/Device Benchmarking/`
 - [x] PostgreSQL schema + Alembic migration (13 tables, ADR-0006)
 - [x] Seeder — 5 households x 31 days x 48 intervals, July household reproduces the measurement
+- [x] Weather / tariff / hardship analytics — all 7 demo lines now have maths behind them
 - [ ] Repository layer to replace `fixtures.py` (Day 2 — next)
 - [ ] **Unverified:** `make db && make migrate && make seed` has never run — no Docker on flex5
 - [ ] Golden set + model bake-off (Day 6)

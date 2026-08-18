@@ -17,14 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
-import json
-import math
-import pathlib
 from decimal import Decimal
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.analytics.fixtures import HOUSEHOLDS, REGION
 from app.config import settings
 from app.db.models import (
     Base,
@@ -46,8 +44,6 @@ from app.db.models import (
 NZ = dt.timezone(dt.timedelta(hours=12))  # NZST for July; see the note in _intervals()
 JULY = dt.date(2026, 7, 1)
 DAYS = 31
-
-JULY_DATA = pathlib.Path(__file__).resolve().parents[2] / "tests" / "data" / "july_2026_daily.json"
 
 #: Illustrative only — Kea's real tariff is not public. Every surface showing a dollar
 #: figure has to say so, which is why the flag lives on the row.
@@ -94,44 +90,7 @@ def _intervals(day: dt.date, daily_kwh: float) -> list[tuple[dt.datetime, Decima
     return out
 
 
-def _july_daily() -> list[float]:
-    return json.loads(JULY_DATA.read_text())
 
-
-def _flat(base: float, days: int = DAYS) -> list[float]:
-    return [base] * days
-
-
-# (external_ref, label, daily totals, benchmark kWh/day, demo line it serves)
-HOUSEHOLDS: list[tuple[str, str, list[float], float, str]] = [
-    (
-        "H-JUL", "The real July household — high standing load",
-        _july_daily(), 7.06,
-        "Line 1: why was my July bill so high?",
-    ),
-    (
-        "H-COLD", "Cold-snap driven, not behaviour",
-        [7.2, 7.5, 12.8, 14.1, 15.2, 14.8, 13.9, 12.1, *_flat(7.5, 23)], 7.0,
-        "Line 2: wasn't that just the cold snap?",
-    ),
-    (
-        "H-SPIKE", "One genuine behavioural spike",
-        [*_flat(4.1, 6), 19.6, *_flat(4.1, 24)], 4.0,
-        "Line 4: which appliance caused it? — the honest refusal",
-    ),
-    (
-        "H-DROP", "Usage collapse — the hardship signal",
-        [11.2, 10.9, 11.4, 11.0, 10.8, 11.1, 9.2, 7.4, 5.1, 3.8, *_flat(3.0, 21)], 8.0,
-        "Line 5: I'm struggling to pay this",
-    ),
-    (
-        "H-TARIFF", "Steady user on the wrong plan",
-        _flat(6.1), 6.0,
-        "Line 3 / tariff check: low fixed charge modelling",
-    ),
-]
-
-REGION = "Auckland"
 
 
 async def seed(session: AsyncSession) -> None:
@@ -149,26 +108,26 @@ async def seed(session: AsyncSession) -> None:
     )
     low_fixed = Tariff(
         name="Low Fixed Charge (illustrative)", plan_type="low_fixed_charge",
-        unit_price_nzd=Decimal("0.34"), daily_fixed_nzd=Decimal("0.30"), is_illustrative=True,
+        unit_price_nzd=Decimal("0.36"), daily_fixed_nzd=Decimal("0.30"), is_illustrative=True,
     )
     session.add_all([standard, low_fixed])
     await session.flush()
 
-    # Weather. Days 3-8 of July are the cold snap H-COLD responds to — the whole point of
-    # this table is being able to tell "you used more" from "it was colder".
-    for offset in range(DAYS):
-        day = JULY + dt.timedelta(days=offset)
-        cold = 3 <= offset <= 8
-        mean_c = 7.5 if cold else 11.5 + 1.5 * math.sin(offset / 4)
+    # Weather, taken from the same series the API uses (app/analytics/fixtures) so the
+    # database and the fixtures can never disagree about how cold July was.
+    from app.analytics.fixtures import _HDD_JULY
+
+    for offset, hdd in enumerate(_HDD_JULY):
         session.add(
             WeatherDay(
-                region=REGION, day=day,
-                mean_temp_c=Decimal(str(round(mean_c, 2))),
-                hdd_18=Decimal(str(round(max(0.0, 18.0 - mean_c), 3))),
+                region=REGION, day=JULY + dt.timedelta(days=offset),
+                mean_temp_c=Decimal(str(round(18.0 - hdd, 2))),
+                hdd_18=Decimal(str(hdd)),
             )
         )
 
-    for ref, label, daily, bench_kwh, _line in HOUSEHOLDS:
+    for h in HOUSEHOLDS:
+        ref, label, daily, bench_kwh = h.ref, h.label, h.daily_kwh, h.benchmark_kwh_per_day
         benchmark = Benchmark(
             region=REGION, segment=f"similar-to-{ref}",
             kwh_per_day=Decimal(str(bench_kwh)),
