@@ -40,6 +40,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    # The provider is cached and owns a connection pool, so it needs closing.
+    aclose = getattr(provider, "aclose", None)
+    if aclose is not None:
+        await aclose()
+
 
 app = FastAPI(
     title="Kea Energy — Home Energy Advisor",

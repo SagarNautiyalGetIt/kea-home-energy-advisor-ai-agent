@@ -22,11 +22,16 @@ log = logging.getLogger(__name__)
 MAX_ATTEMPTS = 2
 
 
-async def _generate(provider: LLMProvider, bundle: FactBundle, question: str) -> str:
+async def _generate(
+    provider: LLMProvider,
+    bundle: FactBundle,
+    question: str,
+    rejected: list[str] | None = None,
+) -> str:
     chunks: list[str] = []
     async for piece in provider.narrate(
         system=SYSTEM,
-        user=build_user_prompt(bundle, question),
+        user=build_user_prompt(bundle, question, rejected),
         max_tokens=300,
     ):
         chunks.append(piece)
@@ -40,10 +45,13 @@ async def narrate_verified(
 ) -> tuple[str, VerificationReport]:
     """Produce prose that is guaranteed not to contain an uncomputed number."""
     report = VerificationReport(passed=False)
+    rejected: list[str] = []
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            draft = await _generate(provider, bundle, question)
+            # Attempt 2 is told which tokens were refused. Re-sending an identical
+            # prompt at temperature 0.2 mostly reproduces the identical failure.
+            draft = await _generate(provider, bundle, question, rejected or None)
         except Exception as exc:  # noqa: BLE001 - any provider failure degrades, never 500s
             # Model unreachable, throttled, or timed out. A boring correct answer beats
             # a stack trace, and it means the frontend can integrate before anyone has
@@ -58,6 +66,7 @@ async def narrate_verified(
         if report.passed:
             return draft, report
 
+        rejected = list(report.unverified)
         log.warning(
             "number-checker rejected draft (attempt %d/%d) intent=%s customer=%s unverified=%s",
             attempt,

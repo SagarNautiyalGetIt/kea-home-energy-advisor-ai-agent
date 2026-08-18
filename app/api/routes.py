@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.analytics import fixtures
 from app.analytics.engine import (
+    NO_APPLIANCE,
     TariffOption,
     build_hardship,
     build_tariff_check,
@@ -82,8 +84,25 @@ def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
         bundle = build_hardship()
         return bundle.model_copy(update={"customer_id": customer_id})
 
-    # Out of scope: say so and offer a person. Never improvise.
-    return FactBundle(customer_id=customer_id, intent=intent, period=window.period)
+    # No analytics path for this intent yet — COMPARE_TO_LAST_YEAR is routable but
+    # unimplemented (KEA-69), and OUT_OF_SCOPE never had one. Either way the model gets
+    # an empty bundle, and an empty bundle with no caveats is the one case layer 3
+    # cannot protect: "your usage was higher than last winter" contains no numeric token,
+    # so the number-checker passes it and a fabricated comparison reaches the customer.
+    # The caveats are the only guard here. Do not remove them when KEA-69 lands — replace
+    # them with real facts.
+    return FactBundle(
+        customer_id=customer_id,
+        intent=intent,
+        period=window.period,
+        caveats=[
+            "You have NO figures for this question. Do not compare, estimate, characterise "
+            "or describe their usage in any way — not even in words like 'higher', 'lower' "
+            "or 'about the same'. Say plainly that you cannot answer this one yet and offer "
+            "to connect them with the team.",
+            NO_APPLIANCE,
+        ],
+    )
 
 
 @router.get("/health")
@@ -131,6 +150,18 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     )
 
 
+# A sentence ends at . ? or ! followed by whitespace and a capital or a quote. Splitting
+# on the bare string ". " broke "2.4 kWh" -> no, but it did break "e.g. roughly $24" into
+# a chunk ending "e.g." — and the old code then appended a second full stop. It matters
+# beyond cosmetics: ADR-0003 has voice speaking sentence one while sentence two generates,
+# so a bad boundary becomes an audible one.
+_SENTENCE_END = re.compile(r'(?<=[.!?])\s+(?=[A-Z"“])')
+
+
+def _sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
     """Non-streaming path. Simpler to test; /chat/stream is what the UI uses."""
@@ -174,6 +205,14 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     hardware the wait is short; when we move to a hosted model, revisit whether
     sentence-level verification lets us start streaming earlier.
     """
+    # Validate before the response starts. Raising inside the generator would already
+    # have committed a 200 and an SSE content-type, so an unknown customer surfaced as
+    # a 500 with a half-open stream while /chat returned a clean 404 for the same input.
+    try:
+        fixtures.get_window(req.customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     routing = route(req.message)
     bundle = _bundle_for(routing.intent, req.customer_id)
     provider = get_provider()
@@ -182,10 +221,8 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
         meta = json.dumps({"intent": routing.intent, "escalate": routing.is_escalation})
         yield f"event: meta\ndata: {meta}\n\n"
         text, report = await narrate_verified(provider, bundle, req.message)
-        for sentence in text.split(". "):
-            if sentence.strip():
-                chunk = sentence if sentence.endswith(".") else sentence + "."
-                yield f"event: token\ndata: {json.dumps({'text': chunk + ' '})}\n\n"
+        for chunk in _sentences(text):
+            yield f"event: token\ndata: {json.dumps({'text': chunk + ' '})}\n\n"
         yield f"event: done\ndata: {report.model_dump_json()}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

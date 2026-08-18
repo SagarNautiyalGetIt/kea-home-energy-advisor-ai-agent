@@ -77,7 +77,19 @@ _FEW_SHOT: dict[Intent, tuple[str, str]] = {
 }
 
 
-def build_user_prompt(bundle: FactBundle, question: str) -> str:
+def build_user_prompt(
+    bundle: FactBundle,
+    question: str,
+    rejected: list[str] | None = None,
+) -> str:
+    """`rejected` names the tokens layer 3 refused on the previous attempt.
+
+    Retrying with a byte-identical prompt at temperature 0.2 mostly reproduces the
+    same failure — the model has no way to know what was wrong. Naming the offending
+    tokens is the cheapest correction signal available and costs one short paragraph.
+    Whether it actually lifts the pass rate is a golden-set question (KEA-46), not a
+    matter of taste: measure it before assuming.
+    """
     task = _INTENT_TASK.get(bundle.intent, _INTENT_TASK[Intent.OUT_OF_SCOPE])
     parts: list[str] = []
 
@@ -87,6 +99,17 @@ def build_user_prompt(bundle: FactBundle, question: str) -> str:
         parts.append(
             "Here is an example of the style expected.\n\n"
             f"FIGURES:\n{facts_in}\n\nANSWER:\n{answer_out}\n\n---\n"
+        )
+
+    if rejected:
+        offending = ", ".join(sorted(set(rejected)))
+        parts.append(
+            "YOUR PREVIOUS ANSWER WAS REJECTED. It contained these figures, which are "
+            f"not in the data you were given: {offending}\n"
+            "Write the answer again using ONLY the figures listed below, copied exactly "
+            "as written. Do not calculate, convert, annualise or round to a new number. "
+            "If you cannot make the point without a figure you were not given, leave the "
+            "point out.\n"
         )
 
     parts.append(f"The customer asked: \"{question}\"\n")

@@ -32,6 +32,24 @@ class OllamaProvider:
         self.base_url = base_url.rstrip("/")
         self._timeout = timeout
         self.last_usage = TokenUsage()
+        self._client: httpx.AsyncClient | None = None
+
+    def _http(self) -> httpx.AsyncClient:
+        """One client, reused. It owns the connection pool.
+
+        A client per request means a TCP handshake per chat turn. That is cheap on
+        loopback and not free, and it stops being loopback the moment the model moves
+        to Bedrock — so the shape should be right before then, not after.
+        """
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        """Release the pool. Called from the app lifespan on shutdown."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+        self._client = None
 
     async def narrate(
         self,
@@ -53,10 +71,7 @@ class OllamaProvider:
             },
         }
         url = f"{self.base_url}/api/generate"
-        async with (
-            httpx.AsyncClient(timeout=self._timeout) as client,
-            client.stream("POST", url, json=payload) as r,
-        ):
+        async with self._http().stream("POST", url, json=payload) as r:
             r.raise_for_status()
             async for line in r.aiter_lines():
                 if not line:
@@ -78,9 +93,8 @@ class OllamaProvider:
 
     async def health(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                r = await client.get(f"{self.base_url}/api/tags")
-                return r.status_code == 200
+            r = await self._http().get(f"{self.base_url}/api/tags", timeout=5.0)
+            return r.status_code == 200
         except httpx.HTTPError:
             return False
 

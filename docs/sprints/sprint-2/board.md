@@ -8,6 +8,25 @@ Feature milestone (chat + voice) **Wed 26 Aug**.
 > The Sprint 1 column is **reconstructed from the artefacts** — the brief, the vault and the
 > repos — not copied from the real board. Correct it against what was actually tracked.
 
+> [!warning] Card IDs were renumbered on 18 Aug 2026 — four of them collided
+> **KEA-35, 36, 37 and 38 each named two different cards.** The worst was KEA-38, which was
+> simultaneously *"ADR-0006 — PostgreSQL"* in the ✅ done list and *"Weather normalisation"* in
+> Day 4's to-do — one ID both finished and not started. If any of these were copied into a real
+> tracker before today, **check that tracker**: the Day 3 and Day 4 blocks were the ones moved.
+>
+> | Was | Now | Card |
+> |---|---|---|
+> | KEA-35 | **KEA-64** | End-to-end path with a real model (Day 3) |
+> | KEA-36 | **KEA-65** | Verify on the second machine (Day 3) |
+> | KEA-37 | **KEA-66** | Model warm-up + UI ready state (Day 3) |
+> | KEA-38 | **KEA-67** | Weather normalisation (Day 4) |
+> | KEA-39 | **KEA-68** | Low Fixed Charge modelling (Day 4) |
+> | KEA-40 | **KEA-69** | Year-on-year comparison (Day 4) |
+> | KEA-41 | **KEA-70** | Hardship detection signals (Day 4) |
+>
+> 39–41 moved too, only to keep the Day 4 block contiguous. Kept: KEA-35/36/37 as the Day 2
+> cards and KEA-38 as ADR-0006, because those are referenced elsewhere and partly done.
+
 Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day, split it.
 
 ---
@@ -110,18 +129,18 @@ hand-shaped numbers in a Python file; by tonight they should be a real database.
 
 | ID | Card | Size | Description |
 |---|---|---|---|
-| KEA-35 | End-to-end path with a real model | L | React → `/chat/stream` → Ollama → streamed tokens. Ugly is fine; it only has to prove the wiring |
-| KEA-36 | Verify on the second machine | M | `docker compose up` on the Mac mini. **Two people must be able to run the demo** |
-| KEA-37 | Model warm-up + UI ready state | S | Cold start is several GB from disk; 10s of silence reads as a crash |
+| KEA-64 | End-to-end path with a real model | L | React → `/chat/stream` → Ollama → streamed tokens. Ugly is fine; it only has to prove the wiring |
+| KEA-65 | Verify on the second machine | M | `docker compose up` on the Mac mini. **Two people must be able to run the demo** |
+| KEA-66 | Model warm-up + UI ready state | S | Cold start is several GB from disk; 10s of silence reads as a crash |
 
 ### Day 4 — Thu 20 Aug · analytics depth
 
 | ID | Card | Size | Description |
 |---|---|---|---|
-| KEA-38 | Weather normalisation | L | Heating degree days, 18 °C baseline. Depends on KEA-42 |
-| KEA-39 | Low Fixed Charge modelling | M | Brief ranks this job #1 of five — needs no new data and produces a dated, personal, sourced prediction |
-| KEA-40 | Year-on-year comparison | M | Serves the `compare_to_last_year` intent |
-| KEA-41 | Hardship detection signals | M | Usage collapse pattern. Feeds KEA-48 |
+| KEA-67 | Weather normalisation | L | Heating degree days, 18 °C baseline. Depends on KEA-42 |
+| KEA-68 | Low Fixed Charge modelling | M | Brief ranks this job #1 of five — needs no new data and produces a dated, personal, sourced prediction |
+| KEA-69 | Year-on-year comparison | M | Serves the `compare_to_last_year` intent |
+| KEA-70 | Hardship detection signals | M | Usage collapse pattern. Feeds KEA-48 |
 
 ### Day 5 — Fri 21 Aug · routing + narration
 
@@ -187,7 +206,7 @@ hand-shaped numbers in a Python file; by tonight they should be a real database.
 
 ## Related
 
-- `docs/adr/` — the four decisions
-- `docs/demo-script.md` — the spec everything derives from
+- `docs/adr/` — the six decisions
+- `docs/sprints/sprint-2/demo-script.md` — the spec everything derives from
 - `docs/decision-log.md` — smaller calls, dated
 - `~/Documents/Friday/Projects/kea-agent.md` — the project map
