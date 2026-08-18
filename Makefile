@@ -1,4 +1,4 @@
-.PHONY: help setup dev test lint fmt types check bench pull clean
+.PHONY: help setup db migrate seed dev test lint fmt types check bench pull clean
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n",$$1,$$2}'
@@ -8,6 +8,18 @@ setup:  ## create the venv and install everything
 	.venv/bin/pip install -q --upgrade pip
 	.venv/bin/pip install -q -e ".[dev]"
 	@echo "done — activate with: source .venv/bin/activate"
+
+db:  ## start postgres (Ollama stays native - Docker has no Apple GPU access)
+	docker compose up -d db
+	@echo "waiting for postgres..."
+	@until docker compose exec -T db pg_isready -U kea -d kea >/dev/null 2>&1; do sleep 1; done
+	@echo "postgres ready on :5432"
+
+migrate:  ## apply migrations
+	.venv/bin/alembic upgrade head
+
+seed:  ## load the five demo households (idempotent)
+	.venv/bin/python -m app.db.seed
 
 dev:  ## run the API with reload on :8000
 	.venv/bin/uvicorn app.main:app --reload --port 8000

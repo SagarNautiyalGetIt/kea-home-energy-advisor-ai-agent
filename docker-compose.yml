@@ -1,0 +1,29 @@
+# Postgres for local development (ADR-0006).
+#
+# Ollama is deliberately NOT here. Docker Desktop on macOS is a Linux VM with no access
+# to the Apple GPU, so a containerised model server silently drops to CPU speed — on the
+# demo machine that is the difference between 78 words/sec and single digits.
+# Install it natively:  brew install --cask ollama
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: kea-db
+    environment:
+      POSTGRES_USER: kea
+      POSTGRES_PASSWORD: kea
+      POSTGRES_DB: kea
+      # NZ daylight saving is why every timestamp column is timezone-aware; keeping the
+      # server in UTC means the conversion happens in one predictable place.
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - kea-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kea -d kea"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  kea-pgdata:

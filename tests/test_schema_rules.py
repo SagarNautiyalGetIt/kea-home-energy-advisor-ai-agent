@@ -1,0 +1,100 @@
+"""Guards the type rules from ADR-0006 at the schema level.
+
+These run with no database — they compile the models to PostgreSQL DDL and inspect it.
+That means the rules are enforced on every PR, on machines that have never run Postgres.
+
+Why bother: our entire product claim is that figures are computed rather than invented.
+A `Float` column silently introduces `0.1 + 0.2 == 0.30000000000000004`, and a naive
+timestamp moves half-hourly readings into the wrong day whenever NZ changes clocks. Both
+are the kind of bug that surfaces once, in front of a judge.
+"""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateTable
+
+from app.db.models import Base
+
+DIALECT = postgresql.dialect()
+
+MONEY_OR_ENERGY = ("kwh", "nzd", "price", "cost")
+
+
+def _columns():
+    for table in Base.metadata.sorted_tables:
+        for col in table.columns:
+            yield table.name, col
+
+
+def test_every_table_compiles_to_postgres_ddl():
+    for table in Base.metadata.sorted_tables:
+        ddl = str(CreateTable(table).compile(dialect=DIALECT))
+        assert "CREATE TABLE" in ddl
+
+
+def test_no_float_columns_anywhere():
+    """Money must never be a float. Neither must energy — meters report decimals."""
+    offenders = [
+        f"{t}.{c.name} is {c.type}"
+        for t, c in _columns()
+        if "FLOAT" in str(c.type).upper() or "DOUBLE" in str(c.type).upper()
+    ]
+    assert not offenders, "use Numeric, not Float: " + "; ".join(offenders)
+
+
+def test_money_and_energy_columns_are_numeric():
+    for t, c in _columns():
+        if any(k in c.name.lower() for k in MONEY_OR_ENERGY):
+            assert "NUMERIC" in str(c.type).upper(), f"{t}.{c.name} is {c.type}, expected NUMERIC"
+
+
+def test_every_timestamp_is_timezone_aware():
+    """NZ observes daylight saving and the July analysis is about *which day* usage
+    happened. A naive timestamp puts readings in the wrong day twice a year."""
+    offenders = [
+        f"{t}.{c.name}"
+        for t, c in _columns()
+        if "TIMESTAMP" in str(c.type).upper() and "WITH TIME ZONE" not in str(c.type).upper()
+    ]
+    assert not offenders, "use DateTime(timezone=True): " + ", ".join(offenders)
+
+
+def test_ids_are_bigint():
+    """Readings grow fastest; a 32-bit id is a future outage."""
+    for table in Base.metadata.sorted_tables:
+        for col in table.primary_key.columns:
+            assert "BIGINT" in str(col.type).upper(), f"{table.name}.{col.name} is {col.type}"
+
+
+def test_readings_are_indexed_for_the_query_we_actually_run():
+    """Every analytics question is 'this meter, this time range'."""
+    reading = Base.metadata.tables["reading"]
+    cols = [tuple(c.name for c in ix.columns) for ix in reading.indexes]
+    assert ("meter_id", "interval_start") in cols
+
+
+def test_a_reading_cannot_be_recorded_twice():
+    reading = Base.metadata.tables["reading"]
+    uniques = [
+        tuple(c.name for c in con.columns)
+        for con in reading.constraints
+        if con.__class__.__name__ == "UniqueConstraint"
+    ]
+    assert ("meter_id", "interval_start") in uniques
+
+
+def test_customer_table_holds_no_personal_details():
+    """47.6% of surveyed customers don't trust an AI with their data. Minimum necessary —
+    the schema should be able to back up what we say about that."""
+    banned = {"name", "full_name", "address", "email", "phone", "account_number", "dob"}
+    present = {c.name for c in Base.metadata.tables["customer"].columns}
+    assert not (present & banned), f"PII in customer: {present & banned}"
+
+
+@pytest.mark.parametrize("table", ["verification", "token_usage", "fact_bundle", "escalation"])
+def test_the_evidence_tables_exist(table: str):
+    """These are deliverables, not debug output. 'N answers, 0 fabricated figures' and
+    'X per conversation' cannot be reconstructed if they were never recorded."""
+    assert table in Base.metadata.tables

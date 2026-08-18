@@ -18,6 +18,11 @@ class Settings:
 
     cors_origins: str = os.getenv("KEA_CORS_ORIGINS", "http://localhost:5173")
 
+    # ADR-0006. asyncpg driver; the same URL shape points at RDS in Sprint 3.
+    database_url: str = os.getenv(
+        "KEA_DATABASE_URL", "postgresql+asyncpg://kea:kea@localhost:5432/kea"
+    )
+
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

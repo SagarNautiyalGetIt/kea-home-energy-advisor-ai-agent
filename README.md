@@ -14,6 +14,8 @@ Team HAKAS, MIT Internship 2026. Sprint 2: **17–28 August 2026**.
 
 ```bash
 make setup                     # venv + deps
+make db                        # postgres in docker (Ollama stays native)
+make migrate                   # create the schema
 brew install --cask ollama     # macOS: native install, NOT the Docker image
 make pull                      # download the candidate models
 make bench                     # measure words/sec on this machine
@@ -48,6 +50,8 @@ Voice is the same pipeline with a different transport
 | [0002](docs/adr/0002-narrate-only-architecture.md) | The model narrates; Python decides |
 | [0003](docs/adr/0003-voice-transport-skin.md) | Voice is a transport skin |
 | [0004](docs/adr/0004-llm-provider-interface.md) | One provider interface — Ollama now, Bedrock later |
+| [0005](docs/adr/0005-two-speed-models.md) | A second "fast" model is the wrong tool here |
+| [0006](docs/adr/0006-postgres-in-sprint-2.md) | PostgreSQL from Sprint 2, not SQLite |
 
 ## For the frontend team
 
@@ -92,6 +96,7 @@ The deck generators are a separate repo at `../mit-deck-build/`.
 - [x] Provider seam, schemas, layer 0, layer 3, fixture API
 - [x] Measured July values ported — analytics validated against real data, not fixtures
 - [x] Device benchmarking kit → `scripts/Device Benchmarking/`
-- [ ] Data model + seeded half-hourly readings (Day 2 — in progress)
+- [x] PostgreSQL schema + Alembic migration (13 tables, ADR-0006)
+- [ ] Seeded half-hourly readings + repository layer (Day 2 — next)
 - [ ] Golden set + model bake-off (Day 6)
 - [ ] Voice (Day 8)
