@@ -83,7 +83,10 @@ under the Consumer Care Obligations that path is closer to a legal duty than a f
   refusal is deliberate and it is a demo line, not a limitation to hide.
 - **Don't tune prompts before the golden set exists** (Day 6). Tuning without a
   measurement is vibes.
-- **Merge daily.** CI runs `make check` on every PR.
+- **Merge daily.** Run `make check` before every commit.
+- **This repo is never pushed anywhere.** Local git only — no remotes, no GitHub. The
+  internship is competitive and the vaults hold client-adjacent material.
+  `.github/workflows/ci.yml` exists but only runs if pushed, so treat `make check` as CI.
 
 ## Where things live
 
