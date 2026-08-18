@@ -1,0 +1,32 @@
+Kea Energy — local model benchmark
+Run at 2026-08-18 14:27 NZST on wifi-172-23-81-169
+
+MACHINE
+  Chip          Apple M4 Pro
+  Model         Mac16,7
+  Memory        48 GB unified
+  Cores         14
+  macOS         15.7.2
+
+MODEL RESULTS
+  gemma3:4b
+    speed              78.9 words/sec (median of 3)
+    time to first word 322 ms
+    60-word answer     0.8s
+    voice-capable      YES
+  qwen3:4b
+    speed              77.6 words/sec (median of 3)
+    time to first word 141 ms
+    60-word answer     0.8s
+    voice-capable      YES
+  gemma3:12b
+    speed              28.1 words/sec (median of 3)
+    time to first word 450 ms
+    60-word answer     2.1s
+    voice-capable      YES
+
+SUMMARY
+  Fastest model here   gemma3:4b (78.9 words/sec)
+  Voice threshold      20 words/sec
+
+Send this whole file back to Akash.

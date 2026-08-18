@@ -66,6 +66,9 @@ Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day
 |---|---|---|---|
 | KEA-28 | ADR-0005 — the two-speed question | M | Evaluated a fast-model / slow-model split for the voice channel. **Outcome: adopt the shape, skip the second model.** Layer 0 knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster, can't fabricate, and loads no competing weights |
 | KEA-29 | Architecture diagrams | M | AI pipeline + backend ER model, published for the team |
+| KEA-21 | ✅ Benchmark both Macs | S | **Done 18 Aug.** MacBook Pro M4 Pro is the demo machine (2.15× the mini). Voice viable at ~1.0 s to first audio. Results + verdict in `scripts/Device Benchmarking/results/` |
+| KEA-22 | ✅ Confirm the M4 variant | S | **M4 Pro**, 48 GB, 14 cores — confirmed by the benchmark |
+| KEA-38 | ADR-0006 — PostgreSQL from Sprint 2 | M | Reversed the SQLite call. Time-series data, exact decimals for money, and a one-line path to RDS |
 | KEA-30 | Shareable Mac benchmark script | M | `scripts/Device Benchmarking/` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
 
 ---
@@ -76,8 +79,6 @@ Blocked on other people or other machines. None of it is code.
 
 | ID | Card | Size | Description | Blocked on |
 |---|---|---|---|---|
-| KEA-21 | Benchmark both Macs | S | Send `scripts/Device Benchmarking/bench-mac.sh` (KEA-30) to whoever has them. Record words/sec per model per machine | Physical access |
-| KEA-22 | Confirm the M4 variant | S | Base / Pro / Max — bandwidth differs sharply and sets the voice ceiling. The script reports it | Physical access |
 | KEA-23 | Hand `openapi.json` to the frontend | S | They run `npx openapi-typescript`. **Unblocks four people** — do it first | Nothing |
 | KEA-24 | Circulate the four ADRs | S | Get agreement, or get the disagreement early | Team |
 | KEA-25 | Confirm the 7-line demo script | M | Everything downstream derives from it — intents, seeding, golden set | Team |
