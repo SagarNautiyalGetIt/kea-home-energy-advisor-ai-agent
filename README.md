@@ -91,8 +91,10 @@ under the Consumer Care Obligations that path is closer to a legal duty than a f
 ## Where things live
 
 This repo is code only. Research, spoken scripts, the contribution log and the
-rendered decks are in the Iris Vault at `~/Documents/Iris Vault/MIT Internship/`.
-The deck generators are a separate repo at `../mit-deck-build/`.
+rendered decks are held in the team research archive, which is deliberately not
+published — the customer survey contains respondent data collected for analysis,
+not publication. Ask the maintainer for anything you need from it. The deck
+generators live in a separate repository.
 
 ## Status
 

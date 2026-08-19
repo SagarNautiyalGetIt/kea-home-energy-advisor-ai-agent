@@ -209,4 +209,4 @@ hand-shaped numbers in a Python file; by tonight they should be a real database.
 - `docs/adr/` — the six decisions
 - `docs/sprints/sprint-2/demo-script.md` — the spec everything derives from
 - `docs/decision-log.md` — smaller calls, dated
-- `~/Documents/Friday/Projects/kea-agent.md` — the project map
+- `README.md` — the project map and architecture overview

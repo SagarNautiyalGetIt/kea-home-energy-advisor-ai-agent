@@ -5,11 +5,11 @@ decks, not code, so its artefacts live in the other two homes of this project.
 
 | Artefact | Where |
 |---|---|
-| **Research Brief v2** (13 Aug) — the primary source document | `~/Documents/Kea-Energy-Research-Brief.docx` |
-| Customer survey — 21 responses, closed 12 Aug | `~/Documents/Iris Vault/MIT Internship/kea-energy/research/survey/` |
-| July 2026 bill analysis + the measurement script | `~/Documents/Iris Vault/MIT Internship/kea-energy/research/` |
-| Personas (6, validation bar not met at n=21) | `~/Documents/Iris Vault/MIT Internship/kea-energy/research/user-personas.md` |
-| Pitch deck (7 Aug, 12 slides) and Sprint 1 review deck (22 slides) | `~/Documents/Friday/Coding/mit-deck-build/kea-energy/deck/` |
+| **Research Brief v2** (13 Aug) — the primary source document | research archive — ask the maintainer |
+| Customer survey — 21 responses, closed 12 Aug | research archive — **not published**, contains respondent data |
+| July 2026 bill analysis + the measurement script | research archive; the measured daily values are in this repo at `tests/data/july_2026_daily.json` |
+| Personas (6, validation bar not met at n=21) | research archive — ask the maintainer |
+| Pitch deck (7 Aug, 12 slides) and Sprint 1 review deck (22 slides) | separate deck repository |
 
 ## What sprint 1 handed to sprint 2
 
