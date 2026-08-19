@@ -1,0 +1,36 @@
+# CODEOWNERS — who must review what.
+#
+# GitHub automatically requests a review from the owner when a PR touches a
+# matching path. Combined with the "Require review from Code Owners" ruleset,
+# these paths cannot merge without that person's approval.
+#
+# Syntax: <path pattern>  <@github-user or @org/team>
+# Last matching rule wins, so order matters — general first, specific last.
+#
+# An owner must have write access or better, or the rule silently does nothing.
+# Maintainer: @nair-akash
+
+# Default owner for everything in the repo.
+*                           @nair-akash
+
+# --- Critical paths: the maintainer reviews these personally -----------------
+
+# The trust claim of the whole product. If this breaks, "0 fabricated figures"
+# stops being true and nobody notices.
+/app/verification/          @nair-akash
+
+# Every headline number in the pitch comes out of here.
+/app/analytics/             @nair-akash
+
+# The schema the frontend generates types from. Changes break four people.
+/app/schemas.py             @nair-akash
+/app/api/                   @nair-akash
+
+# Migrations are close to irreversible once data exists.
+/alembic/                   @nair-akash
+/app/db/                    @nair-akash
+
+# Decisions of record and the rules themselves.
+/docs/adr/                  @nair-akash
+/CONTRIBUTING.md            @nair-akash
+/.github/                   @nair-akash

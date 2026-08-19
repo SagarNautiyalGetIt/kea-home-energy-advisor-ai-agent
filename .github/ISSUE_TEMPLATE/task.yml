@@ -1,0 +1,66 @@
+name: Task
+description: A unit of sprint work from the board
+title: "[KEA-##] "
+labels: ["type: task"]
+body:
+  - type: input
+    id: card
+    attributes:
+      label: Board card ID
+      description: The KEA-## id from docs/sprints/. Used in the branch name and every commit.
+      placeholder: KEA-64
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs to happen
+      description: Plain language. A future teammate should understand this without asking.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What breaks or stays missing if this is not done? Which requirement or demo line does it serve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: ac
+    attributes:
+      label: Acceptance criteria
+      description: How we will know it is done. Be specific enough to disagree with.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options:
+        - "S — up to 2h"
+        - "M — up to half a day"
+        - "L — about a day"
+        - "XL — more than a day (split it)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [analytics, db, api, narration, routing, verification, voice, frontend, ci, docs, research]
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocked
+    attributes:
+      label: Blocked on
+      description: A person, a decision, another card, or an external dependency. Write "nothing" if clear.

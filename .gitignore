@@ -1,9 +1,34 @@
+# --- Python -----------------------------------------------------------------
 .venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
+
+# --- Generated --------------------------------------------------------------
 openapi.json
 *.db
+
+# --- Secrets — never commit -------------------------------------------------
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+.aws/
+
+# --- OS / editor junk -------------------------------------------------------
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Vault leakage guard ----------------------------------------------------
+# This repo lives inside an Obsidian vault directory tree. Nothing belonging to
+# the vault may ever be committed. See the absolute rule in CONTRIBUTING.md.
+.obsidian/
+.trash/
+*.canvas
