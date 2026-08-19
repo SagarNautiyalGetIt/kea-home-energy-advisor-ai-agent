@@ -1,13 +1,115 @@
+# CI for a five-team monorepo.
+#
+# Design notes, because the obvious "improvements" here are traps:
+#
+# 1. NO third-party actions. Only actions/* , which are first-party and always
+#    allowed. Many course and enterprise orgs restrict Actions to "GitHub-created
+#    and verified" only, and a blocked action fails in about five seconds with an
+#    error that does not obviously say "policy". Not worth the debugging tax.
+#
+# 2. NO path filtering. An earlier version skipped jobs when a PR touched nothing
+#    relevant. The backend suite runs in under a second and the frontend build in
+#    about ten, so filtering bought nothing and cost a whole class of bug — every
+#    filter failure cascades into "skipped" for every job that needs it. Revisit
+#    only if CI ever gets genuinely slow.
+#
+# 3. NO top-level `paths:` key, for the same reason plus a worse one: a workflow
+#    skipped that way never reports a status at all, so a required check would
+#    block every unrelated PR forever.
+#
+# 4. The final `check` job is the ONLY one you should mark as required in branch
+#    protection. It passes only if everything else passed, so you get one stable
+#    gate whose name never changes when jobs are added or renamed. Renaming a
+#    required check silently blocks every PR until someone edits the ruleset.
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 jobs:
-  check:
+  api:
+    name: backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check app tests
+      - run: pytest
+
+  # The frontend generates its types from contracts/openapi.json. If that file
+  # drifts from the code, the frontend compiles cleanly against a lie. Cheaper to
+  # catch here than as an integration bug three days before the pitch.
+  contract:
+    name: contract is up to date
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/pyproject.toml
       - run: pip install -e ".[dev]"
-      - run: ruff check app tests
-      - run: pytest
+        working-directory: services/api
+      - name: Regenerate the contract
+        working-directory: services/api
+        run: |
+          python -c "import json, app.main as m; print(json.dumps(m.app.openapi(), indent=2))" \
+            > ../../contracts/openapi.json
+      - name: Fail if the committed contract is stale
+        run: |
+          if ! git diff --exit-code -- contracts/openapi.json; then
+            echo "::error::contracts/openapi.json is out of date. Run 'make api-spec' and commit the result."
+            exit 1
+          fi
+
+  web:
+    name: frontend (eslint + tsc + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+      # `npm ci` not `npm install` — installs exactly the lockfile and fails if
+      # package.json and the lockfile disagree, which is what you want in CI.
+      - run: npm ci
+      - run: npm run types
+      - run: npm run lint
+      - run: npm run build
+
+  # The single required check. Mark THIS one in branch protection and nothing else,
+  # then adding or renaming a job above never touches the ruleset.
+  check:
+    name: check
+    needs: [api, contract, web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every job succeeded
+        run: |
+          echo "api=${{ needs.api.result }}"
+          echo "contract=${{ needs.contract.result }}"
+          echo "web=${{ needs.web.result }}"
+          if [ "${{ needs.api.result }}" != "success" ] \
+          || [ "${{ needs.contract.result }}" != "success" ] \
+          || [ "${{ needs.web.result }}" != "success" ]; then
+            echo "::error::At least one CI job did not succeed."
+            exit 1
+          fi
+          echo "all green"

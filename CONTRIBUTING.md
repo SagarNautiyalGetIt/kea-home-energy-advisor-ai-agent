@@ -76,10 +76,21 @@ Refs: KEA-64
 | Rule | Why |
 |---|---|
 | `type` from the same list as branches | machine-readable history, release notes generate themselves |
-| `scope` = the area touched (`analytics`, `db`, `api`, `narration`, `voice`, `ci`, `docs`) | tells a reviewer where to look before opening the diff |
+| `scope` = the area touched — see the list below | tells a reviewer where to look before opening the diff |
 | subject ≤ 72 chars, imperative mood, no trailing full stop | "add weather normalisation", not "added" or "adds" |
 | body explains **why** | the diff already shows what |
 | `Refs: KEA-##` on every commit | links code to the board, permanently |
+
+**Scopes**, one per team plus the cross-cutting ones:
+
+| Team | Scopes |
+|---|---|
+| Backend | `api` · `schemas` · `routing` |
+| Frontend | `web` |
+| AI | `narration` · `providers` · `evals` · `voice` |
+| Data | `analytics` · `db` · `data` |
+| AWS | `infra` · `deploy` |
+| Anyone | `ci` · `docs` · `contracts` · `repo` |
 
 ### Good
 
@@ -124,7 +135,7 @@ A PR is a request for a colleague's judgement, not a formality.
 |---|---|
 | 1 | Title uses the **same Conventional Commit format** as commits |
 | 2 | The template must be filled in — no empty sections |
-| 3 | **At least 1 approving review** before merge. Code touching `app/verification/` or `app/analytics/` needs the maintainer's approval |
+| 3 | **At least 1 approving review** before merge. [`CODEOWNERS`](.github/CODEOWNERS) decides who — GitHub requests them automatically. `app/verification/`, `app/schemas.py`, `app/api/`, `alembic/` and `contracts/` need the maintainer specifically |
 | 4 | CI must be green. A red PR is not reviewable |
 | 5 | Keep it under ~400 changed lines where you can. Big PRs get shallow reviews |
 | 6 | Link the issue: `Closes #12` in the description auto-closes it on merge |
@@ -149,7 +160,7 @@ A card is done when **all** of these are true. This is not negotiable per-card.
 - [ ] Runs on a **second** teammate's machine, not only the author's
 - [ ] New analytics functions have unit tests
 - [ ] Any new external figure carries a source link
-- [ ] `openapi.json` regenerated (`make spec`) if any endpoint changed
+- [ ] `contracts/openapi.json` regenerated (`make api-spec`) if any endpoint changed
 - [ ] Anything cut is written into the tech-debt register with a reason
 
 ---
@@ -168,12 +179,19 @@ Every piece of work has an issue. The issue ID is the `KEA-##` used in branches 
 ## 6. Local setup
 
 ```bash
-make setup      # venv + deps
-make db         # postgres in docker — Ollama stays NATIVE
-make migrate
-make test       # must pass before you push
-make lint
+make setup         # installs every service — python venv and node modules
+cp .env.example .env
+make db            # postgres in docker — Ollama stays NATIVE
+make api-migrate
+make api-seed
+make check         # everything CI runs. Must pass before you push
 ```
+
+`make help` lists every target grouped by team. Targets are prefixed by the team that
+owns them (`api-`, `web-`, `ml-`); unprefixed targets are cross-cutting.
+
+Your team's page in [`docs/teams/`](docs/teams/) has the shorter, specific version of
+this.
 
 Copy `.env.example` to `.env` and fill it in. **`.env` is gitignored and must stay that way.**
 If you ever need to add a real secret, it goes in GitHub Actions secrets — never in a file.
@@ -187,6 +205,7 @@ question, write an ADR — it takes ten minutes and saves an argument.
 
 | Document | Location |
 |---|---|
+| **Team onboarding — read yours first** | `docs/teams/` |
 | Product requirements | `docs/prd.md` |
 | Data model / ERD | `docs/erd.md` |
 | API standards | `docs/api-standards.md` |
@@ -194,10 +213,15 @@ question, write an ADR — it takes ten minutes and saves an argument.
 | Smaller dated calls | `docs/decision-log.md` |
 | Sprint boards | `docs/sprints/` |
 
+Each top-level directory also has a README explaining what belongs in it —
+[`services/`](services/), [`ml/`](ml/), [`data/`](data/), [`infra/`](infra/),
+[`contracts/`](contracts/). If you are unsure where a file goes, that is where to look.
+
 ---
 
 ## Related
 
+- [`docs/teams/`](docs/teams/) — what your team owns and how to run it
 - [`docs/api-standards.md`](docs/api-standards.md) — how endpoints are shaped
 - [`docs/prd.md`](docs/prd.md) — what we are building and why
 - [`SECURITY.md`](SECURITY.md) — data handling and secrets

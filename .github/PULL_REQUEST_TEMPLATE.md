@@ -16,10 +16,10 @@ Closes #
 
 <!-- Delete what does not apply. Be specific — "ran the tests" is not evidence. -->
 
-- [ ] `make test` passes locally (N tests)
-- [ ] `make lint` clean
+- [ ] `make check` passes locally (N tests)
 - [ ] Ran on a second machine
-- [ ] `make spec` regenerated `openapi.json` (endpoints changed)
+- [ ] `make api-spec` regenerated `contracts/openapi.json` (endpoints changed)
+- [ ] `make web-types` regenerated frontend types (the contract changed)
 - [ ] Manually checked against the demo script line: ___
 
 ## Definition of Done

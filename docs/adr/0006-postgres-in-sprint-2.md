@@ -35,12 +35,12 @@ customer data leaving the device"* stays true and stays a pitch point.
 **Accepted:**
 
 - One more moving part on demo day. Mitigated by a seeded volume and an idempotent
-  `make seed`, both rehearsed on Day 10 from a cold boot.
+  `make api-seed`, both rehearsed on Day 10 from a cold boot.
 - Docker Desktop must be running on the demo machine. **Ollama still runs natively** —
   Docker on macOS is a Linux VM with no Apple GPU access, so a containerised model
   server would silently drop to CPU speed.
 - Slightly more setup for a teammate cloning the repo: `docker compose up -d db` before
-  `make dev`.
+  `make api-dev`.
 
 **Gained:**
 

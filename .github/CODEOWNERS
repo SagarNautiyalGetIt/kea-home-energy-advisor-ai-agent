@@ -1,36 +1,71 @@
 # CODEOWNERS — who must review what.
 #
-# GitHub automatically requests a review from the owner when a PR touches a
-# matching path. Combined with the "Require review from Code Owners" ruleset,
-# these paths cannot merge without that person's approval.
+# GitHub automatically requests a review from the owner when a PR touches a matching
+# path. Combined with the "Require review from Code Owners" ruleset, these paths cannot
+# merge without that person's or team's approval.
 #
 # Syntax: <path pattern>  <@github-user or @org/team>
 # Last matching rule wins, so order matters — general first, specific last.
 #
-# An owner must have write access or better, or the rule silently does nothing.
+# An owner must have write access or better, or the rule SILENTLY DOES NOTHING.
+# There is no warning. If reviews stop being requested, check team membership first.
+#
+# ---------------------------------------------------------------------------------
+# SETUP REQUIRED — these teams must exist in the CS778-S2-2026-AWS-Challenge org,
+# with write access to this repository, or every rule below is a no-op:
+#
+#   @CS778-S2-2026-AWS-Challenge/hakas-backend
+#   @CS778-S2-2026-AWS-Challenge/hakas-frontend
+#   @CS778-S2-2026-AWS-Challenge/hakas-ai
+#   @CS778-S2-2026-AWS-Challenge/hakas-data
+#   @CS778-S2-2026-AWS-Challenge/hakas-aws
+#
 # Maintainer: @nair-akash
+# ---------------------------------------------------------------------------------
 
-# Default owner for everything in the repo.
-*                           @nair-akash
+# Default owner for anything not matched below.
+*                                   @nair-akash
+
+# --- Services ----------------------------------------------------------------
+
+/services/api/                      @CS778-S2-2026-AWS-Challenge/hakas-backend
+/services/web/                      @CS778-S2-2026-AWS-Challenge/hakas-frontend
+
+# --- Ownership that follows the work, not the directory ----------------------
+#
+# These paths live inside the backend service because the API imports them at
+# request time, but the team that writes them is not the backend team. Ownership
+# is a review rule; it does not require moving code.
+
+/services/api/app/narration/        @CS778-S2-2026-AWS-Challenge/hakas-ai
+/services/api/app/providers/        @CS778-S2-2026-AWS-Challenge/hakas-ai
+/services/api/app/analytics/        @CS778-S2-2026-AWS-Challenge/hakas-data
+/services/api/app/db/               @CS778-S2-2026-AWS-Challenge/hakas-data
+
+# --- Team directories --------------------------------------------------------
+
+/ml/                                @CS778-S2-2026-AWS-Challenge/hakas-ai
+/data/                              @CS778-S2-2026-AWS-Challenge/hakas-data
+/infra/                             @CS778-S2-2026-AWS-Challenge/hakas-aws
 
 # --- Critical paths: the maintainer reviews these personally -----------------
+#
+# Listed last so they win over the team rules above.
 
 # The trust claim of the whole product. If this breaks, "0 fabricated figures"
 # stops being true and nobody notices.
-/app/verification/          @nair-akash
+/services/api/app/verification/     @nair-akash
 
-# Every headline number in the pitch comes out of here.
-/app/analytics/             @nair-akash
-
-# The schema the frontend generates types from. Changes break four people.
-/app/schemas.py             @nair-akash
-/app/api/                   @nair-akash
+# The contract four people generate types from. Breaking it blocks the frontend.
+/services/api/app/schemas.py        @nair-akash
+/services/api/app/api/              @nair-akash
+/contracts/                         @nair-akash
 
 # Migrations are close to irreversible once data exists.
-/alembic/                   @nair-akash
-/app/db/                    @nair-akash
+/services/api/alembic/              @nair-akash
 
 # Decisions of record and the rules themselves.
-/docs/adr/                  @nair-akash
-/CONTRIBUTING.md            @nair-akash
-/.github/                   @nair-akash
+/docs/adr/                          @nair-akash
+/CONTRIBUTING.md                    @nair-akash
+/SECURITY.md                        @nair-akash
+/.github/                           @nair-akash

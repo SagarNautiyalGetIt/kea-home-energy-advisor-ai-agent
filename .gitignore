@@ -6,9 +6,26 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# --- Node / frontend --------------------------------------------------------
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
 # --- Generated --------------------------------------------------------------
-openapi.json
 *.db
+# NOTE: contracts/openapi.json is deliberately COMMITTED, not ignored. It is the
+# contract between backend and frontend — the frontend team must be able to
+# generate types without standing up Postgres and the API first. Regenerate it
+# with `make api-spec` in the same PR as any endpoint change.
+services/web/src/api.d.ts
+
+# --- Terraform / infra state ------------------------------------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
 
 # --- Secrets — never commit -------------------------------------------------
 .env

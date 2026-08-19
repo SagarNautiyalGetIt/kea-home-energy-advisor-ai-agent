@@ -1,0 +1,416 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kea Energy \u2014 Home Energy Advisor",
+    "description": "Every number in every answer is computed by Python and verified before it reaches the customer. The model writes the sentence; it never does the maths.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households": {
+      "get": {
+        "summary": "List Households",
+        "operationId": "list_households_api_households_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HouseholdSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Households Api Households Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}": {
+      "get": {
+        "summary": "Get Household",
+        "operationId": "get_household_api_households__customer_id__get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "summary": "Chat",
+        "description": "Non-streaming path. Simpler to test; /chat/stream is what the UI uses.",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/stream": {
+      "post": {
+        "summary": "Chat Stream",
+        "description": "SSE. Streams the verified answer.\n\nNote the ordering constraint: verification is a whole-text check, so we cannot\nstream raw model output and verify afterwards \u2014 that would put an unverified\nnumber on screen. We verify first, then stream the approved text. On this\nhardware the wait is short; when we move to a hosted model, revisit whether\nsentence-level verification lets us start streaming earlier.",
+        "operationId": "chat_stream_api_chat_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/VerificationReport"
+          },
+          "escalate_to_human": {
+            "type": "boolean",
+            "title": "Escalate To Human",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "intent",
+          "text",
+          "facts",
+          "verification"
+        ],
+        "title": "ChatResponse"
+      },
+      "Fact": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "stable identifier, e.g. 'standing_load_kwh_per_day'"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "description": "kWh | kWh/day | NZD | NZD/year | % | x | days"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "human-readable name for the narrator's benefit"
+          },
+          "display": {
+            "type": "string",
+            "title": "Display",
+            "description": "pre-formatted string, e.g. '$290' or '2.4 kWh a day'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "value",
+          "unit",
+          "label",
+          "display"
+        ],
+        "title": "Fact",
+        "description": "One computed value. Every number the customer ever sees starts life here.\n\n`display` is the canonical rendering. The narration prompt tells the model to\ncopy these strings verbatim rather than formatting numbers itself, which both\nraises pass rate on small models and gives the verifier an exact string to match."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HouseholdSummary": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "daily_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Daily Kwh"
+          },
+          "total_kwh": {
+            "type": "number",
+            "title": "Total Kwh"
+          },
+          "estimated_cost_nzd": {
+            "type": "number",
+            "title": "Estimated Cost Nzd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "label",
+          "period",
+          "daily_kwh",
+          "total_kwh",
+          "estimated_cost_nzd"
+        ],
+        "title": "HouseholdSummary",
+        "description": "Shape the frontend charts against. Fixture-backed until Day 2."
+      },
+      "Intent": {
+        "type": "string",
+        "enum": [
+          "why_bill_high",
+          "what_will_i_pay",
+          "using_more_than_usual",
+          "what_costs_most",
+          "compare_to_last_year",
+          "tariff_check",
+          "hardship",
+          "out_of_scope"
+        ],
+        "title": "Intent",
+        "description": "The questions we handle. Layer 0 maps free text onto exactly one of these.\n\nAdding an intent means adding: a router rule, an analytics path, a narration\nprompt, and golden-set cases. Don't add one without all four."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerificationReport": {
+        "properties": {
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "checked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked",
+            "description": "numeric tokens in the draft"
+          },
+          "unverified": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unverified",
+            "description": "tokens with no matching fact"
+          },
+          "regenerated": {
+            "type": "boolean",
+            "title": "Regenerated",
+            "default": false
+          },
+          "fell_back_to_template": {
+            "type": "boolean",
+            "title": "Fell Back To Template",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "passed"
+        ],
+        "title": "VerificationReport",
+        "description": "Layer 3's output. This is the evidence behind the pitch \u2014 log every one."
+      }
+    }
+  }
+}

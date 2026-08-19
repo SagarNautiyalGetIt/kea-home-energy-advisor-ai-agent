@@ -69,7 +69,7 @@ Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day
 | KEA-13 | Fixture API + 5 demo households | M | Each household demos exactly one finding. **Works with no model installed** |
 | KEA-14 | Graceful degradation | S | Provider failure falls back to the deterministic template instead of a 500 |
 | KEA-15 | Port the real July measurements | M | Ran `measure-july-chart.py`; 31 values into `tests/data/`. Analytics now validated against measured data. **9 tests** |
-| KEA-16 | Generate `openapi.json` | S | 5 paths, 8 schemas — `make spec` |
+| KEA-16 | Generate `openapi.json` | S | 5 paths, 8 schemas — `make api-spec` |
 | KEA-17 | Draft the §5 brief amendment | M | Separates voice-as-app-feature (unfunded) from voice-as-call-deflection (funded by 900 calls/week) |
 | KEA-18 | Demo script template | S | 7 proposed lines, each mapped to a household and a conclusion |
 | KEA-19 | Decision log | S | Eight non-obvious calls recorded with reasons |
@@ -85,10 +85,10 @@ Sizes: **S** ≤ 2h · **M** ≤ half a day · **L** ≈ a day · **XL** > a day
 |---|---|---|---|
 | KEA-28 | ADR-0005 — the two-speed question | M | Evaluated a fast-model / slow-model split for the voice channel. **Outcome: adopt the shape, skip the second model.** Layer 0 knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster, can't fabricate, and loads no competing weights |
 | KEA-29 | Architecture diagrams | M | AI pipeline + backend ER model, published for the team |
-| KEA-21 | ✅ Benchmark both Macs | S | **Done 18 Aug.** MacBook Pro M4 Pro is the demo machine (2.15× the mini). Voice viable at ~1.0 s to first audio. Results + verdict in `scripts/Device Benchmarking/results/` |
+| KEA-21 | ✅ Benchmark both Macs | S | **Done 18 Aug.** MacBook Pro M4 Pro is the demo machine (2.15× the mini). Voice viable at ~1.0 s to first audio. Results + verdict in `ml/benchmarks/device/results/` |
 | KEA-22 | ✅ Confirm the M4 variant | S | **M4 Pro**, 48 GB, 14 cores — confirmed by the benchmark |
 | KEA-38 | ADR-0006 — PostgreSQL from Sprint 2 | M | Reversed the SQLite call. Time-series data, exact decimals for money, and a one-line path to RDS |
-| KEA-30 | Shareable Mac benchmark script | M | `scripts/Device Benchmarking/` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
+| KEA-30 | Shareable Mac benchmark script | M | `ml/benchmarks/device/` — standalone, needs nothing from the repo. Detects chip/memory, runs 3 models × 3 runs, reports words/sec and time-to-first-word, writes a results file to send back |
 
 ---
 

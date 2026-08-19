@@ -47,7 +47,7 @@ a long silence.
 ## Running it yourself
 
 ```bash
-cd "scripts/Device Benchmarking"
+cd ml/benchmarks/device
 bash bench-mac.sh
 ```
 

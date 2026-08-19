@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Tailwind v4 configures itself from CSS, not tailwind.config.js. Design tokens go
+   in @theme and become utilities automatically — `--color-kea-600` gives you
+   bg-kea-600, text-kea-600, border-kea-600 and so on. */
+@theme {
+  --color-kea-50: oklch(0.97 0.02 155);
+  --color-kea-500: oklch(0.65 0.14 155);
+  --color-kea-600: oklch(0.56 0.13 155);
+  --color-kea-900: oklch(0.31 0.06 155);
+}

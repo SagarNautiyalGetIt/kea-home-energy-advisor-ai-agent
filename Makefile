@@ -1,51 +1,78 @@
-.PHONY: help setup db migrate seed dev test lint fmt types check bench pull clean
+# Root Makefile — the one entry point for all five teams.
+#
+# Targets are prefixed by the team that owns them. Anything unprefixed is
+# cross-cutting (setup, check, db). Per-service detail lives in that service's
+# own Makefile; this file only delegates, so there is one place to look.
+.PHONY: help setup check db db-stop db-logs \
+        api-migrate api-seed api-dev api-test api-lint api-check api-spec \
+        web-install web-dev web-build web-lint web-types \
+        ml-pull ml-bench clean
 
-help:
-	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n",$$1,$$2}'
+COMPOSE := docker compose -f infra/docker-compose.yml
+API     := $(MAKE) -C services/api
+WEB     := $(MAKE) -C services/web
 
-setup:  ## create the venv and install everything
-	python3 -m venv .venv
-	.venv/bin/pip install -q --upgrade pip
-	.venv/bin/pip install -q -e ".[dev]"
-	@echo "done — activate with: source .venv/bin/activate"
+help:  ## show this help
+	@awk 'BEGIN{FS=":.*?## "} /^## /{printf "\n\033[1m%s\033[0m\n", substr($$0,4); next} /^[a-z][a-z-]*:.*?## /{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
 
-db:  ## start postgres (Ollama stays native - Docker has no Apple GPU access)
-	docker compose up -d db
+## Everyone
+setup:  ## install every service's dependencies
+	$(API) setup
+	$(WEB) install
+	@echo ""
+	@echo "next: cp .env.example .env && make db && make api-migrate && make api-seed"
+
+check:  ## run every team's CI checks — do this before you push
+	$(API) check
+	$(WEB) lint
+
+db:  ## start postgres (Ollama stays NATIVE — Docker has no Apple GPU access)
+	$(COMPOSE) up -d db
 	@echo "waiting for postgres..."
-	@until docker compose exec -T db pg_isready -U kea -d kea >/dev/null 2>&1; do sleep 1; done
+	@until $(COMPOSE) exec -T db pg_isready -U kea -d kea >/dev/null 2>&1; do sleep 1; done
 	@echo "postgres ready on :5432"
 
-migrate:  ## apply migrations
-	.venv/bin/alembic upgrade head
+db-stop:  ## stop postgres, keep the data volume
+	$(COMPOSE) stop db
 
-seed:  ## load the five demo households (idempotent)
-	.venv/bin/python -m app.db.seed
+db-logs:  ## tail postgres logs
+	$(COMPOSE) logs -f db
 
-dev:  ## run the API with reload on :8000
-	.venv/bin/uvicorn app.main:app --reload --port 8000
+## Backend team — services/api
+api-migrate:  ## apply database migrations
+	$(API) migrate
+api-seed:  ## load the five demo households
+	$(API) seed
+api-dev:  ## run the API on :8000, docs at /docs
+	$(API) dev
+api-test:  ## run the backend test suite
+	$(API) test
+api-lint:  ## ruff
+	$(API) lint
+api-check:  ## lint + test
+	$(API) check
+api-spec:  ## regenerate contracts/openapi.json — REQUIRED when an endpoint changes
+	$(API) spec
 
-test:  ## run the test suite
-	.venv/bin/pytest
+## Frontend team — services/web
+web-install:  ## install node dependencies
+	$(WEB) install
+web-dev:  ## run the dev server on :5173
+	$(WEB) dev
+web-build:  ## production build
+	$(WEB) build
+web-lint:  ## eslint + tsc
+	$(WEB) lint
+web-types:  ## regenerate src/api.d.ts from contracts/openapi.json
+	$(WEB) types
 
-lint:  ## check style
-	.venv/bin/ruff check app tests
-
-fmt:  ## fix style
-	.venv/bin/ruff check --fix app tests
-	.venv/bin/ruff format app tests
-
-check: lint test  ## what CI runs
-
-pull:  ## download the candidate models (run natively on macOS, NOT in Docker)
+## AI team — ml/
+ml-pull:  ## download the candidate models (run natively on macOS, NOT in Docker)
 	ollama pull gemma3:4b
 	ollama pull qwen3:4b
-
-bench:  ## measure words/sec for each candidate model on this machine
-	cd "scripts/Device Benchmarking" && bash bench-mac.sh
-
-spec:  ## write the OpenAPI spec for the frontend to generate types from
-	.venv/bin/python -c "import json, app.main as m; print(json.dumps(m.app.openapi(), indent=2))" > openapi.json
-	@echo "wrote openapi.json — frontend: npx openapi-typescript openapi.json -o src/api.d.ts"
+ml-bench:  ## measure words/sec for each candidate model on this machine
+	cd ml/benchmarks/device && bash bench-mac.sh
 
 clean:
-	rm -rf .venv .pytest_cache **/__pycache__ openapi.json
+	$(API) clean
+	$(WEB) clean
