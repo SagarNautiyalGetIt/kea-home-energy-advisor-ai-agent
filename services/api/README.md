@@ -33,17 +33,18 @@ a small local model, so we removed it — [ADR-0002](../../docs/adr/0002-narrate
 
 ## Cross-team ownership inside this service
 
-Three directories here are reviewed by other teams, because that is where their work
-actually runs. See [`.github/CODEOWNERS`](../../.github/CODEOWNERS).
+Three directories here are written by other teams, because this is where their work
+actually runs. Not enforced by tooling — **tag the owning team on the PR.**
 
-| Path | Reviewed by |
+| Path | Written by |
 |---|---|
-| `app/narration/`, `app/providers/` | AI team |
-| `app/analytics/`, `app/db/` | Data team |
+| `app/narration/`, `app/providers/` | [AI team](../../docs/teams/ai.md) |
+| `app/analytics/`, `app/db/` | [Data team](../../docs/teams/data.md) |
 | `app/verification/`, `app/schemas.py`, `app/api/`, `alembic/` | Maintainer |
 
 `app/verification/` is the trust claim of the whole product. If it breaks, "0 fabricated
-figures" stops being true and nobody notices. That is why it needs a named approval.
+figures" stops being true and nobody notices. That is why
+[`.github/CODEOWNERS`](../../.github/CODEOWNERS) requires a named approval on it.
 
 ## If you change an endpoint
 

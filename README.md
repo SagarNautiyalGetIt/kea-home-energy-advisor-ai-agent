@@ -44,9 +44,13 @@ docs/             —               ADRs, PRD, ERD, sprint boards, team onboardi
 
 Two teams own code that sits inside `services/api/`: the AI team writes
 `app/narration/`, the Data team writes `app/analytics/`. That code lives in the backend
-service because the API imports it at request time. **Ownership is a review rule, not a
-directory** — [`.github/CODEOWNERS`](.github/CODEOWNERS) routes each path to the right
-team automatically.
+service because the API imports it at request time — **ownership is a convention, not a
+directory.** Who owns what is written down in [`docs/teams/`](docs/teams/); nothing stops
+you editing another team's files, but tell them.
+
+[`.github/CODEOWNERS`](.github/CODEOWNERS) currently routes every review to the
+maintainer. To hand an area to someone, add their `@handle` to that line — they only need
+write access to the repo.
 
 ## Architecture
 

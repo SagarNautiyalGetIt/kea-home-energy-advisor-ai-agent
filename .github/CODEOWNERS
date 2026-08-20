@@ -1,68 +1,41 @@
 # CODEOWNERS — who must review what.
 #
 # GitHub automatically requests a review from the owner when a PR touches a matching
-# path. Combined with the "Require review from Code Owners" ruleset, these paths cannot
-# merge without that person's or team's approval.
+# path. Combined with the "Require review from Code Owners" ruleset, these paths
+# cannot merge without that person's approval.
 #
-# Syntax: <path pattern>  <@github-user or @org/team>
+# Syntax: <path pattern>  <@github-user>
 # Last matching rule wins, so order matters — general first, specific last.
 #
 # An owner must have write access or better, or the rule SILENTLY DOES NOTHING.
-# There is no warning. If reviews stop being requested, check team membership first.
-#
-# ---------------------------------------------------------------------------------
-# SETUP REQUIRED — these teams must exist in the CS778-S2-2026-AWS-Challenge org,
-# with write access to this repository, or every rule below is a no-op:
-#
-#   @CS778-S2-2026-AWS-Challenge/hakas-backend
-#   @CS778-S2-2026-AWS-Challenge/hakas-frontend
-#   @CS778-S2-2026-AWS-Challenge/hakas-ai
-#   @CS778-S2-2026-AWS-Challenge/hakas-data
-#   @CS778-S2-2026-AWS-Challenge/hakas-aws
-#
-# Maintainer: @nair-akash
-# ---------------------------------------------------------------------------------
+# There is no warning. If reviews stop being requested, check repo access first.
 
-# Default owner for anything not matched below.
+# Everything, unless a more specific rule below overrides it.
 *                                   @nair-akash
 
-# --- Services ----------------------------------------------------------------
-
-/services/api/                      @CS778-S2-2026-AWS-Challenge/hakas-backend
-/services/web/                      @CS778-S2-2026-AWS-Challenge/hakas-frontend
-
-# --- Ownership that follows the work, not the directory ----------------------
+# --- Critical paths ----------------------------------------------------------
 #
-# These paths live inside the backend service because the API imports them at
-# request time, but the team that writes them is not the backend team. Ownership
-# is a review rule; it does not require moving code.
-
-/services/api/app/narration/        @CS778-S2-2026-AWS-Challenge/hakas-ai
-/services/api/app/providers/        @CS778-S2-2026-AWS-Challenge/hakas-ai
-/services/api/app/analytics/        @CS778-S2-2026-AWS-Challenge/hakas-data
-/services/api/app/db/               @CS778-S2-2026-AWS-Challenge/hakas-data
-
-# --- Team directories --------------------------------------------------------
-
-/ml/                                @CS778-S2-2026-AWS-Challenge/hakas-ai
-/data/                              @CS778-S2-2026-AWS-Challenge/hakas-data
-/infra/                             @CS778-S2-2026-AWS-Challenge/hakas-aws
-
-# --- Critical paths: the maintainer reviews these personally -----------------
+# Listed separately from the catch-all so the intent survives when other owners
+# are added. To hand an area to a teammate, add their @handle on that line — they
+# only need write access to the repo. Nothing here requires GitHub Teams.
 #
-# Listed last so they win over the team rules above.
+#   /services/api/app/narration/      @nair-akash @someone-else
 
 # The trust claim of the whole product. If this breaks, "0 fabricated figures"
 # stops being true and nobody notices.
 /services/api/app/verification/     @nair-akash
 
-# The contract four people generate types from. Breaking it blocks the frontend.
+# Every headline number in the pitch comes out of here.
+/services/api/app/analytics/        @nair-akash
+
+# The contract the frontend generates types from. Breaking it blocks four people.
 /services/api/app/schemas.py        @nair-akash
 /services/api/app/api/              @nair-akash
 /contracts/                         @nair-akash
 
 # Migrations are close to irreversible once data exists.
 /services/api/alembic/              @nair-akash
+/services/api/app/db/               @nair-akash
 
 # Decisions of record and the rules themselves.
 /docs/adr/                          @nair-akash
