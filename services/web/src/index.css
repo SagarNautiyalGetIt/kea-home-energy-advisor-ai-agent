@@ -414,7 +414,7 @@ html[data-reduced-motion=true] *,html[data-reduced-motion=true] *::before,html[d
   .toast-stack{right:16px;bottom:16px;left:16px}.toast{width:100%}
 }
 
-@media print{.sidebar,.topbar,.tariff-note,.billing-heading>button,.billing-summary-grid,.invoice-history,.toast-stack{display:none!important}.app-shell{display:block}.page-content{padding:0}.invoice{box-shadow:none;border:0;width:100%;max-width:none}}
+@media print{.sidebar,.topbar,.billing-heading>button,.billing-summary-grid,.invoice-history,.toast-stack{display:none!important}.app-shell{display:block}.page-content{padding:0}.invoice{box-shadow:none;border:0;width:100%;max-width:none}}
 
 /* Production UX refinement */
 body{font-size:14px}

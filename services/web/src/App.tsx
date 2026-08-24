@@ -4,14 +4,20 @@ import AppShell from './components/AppShell'
 import LogoutModal from './components/LogoutModal'
 import OnboardingModal from './components/OnboardingModal'
 import ToastStack, { type ToastMessage } from './components/ToastStack'
+import AssistantPage from './pages/AssistantPage'
+import BillingPage from './pages/BillingPage'
+import DashboardPage from './pages/DashboardPage'
 import HelpPage from './pages/HelpPage'
 import LoginPage from './pages/LoginPage'
+import NotFoundPage from './pages/NotFoundPage'
 import PlansPage from './pages/PlansPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
+import UsagePage from './pages/UsagePage'
 import type { PageId } from './types/navigation'
 
 const routeFor: Record<PageId, string> = {
+  dashboard: '/dashboard', usage: '/usage', billing: '/billing', assistant: '/assistant',
   plans: '/plans', profile: '/profile', help: '/help', settings: '/settings',
 }
 
@@ -34,7 +40,7 @@ function App() {
   const login = () => {
     localStorage.setItem('kea-demo-session', 'true')
     setLoggedIn(true)
-    navigate('/plans')
+    navigate('/dashboard')
     if (localStorage.getItem('kea-onboarding-seen') !== 'true') setShowOnboarding(true)
     addToast('Welcome back, Adela')
   }
@@ -50,13 +56,17 @@ function App() {
 
   return <AppShell active={active} onNavigate={go} onLogout={() => setShowLogout(true)}>
     <Routes>
-      <Route path="/" element={<Navigate to="/plans" replace/>}/>
-      <Route path="/login" element={<Navigate to="/plans" replace/>}/>
+      <Route path="/" element={<Navigate to="/dashboard" replace/>}/>
+      <Route path="/login" element={<Navigate to="/dashboard" replace/>}/>
+      <Route path="/dashboard" element={<DashboardPage onNavigate={go} onToast={addToast}/>}/>
+      <Route path="/usage" element={<UsagePage/>}/>
+      <Route path="/billing" element={<BillingPage onToast={addToast}/>}/>
+      <Route path="/assistant" element={<AssistantPage onEscalate={() => addToast('A Consumer Care request has been prepared', 'info')} onToast={addToast}/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>
-      <Route path="*" element={<Navigate to="/plans" replace/>}/>
+      <Route path="*" element={<NotFoundPage onHome={() => go('dashboard')}/>}/>
     </Routes>
     {showLogout && <LogoutModal onCancel={()=>setShowLogout(false)} onConfirm={confirmLogout}/>}
     {showOnboarding && <OnboardingModal onClose={closeOnboarding}/>}

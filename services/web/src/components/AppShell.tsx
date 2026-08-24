@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, BriefcaseBusiness, CheckCheck, CircleHelp, House, Menu, Moon, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
+import { Bell, BriefcaseBusiness, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, Menu, MessagesSquare, Moon, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
 import type { PageId } from '../types/navigation'
 
 const nav: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
+  { id: 'dashboard', label: 'Dashboard', icon: House, keywords: 'home overview cost projection' },
+  { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, keywords: 'graph energy kwh electricity' },
+  { id: 'billing', label: 'Billing', icon: CircleDollarSign, keywords: 'bill invoice payment history' },
+  { id: 'assistant', label: 'AI Assistant', icon: MessagesSquare, keywords: 'chat question help consumer care' },
   { id: 'plans', label: 'Plans', icon: BriefcaseBusiness, keywords: 'pricing compare tariff' },
   { id: 'profile', label: 'Profile', icon: SquareUserRound, keywords: 'customer account details' },
 ]
@@ -97,6 +101,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
           </div>
         </header>
         <section className="page-content">{children}</section>
+        <small className="tariff-note">Dollar figures are illustrative at 30c/kWh; Kea Energy&apos;s real tariff is not public.</small>
       </div>
     </div>
   )
