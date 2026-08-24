@@ -463,3 +463,29 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 @media(max-width:760px){
   .assistant-page{min-height:680px;height:calc(100svh - 105px)}.prompt-grid{grid-template-columns:1fr}.assistant-start{margin:24px auto}.assistant-start .prompt-grid>button{min-height:58px}.assistant-start h2{font-size:23px}.bubble,.bubble.long{max-width:90%;font-size:16px}.attachment-menu{position:fixed;right:16px;bottom:90px;left:16px;width:auto}.settings-list{padding:0 18px}.contact-actions{flex-wrap:wrap}
 }
+
+/* KEA-57 — the assistant on the real pipeline.
+   Verification state, escalation and the offline notice are new surfaces: before this
+   the page answered from hardcoded text and none of these states could occur. */
+.assistant-controls{display:flex;align-items:center;gap:10px;margin-left:auto}
+.household-picker select{height:38px;padding:0 10px;border:1px solid #e0e5f2;border-radius:11px;color:var(--ink);background:#fff;font-size:13px;font-weight:600}
+.household-picker select:disabled{opacity:.5}
+
+.assistant-offline{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px 16px;border:1px solid #f3d9a6;border-radius:12px;background:#fdf6e7}
+.assistant-offline>svg{flex:0 0 auto;width:22px;color:#c8862a}
+.assistant-offline strong,.assistant-offline small{display:block}
+.assistant-offline small{color:#8a7550;font-size:12px}
+.assistant-offline button{flex:0 0 auto;margin-left:auto;padding:8px 14px;border:1px solid #e6cf9f;border-radius:10px;color:#8a6420;background:#fff;font-weight:700}
+
+/* Deliberately quiet. The claim is strong enough that shouting it reads as insecurity —
+   and it must never appear on an answer that failed verification. */
+.verified-badge{display:flex;align-items:center;gap:6px;margin-top:10px;color:#3f8f6b;font-size:11px;font-weight:600}
+.verified-badge svg{width:14px}
+
+.answer-withheld{margin:0;color:#5c6788}
+
+.escalation-prompt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:11px 15px;border:1px solid #d9e3f8;border-radius:12px;background:#f2f6ff;color:#3c4a70;font-size:13px}
+.escalation-prompt button{padding:6px 12px;border:0;border-radius:9px;color:#fff;background:var(--purple);font-size:12px;font-weight:700}
+
+html[data-theme=dark] .assistant-offline{background:#2a2416;border-color:#4a3d22}
+html[data-theme=dark] .escalation-prompt{background:#161d33;border-color:#2c3552;color:#c3cdea}
