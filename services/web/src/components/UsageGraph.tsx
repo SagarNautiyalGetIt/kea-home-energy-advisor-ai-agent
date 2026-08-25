@@ -10,6 +10,11 @@ export type UsageGraphProps = {
   compact?: boolean
   ariaLabel?: string
   comparisonValues?: number[]
+  xLabelInterval?: number
+  showLegend?: boolean
+  secondaryLabels?: string[]
+  tooltipLabels?: string[]
+  animate?: boolean
 }
 
 const formatMetric = (value: number, unit: UsageUnit, max: number) => {
@@ -17,7 +22,7 @@ const formatMetric = (value: number, unit: UsageUnit, max: number) => {
   return unit === '$' ? `$${value.toFixed(decimals)}` : `${value.toFixed(decimals)} kWh`
 }
 
-export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues }: UsageGraphProps) {
+export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false }: UsageGraphProps) {
   const gradientId = `usage-fill-${useId().replaceAll(':', '')}`
   const graphRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(760)
@@ -79,25 +84,37 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
           )
         })}
 
-        <path d={areaPath} fill={`url(#${gradientId})`} />
-        {comparisonPath&&<path d={comparisonPath} className="comparison-line"/>}
-        <path d={linePath} className="chart-line" />
-        {points.map((point, index) => {
-          const value = safeValues[index] ?? 0
-          return <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r={activeIndex===index?6:compact?3:4} className="chart-point interactive-point" tabIndex={0} role="button" aria-label={`${labels[index] ?? `Point ${index+1}`}: ${formatMetric(value,unit,ceiling)}`} onMouseEnter={()=>setActiveIndex(index)} onFocus={()=>setActiveIndex(index)} onBlur={()=>setActiveIndex(null)} />
-        })}
+        <g>
+          <path d={areaPath} fill={`url(#${gradientId})`} className={animate ? 'chart-area-reveal' : undefined} />
+          {comparisonPath&&<path d={comparisonPath} pathLength={animate ? 1 : undefined} className={`comparison-line ${animate ? 'chart-line-reveal' : ''}`}/>}
+          <path d={linePath} pathLength={animate ? 1 : undefined} className={`chart-line ${animate ? 'chart-line-reveal' : ''}`} />
+          <g className={animate ? 'chart-points-reveal' : undefined}>
+          {points.map((point, index) => {
+            const value = safeValues[index] ?? 0
+            return <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r={activeIndex===index?6:compact?3:4} className="chart-point interactive-point" tabIndex={0} role="button" aria-label={`${tooltipLabels?.[index] ?? labels[index] ?? `Point ${index+1}`}: ${formatMetric(value,unit,ceiling)}`} onMouseEnter={()=>setActiveIndex(index)} onFocus={()=>setActiveIndex(index)} onBlur={()=>setActiveIndex(null)} />
+          })}
+          </g>
+        </g>
         {activeIndex!==null&&(() => {
           const activePoint = points[activeIndex]
           const activeValue = safeValues[activeIndex] ?? 0
           if (!activePoint) return null
-          return <g className="chart-tooltip" pointerEvents="none"><line x1={activePoint.x} x2={activePoint.x} y1={margin.top} y2={baseline}/><rect x={Math.min(width-126,Math.max(4,activePoint.x-57))} y={Math.max(4,activePoint.y-47)} width="116" height="34" rx="8"/><text x={Math.min(width-68,Math.max(62,activePoint.x))} y={Math.max(25,activePoint.y-25)} textAnchor="middle">{labels[activeIndex] ?? `Point ${activeIndex + 1}`} · {formatMetric(activeValue,unit,ceiling)}</text></g>
+          const tooltipLabel = tooltipLabels?.[activeIndex] ?? labels[activeIndex] ?? `Point ${activeIndex + 1}`
+          const tooltipWidth = tooltipLabels ? 190 : 116
+          const tooltipX = Math.min(width-tooltipWidth-4,Math.max(4,activePoint.x-tooltipWidth/2))
+          return <g className="chart-tooltip" pointerEvents="none"><line x1={activePoint.x} x2={activePoint.x} y1={margin.top} y2={baseline}/><rect x={tooltipX} y={Math.max(4,activePoint.y-47)} width={tooltipWidth} height="34" rx="8"/><text x={tooltipX+tooltipWidth/2} y={Math.max(25,activePoint.y-25)} textAnchor="middle">{tooltipLabel} · {formatMetric(activeValue,unit,ceiling)}</text></g>
         })()}
         {labels.map((label, index) => {
+          if (index % xLabelInterval !== 0) return null
           const x = margin.left + (index * chartWidth) / Math.max(labels.length - 1, 1)
-          return <text key={`${label}-${index}`} x={x} y={height - 10} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} className="axis-label x-axis-label">{label}</text>
+          const textAnchor = index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'
+          return <g key={`${label}-${index}`}>
+            <text x={x} y={secondaryLabels ? height - 20 : height - 10} textAnchor={textAnchor} className="axis-label x-axis-label">{label}</text>
+            {secondaryLabels?.[index]&&<text x={x} y={height - 7} textAnchor={textAnchor} className="axis-label x-axis-date-label">{secondaryLabels[index]}</text>}
+          </g>
         })}
       </svg>
-      <div className="chart-legend"><span><i className="legend-current"/>Current period</span>{comparisonValues&&<span><i className="legend-previous"/>Previous period</span>}</div>
+      {showLegend&&<div className="chart-legend"><span><i className="legend-current"/>Current period</span>{comparisonValues&&<span><i className="legend-previous"/>Previous period</span>}</div>}
       <p className="sr-only">{ariaLabel}. Highest value is {formatMetric(Math.max(...safeValues),unit,ceiling)} and lowest value is {formatMetric(Math.min(...safeValues),unit,ceiling)}.</p>
     </div>
   )

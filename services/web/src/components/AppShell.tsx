@@ -96,12 +96,12 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
           <button aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} theme`} className="round-action" onClick={toggleTheme}>{theme === 'dark' ? <Sun/> : <Moon/>}</button>
 
           <div className="topbar-control profile-control">
-            <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/kea-profile.png" alt=""/></button>
-            {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/kea-profile.png" alt=""/><div><strong>Adela Parkson</strong><small>CID: 110733ap</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; support</button><button className="profile-logout" onClick={onLogout}>Logout</button></div>}
+            <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/assets/profile/kea-profile.png" alt=""/></button>
+            {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>Adela Parkson</strong><small>CID: 110733ap</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; support</button><button className="profile-logout" onClick={onLogout}>Logout</button></div>}
           </div>
         </header>
         <section className="page-content">{children}</section>
-        <small className="tariff-note">Dollar figures are illustrative at 30c/kWh; Kea Energy&apos;s real tariff is not public.</small>
+        <small className="tariff-note">© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</small>
       </div>
     </div>
   )
