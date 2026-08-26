@@ -37,7 +37,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: () => void; o
         </div>
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
-      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand.png" alt="" /><strong>KEA ENERGY</strong></aside>
+      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand.svg" alt="" /><strong>KEA ENERGY</strong></aside>
       {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={()=>{setShowForgot(false);onToast('Password reset instructions prepared for your email','info')}}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" onChange={(event)=>setEmail(event.target.value)}/></div></Modal>}
     </main>
   )

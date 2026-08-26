@@ -6,10 +6,11 @@ export type UsageSummaryCardProps = {
   detail: string
   icon: ReactNode
   trend?: string
-  tone?: 'purple' | 'coral' | 'teal'
+  share?: string
+  tone?: 'purple' | 'coral' | 'amber' | 'indigo' | 'teal'
 }
 
-export default function UsageSummaryCard({ title, value, detail, icon, trend, tone = 'purple' }: UsageSummaryCardProps) {
+export default function UsageSummaryCard({ title, value, detail, icon, trend, share, tone = 'purple' }: UsageSummaryCardProps) {
   return (
     <article className={`usage-summary-card usage-summary-${tone}`}>
       <div className="usage-summary-icon" aria-hidden="true">{icon}</div>
@@ -19,6 +20,7 @@ export default function UsageSummaryCard({ title, value, detail, icon, trend, to
         <small>{detail}</small>
       </div>
       {trend && <em>{trend}</em>}
+      {share && <em className="usage-summary-share">{share}</em>}
     </article>
   )
 }

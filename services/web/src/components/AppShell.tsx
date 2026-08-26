@@ -1,21 +1,36 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, BriefcaseBusiness, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, Menu, MessagesSquare, Moon, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
+import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
 import type { PageId } from '../types/navigation'
 
-const nav: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
+// Sprint 2: Plans is not a key feature yet. Keep its page and route intact, but
+// hide its navigation/search entry until the feature is ready to be exposed.
+// Sprint 2: keep the completed Plans page available in code, but hide its
+// navigation entry until the feature is brought back into scope.
+const SHOW_PLANS_NAV_ITEM = false
+// Temporarily hide Profile from the navigation during Sprint 2. Its page and
+// route remain available; change this flag to true when it should be exposed.
+const SHOW_PROFILE_NAV_ITEM = false
+
+const allNavItems: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
   { id: 'dashboard', label: 'Dashboard', icon: House, keywords: 'home overview cost projection' },
   { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, keywords: 'graph energy kwh electricity' },
   { id: 'billing', label: 'Billing', icon: CircleDollarSign, keywords: 'bill invoice payment history' },
+  { id: 'plans', label: 'Plans', icon: ListChecks, keywords: 'pricing compare tariff' },
   { id: 'assistant', label: 'AI Assistant', icon: MessagesSquare, keywords: 'chat question help consumer care' },
-  { id: 'plans', label: 'Plans', icon: BriefcaseBusiness, keywords: 'pricing compare tariff' },
   { id: 'profile', label: 'Profile', icon: SquareUserRound, keywords: 'customer account details' },
 ]
 
+const nav = allNavItems.filter((item) => {
+  if (item.id === 'plans') return SHOW_PLANS_NAV_ITEM
+  if (item.id === 'profile') return SHOW_PROFILE_NAV_ITEM
+  return true
+})
+
 const utilityPages: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
-  { id: 'help', label: 'Help & Support', icon: CircleHelp, keywords: 'faq contact outage support' },
   { id: 'settings', label: 'Settings', icon: Settings, keywords: 'theme alerts privacy preferences' },
+  { id: 'help', label: 'Help & Support', icon: CircleHelp, keywords: 'faq contact outage support' },
 ]
 
 type AppShellProps = {
@@ -83,21 +98,23 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
           <button className="hamburger" aria-label="Open menu" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu/></button>
           <div className="mobile-brand"><BrandMark compact /></div>
 
-          <div className="topbar-control search-control">
+          <div className="topbar-cluster">
+            <div className="topbar-control search-control">
             <div className="search-box"><Search aria-hidden="true"/><input aria-label="Search pages" placeholder="Search" value={query} onFocus={() => setOpenPanel('search')} onChange={(event) => { setQuery(event.target.value); setOpenPanel('search') }}/>{query && <button aria-label="Clear search" onClick={() => setQuery('')}><X/></button>}</div>
             {openPanel === 'search' && <div className="topbar-panel search-results"><header><strong>Quick navigation</strong><button onClick={() => setOpenPanel(null)}><X/></button></header>{searchResults.length ? searchResults.map((item) => <button key={item.id} onClick={() => go(item.id)}><item.icon/><span><strong>{item.label}</strong><small>{item.keywords}</small></span></button>) : <p>No matching pages found.</p>}</div>}
-          </div>
+            </div>
 
-          <div className="topbar-control">
-            <button aria-label="Notifications" className="round-action" aria-expanded={openPanel === 'notifications'} onClick={() => setOpenPanel(openPanel === 'notifications' ? null : 'notifications')}><Bell aria-hidden="true"/>{unread>0&&<b className="notification-count">{unread}</b>}</button>
-            {openPanel === 'notifications' && <div className="topbar-panel notifications-panel"><header><strong>Notifications</strong><button onClick={() => setNotifications((items) => items.map((item) => ({...item, unread:false})))}><CheckCheck/>Mark all read</button></header>{notifications.map((item) => <button className={item.unread?'unread':''} key={item.id} onClick={() => setNotifications((items) => items.map((entry) => entry.id === item.id ? {...entry, unread:false} : entry))}><span></span><div><strong>{item.title}</strong><small>{item.detail}</small></div></button>)}</div>}
-          </div>
+            <div className="topbar-control">
+              <button aria-label="Notifications" className="round-action" aria-expanded={openPanel === 'notifications'} onClick={() => setOpenPanel(openPanel === 'notifications' ? null : 'notifications')}><Bell aria-hidden="true"/>{unread>0&&<b className="notification-count">{unread}</b>}</button>
+              {openPanel === 'notifications' && <div className="topbar-panel notifications-panel"><header><strong>Notifications</strong><button onClick={() => setNotifications((items) => items.map((item) => ({...item, unread:false})))}><CheckCheck/>Mark all read</button></header>{notifications.map((item) => <button className={item.unread?'unread':''} key={item.id} onClick={() => setNotifications((items) => items.map((entry) => entry.id === item.id ? {...entry, unread:false} : entry))}><span></span><div><strong>{item.title}</strong><small>{item.detail}</small></div></button>)}</div>}
+            </div>
 
-          <button aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} theme`} className="round-action" onClick={toggleTheme}>{theme === 'dark' ? <Sun/> : <Moon/>}</button>
+            <button aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} theme`} className="round-action" onClick={toggleTheme}>{theme === 'dark' ? <Sun/> : <Moon/>}</button>
 
-          <div className="topbar-control profile-control">
-            <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/assets/profile/kea-profile.png" alt=""/></button>
-            {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>Adela Parkson</strong><small>CID: 110733ap</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; support</button><button className="profile-logout" onClick={onLogout}>Logout</button></div>}
+            <div className="topbar-control profile-control">
+              <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/assets/profile/kea-profile.png" alt=""/></button>
+              {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>Adela Parkson</strong><small>CID: 110733ap</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My Profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; Support</button><button onClick={onLogout}><LogOut/>Logout</button></div>}
+            </div>
           </div>
         </header>
         <section className="page-content">{children}</section>
