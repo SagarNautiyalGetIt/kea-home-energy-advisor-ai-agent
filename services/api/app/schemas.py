@@ -140,6 +140,48 @@ class ChatResponse(BaseModel):
     escalate_to_human: bool = False
 
 
+class BillShockWarning(BaseModel):
+    """The proactive half of the product.
+
+    Everything else in this API answers a question the customer asked. This one has to
+    reach them *before* the bill does, so it is a GET the dashboard polls rather than a
+    chat intent — a warning that only appears if you think to ask for it is not a
+    warning.
+
+    `triggered` is the only field the UI should branch on. The figures are present either
+    way so the dashboard can show a calm "on track" state without a second request.
+    """
+
+    customer_id: str
+    period: str
+    triggered: bool
+    reasons: list[str] = Field(
+        default_factory=list,
+        description="above_comparable_homes | rising_within_cycle. Empty when not triggered.",
+    )
+
+    days_elapsed: int
+    days_in_cycle: int
+    days_remaining: int = Field(
+        description="What makes this actionable rather than just bad news."
+    )
+
+    usage_so_far_kwh: float
+    cost_so_far_nzd: float
+    projected_cycle_cost_nzd: float
+    comparable_home_cost_nzd: float
+    overshoot_nzd: float
+    overshoot_pct: float
+    recent_trend_pct: float
+
+    facts: list[Fact] = Field(
+        default_factory=list,
+        description="The same computed facts the narration is limited to, so the UI and "
+        "the assistant can never disagree about a figure.",
+    )
+    caveats: list[str] = Field(default_factory=list)
+
+
 class HouseholdSummary(BaseModel):
     """Shape the frontend charts against. Fixture-backed until Day 2."""
 

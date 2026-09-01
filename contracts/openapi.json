@@ -87,6 +87,62 @@
         }
       }
     },
+    "/api/households/{customer_id}/bill-shock": {
+      "get": {
+        "summary": "Bill Shock",
+        "description": "The bill-shock warning. A GET, because it has to reach the customer unprompted.\n\nEvery other endpoint answers a question somebody asked. A warning that only appears\nif you think to ask for it is not a warning, so this is polled by the dashboard\nrather than routed through chat.\n\n`as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded\nhousehold holds a complete July, and a warning delivered on day 31 is not a warning,\nit is a bill. Which days show what is not obvious from the data, so: H-JUL trips\n`above_comparable_homes` at every point in the cycle, and H-COLD trips\n`rising_within_cycle` on days 6-8 as the cold snap starts \u2014 that second one is the\nbetter demo, because there are still 25 days left to act on it.",
+        "operationId": "bill_shock_api_households__customer_id__bill_shock_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "as_at_day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As At Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillShockWarning"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/chat": {
       "post": {
         "summary": "Chat",
@@ -166,6 +222,104 @@
   },
   "components": {
     "schemas": {
+      "BillShockWarning": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "triggered": {
+            "type": "boolean",
+            "title": "Triggered"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "above_comparable_homes | rising_within_cycle. Empty when not triggered."
+          },
+          "days_elapsed": {
+            "type": "integer",
+            "title": "Days Elapsed"
+          },
+          "days_in_cycle": {
+            "type": "integer",
+            "title": "Days In Cycle"
+          },
+          "days_remaining": {
+            "type": "integer",
+            "title": "Days Remaining",
+            "description": "What makes this actionable rather than just bad news."
+          },
+          "usage_so_far_kwh": {
+            "type": "number",
+            "title": "Usage So Far Kwh"
+          },
+          "cost_so_far_nzd": {
+            "type": "number",
+            "title": "Cost So Far Nzd"
+          },
+          "projected_cycle_cost_nzd": {
+            "type": "number",
+            "title": "Projected Cycle Cost Nzd"
+          },
+          "comparable_home_cost_nzd": {
+            "type": "number",
+            "title": "Comparable Home Cost Nzd"
+          },
+          "overshoot_nzd": {
+            "type": "number",
+            "title": "Overshoot Nzd"
+          },
+          "overshoot_pct": {
+            "type": "number",
+            "title": "Overshoot Pct"
+          },
+          "recent_trend_pct": {
+            "type": "number",
+            "title": "Recent Trend Pct"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "type": "array",
+            "title": "Facts",
+            "description": "The same computed facts the narration is limited to, so the UI and the assistant can never disagree about a figure."
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Caveats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "period",
+          "triggered",
+          "days_elapsed",
+          "days_in_cycle",
+          "days_remaining",
+          "usage_so_far_kwh",
+          "cost_so_far_nzd",
+          "projected_cycle_cost_nzd",
+          "comparable_home_cost_nzd",
+          "overshoot_nzd",
+          "overshoot_pct",
+          "recent_trend_pct"
+        ],
+        "title": "BillShockWarning",
+        "description": "The proactive half of the product.\n\nEverything else in this API answers a question the customer asked. This one has to\nreach them *before* the bill does, so it is a GET the dashboard polls rather than a\nchat intent \u2014 a warning that only appears if you think to ask for it is not a\nwarning.\n\n`triggered` is the only field the UI should branch on. The figures are present either\nway so the dashboard can show a calm \"on track\" state without a second request."
+      },
       "ChatRequest": {
         "properties": {
           "customer_id": {

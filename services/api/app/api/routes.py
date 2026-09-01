@@ -18,6 +18,9 @@ from app.analytics import fixtures
 from app.analytics.engine import (
     NO_APPLIANCE,
     TariffOption,
+    UsageWindow,
+    assess_bill_shock,
+    build_bill_shock,
     build_hardship,
     build_tariff_check,
     build_weather_check,
@@ -29,6 +32,7 @@ from app.config import get_provider
 from app.narration.narrator import narrate_verified
 from app.routing.intents import route
 from app.schemas import (
+    BillShockWarning,
     ChatRequest,
     ChatResponse,
     FactBundle,
@@ -147,6 +151,76 @@ async def get_household(customer_id: str) -> HouseholdSummary:
         daily_kwh=w.daily_kwh,
         total_kwh=round(w.total_kwh, 2),
         estimated_cost_nzd=round(w.cost_nzd, 2),
+    )
+
+
+@router.get("/households/{customer_id}/bill-shock", response_model=BillShockWarning)
+async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShockWarning:
+    """The bill-shock warning. A GET, because it has to reach the customer unprompted.
+
+    Every other endpoint answers a question somebody asked. A warning that only appears
+    if you think to ask for it is not a warning, so this is polled by the dashboard
+    rather than routed through chat.
+
+    `as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded
+    household holds a complete July, and a warning delivered on day 31 is not a warning,
+    it is a bill. Which days show what is not obvious from the data, so: H-JUL trips
+    `above_comparable_homes` at every point in the cycle, and H-COLD trips
+    `rising_within_cycle` on days 6-8 as the cold snap starts — that second one is the
+    better demo, because there are still 25 days left to act on it.
+    """
+    try:
+        full = fixtures.get_window(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if as_at_day is None:
+        window = full
+    else:
+        if not 1 <= as_at_day <= len(full.daily_kwh):
+            raise HTTPException(
+                status_code=422,
+                detail=f"as_at_day must be between 1 and {len(full.daily_kwh)}",
+            )
+        window = UsageWindow(
+            customer_id=full.customer_id,
+            period=full.period,
+            daily_kwh=full.daily_kwh[:as_at_day],
+            unit_price_nzd=full.unit_price_nzd,
+        )
+
+    assessment = assess_bill_shock(
+        window, DAYS_IN_JULY, fixtures.comparison_baseline(customer_id)
+    )
+    bundle = build_bill_shock(assessment, window)
+
+    log.info(
+        "bill-shock customer=%s day=%d/%d triggered=%s reasons=%s projected=%.2f",
+        customer_id,
+        assessment.days_elapsed,
+        assessment.days_in_cycle,
+        assessment.triggered,
+        assessment.reasons,
+        assessment.projected_cost_nzd,
+    )
+
+    return BillShockWarning(
+        customer_id=customer_id,
+        period=window.period,
+        triggered=assessment.triggered,
+        reasons=assessment.reasons,
+        days_elapsed=assessment.days_elapsed,
+        days_in_cycle=assessment.days_in_cycle,
+        days_remaining=assessment.days_remaining,
+        usage_so_far_kwh=assessment.usage_so_far_kwh,
+        cost_so_far_nzd=assessment.cost_so_far_nzd,
+        projected_cycle_cost_nzd=assessment.projected_cost_nzd,
+        comparable_home_cost_nzd=assessment.expected_cost_nzd,
+        overshoot_nzd=assessment.overshoot_nzd,
+        overshoot_pct=assessment.overshoot_pct,
+        recent_trend_pct=assessment.recent_trend_pct,
+        facts=bundle.facts,
+        caveats=bundle.caveats,
     )
 
 

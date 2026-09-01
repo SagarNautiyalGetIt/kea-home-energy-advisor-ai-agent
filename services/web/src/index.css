@@ -489,3 +489,56 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 
 html[data-theme=dark] .assistant-offline{background:#2a2416;border-color:#4a3d22}
 html[data-theme=dark] .escalation-prompt{background:#161d33;border-color:#2c3552;color:#c3cdea}
+
+/* KEA-48 / demo line 6 — the operator's verification log.
+   The headline must be able to turn red. A panel that can only ever show a green tick is
+   decoration, and a judge who suspects that won't believe the green tick either. */
+.verification-page{max-width:900px}
+.verification-headline{display:flex;align-items:center;gap:16px;margin-bottom:18px;padding:20px 22px;border:1px solid #cde9d9;border-radius:14px;background:#f2fbf6}
+.verification-headline>svg{flex:0 0 auto;width:34px;color:#2f8a63}
+.verification-headline strong{display:block;color:#1f6a4b;font-size:22px;letter-spacing:-.02em}
+.verification-headline small{display:block;margin-top:4px;color:#4a7864;font-size:12px;line-height:1.5}
+.verification-headline button{display:flex;align-items:center;gap:6px;margin-left:auto;padding:8px 13px;border:1px solid #cfe3d8;border-radius:10px;color:#3d6d59;background:#fff;font-size:12px;font-weight:600}
+.verification-headline button svg{width:14px}
+.verification-headline.breached{border-color:#f0c7c7;background:#fdf3f3}
+.verification-headline.breached>svg{color:#c0392b}
+.verification-headline.breached strong{color:#a5291b}
+.verification-headline.breached small{color:#8d5049}
+
+.verification-empty{display:flex;align-items:center;gap:12px;padding:26px;border:1px dashed #dfe4f2;border-radius:14px;color:#8592b4}
+.verification-empty svg{width:24px}
+.verification-empty p{margin:0;font-size:13px}
+
+.verification-list{display:flex;flex-direction:column;gap:10px}
+.verification-row{padding:15px 18px;border:1px solid #e9edf7;border-radius:13px;background:var(--card)}
+.verification-row.rejected{border-color:#f0c7c7;background:#fdf5f5}
+.verification-row header{display:flex;align-items:center;gap:9px;margin-bottom:7px;font-size:11px}
+.verification-intent{padding:3px 9px;border-radius:20px;color:#4b3fd0;background:#eeecff;font-weight:700}
+.verification-household{color:#7c89aa;font-weight:600}
+.verification-row time{margin-left:auto;color:#9aa5c2}
+.verification-question{margin:0 0 8px;color:var(--ink);font-size:14px}
+.verification-verdict{display:flex;align-items:center;gap:7px;margin:0;color:#2f8a63;font-size:12px;font-weight:600}
+.verification-verdict svg{width:15px}
+.verification-verdict.bad{color:#c0392b}
+.verification-tokens{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
+.verification-tokens li{padding:3px 9px;border-radius:7px;color:#41506f;background:#f1f4fb;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.verification-tokens li.bad{color:#fff;background:#c0392b}
+.verification-footnote{margin-top:18px;color:#8592b4;font-size:12px;line-height:1.6}
+
+html[data-theme=dark] .verification-headline{background:#132419;border-color:#274634}
+html[data-theme=dark] .verification-headline.breached{background:#2a1616;border-color:#4c2626}
+html[data-theme=dark] .verification-tokens li{background:#1b2237;color:#c3cdea}
+
+/* Bill-shock warning — the proactive half of the product.
+   Three states, because a card that only ever shows alarm is ignored within a week:
+   triggered (amber), on-track (calm), and data-unavailable (grey, no estimate). */
+.shock-card small.shock-basis{display:block;margin-top:12px;color:#8a7550;font-size:11px;line-height:1.5}
+.shock-card.shock-ok{border-color:#cde9d9;background:#f4fbf7}
+.shock-card.shock-ok h3{color:#1f6a4b}
+.shock-card.shock-ok h3 svg{color:#2f8a63}
+.shock-card.shock-ok small.shock-basis{color:#4a7864}
+.shock-card.shock-offline{border-color:#e3e7f2;background:#f7f8fc}
+.shock-card.shock-offline h3{color:#5c6788}
+.shock-card.shock-offline h3 svg{color:#8592b4}
+html[data-theme=dark] .shock-card.shock-ok{background:#132419;border-color:#274634}
+html[data-theme=dark] .shock-card.shock-offline{background:#161a28;border-color:#2a3146}

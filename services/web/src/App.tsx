@@ -14,6 +14,7 @@ import PlansPage from './pages/PlansPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import UsagePage from './pages/UsagePage'
+import VerificationPage from './pages/VerificationPage'
 import type { PageId } from './types/navigation'
 
 const routeFor: Record<PageId, string> = {
@@ -66,6 +67,9 @@ function App() {
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>
+      {/* Demo line 6. Deliberately not in the customer navigation — this is the
+          operator's evidence view, reached by URL during the pitch. */}
+      <Route path="/verification" element={<VerificationPage/>}/>
       <Route path="*" element={<NotFoundPage onHome={() => go('dashboard')}/>}/>
     </Routes>
     {showLogout && <LogoutModal onCancel={()=>setShowLogout(false)} onConfirm={confirmLogout}/>}

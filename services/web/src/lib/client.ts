@@ -73,8 +73,45 @@ async function getJSON<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * The proactive half of the product.
+ *
+ * `triggered` is the only field to branch on. The figures are present either way, so a
+ * calm "on track" state costs no extra request.
+ *
+ * Read `reasons` before writing any copy: `above_comparable_homes` means the projection
+ * exceeds what a *similar home* would spend. It does **not** mean "more than you usually
+ * pay" — there is no billing history behind this, and claiming otherwise is the exact
+ * fabrication the product exists to prevent. The backend repeats this in `caveats`.
+ */
+export interface BillShockWarning {
+  customer_id: string;
+  period: string;
+  triggered: boolean;
+  reasons: string[];
+  days_elapsed: number;
+  days_in_cycle: number;
+  days_remaining: number;
+  usage_so_far_kwh: number;
+  cost_so_far_nzd: number;
+  projected_cycle_cost_nzd: number;
+  comparable_home_cost_nzd: number;
+  overshoot_nzd: number;
+  overshoot_pct: number;
+  recent_trend_pct: number;
+  facts: { key: string; value: number; unit: string; label: string; display: string }[];
+  caveats: string[];
+}
+
 export const getHealth = () => getJSON<Health>("/api/health");
 export const getHouseholds = () => getJSON<HouseholdSummary[]>("/api/households");
+
+/** `asAtDay` truncates the cycle — a warning delivered on day 31 is a bill, not a warning. */
+export const getBillShock = (customerId: string, asAtDay?: number) =>
+  getJSON<BillShockWarning>(
+    `/api/households/${encodeURIComponent(customerId)}/bill-shock` +
+      (asAtDay ? `?as_at_day=${asAtDay}` : ""),
+  );
 
 export interface StreamHandlers {
   onMeta?: (e: MetaEvent) => void;

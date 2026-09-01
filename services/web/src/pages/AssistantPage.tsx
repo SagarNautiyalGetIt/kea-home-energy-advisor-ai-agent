@@ -8,6 +8,7 @@ import {
   type DoneEvent,
   type HouseholdSummary,
 } from '../lib/client'
+import { fromDoneEvent } from '../lib/verificationLog'
 
 /**
  * The assistant, answering from the real pipeline.
@@ -104,14 +105,19 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       const patch = (fn: (m: Message) => Message) =>
         setMessages((current) => current.map((m) => (m.id === answerId ? fn(m) : m)))
 
+      let intent = 'unknown'
       try {
         await streamChat(
           { customer_id: customerId, message: question },
           {
-            onMeta: (meta) => setEscalating(meta.escalate),
+            onMeta: (meta) => { intent = meta.intent; setEscalating(meta.escalate) },
             onToken: (token) => patch((m) => ({ ...m, text: m.text + token.text })),
-            onDone: (report) =>
-              patch((m) => ({ ...m, report, failed: !isSafeToDisplay(report) })),
+            onDone: (report) => {
+              patch((m) => ({ ...m, report, failed: !isSafeToDisplay(report) }))
+              // Demo line 6. Recorded for every answer, including rejected ones — a log
+              // that only records successes is not evidence.
+              fromDoneEvent(report, { customerId, question, intent })
+            },
           },
           controller.signal,
         )
