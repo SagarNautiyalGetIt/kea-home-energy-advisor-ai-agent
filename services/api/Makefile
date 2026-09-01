@@ -1,7 +1,7 @@
 # Backend service — owned by the Backend team.
 # Every target assumes this directory is the working directory. The root Makefile
 # delegates here, so `make api-test` at the root and `make test` here do the same thing.
-.PHONY: help setup migrate seed dev test lint fmt check spec clean
+.PHONY: help setup migrate seed dev test golden lint fmt check spec clean
 
 VENV := .venv
 PY   := $(VENV)/bin/python
@@ -26,6 +26,9 @@ dev:  ## run the API with reload on :8000
 
 test:  ## run the test suite
 	$(VENV)/bin/pytest
+
+golden:  ## run the golden set on its own and show the headline (KEA-46 / KEA-57)
+	$(VENV)/bin/pytest tests/test_golden_set.py -v
 
 lint:  ## check style
 	$(VENV)/bin/ruff check app tests

@@ -72,6 +72,8 @@ ml-pull:  ## download the candidate models (run natively on macOS, NOT in Docker
 	ollama pull qwen3:4b
 ml-bench:  ## measure words/sec for each candidate model on this machine
 	cd ml/benchmarks/device && bash bench-mac.sh
+ml-golden:  ## run the golden set and print the headline (no model, no database needed)
+	$(API) golden
 
 clean:
 	$(API) clean

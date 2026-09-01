@@ -15,7 +15,7 @@ in here.
 | Path | What goes in it |
 |---|---|
 | `prompts/` | Prompt experiments and versions. The one in production lives in `app/narration/prompts.py` — this is the workbench |
-| `goldens/` | The golden set: question → expected facts → acceptable answers. **Due Day 6** |
+| `goldens/` | The golden set: question → expected facts → acceptable answers. **Landed** — 36 prompts, 14 drafts, runs in CI. See [`goldens/README.md`](goldens/README.md) |
 | `evals/` | The harness that scores a model against the golden set, and its results |
 | `benchmarks/` | Speed measurements per device and per model |
 

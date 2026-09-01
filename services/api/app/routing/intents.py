@@ -44,7 +44,13 @@ _RULES: list[tuple[Intent, re.Pattern[str]]] = [
     ),
     (
         Intent.COMPARE_TO_LAST_YEAR,
-        re.compile(r"\b(last year|same time last|year on year|compared to last winter)\b", re.I),
+        # "last winter" is matched on its own rather than as part of the fixed phrase
+        # "compared to last winter". The golden set (R-052) caught the original: it
+        # answered "how does this compare to last winter?" with out_of_scope, because
+        # only that one exact wording was handled. This rule must stay ahead of the
+        # weather rule below — "last winter" is a year-on-year question, not a
+        # cold-snap one, even though both mention winter.
+        re.compile(r"\b(last year|last winter|same time last|year[- ]on[- ]year)\b", re.I),
     ),
     (
         Intent.WHAT_COSTS_MOST,
@@ -56,7 +62,18 @@ _RULES: list[tuple[Intent, re.Pattern[str]]] = [
     ),
     (
         Intent.USING_MORE_THAN_USUAL,
-        re.compile(r"\b(more than usual|using more|gone up|increase[db]?|spike|unusual)\b", re.I),
+        # The weather terms are not decoration — this intent is the *only* path to
+        # weather attribution, and demo line 2 is literally "wasn't that just the cold
+        # snap?". The golden set (R-020) caught that question routing to out_of_scope,
+        # which would have been discovered on stage.
+        #
+        # Sitting below COMPARE_TO_LAST_YEAR is deliberate: "last winter" is a
+        # year-on-year comparison and must not be captured here by "winter".
+        re.compile(
+            r"\b(more than usual|using more|gone up|increase[db]?|spike|unusual|"
+            r"cold snap|cold spell|colder|the weather|because of the weather)\b",
+            re.I,
+        ),
     ),
     (
         Intent.WHY_HIGH,
