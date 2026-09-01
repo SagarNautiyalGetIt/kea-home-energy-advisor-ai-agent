@@ -1,6 +1,6 @@
 # Security & data handling
 
-Team HAKAS · Kea Energy Scenario 9
+Team HAKAS · Kea Energy Scenario 10
 
 This is a university project, but it models a real regulated domain — electricity
 retail, hardship detection, and household consumption data. We hold ourselves to

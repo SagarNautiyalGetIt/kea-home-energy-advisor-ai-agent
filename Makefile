@@ -6,11 +6,14 @@
 .PHONY: help setup check db db-stop db-logs \
         ollama ollama-status api-migrate api-seed data-load data-reload api-dev api-test api-lint api-check api-spec \
         web-install web-dev web-build web-lint web-types \
-        ml-pull ml-bench voice-setup voice-check voice-smoke clean
+        ml-pull ml-bench ml-golden voice-setup voice-check voice-smoke \
+        data-images data-up data-down data-clean data-ps data-dbt-build data-serving-schema \
+        clean
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 API     := $(MAKE) -C services/api
 WEB     := $(MAKE) -C services/web
+DATA    := $(MAKE) -C data
 
 help:  ## show this help
 	@awk 'BEGIN{FS=":.*?## "} /^## /{printf "\n\033[1m%s\033[0m\n", substr($$0,4); next} /^[a-z][a-z-]*:.*?## /{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
@@ -76,6 +79,26 @@ web-lint:  ## eslint + tsc
 	$(WEB) lint
 web-types:  ## regenerate src/api.d.ts from contracts/openapi.json
 	$(WEB) types
+
+## Data team — data/
+# The pipeline stack, separate from `db` above: that one is the application's
+# Postgres, this is the lake/warehouse/orchestration stack the Data team runs.
+# Target names inside data/Makefile are the conventional ones for a stack of
+# that shape, so the prefix is added here at the boundary rather than there.
+data-images:  ## build the pipeline images (dataeng/airflow, spark, dbt, soda)
+	$(DATA) images
+data-up:  ## start the pipeline stack (airflow :8080, minio :9001, grafana :3001)
+	$(DATA) up
+data-down:  ## stop the pipeline stack
+	$(DATA) down
+data-clean:  ## stop it and wipe its volumes
+	$(DATA) clean
+data-ps:  ## what is running in the pipeline stack
+	$(DATA) ps
+data-serving-schema:  ## apply the source + serving DDL to the pipeline's Postgres
+	$(DATA) serving-schema
+data-dbt-build:  ## dbt deps + build against Snowflake
+	$(DATA) dbt-build
 
 ## AI team — ml/
 ml-pull:  ## download the candidate models (run natively on macOS, NOT in Docker)

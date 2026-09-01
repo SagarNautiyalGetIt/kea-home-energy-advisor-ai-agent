@@ -1,6 +1,6 @@
 # Contributing to HAKAS kea-energy
 
-Team HAKAS · Kea Energy Scenario 9 · CS778-S2-2026-AWS-Challenge
+Team HAKAS · Kea Energy Scenario 10 · CS778-S2-2026-AWS-Challenge
 
 This document is the rulebook. If a rule here and a habit disagree, the rule wins.
 If a rule is wrong, open a PR against this file — don't quietly ignore it.

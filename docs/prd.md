@@ -1,6 +1,6 @@
 # Product Requirements — Home Energy Advisor & Bill-Shock Prevention Agent
 
-**Kea Energy · Scenario 9 · Team HAKAS · MIT Internship 2026**
+**Kea Energy · Scenario 10 · Team HAKAS · MIT Internship 2026**
 Status: living document · Sprint 2 (17–28 Aug 2026) · Owner: maintainer
 
 > Primary source for everything below: **Research Brief v2** (13 Aug 2026, Iris Vault).

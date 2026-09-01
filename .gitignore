@@ -50,6 +50,22 @@ Thumbs.db
 .trash/
 *.canvas
 
+# --- Coursework, not project material ---------------------------------------
+# The internship journal and its supporting documents are the author's own
+# coursework, submitted to the academic supervisor. They are not Kea Energy
+# project files, so under the rule in CONTRIBUTING.md they do not belong here.
+data/journal/
+
+# --- Raw source extracts -----------------------------------------------------
+# data/raw/ holds source data as received. The LCL smart-meter dataset alone is
+# about 1 GB zipped, and the rule in data/README.md is that raw extracts are
+# never edited by hand -- so they are fetched, not committed. The fetch script
+# records provenance and a checksum alongside them.
+data/raw/*
+!data/raw/.gitkeep
+# Derived from raw/lcl by cohort.py; ~1 MB, rebuilt in a minute.
+data/pipeline/scripts/gen_source/coverage.json
+
 # Rootless local Postgres cluster (infra/pg-local.sh) — never commit a data directory.
 .pg-local/
 

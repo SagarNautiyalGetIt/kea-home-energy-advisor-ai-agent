@@ -1,6 +1,6 @@
 # HAKAS — Kea Energy Home Energy Advisor
 
-Bill-shock prevention agent · Scenario 9 · Team HAKAS · CS778-S2-2026-AWS-Challenge
+Bill-shock prevention agent · Scenario 10 · Team HAKAS · CS778-S2-2026-AWS-Challenge
 Sprint 2: **17–28 August 2026**
 
 > **Every number in every answer is computed by Python and verified before it reaches
