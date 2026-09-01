@@ -1,0 +1,833 @@
+<title>HAKAS — Kea Energy build map</title>
+<style>
+  :root {
+    --paper:      #e9ebe5;
+    --card:       #f4f5f1;
+    --card-2:     #dfe2da;
+    --ink:        #1b2019;
+    --ink-2:      #4a5147;
+    --ink-3:      #7c8377;
+    --rule:       #c9cec2;
+    --rule-soft:  #d8dcd2;
+    --olive:      #55671f;
+    --olive-soft: #dfe6c6;
+    --orange:     #c04e0a;
+    --orange-soft:#f6e0cd;
+    --crimson:    #97302b;
+    --crimson-soft:#f2d9d6;
+    --slate:      #4a5f6b;
+    --slate-soft: #d9e2e6;
+    --shadow:     0 1px 0 rgba(27,32,25,.05), 0 2px 10px -6px rgba(27,32,25,.22);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #14170f;
+      --card:       #1c2016;
+      --card-2:     #252a1d;
+      --ink:        #e7eadf;
+      --ink-2:      #b0b6a5;
+      --ink-3:      #7f8775;
+      --rule:       #333a28;
+      --rule-soft:  #262c1d;
+      --olive:      #a3bd54;
+      --olive-soft: #2b3618;
+      --orange:     #e8853b;
+      --orange-soft:#3a2513;
+      --crimson:    #dd7b72;
+      --crimson-soft:#3a1e1b;
+      --slate:      #92b0bd;
+      --slate-soft: #1c2a30;
+      --shadow:     0 1px 0 rgba(0,0,0,.3), 0 2px 12px -6px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper:#e9ebe5; --card:#f4f5f1; --card-2:#dfe2da; --ink:#1b2019; --ink-2:#4a5147;
+    --ink-3:#7c8377; --rule:#c9cec2; --rule-soft:#d8dcd2; --olive:#55671f; --olive-soft:#dfe6c6;
+    --orange:#c04e0a; --orange-soft:#f6e0cd; --crimson:#97302b; --crimson-soft:#f2d9d6;
+    --slate:#4a5f6b; --slate-soft:#d9e2e6;
+    --shadow:0 1px 0 rgba(27,32,25,.05), 0 2px 10px -6px rgba(27,32,25,.22);
+  }
+  :root[data-theme="dark"] {
+    --paper:#14170f; --card:#1c2016; --card-2:#252a1d; --ink:#e7eadf; --ink-2:#b0b6a5;
+    --ink-3:#7f8775; --rule:#333a28; --rule-soft:#262c1d; --olive:#a3bd54; --olive-soft:#2b3618;
+    --orange:#e8853b; --orange-soft:#3a2513; --crimson:#dd7b72; --crimson-soft:#3a1e1b;
+    --slate:#92b0bd; --slate-soft:#1c2a30;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 2px 12px -6px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 22px 100px; }
+  a { color: inherit; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+
+  /* ---------- masthead ---------- */
+  .mast { border-bottom: 2px solid var(--ink); padding-bottom: 20px; }
+  .mast h1 {
+    margin: 10px 0 6px; font-size: clamp(30px, 5.2vw, 50px); line-height: 1.02;
+    letter-spacing: -.033em; font-weight: 800; text-wrap: balance;
+  }
+  .mast .thesis {
+    margin: 0; max-width: 62ch; color: var(--ink-2); font-size: 16.5px;
+  }
+  .mast .thesis b { color: var(--ink); font-weight: 650; }
+
+  /* ---------- metric band ---------- */
+  .band {
+    display: grid; gap: 1px; background: var(--rule);
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    border: 1px solid var(--rule); margin: 22px 0 0;
+  }
+  .metric { background: var(--card); padding: 12px 14px 13px; }
+  .metric .k {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 5px;
+  }
+  .metric .v {
+    font-family: var(--mono); font-size: 23px; font-variant-numeric: tabular-nums;
+    font-weight: 600; letter-spacing: -.02em; display: block; line-height: 1.1;
+  }
+  .metric .n { font-size: 12px; color: var(--ink-3); display: block; margin-top: 2px; }
+  .v.pos { color: var(--olive); } .v.warn { color: var(--orange); } .v.bad { color: var(--crimson); }
+
+  /* ---------- burn rail ---------- */
+  .rail { margin-top: 1px; border: 1px solid var(--rule); border-top: 0; background: var(--card);
+          padding: 13px 14px 14px; }
+  .rail-days { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+  .rail-day { height: 30px; border-radius: 1px; position: relative; background: var(--rule-soft);
+              display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+              font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .rail-day.done { background: var(--olive-soft); color: var(--olive); }
+  .rail-day.now  { background: var(--orange-soft); color: var(--orange); outline: 1.5px solid var(--orange); }
+  .rail-day.mile { box-shadow: inset 0 3px 0 var(--slate); }
+  .rail-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 9px;
+                 font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+  .rail-legend i { font-style: normal; }
+  .swatch { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 52px; }
+  h2 {
+    font-size: 13px; font-family: var(--mono); letter-spacing: .13em; text-transform: uppercase;
+    color: var(--ink); margin: 0 0 4px; font-weight: 600;
+  }
+  .sub { margin: 0 0 20px; color: var(--ink-2); max-width: 68ch; font-size: 14.5px; }
+  h2 + .sub { border-top: 1px solid var(--rule); padding-top: 12px; }
+
+  /* ---------- pipeline ---------- */
+  .pipe { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+  .layer {
+    text-align: left; font: inherit; cursor: pointer; background: var(--card);
+    border: 1px solid var(--rule); border-top: 3px solid var(--slate);
+    padding: 13px 14px 14px; display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .12s, transform .12s;
+  }
+  .layer:hover { transform: translateY(-2px); }
+  .layer[aria-pressed="true"] { border-color: var(--orange); border-top-color: var(--orange); }
+  .layer.model { border-top-color: var(--orange); background: var(--orange-soft); }
+  .layer .lnum { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+                 text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; }
+  .layer .lname { font-weight: 680; font-size: 16px; letter-spacing: -.01em; }
+  .layer .lmod { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); word-break: break-all; }
+  .layer .lcost { font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+                  font-variant-numeric: tabular-nums; }
+  .detail {
+    margin-top: 10px; border: 1px solid var(--rule); background: var(--card-2);
+    padding: 16px 18px; display: none;
+  }
+  .detail.open { display: block; }
+  .detail h3 { margin: 0 0 4px; font-size: 17px; letter-spacing: -.012em; }
+  .detail p { margin: 0 0 12px; color: var(--ink-2); max-width: 74ch; }
+  .detail ul { margin: 0; padding-left: 17px; color: var(--ink-2); }
+  .detail li { margin-bottom: 5px; }
+  .detail code, code.inl {
+    font-family: var(--mono); font-size: 12.5px; background: var(--paper);
+    border: 1px solid var(--rule); padding: 0 4px; border-radius: 2px; color: var(--ink);
+  }
+
+  /* ---------- fact grid ---------- */
+  .facts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .fact { background: var(--card); border: 1px solid var(--rule); padding: 13px 15px 15px; }
+  .fact h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .fact ul { margin: 0; padding-left: 16px; font-size: 13.5px; color: var(--ink-2); }
+  .fact li { margin-bottom: 4px; }
+  .fact li b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .fact .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { font-family: var(--mono); font-size: 11px; background: var(--paper);
+         border: 1px solid var(--rule); padding: 1px 6px; color: var(--ink-2); }
+
+  /* ---------- controls ---------- */
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .chip {
+    font: inherit; font-family: var(--mono); font-size: 11.5px; letter-spacing: .04em;
+    background: var(--card); border: 1px solid var(--rule); color: var(--ink-2);
+    padding: 5px 11px; cursor: pointer; text-transform: uppercase;
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .chip .ct { opacity: .6; margin-left: 5px; font-variant-numeric: tabular-nums; }
+  .search {
+    font: inherit; font-family: var(--mono); font-size: 12.5px; background: var(--card);
+    border: 1px solid var(--rule); color: var(--ink); padding: 5px 10px; min-width: 190px; flex: 1;
+  }
+  .search::placeholder { color: var(--ink-3); }
+  .linky { font: inherit; font-family: var(--mono); font-size: 11.5px; background: none;
+           border: 0; border-bottom: 1px solid var(--rule); color: var(--ink-3); cursor: pointer;
+           padding: 4px 2px; text-transform: uppercase; letter-spacing: .04em; }
+  .linky:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ---------- tree ---------- */
+  .tree { border-left: 2px solid var(--rule); margin-left: 8px; }
+  .day { position: relative; padding-left: 24px; margin-bottom: 2px; }
+  .day::before {
+    content: ""; position: absolute; left: 0; top: 21px; width: 22px; height: 2px; background: var(--rule);
+  }
+  .day > .dot {
+    position: absolute; left: -7px; top: 15px; width: 12px; height: 12px; background: var(--paper);
+    border: 2px solid var(--rule);
+  }
+  .day.d-done > .dot { border-color: var(--olive); background: var(--olive); }
+  .day.d-now  > .dot { border-color: var(--orange); background: var(--orange); }
+  .day.d-mile > .dot { border-color: var(--slate); background: var(--slate); transform: rotate(45deg); }
+
+  .dayhead {
+    width: 100%; text-align: left; font: inherit; cursor: pointer; background: var(--card);
+    border: 1px solid var(--rule); padding: 9px 13px; display: flex; gap: 12px; align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .dayhead:hover { border-color: var(--ink-3); }
+  .day.d-now > .dayhead { border-color: var(--orange); border-left: 3px solid var(--orange); }
+  .dayhead .dn { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; color: var(--ink-3);
+                 text-transform: uppercase; min-width: 118px; }
+  .dayhead .dt { font-weight: 650; letter-spacing: -.01em; flex: 1; min-width: 140px; }
+  .dayhead .dmeta { font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+                    font-variant-numeric: tabular-nums; }
+  .dayhead .caret { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+  .kids { display: none; padding: 8px 0 14px 22px; border-left: 1px dashed var(--rule); margin-left: 9px; }
+  .day.open .kids { display: block; }
+  .daynote { font-size: 13.5px; color: var(--ink-2); margin: 0 0 10px; max-width: 74ch;
+             border-left: 2px solid var(--rule); padding-left: 11px; }
+  .daynote b { color: var(--ink); }
+
+  .card {
+    position: relative; background: var(--card); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule); padding: 9px 13px 10px; margin-bottom: 5px;
+  }
+  .card::before {
+    content: ""; position: absolute; left: -22px; top: 18px; width: 21px; height: 1px;
+    background: var(--rule);
+  }
+  .card.s-done    { border-left-color: var(--olive); }
+  .card.s-now     { border-left-color: var(--orange); }
+  .card.s-blocked { border-left-color: var(--crimson); }
+  .card.s-todo    { border-left-color: var(--rule); }
+  .card.s-cut     { border-left-color: var(--ink-3); opacity: .72; }
+  .card .top { display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap; }
+  .card .id { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+              font-variant-numeric: tabular-nums; }
+  .card .ti { font-weight: 620; letter-spacing: -.005em; flex: 1; min-width: 180px; font-size: 14.5px; }
+  .card .de { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); max-width: 78ch; }
+  .card .de b { color: var(--ink); font-weight: 650; }
+  .pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 1px 6px; border: 1px solid;
+  }
+  .p-done    { color: var(--olive);   border-color: var(--olive);   background: var(--olive-soft); }
+  .p-now     { color: var(--orange);  border-color: var(--orange);  background: var(--orange-soft); }
+  .p-blocked { color: var(--crimson); border-color: var(--crimson); background: var(--crimson-soft); }
+  .p-todo    { color: var(--ink-3);   border-color: var(--rule);    background: var(--paper); }
+  .p-cut     { color: var(--ink-3);   border-color: var(--rule);    background: var(--paper); }
+  .sz { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+  .card[hidden] { display: none; }
+  .empty { font-family: var(--mono); font-size: 12px; color: var(--ink-3); padding: 4px 0; }
+
+  /* ---------- sprint blocks ---------- */
+  .sprints { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+  .sprint { background: var(--card); border: 1px solid var(--rule); border-top: 3px solid var(--slate);
+            padding: 14px 15px 16px; }
+  .sprint .sn { font-family: var(--mono); font-size: 10.5px; letter-spacing: .11em;
+                text-transform: uppercase; color: var(--ink-3); }
+  .sprint h3 { margin: 5px 0 2px; font-size: 17px; letter-spacing: -.015em; }
+  .sprint .dates { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); margin-bottom: 9px; }
+  .sprint .ends { font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--rule);
+                  padding-top: 8px; margin-top: 9px; }
+  .sprint ul { margin: 0; padding-left: 16px; font-size: 13.5px; color: var(--ink-2); }
+  .sprint li { margin-bottom: 4px; }
+
+  /* ---------- risks ---------- */
+  .risks { display: grid; gap: 8px; }
+  .risk { display: grid; grid-template-columns: 92px 1fr; gap: 14px; background: var(--card);
+          border: 1px solid var(--rule); border-left: 3px solid var(--crimson); padding: 11px 14px; }
+  .risk.warn { border-left-color: var(--orange); }
+  .risk.ok   { border-left-color: var(--olive); }
+  .risk .rk { font-family: var(--mono); font-size: 10.5px; letter-spacing: .09em;
+              text-transform: uppercase; color: var(--ink-3); padding-top: 2px; }
+  .risk .rv { font-size: 14px; }
+  .risk .rv b { font-weight: 650; }
+  .risk .rv .cons { display: block; color: var(--ink-2); font-size: 13.5px; margin-top: 2px; }
+
+  footer { margin-top: 56px; border-top: 1px solid var(--rule); padding-top: 14px;
+           font-family: var(--mono); font-size: 11px; color: var(--ink-3); line-height: 1.7; }
+
+  :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 620px) {
+    .dayhead .dn { min-width: 100%; }
+    .risk { grid-template-columns: 1fr; gap: 3px; }
+    .rail-days { grid-template-columns: repeat(5, 1fr); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <span class="eyebrow">Team HAKAS · Scenario 9 · CS778-S2-2026-AWS-Challenge</span>
+    <h1>Kea Energy — the build map</h1>
+    <p class="thesis">A bill-shock prevention agent for New&nbsp;Zealand households. <b>Python computes every
+      number and verifies it before the customer sees it; the model only writes the sentence.</b>
+      61.9% of surveyed customers named fabricated information as their top concern — so
+      preventing it <i>demonstrably</i> is the product, not a footnote.</p>
+  </header>
+
+  <div class="band" id="band"></div>
+
+  <div class="rail">
+    <div class="rail-days" id="railDays"></div>
+    <div class="rail-legend">
+      <i><span class="swatch" style="background:var(--olive-soft);border:1px solid var(--olive)"></span>shipped</i>
+      <i><span class="swatch" style="background:var(--orange-soft);border:1px solid var(--orange)"></span>today · day 5</i>
+      <i><span class="swatch" style="background:var(--rule-soft);border:1px solid var(--rule)"></span>remaining</i>
+      <i><span class="swatch" style="background:var(--slate)"></span>feature milestone · Wed 26 Aug</i>
+    </div>
+  </div>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section>
+    <h2>The four layers</h2>
+    <p class="sub">This is the whole architecture, and it does not change between Sprint 2 and Sprint 5 —
+      everything after this is transport and plumbing. The model owns exactly one layer, and it is the
+      only one that cannot be trusted with arithmetic. Click a layer for what is actually built.</p>
+
+    <div class="pipe" id="pipe"></div>
+    <div class="detail" id="layerDetail" role="region" aria-live="polite"></div>
+  </section>
+
+  <!-- ================= WHAT EXISTS ================= -->
+  <section>
+    <h2>What exists in the repository today</h2>
+    <p class="sub">Counted from the working tree on 21 Aug 2026, not from the board.</p>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <!-- ================= DAY TREE ================= -->
+  <section>
+    <h2>Sprint 2 · day by day</h2>
+    <p class="sub">Mon 17 Aug → Fri 28 Aug. Every card, every day, with its real status. Expand a day,
+      filter by state, or search for a card ID, a module or a person's blocker.</p>
+
+    <div class="controls">
+      <button class="chip" data-f="all"     aria-pressed="true">All<span class="ct" id="c-all"></span></button>
+      <button class="chip" data-f="done"    aria-pressed="false">Shipped<span class="ct" id="c-done"></span></button>
+      <button class="chip" data-f="now"     aria-pressed="false">In flight<span class="ct" id="c-now"></span></button>
+      <button class="chip" data-f="blocked" aria-pressed="false">Blocked<span class="ct" id="c-blocked"></span></button>
+      <button class="chip" data-f="todo"    aria-pressed="false">To do<span class="ct" id="c-todo"></span></button>
+      <button class="chip" data-f="cut"     aria-pressed="false">Cut<span class="ct" id="c-cut"></span></button>
+      <input class="search" id="q" type="search" placeholder="search cards, modules, IDs…" aria-label="Search cards">
+      <button class="linky" id="expandAll">expand all</button>
+      <button class="linky" id="collapseAll">collapse all</button>
+    </div>
+
+    <div class="tree" id="tree"></div>
+  </section>
+
+  <!-- ================= FORWARD SPRINTS ================= -->
+  <section>
+    <h2>Sprints 3 → 5</h2>
+    <p class="sub">The pipeline stays byte-for-byte identical. What moves is the transport: first onto AWS,
+      then onto a phone number, then in front of judges. Sprint 3–5 dates are assumed two-week blocks and
+      must be confirmed against the course calendar.</p>
+    <div class="sprints" id="sprints"></div>
+  </section>
+
+  <!-- ================= RISK ================= -->
+  <section>
+    <h2>Honest status · what will bite</h2>
+    <p class="sub">The foundations are ahead of the schedule. The schedule is the problem.</p>
+    <div class="risks" id="risks"></div>
+  </section>
+
+  <footer>
+    Generated from <code class="inl">docs/roadmap.md</code>, <code class="inl">docs/sprints/sprint-2/board.md</code>,
+    <code class="inl">docs/adr/</code> and the working tree · 21 Aug 2026<br>
+    Dollar figures use an illustrative 30c/kWh — Kea's real tariff is not public, and anywhere a dollar
+    figure appears must say so.
+  </footer>
+</div>
+
+<script>
+/* ---------------------------------- data ---------------------------------- */
+
+const LAYERS = [
+  { n:"Layer 0", owner:"Python", name:"Intent router", mod:"app/routing/intents.py", cost:"~0 ms",
+    blurb:"Maps free text onto exactly one of eight intents using pure Python rules — no model, no tokens, no chance of a wrong branch being invented.",
+    bullets:[
+      "Eight intents: <code>why_bill_high</code>, <code>what_will_i_pay</code>, <code>using_more_than_usual</code>, <code>what_costs_most</code>, <code>compare_to_last_year</code>, <code>tariff_check</code>, <code>hardship</code>, <code>out_of_scope</code>",
+      "<b>Hardship outranks everything.</b> If distress signals are present the router never reaches the analytics branch — it escalates.",
+      "Returns a <code>RoutingResult</code> with an <code>is_escalation()</code> predicate; 15 unit tests.",
+      "Adding an intent means adding four things at once: a router rule, an analytics path, a narration prompt, and golden-set cases."
+    ]},
+  { n:"Layer 1", owner:"Python", name:"Analytics core", mod:"app/analytics/engine.py", cost:"~1 ms",
+    blurb:"Every figure the customer will ever read is computed here, as arithmetic over meter readings, and packed into a typed FactBundle.",
+    bullets:[
+      "Primitives: <code>standing_load_kwh_per_day</code>, <code>spike_days(threshold=1.5)</code>, <code>overshoot_attribution</code>, <code>project_month_end</code>, <code>sustained_overshoot_per_day</code>",
+      "Weather: <code>heating_degree_days(base_c=18.0)</code> → <code>weather_attribution</code> — separates the cold snap from behaviour instead of blaming the customer",
+      "Tariff + hardship: <code>compare_tariffs</code>, <code>detect_usage_collapse</code> → <code>CollapseSignal</code>",
+      "Six bundle builders, one per demo line: <code>build_why_high</code>, <code>build_what_will_i_pay</code>, <code>build_weather_check</code>, <code>build_what_costs_most</code>, <code>build_tariff_check</code>, <code>build_hardship</code>",
+      "Validated against 31 <b>measured</b> daily values read off the published July 2026 Genesis bill at ±0.2 kWh/day — not synthetic data."
+    ]},
+  { n:"Layer 2", owner:"The model", name:"Narration", mod:"app/narration/", cost:"~1 s", model:true,
+    blurb:"The only layer the model owns. It receives a FactBundle and writes two to four sentences. It never chooses what to compute and never sees a raw meter reading.",
+    bullets:[
+      "<b>Tool selection was removed entirely</b> (ADR-0002). Small local models are measurably weaker at picking a function and its arguments than at generating prose, so they are not asked to.",
+      "<code>narrator.py</code> + <code>prompts.py</code>; per-intent few-shot examples are Day 7 work and must not be tuned before the golden set exists.",
+      "This layer is effectively the entire latency budget: STT ~400 ms, routing ~0 ms, analytics ~1 ms, <b>narration ~1 s</b>, verification ~1 ms, TTS ~200 ms.",
+      "ADR-0005 rejected a second fast model: Layer 0 already knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster, cannot fabricate, and loads no competing weights."
+    ]},
+  { n:"Layer 3", owner:"Python", name:"Number checker", mod:"app/verification/number_checker.py", cost:"~1 ms",
+    blurb:"The guarantee. Every unit-bearing figure in the generated sentence must trace back to a fact Layer 1 computed, or the sentence does not ship.",
+    bullets:[
+      "Unit-bearing tokens — <code>$</code>, <code>%</code>, <code>×</code>, <code>x</code>, <code>kWh</code> — must match a computed fact within <code>REL_TOLERANCE = 0.01</code> or <code>ABS_TOLERANCE = 0.005</code>.",
+      "Structural integers up to <code>STRUCTURAL_INT_MAX = 12</code> are exempt — \"three reasons\", \"the 7th\" — so the checker doesn't fight ordinary English.",
+      "Failure is not an error page: <code>template_fallback(bundle)</code> emits a deterministic sentence built from the same facts. Provider down, model missing, verification failed — the customer still gets a correct answer.",
+      "16 unit tests. The rejection log this produces <b>is</b> demo line 6: <i>N prompts, 0 fabricated figures</i>."
+    ]}
+];
+
+const FACTS = [
+  { h:"Backend · services/api", li:[
+    "FastAPI, ASGI, Python <b>3.14</b> — chosen for streaming: SSE is a generator, WebSockets are built in",
+    "<b>127</b> tests in 2.6s, lint clean, CI green on every push — Postgres runs as a CI service so the migration is exercised on every PR",
+    "5 frozen endpoints: <code>/api/health</code>, <code>/api/households</code>, <code>/api/households/{id}</code>, <code>/api/chat</code>, <code>/api/chat/stream</code>",
+    "SSE contract: <code>meta</code> → <code>token</code>* → <code>done</code>"
+  ]},
+  { h:"Provider seam · ADR-0004", li:[
+    "One <code>LLMProvider</code> Protocol — <code>narrate()</code>, <code>health()</code>",
+    "<code>OllamaProvider</code> live; <code>BedrockProvider</code> written as an unused stub <b>specifically to prove the seam holds</b> rather than assume it",
+    "Nothing above the provider layer may import <code>ollama</code> or <code>boto3</code>",
+    "Sprint 3's migration is therefore a config change, not a rewrite"
+  ]},
+  { h:"Data model · 13 tables", li:[
+    "Domain: customer, meter, reading, tariff, customer_tariff, benchmark, weather_day",
+    "<b>Evidence: conversation, turn, fact_bundle, verification, token_usage, escalation</b> — the tables that produce the 0-fabrications claim and the cost projection",
+    "Postgres, not SQLite (ADR-0006): time-series windows, real <code>numeric</code> for money, one-line path to RDS",
+    "<b>Migrated, seeded and written to as of 21 Aug.</b> 7,440 readings; H-JUL reproduces the measured 300.0 kWh. Every chat turn now lands in the evidence tables"
+  ]},
+  { h:"Frontend · services/web", li:[
+    "React 19 + TypeScript + Tailwind + Vite",
+    "<code>src/App.tsx</code>, <code>src/lib/client.ts</code>, generated <code>src/api.d.ts</code>",
+    "Types come from <code>contracts/openapi.json</code> via <code>npx openapi-typescript</code> — a fresh clone needs no backend running",
+    "CI fails if the committed spec goes stale"
+  ]},
+  { h:"Hardware · benchmarked 18 Aug", li:[
+    "Demo machine: <b>MacBook Pro M4 Pro, 48 GB, 14 cores</b> — 2.15× the Mac mini",
+    "Voice viable at <b>~1.0 s</b> to first audio",
+    "Ollama stays native — Docker on macOS has no Apple GPU access",
+    "Shareable benchmark script in <code>ml/benchmarks/device/</code>: 3 models × 3 runs, reports words/sec and time-to-first-word"
+  ]},
+  { h:"Evidence base", li:[
+    "Survey n=21, closed 12 Aug: <b>61.9%</b> fear fabrication · <b>47.6%</b> distrust AI with usage data · <b>90.5%</b> want a mid-month warning · <b>71.4%</b> want it in dollars",
+    "Sat 11 Jul was exactly <b>2.00×</b> the other Saturdays — but the spike is only ~11% of the overshoot; the steady <b>2.4 kWh/day</b> is the money: <b>$290/yr vs $2.60</b>",
+    "EA Consumer Care Obligations Part 6 <b>cl. 9.3(c)</b> names significant consumption changes as a retailer duty — enforceable since 1 Apr 2025",
+    "Business case: <b>900+</b> bill-query calls a week, 12–15 min each, ≈200 agent-hours"
+  ]},
+  { h:"Six decisions of record", li:[
+    "<b>0001</b> FastAPI, not Django or Flask",
+    "<b>0002</b> The model narrates; Python decides",
+    "<b>0003</b> Voice is a transport skin, never a second brain",
+    "<b>0004</b> One provider interface — Ollama now, Bedrock later",
+    "<b>0005</b> A second \"fast\" model is the wrong tool here",
+    "<b>0006</b> PostgreSQL from Sprint 2, superseding the SQLite call"
+  ]},
+  { h:"Standing rules", li:[
+    "Every figure traces to a source — in code as much as in slides",
+    "<b>Never name an appliance.</b> Half-hourly data cannot identify them; the refusal is demo line 4, not a limitation to hide",
+    "Always surface <code>escalate_to_human</code> — closer to a legal duty than a feature",
+    "Don't tune prompts before the golden set exists. Tuning without a measurement is vibes",
+    "Done = merged via PR, CI green, and <b>running on a second teammate's machine</b>"
+  ]}
+];
+
+/* status: done | now | blocked | todo | cut */
+const DAYS = [
+  { d:1, label:"Day 1", date:"Mon 17 Aug", title:"Foundations — four ADRs and the spine",
+    state:"done",
+    note:"Ended the day with <b>40 tests passing, lint clean, 3 commits</b>. The architecture was decided before any feature was written, which is why none of it has been revisited since.",
+    cards:[
+      {id:"KEA-01", s:"done", z:"S", t:"ADR-0001 — backend framework", d:"FastAPI, not Django or Flask. Streaming, Pydantic doing triple duty, OpenAPI generated for the frontend."},
+      {id:"KEA-02", s:"done", z:"M", t:"ADR-0002 — AI architecture", d:"<b>The model narrates; Python decides.</b> Four layers, tool selection removed from the model entirely."},
+      {id:"KEA-03", s:"done", z:"S", t:"ADR-0003 — voice scope", d:"Voice is a transport skin over the identical pipeline, never a second brain."},
+      {id:"KEA-04", s:"done", z:"S", t:"ADR-0004 — provider seam", d:"One <code>LLMProvider</code> Protocol. Ollama now, Bedrock Sprint 3."},
+      {id:"KEA-05", s:"done", z:"S", t:"Create the repo", d:"git init, <code>pyproject.toml</code>, <code>Makefile</code>, <code>.gitignore</code>."},
+      {id:"KEA-06", s:"done", z:"S", t:"CI from the first commit", d:"GitHub Actions running <code>ruff</code> + <code>pytest</code> on every push and PR."},
+      {id:"KEA-07", s:"done", z:"M", t:"Define FactBundle and schemas", d:"The spine every layer speaks. <b>Carries no raw readings and no PII by design.</b>"},
+      {id:"KEA-08", s:"done", z:"M", t:"Layer 0 — intent router", d:"8 intents, pure Python. Hardship outranks everything. 15 tests."},
+      {id:"KEA-09", s:"done", z:"L", t:"Layer 3 — number checker", d:"Unit-bearing tokens must match a computed fact; structural integers exempt; template fallback. 16 tests."},
+      {id:"KEA-10", s:"done", z:"M", t:"LLMProvider + OllamaProvider", d:"Streaming, health check, warm-up, token capture for the cost projection."},
+      {id:"KEA-11", s:"done", z:"S", t:"BedrockProvider stub", d:"Written unused, <b>specifically to prove the seam holds</b> rather than assume it."},
+      {id:"KEA-12", s:"done", z:"L", t:"Layer 1 — analytics core", d:"Standing load, spike detection, overshoot attribution, month-end projection."},
+      {id:"KEA-13", s:"done", z:"M", t:"Fixture API + 5 demo households", d:"Each household demos exactly one finding. <b>Works with no model installed.</b>"},
+      {id:"KEA-14", s:"done", z:"S", t:"Graceful degradation", d:"Provider failure falls back to the deterministic template instead of a 500."},
+      {id:"KEA-15", s:"done", z:"M", t:"Port the real July measurements", d:"31 measured values into <code>tests/data/</code>. Analytics now validated against measured data, not synthetic. 9 tests."},
+      {id:"KEA-16", s:"done", z:"S", t:"Generate openapi.json", d:"5 paths, 8 schemas — <code>make api-spec</code>."},
+      {id:"KEA-17", s:"done", z:"M", t:"Draft the §5 brief amendment", d:"Separates voice-as-app-feature (unfunded by the survey) from voice-as-call-deflection (funded by 900 calls/week)."},
+      {id:"KEA-18", s:"done", z:"S", t:"Demo script template", d:"7 proposed lines, each mapped to a household and a conclusion."},
+      {id:"KEA-19", s:"done", z:"S", t:"Decision log", d:"Eight non-obvious calls recorded with reasons."},
+      {id:"KEA-20", s:"done", z:"M", t:"Document in Obsidian", d:"Project note + Friday Index + Changelog — cold-session handoff."}
+    ]},
+
+  { d:2, label:"Day 2", date:"Tue 18 Aug", title:"Benchmarks, the storage reversal, the data model",
+    state:"done",
+    note:"Two ADRs written and one reversed on the same day. Also the day the card IDs were renumbered after <b>four collisions</b> — KEA-38 was simultaneously \"ADR-0006 done\" and \"weather normalisation not started\".",
+    cards:[
+      {id:"KEA-21", s:"done", z:"S", t:"Benchmark both Macs", d:"MacBook Pro M4 Pro is the demo machine at <b>2.15×</b> the mini. Voice viable at ~1.0 s to first audio."},
+      {id:"KEA-22", s:"done", z:"S", t:"Confirm the M4 variant", d:"<b>M4 Pro, 48 GB, 14 cores</b> — confirmed by the benchmark, not by the spec sheet."},
+      {id:"KEA-28", s:"done", z:"M", t:"ADR-0005 — the two-speed question", d:"Evaluated a fast/slow model split for voice. <b>Outcome: adopt the shape, skip the second model.</b> Layer 0 knows the intent in ~0 ms, so a pre-synthesised acknowledgement is faster and cannot fabricate."},
+      {id:"KEA-29", s:"done", z:"M", t:"Architecture diagrams", d:"AI pipeline + backend ER model, published for the team."},
+      {id:"KEA-38", s:"done", z:"M", t:"ADR-0006 — PostgreSQL from Sprint 2", d:"Reversed the SQLite call. 7,440 rows a month of time-series, exact <code>numeric</code> for money, and a one-line path to RDS."},
+      {id:"KEA-30", s:"done", z:"M", t:"Shareable Mac benchmark script", d:"Standalone, needs nothing from the repo. Detects chip and memory, runs 3 models × 3 runs, writes a results file to send back."},
+      {id:"KEA-31", s:"done", z:"L", t:"Implement the data model", d:"13 tables built from the ER diagram. <b>AC met:</b> <code>alembic upgrade head</code> builds it from empty via <code>0001_initial.py</code>."},
+      {id:"KEA-37", s:"done", z:"M", t:"docker-compose for the app", d:"Now at <code>infra/docker-compose.yml</code>. Ollama stays native — Docker on macOS has no Apple GPU access."},
+      {id:"KEA-32", s:"todo", z:"L", t:"Half-hourly data generator", d:"5 households × 31 days × 48 readings, each shaped to demo one finding. <b>Slipped to Day 6.</b>"},
+      {id:"KEA-33", s:"todo", z:"M", t:"Migrate fixtures → database", d:"<code>app/analytics/fixtures.py</code> is still hand-shaped numbers in a Python file. <b>Slipped to Day 6.</b>"},
+      {id:"KEA-34", s:"blocked", z:"S", t:"Map each household to a demo line", d:"A finding with no household can't be demoed; a household serving no line is data nobody sees. Blocked on KEA-25."},
+      {id:"KEA-35", s:"todo", z:"S", t:"Bind session → customer_id", d:"Fake auth is fine; the binding must exist now. Retrofitting identity is painful."},
+      {id:"KEA-36", s:"now",  z:"M", t:"Persist turns + verification + tokens", d:"<b>This is R4, and it is the highest-value open card.</b> The cost projection and the \"0 fabricated figures\" claim do not exist retroactively — every conversation run before this lands is evidence being deleted."}
+    ]},
+
+  { d:3, label:"Day 3", date:"Wed 19 Aug", title:"Governance and the written contract",
+    state:"done",
+    note:"The walking skeleton was scheduled here and <b>did not happen</b> — the day went to documentation instead. That slip is the origin of every schedule problem below.",
+    cards:[
+      {id:"—", s:"done", z:"M", t:"Governance rules, templates, secret-safe gitignore", d:"PR template, issue templates, contribution rules, and a gitignore written to make committing survey data or vault notes hard."},
+      {id:"—", s:"done", z:"L", t:"PRD, ERD and API standards", d:"<code>docs/api-standards.md</code> grew to 707 lines. The written contract five teams work against."},
+      {id:"—", s:"done", z:"S", t:"Replace local vault paths with neutral references", d:"Repo no longer leaks the maintainer's filesystem layout — a prerequisite for handing it to four other people."},
+      {id:"KEA-64", s:"now", z:"L", t:"End-to-end path with a real model", d:"<b>Scheduled Day 3, still open on Day 5.</b> React → <code>/chat/stream</code> → Ollama → streamed tokens → verified answer. The single highest-risk item: nothing downstream is proven until it closes."},
+      {id:"KEA-65", s:"todo", z:"M", t:"Verify on the second machine", d:"<code>docker compose up</code> from <code>infra/</code> on the Mac mini. Two people must be able to run the demo."},
+      {id:"KEA-66", s:"todo", z:"S", t:"Model warm-up + UI ready state", d:"Cold start pulls several GB from disk; ten seconds of silence reads as a crash."}
+    ]},
+
+  { d:4, label:"Day 4", date:"Thu 20 Aug", title:"Five-team monorepo — yesterday",
+    state:"done",
+    note:"Three commits, two merged PRs, zero application code. The repo went from one person's project to something five teams can work in simultaneously.",
+    cards:[
+      {id:"KEA-71", s:"done", z:"L", t:"Restructure into a five-team monorepo", d:"PR #47, breaking. <code>app/</code> split into <code>services/{api,web}</code>, <code>ml/</code>, <code>data/</code>, <code>infra/</code>, <code>contracts/</code>. CI, Makefile, README and CONTRIBUTING rewritten to match. <b>AC met:</b> tests and lint green after the move."},
+      {id:"KEA-72", s:"done", z:"M", t:"Per-team charters and ownership", d:"<code>docs/teams/{ai,aws,backend,data,frontend}.md</code> — one screen each: what you own, how to run it, the rules specific to your work. Two teams own code inside <code>services/api/</code>, so ownership is documented as a convention, not a directory."},
+      {id:"KEA-73", s:"done", z:"S", t:"Publish contracts/openapi.json", d:"The 416-line spec promoted out of the API package to a fixed path. <b>This is what KEA-23 was actually asking for — it unblocks four people.</b>"},
+      {id:"KEA-74", s:"done", z:"S", t:"Fix CODEOWNERS — drop GitHub Teams", d:"PR #48. The <code>@org/team</code> handles don't exist, so every review rule silently matched nobody. Reverted to individuals until the org teams are created."},
+      {id:"KEA-75", s:"now", z:"L", t:"Sprint 2 → Sprint 5 roadmap", d:"336 lines: explicit cut line, day-by-day to 28 Aug, the Sprint 3 AWS plan. <b>Still unmerged on branch <code>docs/roadmap</code>.</b>"}
+    ]},
+
+  { d:5, label:"Day 5 · today", date:"Fri 21 Aug", title:"The database path is real — and it was broken",
+    state:"now",
+    note:"<b>The critical path moved.</b> The Postgres path had never been run once; running it found a migration that did not import. With that fixed, R4 landed the same day — every conversation now writes turn, fact bundle, verification and token usage. Two more defects fell out along the way. <b>119 tests passing, up from 105.</b>",
+    cards:[
+      {id:"KEA-76", s:"done", z:"M", t:"Run the Postgres path end to end", d:"✅ <code>alembic upgrade head</code> → <code>python -m app.db.seed</code> against a real server. <b>7,440 readings, H-JUL totals 300.0 kWh against 300.0 measured.</b> <code>alembic check</code> reports no drift from <code>models.py</code>, and the seed is idempotent across repeated runs."},
+      {id:"KEA-87", s:"done", z:"S", t:"🐛 Fix NameError: Text in 0001_initial", d:"<b>The migration had never been run and did not import.</b> Autogenerate emitted <code>postgresql.JSONB(astext_type=Text())</code> with no <code>sa.</code> prefix, so the schema could not be built at all — and every card downstream assumed it could."},
+      {id:"KEA-31", s:"done", z:"L", t:"Implement the data model — verified", d:"13 tables build from empty and <code>alembic check</code> finds no drift against <code>models.py</code>. Previously written but never executed."},
+      {id:"KEA-36", s:"done", z:"M", t:"R4 — persist turn, fact bundle, verification, token usage", d:"✅ Both turns per exchange, the bundle <i>with its caveats</i>, the verdict, the token count, and escalations. <b>Recording can never fail a request</b> — <code>safe_record</code> logs <code>EVIDENCE NOT RECORDED</code> and the answer still ships. <code>conversation_id</code> threads through API, SSE and the React client. <b>7 tests.</b>"},
+      {id:"KEA-88", s:"done", z:"S", t:"Separate an outage from a caught fabrication", d:"Both set <code>fell_back_to_template</code>. Added <code>provider_error</code> to <code>VerificationReport</code>: without it, a day Ollama was down counts as a day the checker caught six inventions — <b>the opposite claim.</b> Demo line 6 depends on the difference."},
+      {id:"KEA-89", s:"done", z:"S", t:"🐛 model_ready lied when no model was installed", d:"<code>/api/tags</code> returns 200 whenever Ollama runs, <b>including with zero models</b>. The UI showed \"warm\" while every answer fell back to a template and nothing said why. <code>health()</code> now checks the configured model is actually present, and handles the untagged <code>gemma3</code> → <code>gemma3:latest</code> case. <b>7 tests.</b>"},
+      {id:"KEA-90", s:"done", z:"S", t:"Postgres in CI + a guard against silent skips", d:"The evidence tests skip without a database — right on a laptop, wrong in CI, where a skip looks identical to a pass. Added a <code>postgres:16-alpine</code> service, migrate and seed steps, and <b>a step that fails the run if those tests skipped.</b> The migration is now exercised on every PR."},
+      {id:"KEA-91", s:"done", z:"S", t:"Rootless Postgres for developers without Docker", d:"<code>infra/pg-local.sh</code> — fetches the Postgres 16 server binaries, <code>initdb</code> into a gitignored directory, no root and no package manager. <code>make db</code> remains the supported path for the demo machine."},
+      {id:"KEA-80", s:"done", z:"S", t:"Update the board", d:"✅ It had shown Tue 18 Aug as \"today\" for three days. Also documents that <code>roadmap.md</code>'s day labels are off by one."},
+      {id:"KEA-64", s:"done", z:"L", t:"Walking skeleton — end to end with a real model", d:"✅ <b>CLOSED — open since Day 3.</b> <code>gemma3:4b</code> native, SSE over real HTTP, <code>meta</code> → <code>token</code> → <code>done</code>, every figure verified against a computed fact, every turn persisted. <b>All five demo lines run against a real model.</b>"},
+      {id:"KEA-92", s:"done", z:"S", t:"🐛 Demo line 2 routed to out_of_scope", d:"Found by running the demo script against a real model. <b>\"Wasn't that just the cold snap?\" had no routing rule</b> — <code>build_weather_check</code> existed and nothing pointed at it, so the customer got <i>\"I can't explain why your bill was higher\"</i>. The line exists to separate weather from behaviour and it did the opposite. <b>8 tests.</b>"},
+      {id:"KEA-93", s:"done", z:"S", t:"🐛 provider_error was never a column", d:"The distinction existed on the API response but not in the <code>verification</code> table — <b>and the table is what demo line 6 counts.</b> Added with migration <code>0002</code>, backfilled false. Autogenerate had emitted a bare <code>NOT NULL</code> add, which fails on a table with rows."},
+      {id:"KEA-94", s:"done", z:"S", t:"Keep make check fast", d:"Evidence tests hitting a real model took the suite from 1s to <b>152s</b>, at which point people stop running it before pushing. A stub provider echoes the bundle's <code>display</code> strings, so layer 3 is still genuinely exercised. <b>Back to 2.6s.</b>"},
+      {id:"KEA-95", s:"done", z:"M", t:"Review Harvey's elt data-platform design", d:"725-line design + 4 DDL files. <b>Two blocking conflicts</b> — the evidence tables have nowhere to live in his <code>app</code> schema, and <code>tool_calls</code> encodes the architecture ADR-0002 removed. Two ADRs needed: where the numbers are computed, and Snowflake in an AWS challenge. <b>Nothing in it changes Sprint 2 code.</b>"},
+      {id:"KEA-77", s:"blocked", z:"S", t:"Email VJ about AWS access", d:"Request account or credits, Amazon Connect enablement in <code>ap-southeast-2</code>, phone-number budget, and Bedrock model access. <b>Ten minutes of effort, multi-day approval lead time — still the most time-sensitive item in the roadmap.</b> Also ask what contact-centre platform Kea actually runs; if they have one, augmenting beats replacing and the pitch changes."},
+      {id:"KEA-78", s:"blocked", z:"S", t:"Reconcile household IDs", d:"The demo script says <code>H-A…H-D</code>; <code>app/db/seed.py</code> seeds <code>H-JUL</code>, <code>H-COLD</code>, <code>H-SPIKE</code>, <code>H-DROP</code>, <code>H-TARIFF</code>. <b>Pick one set and change the other.</b> Ties to KEA-25."},
+      {id:"KEA-42", s:"blocked", z:"S", t:"NIWA weather spike — timebox 2h", d:"CliFlo is being retired for DataHub. Establish which is live and whether a free key arrives in time. <b>If not, weather normalisation moves to Sprint 3 and that gets said out loud.</b>"},
+      {id:"KEA-65", s:"todo", z:"M", t:"Verify on the second machine", d:"Definition of Done requires it for every card, so it cannot be a Day 10 discovery."},
+      {id:"KEA-45", s:"todo", z:"S", t:"Team demo", d:"End of week, even if it's ugly. The forcing function for KEA-64."}
+    ]},
+
+  { d:6, label:"Day 6", date:"Mon 24 Aug", title:"Real data through the real pipeline",
+    state:"todo",
+    note:"The day the product stops being a fixture. Until <code>fixtures.py</code> dies, the analytics are validated against numbers someone typed.",
+    cards:[
+      {id:"KEA-33", s:"todo", z:"M", t:"Repository layer replaces fixtures.py", d:"Swap hand-shaped numbers for repository queries. <b>AC:</b> all 119 tests still pass."},
+      {id:"KEA-32", s:"todo", z:"L", t:"Half-hourly data generator", d:"5 households × 31 days × 48 readings. <b>AC:</b> the July household reproduces the published figures <i>through the pipeline</i>, not through the fixture."},
+      {id:"KEA-68", s:"todo", z:"M", t:"Low Fixed Charge modelling", d:"The brief ranks this <b>#1 of five jobs</b>: it needs no new data and produces a dated, personal, sourced prediction."},
+      {id:"KEA-67", s:"todo", z:"L", t:"Weather normalisation", d:"Heating degree days, 18 °C baseline. <b>Only if KEA-42 resolved</b> — otherwise this is Sprint 3."},
+      {id:"KEA-35", s:"todo", z:"S", t:"Bind session → customer_id", d:"Fake auth is fine. Retrofitting identity after the demo data exists is painful."}
+    ]},
+
+  { d:7, label:"Day 7", date:"Tue 25 Aug", title:"Evidence — the golden set",
+    state:"todo",
+    note:"<code>ml/goldens/</code> is <b>currently an empty directory</b>. Until it isn't, G1 has no instrument and prompt tuning is unfalsifiable.",
+    cards:[
+      {id:"KEA-46", s:"todo", z:"L", t:"Build the golden set", d:"30–50 question/expected-fact pairs across 5 households, <b>including adversarial ones</b> — questions designed to tempt a figure out of the model."},
+      {id:"KEA-57", s:"todo", z:"M", t:"Wire the golden set into CI", d:"This is G1's instrument. It produces the headline: <i>N prompts, 0 fabricated figures</i>."},
+      {id:"KEA-47", s:"todo", z:"M", t:"Model bake-off", d:"gemma3:4b vs qwen3:4b against the golden set. <b>Rule: ship the smallest model that passes.</b>"},
+      {id:"KEA-43", s:"todo", z:"L", t:"Per-intent narration prompts", d:"Few-shot worked examples per intent — small models follow examples far better than rules. <b>Cannot start before KEA-46.</b>"},
+      {id:"KEA-44", s:"todo", z:"M", t:"Router hardening", d:"Log every routing decision; add the cases the demo script exposes."}
+    ]},
+
+  { d:8, label:"Day 8", date:"Wed 26 Aug", title:"Feature milestone + compliance",
+    state:"mile",
+    note:"<b>🎯 Feature milestone: chat working end to end.</b> Also the voice decision point — build it, or cut it out loud. A deliberate cut is a project-management decision; an undelivered card is a miss.",
+    cards:[
+      {id:"KEA-70", s:"todo", z:"M", t:"Hardship detection signals", d:"Usage-collapse pattern via <code>detect_usage_collapse</code>. Feeds KEA-49."},
+      {id:"KEA-49", s:"todo", z:"L", t:"Hardship → human handoff", d:"Consumer Care Obligations cl. 9.3(c). <b>The model must never counsel someone in financial distress.</b> Verified against demo line 5."},
+      {id:"KEA-48", s:"todo", z:"M", t:"Rejection log view + GET /api/verification/log", d:"The verification log is the evidence, not debug output. <b>Demo line 6 does not exist without this.</b>"},
+      {id:"KEA-50", s:"todo", z:"M", t:"Data-transparency panel", d:"Show the customer exactly what the assistant can see. Answers the 47.6% who don't trust AI with usage data."},
+      {id:"KEA-51", s:"todo", z:"S", t:"Degradation under load", d:"Model slow or down → template. Never a stack trace, never an empty bubble."},
+      {id:"KEA-52", s:"cut", z:"L", t:"Silero VAD + whisper.cpp STT", d:"whisper.cpp, <b>not</b> faster-whisper — Metal / Core ML on Apple Silicon. Cut unless KEA-64 and KEA-36 closed by end of Day 6."},
+      {id:"KEA-53", s:"cut", z:"L", t:"Piper TTS, sentence-streamed", d:"Speak sentence one while generating sentence two. Without streaming, voice feels broken."},
+      {id:"KEA-54", s:"cut", z:"L", t:"Voice WebSocket → the same pipeline", d:"Identical layers 0–3. <b>AC: voice cannot produce an answer chat wouldn't.</b> This is ADR-0003's central claim, made testable."},
+      {id:"KEA-55", s:"cut", z:"S", t:"Secure-context check", d:"⚠️ <code>getUserMedia</code> fails <b>silently</b> on <code>http://192.168.x.x</code>. Demo from the host or use mkcert. Test the day voice starts, not Day 10."},
+      {id:"KEA-56", s:"cut", z:"S", t:"Feature-flag voice", d:"Dark-launch if latency doesn't land. Already in the risk register."}
+    ]},
+
+  { d:9, label:"Day 9", date:"Thu 27 Aug", title:"Measurement — turn claims into numbers",
+    state:"todo",
+    note:"Everything the pitch asserts gets a measured value today, or it comes out of the pitch.",
+    cards:[
+      {id:"KEA-57b", s:"todo", z:"M", t:"Run the golden set, record the result", d:"<b>N prompts, 0 fabricated figures.</b> The 61.9% concern, answered with evidence rather than assurance."},
+      {id:"KEA-59", s:"todo", z:"M", t:"Latency percentiles", d:"First token, full answer, voice round trip, against the ADR-0003 budget. <b>Report honestly</b> — a missed budget stated plainly beats a number nobody believes."},
+      {id:"KEA-58", s:"todo", z:"M", t:"Cost projection", d:"Logged tokens × published Bedrock rates. <b>Label it a projection and cite the pricing page.</b> Depends entirely on KEA-36 having been done on Day 5."},
+      {id:"KEA-81", s:"todo", z:"M", t:"Full demo rehearsal, cold, on the demo machine", d:"Cold boot, no warm caches, no internet. The first rehearsal always finds something."}
+    ]},
+
+  { d:10, label:"Day 10", date:"Fri 28 Aug", title:"Ship",
+    state:"todo",
+    note:"Nothing new is built today. The only question is whether what exists survives a cold start in front of judges.",
+    cards:[
+      {id:"KEA-60", s:"todo", z:"S", t:"Code freeze midday", d:"Only demo-blocking fixes after."},
+      {id:"KEA-61", s:"todo", z:"M", t:"Second cold dry run", d:"On the actual demo machine, by the person who will drive."},
+      {id:"KEA-62", s:"todo", z:"S", t:"Record the fallback video", d:"<b>Live demos fail; a video that plays beats an apology.</b>"},
+      {id:"KEA-63", s:"todo", z:"M", t:"Sprint review + retro", d:"Update the risk register and the tech-debt register. Anything cut gets written down with a reason."},
+      {id:"KEA-82", s:"todo", z:"S", t:"Write the Sprint 3 board", d:"Before the AWS work starts, not during it."}
+    ]}
+];
+
+const SPRINTS = [
+  { n:"Sprint 3", dates:"31 Aug – 11 Sep · assumed", title:"Cloud foundations",
+    li:[
+      "<b>No Connect yet.</b> Connect cannot call a laptop, so the API has to be reachable first — and doing both at once means debugging two unfamiliar things through each other.",
+      "ADR-0008: choose the compute target. App Runner or ECS Fargate; <b>Lambda fights the model warm-up requirement</b>.",
+      "Containerise the API; Postgres → RDS, which ADR-0006 already reduced to a connection string.",
+      "Flip <code>BedrockProvider</code> from stub to live behind the existing seam — the test of whether ADR-0004 was worth writing.",
+      "Re-run the golden set against Bedrock. Same instrument, different model."
+    ],
+    ends:"Ends with: the same pipeline running on AWS, layers 0–3 unchanged." },
+  { n:"Sprint 4", dates:"14 – 25 Sep · assumed", title:"Connect — voice and chat",
+    li:[
+      "Claim a phone number in <code>ap-southeast-2</code> and build the Connect contact flow.",
+      "Connect provides STT, TTS and telephony — <b>this is what replaces the Sprint 2 local voice stack</b>, which is why building that stack is optional.",
+      "Prove ADR-0003 at scale: a call and a chat produce the same verified answer from the same FactBundle.",
+      "Call deflection metrics against the 900 calls/week baseline.",
+      "Escalation path from the bot to a human agent inside Connect — the compliance story becomes real infrastructure."
+    ],
+    ends:"Ends with: a real phone number that answers." },
+  { n:"Sprint 5", dates:"28 Sep – 9 Oct · assumed", title:"Measure, polish, pitch",
+    li:[
+      "Final measurement pass: fabrication rate, latency percentiles, cost per conversation, deflection rate.",
+      "Cost model against real Bedrock and Connect usage, replacing the Sprint 2 projection.",
+      "Rebuild the pitch around measured numbers rather than the survey.",
+      "Rehearse. Record the fallback. Update the risk and tech-debt registers one last time."
+    ],
+    ends:"Ends with: the final deliverable." }
+];
+
+const RISKS = [
+  { k:"Closed", cls:"ok", v:"<b>KEA-64 closed on Day 5, after three days open.</b><span class='cons'>All five demo lines run against a real model with every figure verified and every turn persisted. Running the script end to end immediately found demo line 2 broken — it had no routing rule at all — which is the argument for doing this before Day 9 rather than on it.</span>" },
+  { k:"Finding", cls:"warn", v:"<b>gemma3:4b fabricated a figure in 15 of 41 drafts.</b><span class='cons'>A 37% rejection rate. Every one was caught and replaced with deterministic text, so zero reached a customer — which is the product working exactly as designed. It is also a hard number for the Day 7 bake-off, and an argument against ever trusting the model with arithmetic.</span>" },
+  { k:"New", cls:"warn", v:"<b>The <code>elt</code> branch proposes a different architecture.</b><span class='cons'>Harvey's data-platform design says <i>\"the agent computes nothing\"</i> and has no home for the verification, fact-bundle or token-usage tables. The analysis agrees with ours; where it runs does not. Needs ADR-0008 before anyone writes code against it.</span>" },
+  { k:"Closed", cls:"ok", v:"<b>The Postgres path now runs, and it was broken.</b><span class='cons'>The migration did not import — <code>NameError: Text</code> in <code>0001_initial</code>. Fixed, applied, seeded, and checked for drift against <code>models.py</code>. It is now exercised on every PR by a CI service container, so it cannot silently rot again.</span>" },
+  { k:"Closed", cls:"ok", v:"<b>R4 landed on Day 5, not Day 9.</b><span class='cons'>Turn, fact bundle, verification, token usage and escalation all persist, and recording can never fail a request. Demo line 6 and the cost projection now have data accumulating behind them from today rather than from the last two days of the sprint.</span>" },
+  { k:"Time-critical", cls:"warn", v:"<b>AWS access has not been requested.</b><span class='cons'>Account provisioning, Connect enablement and Bedrock model access all have approval lead times measured in days. The effort is ten minutes; the waiting is the risk. This is the single most time-sensitive item in the roadmap and it belongs in Sprint 2, not Sprint 3.</span>" },
+  { k:"Schedule", cls:"warn", v:"<b>~30 cards remain across 5 working days.</b><span class='cons'>Sprint 2 as scoped will not finish. Cutting is not optional — it is the plan. Decide the cut line in daylight rather than at 11pm on Day 9.</span>" },
+  { k:"Blocked", cls:"warn", v:"<b>The demo script is still DRAFT, open since Day 2.</b><span class='cons'>Household seeding, the golden set and every Day 7 card derive from it. It also can't be reconciled with <code>seed.py</code> until the team confirms the seven lines.</span>" },
+  { k:"Bus factor", cls:"warn", v:"<b>One person owns backend, AI and Connect.</b><span class='cons'>A single point of failure on the most important part of the project, across three sprints.</span>" },
+  { k:"Bookkeeping", cls:"warn", v:"<b>The roadmap's day labels are off by one.</b><span class='cons'>It calls Thu 20 Aug \"Day 4 — today, 21 Aug\" and pushes the skeleton to Fri 22. The board's calendar is the correct one: Fri 21 Aug is Day 5, the milestone is Wed 26, and the sprint ends Fri 28.</span>" },
+  { k:"Solid", cls:"ok", v:"<b>The foundations are ahead of the schedule.</b><span class='cons'>Six ADRs, 119 passing tests, a five-team repo structure, a frozen API contract, and a fallback path that already degrades correctly when the model is missing. Nothing decided in week one has needed revisiting.</span>" }
+];
+
+/* ---------------------------------- render ---------------------------------- */
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, html) => { const n = document.createElement(tag);
+  if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+
+const allCards = DAYS.flatMap(d => d.cards);
+const count = s => allCards.filter(c => c.s === s).length;
+
+/* --- metric band --- */
+const METRICS = [
+  { k:"Sprint day",   v:"5 / 10",  n:"Fri 21 Aug",            cls:"warn" },
+  { k:"Cards shipped",v:String(count("done")), n:"of " + allCards.length + " tracked", cls:"pos" },
+  { k:"In flight",    v:String(count("now")),  n:"today",      cls:"warn" },
+  { k:"Blocked",      v:String(count("blocked")), n:"on people, not code", cls:"bad" },
+  { k:"Tests",        v:"127",     n:"2.6s, CI green",         cls:"pos" },
+  { k:"ADRs",         v:"6",       n:"one supersession",       cls:"" },
+  { k:"Tables",       v:"13",      n:"migrated + seeded",      cls:"pos" },
+  { k:"Endpoints",    v:"5",       n:"contract frozen",        cls:"" }
+];
+const band = $("#band");
+METRICS.forEach(m => band.append(el("div","metric",
+  `<span class="k">${m.k}</span><span class="v ${m.cls}">${m.v}</span><span class="n">${m.n}</span>`)));
+
+/* --- burn rail --- */
+const railDays = $("#railDays");
+DAYS.forEach(d => {
+  const cls = d.state === "done" ? "done" : d.state === "now" ? "now" : "";
+  const mile = d.state === "mile" ? " mile" : "";
+  railDays.append(el("div", `rail-day ${cls}${mile}`, `D${d.d}`));
+});
+
+/* --- pipeline --- */
+const pipe = $("#pipe"), detail = $("#layerDetail");
+LAYERS.forEach((L, i) => {
+  const b = el("button", "layer" + (L.model ? " model" : ""),
+    `<span class="lnum"><span>${L.n}</span><span>${L.owner}</span></span>
+     <span class="lname">${L.name}</span>
+     <span class="lmod">${L.mod}</span>
+     <span class="lcost">${L.cost}</span>`);
+  b.type = "button"; b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () => {
+    const on = b.getAttribute("aria-pressed") === "true";
+    pipe.querySelectorAll(".layer").forEach(x => x.setAttribute("aria-pressed","false"));
+    if (on) { detail.classList.remove("open"); return; }
+    b.setAttribute("aria-pressed","true");
+    detail.innerHTML = `<h3>${L.n} · ${L.name} <span class="sz">— ${L.owner}, ${L.cost}</span></h3>
+      <p>${L.blurb}</p><ul>${L.bullets.map(x => `<li>${x}</li>`).join("")}</ul>`;
+    detail.classList.add("open");
+  });
+  pipe.append(b);
+});
+
+/* --- facts --- */
+const facts = $("#facts");
+FACTS.forEach(f => facts.append(el("div","fact",
+  `<h4>${f.h}</h4><ul>${f.li.map(x => `<li>${x}</li>`).join("")}</ul>`)));
+
+/* --- day tree --- */
+const PILL = { done:"Shipped", now:"In flight", blocked:"Blocked", todo:"To do", cut:"Cut unless" };
+const tree = $("#tree");
+DAYS.forEach(d => {
+  const stateCls = d.state === "done" ? "d-done" : d.state === "now" ? "d-now"
+                 : d.state === "mile" ? "d-mile" : "";
+  const wrap = el("div", `day ${stateCls}` + (d.state === "now" ? " open" : ""));
+  wrap.dataset.day = d.d;
+  wrap.append(el("span","dot"));
+
+  const done = d.cards.filter(c => c.s === "done").length;
+  const head = el("button","dayhead",
+    `<span class="dn">${d.label} · ${d.date}</span>
+     <span class="dt">${d.title}</span>
+     <span class="dmeta">${done}/${d.cards.length}</span>
+     <span class="caret">▸</span>`);
+  head.type = "button";
+  head.setAttribute("aria-expanded", d.state === "now" ? "true" : "false");
+  head.addEventListener("click", () => {
+    const open = wrap.classList.toggle("open");
+    head.setAttribute("aria-expanded", String(open));
+    head.querySelector(".caret").textContent = open ? "▾" : "▸";
+  });
+  if (d.state === "now") head.querySelector(".caret").textContent = "▾";
+  wrap.append(head);
+
+  const kids = el("div","kids");
+  if (d.note) kids.append(el("p","daynote", d.note));
+  d.cards.forEach(c => {
+    const card = el("div", `card s-${c.s}`,
+      `<div class="top">
+         <span class="id">${c.id}</span>
+         <span class="ti">${c.t}</span>
+         <span class="pill p-${c.s}">${PILL[c.s]}</span>
+         <span class="sz">${c.z}</span>
+       </div>
+       <p class="de">${c.d}</p>`);
+    card.dataset.state = c.s;
+    card.dataset.text = (c.id + " " + c.t + " " + c.d).toLowerCase().replace(/<[^>]+>/g,"");
+    kids.append(card);
+  });
+  kids.append(el("p","empty","No cards match this filter on this day."));
+  kids.querySelector(".empty").hidden = true;
+  wrap.append(kids);
+  tree.append(wrap);
+});
+
+/* --- sprints --- */
+const sprints = $("#sprints");
+SPRINTS.forEach(s => sprints.append(el("div","sprint",
+  `<span class="sn">${s.n}</span><h3>${s.title}</h3>
+   <div class="dates">${s.dates}</div>
+   <ul>${s.li.map(x => `<li>${x}</li>`).join("")}</ul>
+   <div class="ends">${s.ends}</div>`)));
+
+/* --- risks --- */
+const risks = $("#risks");
+RISKS.forEach(r => risks.append(el("div", `risk ${r.cls}`,
+  `<div class="rk">${r.k}</div><div class="rv">${r.v}</div>`)));
+
+/* --- filter + search --- */
+let filter = "all", query = "";
+["all","done","now","blocked","todo","cut"].forEach(s => {
+  const n = s === "all" ? allCards.length : count(s);
+  $("#c-" + s).textContent = n;
+});
+
+function apply() {
+  document.querySelectorAll(".day").forEach(day => {
+    let shown = 0;
+    day.querySelectorAll(".card").forEach(card => {
+      const okS = filter === "all" || card.dataset.state === filter;
+      const okQ = !query || card.dataset.text.includes(query);
+      const vis = okS && okQ;
+      card.hidden = !vis;
+      if (vis) shown++;
+    });
+    day.querySelector(".empty").hidden = shown !== 0;
+    const filtering = filter !== "all" || query;
+    if (filtering) {
+      day.classList.toggle("open", shown > 0);
+      day.querySelector(".dayhead").setAttribute("aria-expanded", String(shown > 0));
+      day.querySelector(".caret").textContent = shown > 0 ? "▾" : "▸";
+    }
+  });
+}
+
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    filter = chip.dataset.f;
+    document.querySelectorAll(".chip").forEach(c =>
+      c.setAttribute("aria-pressed", String(c === chip)));
+    apply();
+  });
+});
+$("#q").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); apply(); });
+
+function setAll(open) {
+  document.querySelectorAll(".day").forEach(d => {
+    d.classList.toggle("open", open);
+    d.querySelector(".dayhead").setAttribute("aria-expanded", String(open));
+    d.querySelector(".caret").textContent = open ? "▾" : "▸";
+  });
+}
+$("#expandAll").addEventListener("click", () => setAll(true));
+$("#collapseAll").addEventListener("click", () => setAll(false));
+</script>

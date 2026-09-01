@@ -171,11 +171,20 @@ hand-shaped numbers in a Python file; by tonight they should be a real database.
 
 | ID | Card | Size | Description |
 |---|---|---|---|
-| KEA-52 | Silero VAD + whisper.cpp STT | L | **whisper.cpp, not faster-whisper** — Metal/Core ML on Apple Silicon |
-| KEA-53 | Piper TTS, sentence-streamed | L | Speak sentence one while generating sentence two. Without this, voice feels broken |
-| KEA-54 | Voice WebSocket → same pipeline | L | Identical layers 0–3. AC: voice cannot produce an answer chat wouldn't |
-| KEA-55 | ⚠️ Secure-context check | S | `getUserMedia` fails **silently** on `http://192.168.x.x`. Demo from host or use `mkcert`. **Test today, not Day 10** |
-| KEA-56 | Feature-flag voice | S | Dark-launch if latency doesn't land |
+| KEA-52 | Silero VAD + whisper.cpp STT | L | ✅ Code + `ml/voice/setup.sh`, which builds whisper.cpp with **Metal** on Apple Silicon. Silero via onnxruntime with an RMS energy fallback so a fresh clone still starts. **The binaries have not been run — see KEA-97** |
+| KEA-53 | Piper TTS, sentence-streamed | L | ✅ One process per sentence; synthesis of n+1 starts before n is yielded. **See KEA-96 — the ADR's framing of this optimisation does not survive whole-answer verification** |
+| KEA-54 | Voice WebSocket → same pipeline | L | ✅ **CLOSED.** `/api/voice/stream`. Layers 0–3 extracted to `app/pipeline.py`; `/chat`, `/chat/stream` and voice all call it, so the channels cannot drift. The AC is a test — same question, both channels, identical text. Verified over a real socket and through the vite proxy |
+| KEA-55 | ⚠️ Secure-context check | S | ✅ `checkVoiceSupport()` returns the specific reason and names `mkcert`. Done on Day 7, not Day 10 |
+| KEA-56 | Feature-flag voice | S | ✅ `KEA_VOICE_ENABLED`, **off by default**. A disabled socket accepts then closes 1008 so the reason reaches the browser. `/api/health` reports `ready` (binaries on disk) separately from `enabled` (flag set) |
+
+**Voice was decided and built on Day 7 (Tue 25 Aug), branch `feat/kea-52-voice`.**
+Run book: [`docs/voice.md`](../../voice.md). Three cards came out of building it:
+
+| ID | Card | Size | Description |
+|---|---|---|---|
+| KEA-96 | 🔺 **ADR-0003's latency budget assumes streaming generation** | M | The budget — under 2 s to first audio — is built from "first model *sentence* ~1–2 s". Layer 3 verifies the whole answer, so no audio can exist until generation *finishes*. Measured 47 s on an Intel laptop with no GPU acceleration; the M4 Pro is far faster but will not put a full verified answer inside 2 s. Mitigated by ADR-0005's pre-synthesised acknowledgement (`meta` at ~3 ms measured), which is built and speaks while the model works. **Needs a real number from `make voice-smoke` on the M4 Pro before 2 s is quoted anywhere.** If the honest figure is 6 s that is a superseding ADR, not a quiet edit |
+| KEA-97 | 🔴 Run the voice setup on the demo machine | S | `./ml/voice/setup.sh` — ~630 MB, builds whisper.cpp from source. **Nothing about voice has run against real weights yet**, so STT accuracy and Piper's voice are both unmeasured |
+| KEA-98 | Wire the mic button to `VoiceClient` | S | Blocked on `feat/kea-57-wire-assistant`. `AssistantPage.tsx` on main is still hardcoded mock responses, so voice ships as a lib and touches no page — three lines once that branch lands, recipe in `docs/voice.md` |
 
 ### Day 9 — Thu 27 Aug · measurement
 

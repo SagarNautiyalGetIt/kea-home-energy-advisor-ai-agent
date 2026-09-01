@@ -29,7 +29,7 @@ import pathlib
 
 import pytest
 
-from app.api.routes import _bundle_for
+from app.pipeline import _bundle_for
 from app.routing.intents import route
 from app.schemas import Intent
 from app.verification.number_checker import verify

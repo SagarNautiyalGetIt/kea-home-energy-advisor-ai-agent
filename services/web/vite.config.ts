@@ -13,6 +13,10 @@ export default defineConfig({
       "/api": {
         target: process.env.VITE_API_BASE_URL ?? "http://localhost:8000",
         changeOrigin: true,
+        // Voice is a WebSocket at /api/voice/stream. Without this the upgrade request
+        // is proxied as a plain GET, the socket never opens, and the browser reports
+        // only "connection failed" with nothing in the API log to explain it.
+        ws: true,
       },
     },
   },

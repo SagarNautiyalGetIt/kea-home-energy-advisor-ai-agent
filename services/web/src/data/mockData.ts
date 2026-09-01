@@ -1,5 +1,10 @@
 export const dailyUsage = [4.2, 4.8, 4.1, 5, 5.4, 2.6, 2.4]
-export const hourlyUsage = [0.3, 0.2, 0.4, 0.6, 0.5, 0.7, 1.1, 0.4]
+export const hourlyUsage = [
+  0.11, 0.1, 0.09, 0.06, 0.06, 0.08,
+  0.1, 0.13, 0.17, 0.18, 0.2, 0.22,
+  0.18, 0.16, 0.16, 0.2, 0.23, 0.27,
+  0.32, 0.37, 0.41, 0.18, 0.13, 0.09,
+]
 export const monthlyUsage = [24, 32, 34, 26]
 
 export const profile = {

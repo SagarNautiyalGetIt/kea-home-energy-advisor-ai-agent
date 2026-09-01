@@ -63,4 +63,4 @@ fabricated figures" becomes false and every test still passes.
 
 - [`../../services/api/README.md`](../../services/api/README.md)
 - [`../api-standards.md`](../api-standards.md)
-- [`README.md`](README.md) — other teams
+- [`README.md`](Coding/kea-agent/docs/teams/README.md) — other teams

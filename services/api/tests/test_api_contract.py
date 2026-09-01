@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 
 from app.analytics import fixtures
 from app.analytics.engine import UsageWindow
-from app.api.routes import _bundle_for, _sentences
 from app.config import Settings, get_provider
 from app.main import app
+from app.pipeline import _bundle_for, _sentences
 from app.routing.intents import route
 from app.schemas import Intent
 
@@ -174,3 +174,47 @@ def test_retry_prompt_names_the_rejected_tokens():
     retry = build_user_prompt(bundle, "why is my bill high", rejected=["$412", "63%"])
     assert "$412" in retry and "63%" in retry
     assert "REJECTED" in retry
+
+
+def test_dotenv_never_overrides_a_real_environment_variable(tmp_path, monkeypatch):
+    """`.env` fills gaps; it must never win over an exported variable.
+
+    `.claude/launch.json` and CI both set variables explicitly. A loader that overwrote
+    them would be a worse trap than the missing loader it replaced — the app would come
+    up configured differently from how the operator asked, with nothing saying so.
+    """
+    from app.config import _load_dotenv
+
+    monkeypatch.setenv("KEA_TEST_ALREADY_SET", "from-environment")
+    monkeypatch.delenv("KEA_TEST_ONLY_IN_FILE", raising=False)
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# a comment\n"
+        "\n"
+        "KEA_TEST_ALREADY_SET=from-file\n"
+        "KEA_TEST_ONLY_IN_FILE=from-file\n"
+        'KEA_TEST_QUOTED="quoted value"\n'
+        "MALFORMED-NO-EQUALS\n"
+    )
+    monkeypatch.setattr(
+        "app.config.pathlib.Path.resolve",
+        lambda self: tmp_path / "services" / "api" / "app" / "config.py",
+    )
+
+    _load_dotenv()
+
+    assert os.environ["KEA_TEST_ALREADY_SET"] == "from-environment"
+    assert os.environ["KEA_TEST_ONLY_IN_FILE"] == "from-file"
+    assert os.environ["KEA_TEST_QUOTED"] == "quoted value"
+
+
+def test_dotenv_is_absent_without_a_file(tmp_path, monkeypatch):
+    """A missing .env is the normal state on a fresh clone — it must not raise."""
+    from app.config import _load_dotenv
+
+    monkeypatch.setattr(
+        "app.config.pathlib.Path.resolve",
+        lambda self: tmp_path / "services" / "api" / "app" / "config.py",
+    )
+    _load_dotenv()  # no file at tmp_path/.env

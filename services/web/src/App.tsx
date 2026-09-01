@@ -14,7 +14,9 @@ import PlansPage from './pages/PlansPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import UsagePage from './pages/UsagePage'
+import VerificationPage from './pages/VerificationPage'
 import type { PageId } from './types/navigation'
+import { clearSession, loadSession, saveSession, type Session } from './lib/session'
 
 const routeFor: Record<PageId, string> = {
   dashboard: '/dashboard', usage: '/usage', billing: '/billing', assistant: '/assistant',
@@ -25,7 +27,9 @@ function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const nextToastId = useRef(1)
-  const [loggedIn, setLoggedIn] = useState(localStorage.getItem('kea-demo-session') === 'true')
+  // The identity, not a boolean. Every page scopes to `session.customerId`; before
+  // this, all fourteen logins fell through to households[0] and showed one customer.
+  const [session, setSession] = useState<Session | null>(loadSession)
   const [showLogout, setShowLogout] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
@@ -37,22 +41,24 @@ function App() {
   }
   const go = (page: PageId) => navigate(routeFor[page])
   const active = (Object.entries(routeFor).find(([, path]) => location.pathname === path)?.[0] as PageId | undefined)
-  const login = () => {
-    localStorage.setItem('kea-demo-session', 'true')
-    setLoggedIn(true)
+  const login = (next: Session) => {
+    saveSession(next)
+    setSession(next)
     navigate('/dashboard')
     if (localStorage.getItem('kea-onboarding-seen') !== 'true') setShowOnboarding(true)
-    addToast('Welcome back, Adela')
+    // The real name off the account, not a hardcoded "Adela" — that greeting was the
+    // most visible symptom of the session having no identity in it.
+    addToast(`Welcome back, ${next.displayName}`)
   }
   const confirmLogout = () => {
-    localStorage.removeItem('kea-demo-session')
+    clearSession()
     setShowLogout(false)
-    setLoggedIn(false)
+    setSession(null)
     navigate('/login')
   }
   const closeOnboarding = () => { localStorage.setItem('kea-onboarding-seen', 'true'); setShowOnboarding(false) }
 
-  if (!loggedIn) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
+  if (!session) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
 
   return <AppShell active={active} onNavigate={go} onLogout={() => setShowLogout(true)}>
     <Routes>
@@ -66,6 +72,9 @@ function App() {
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>
+      {/* Demo line 6. Deliberately not in the customer navigation — this is the
+          operator's evidence view, reached by URL during the pitch. */}
+      <Route path="/verification" element={<VerificationPage/>}/>
       <Route path="*" element={<NotFoundPage onHome={() => go('dashboard')}/>}/>
     </Routes>
     {showLogout && <LogoutModal onCancel={()=>setShowLogout(false)} onConfirm={confirmLogout}/>}

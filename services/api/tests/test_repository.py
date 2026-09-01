@@ -23,14 +23,16 @@ from fastapi.testclient import TestClient
 
 from app.analytics import fixtures
 from app.analytics.repository import (
+    CompositeRepository,
     DatabaseRepository,
     FixtureRepository,
+    MartRepository,
     UsageContext,
     build_repository,
 )
-from app.api.routes import _bundle_for, bundle_from_context
 from app.config import get_repository
 from app.main import app
+from app.pipeline import _bundle_for, bundle_from_context
 from app.schemas import Intent
 
 
@@ -42,15 +44,27 @@ def _reset_repository_cache():
 
 
 def test_build_repository_honours_the_flag() -> None:
+    """With a database, both sources are live: the five demo households in `public.*`
+    and Harvey's nine fixture accounts in `kea.*`. One login page serves all fourteen,
+    so the composite is what `persist` now selects."""
     assert isinstance(build_repository(use_database=False), FixtureRepository)
-    assert isinstance(build_repository(use_database=True), DatabaseRepository)
+    assert isinstance(build_repository(use_database=True), CompositeRepository)
 
 
-def test_both_repositories_satisfy_the_same_interface() -> None:
-    """Structural check, so a method added to one is not forgotten on the other."""
-    for name in ("name", "all_ids", "context"):
-        assert hasattr(FixtureRepository, name), name
-        assert hasattr(DatabaseRepository, name), name
+def test_every_repository_satisfies_the_same_interface() -> None:
+    """Structural, so a method added to one is not forgotten on the others."""
+    for repo in (FixtureRepository, DatabaseRepository, MartRepository, CompositeRepository):
+        for name in ("name", "all_ids", "context"):
+            assert hasattr(repo, name), f"{repo.__name__} is missing {name}"
+
+
+def test_the_composite_prefers_demo_households_over_mart_accounts() -> None:
+    """Order is not cosmetic. The rehearsed demo lines run against the five hand-shaped
+    households, so an id collision has to resolve to the household the script expects
+    rather than to a fixture account that happens to share it."""
+    sources = CompositeRepository()._sources
+    assert isinstance(sources[0], DatabaseRepository)
+    assert isinstance(sources[1], MartRepository)
 
 
 async def test_fixture_repository_lists_every_demo_household() -> None:

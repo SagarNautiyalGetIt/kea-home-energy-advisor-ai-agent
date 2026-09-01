@@ -58,6 +58,11 @@ async def narrate_verified(
             # a model installed.
             log.error("provider %s unavailable (%s) — serving template", provider.name, exc)
             report.fell_back_to_template = True
+            # The distinction the evidence table exists to preserve: this fallback is
+            # "the model never answered", not "the model answered and we caught it
+            # inventing figures". Counting them together turns an outage into a
+            # flattering verification statistic.
+            report.provider_error = True
             return template_fallback(bundle), report
 
         report = verify(draft, bundle)

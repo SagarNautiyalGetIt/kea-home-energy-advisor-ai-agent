@@ -1,4 +1,4 @@
-import { Bot, Check, Star } from 'lucide-react'
+import { Bot, Check, Star, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -15,7 +15,7 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
   return <>
     <div className="page-heading plans-heading"><div><h1>Plans</h1><p>Explore plan benefits and choose the one that matches your routine.</p></div><button className="compare-action" onClick={askAi}><Bot/>Ask AI about the plan</button></div>
     <div className="plans-grid">{plans.map((plan,index)=><article className={`plan-card card ${index===0?'current-plan':''} ${chosenPlan===plan.name?'selected-plan':''}`} key={plan.name}>
-      {index===0?<span className="plan-badge current"><Check/>CURRENT PLAN</span>:index===1?<span className="plan-badge"><Star/>RECOMMENDED</span>:<span className="plan-badge">GOOD PLAN</span>}
+      {index===0?<span className="plan-badge current"><Check/>CURRENT PLAN</span>:index===1?<span className="plan-badge"><Star/>RECOMMENDED</span>:<span className="plan-badge"><ThumbsUp/>GOOD PLAN</span>}
       <label className="plan-compare"><input type="radio" name="ai-plan" checked={chosenPlan===plan.name} onChange={()=>setChosenPlan(plan.name)}/><span>Select</span></label>
       <h2>{plan.name}</h2><h3>{plan.offer}</h3><small>{plan.cadence}</small><ul>{plan.highlights.map((item)=><li key={item}>{item}</li>)}</ul><h4>Best for</h4><ul>{plan.best.map((item)=><li key={item}>{item}</li>)}</ul><h4>Additional features</h4><ul><li>Track usage across the billing cycle</li><li>Access digital bills and account support</li><li>Receive high-usage notifications</li></ul>
       <p className="plan-links"><button onClick={()=>setTermsPlan(plan)}>Terms &amp; Conditions</button></p><button onClick={()=>setSelected(plan)}>{index===0?'View plan':'View pricing'}</button>

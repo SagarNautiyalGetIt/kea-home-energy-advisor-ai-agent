@@ -76,14 +76,51 @@ _RULES: list[tuple[Intent, re.Pattern[str]]] = [
         ),
     ),
     (
-        Intent.WHY_HIGH,
+        # Above PEAK_USAGE: "what TIME of day" and "which DAY" are different questions
+        # and we can only answer one of them. Routing a time-of-day question to the
+        # daily peak would answer "day 11" to "what hour?", which is the same class of
+        # confidently-wrong answer PEAK_USAGE was added to stop.
+        Intent.TIME_OF_DAY,
         re.compile(
-            r"\b(why|high|expensive|so much|explain).{0,40}\b(bill|power|usage|charge)", re.I
+            r"\b(what|which|when)\b.{0,20}\b(time of day|hour|hourly|time)\b"
+            r"|\b(time of day|what hour|which hour|peak hour|hourly breakdown|"
+            r"morning|evening|overnight|afternoon|during the day|at night)\b",
+            re.I,
+        ),
+    ),
+    (
+        # PEAK_USAGE must sit ABOVE WHY_HIGH, and the reason is a real bug this caught.
+        #
+        # "which was the day of my highest usage?" was answered with the full
+        # why-is-my-bill-high explanation, because `\bhigh` matches inside "highest" and
+        # WHY_HIGH's rule got there first. The model then narrated the wrong bundle
+        # perfectly and layer 3 stamped it "every figure checked" — which was true and
+        # completely beside the point. Layer 3 verifies that figures are real, never
+        # that they answer the question asked; only layer 0 can do that, so a routing
+        # miss surfaces as a confident wrong answer rather than an error.
+        #
+        # These are "when/which/what day" questions — the interrogative is what
+        # distinguishes them from "why is it high", not the word "high".
+        Intent.PEAK_USAGE,
+        re.compile(
+            r"\b(which|what|when|highest|peak|most)\b.{0,30}"
+            r"\b(day|days|date|time|highest|peak|most|worst)\b"
+            r"|\b(peak day|busiest day|highest day|highest usage|used the most|"
+            r"using the most|use the most)\b",
+            re.I,
         ),
     ),
     (
         Intent.WHY_HIGH,
-        re.compile(r"\b(bill|power|usage).{0,40}\b(high|up|expensive|jumped|doubled)\b", re.I),
+        # `high\b` rather than `high` — the missing word boundary is what let this rule
+        # swallow "highest". Same for the second rule below.
+        re.compile(
+            r"\b(why|high\b|expensive|so much|explain).{0,40}\b(bill|power|usage|charge)", re.I
+        ),
+    ),
+    (
+        Intent.WHY_HIGH,
+        re.compile(r"\b(bill|power|usage).{0,40}\b(high\b|up|expensive|jumped|doubled)\b", re.I),
     ),
 ]
 

@@ -4,9 +4,9 @@
 # cross-cutting (setup, check, db). Per-service detail lives in that service's
 # own Makefile; this file only delegates, so there is one place to look.
 .PHONY: help setup check db db-stop db-logs \
-        api-migrate api-seed api-dev api-test api-lint api-check api-spec \
+        ollama ollama-status api-migrate api-seed data-load data-reload api-dev api-test api-lint api-check api-spec \
         web-install web-dev web-build web-lint web-types \
-        ml-pull ml-bench clean
+        ml-pull ml-bench voice-setup voice-check voice-smoke clean
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 API     := $(MAKE) -C services/api
@@ -20,11 +20,16 @@ setup:  ## install every service's dependencies
 	$(API) setup
 	$(WEB) install
 	@echo ""
-	@echo "next: cp .env.example .env && make db && make api-migrate && make api-seed"
+	@echo "next: cp .env.example .env && make db && make api-migrate && make api-seed && make ollama"
 
 check:  ## run every team's CI checks — do this before you push
 	$(API) check
 	$(WEB) lint
+
+ollama:  ## start the local model and pull it if missing (NATIVE, never Docker)
+	./infra/ollama.sh start
+ollama-status:  ## is the model actually answering?
+	./infra/ollama.sh status
 
 db:  ## start postgres (Ollama stays NATIVE — Docker has no Apple GPU access)
 	$(COMPOSE) up -d db
@@ -43,6 +48,12 @@ api-migrate:  ## apply database migrations
 	$(API) migrate
 api-seed:  ## load the five demo households
 	$(API) seed
+
+## Data team — data/
+data-load:  ## load the platform schema and all 9 bill fixtures into kea.*/metering/billing
+	services/api/.venv/bin/python data/load.py
+data-reload:  ## same, but drop the loader's schemas first (never touches app.*)
+	services/api/.venv/bin/python data/load.py --drop
 api-dev:  ## run the API on :8000, docs at /docs
 	$(API) dev
 api-test:  ## run the backend test suite
@@ -74,6 +85,14 @@ ml-bench:  ## measure words/sec for each candidate model on this machine
 	cd ml/benchmarks/device && bash bench-mac.sh
 ml-golden:  ## run the golden set and print the headline (no model, no database needed)
 	$(API) golden
+
+## Voice — ADR-0003 (whisper.cpp + Piper + Silero, all local)
+voice-setup:  ## build whisper.cpp and fetch Piper + Silero into ml/voice/dist (~630 MB)
+	./ml/voice/setup.sh
+voice-check:  ## report which parts of the voice stack are present — downloads nothing
+	./ml/voice/setup.sh --check
+voice-smoke:  ## end-to-end check: PCM in, transcript, verified answer, audio out
+	$(API) voice-smoke
 
 clean:
 	$(API) clean

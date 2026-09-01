@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import voice
 from app.api.routes import router
 from app.config import get_provider, settings
 
@@ -38,6 +39,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await warm()
         log.info("model warm")
 
+    if settings.voice_enabled:
+        status = voice.status()
+        log.info(
+            "voice enabled — stt=%s tts=%s",
+            status["stt"]["available"],
+            status["tts"]["available"],
+        )
+        if not status["ready"]:
+            # Loud, because the alternative is discovering it when someone taps the mic
+            # in front of an audience. The API still serves chat perfectly well.
+            log.warning("voice is ENABLED but not READY — run ml/voice/setup.sh")
+        else:
+            # Same reasoning as warming the language model: the acknowledgement is the
+            # thing that covers model latency, so it must not itself be the slow one.
+            made = await voice.get_tts().prewarm()
+            log.info("pre-synthesised %d acknowledgements", made)
+
     yield
 
     # The provider is cached and owns a connection pool, so it needs closing.
@@ -47,7 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Kea Energy — Home Energy Advisor",
+    title="Sparky — Kea Energy's Home Energy Advisor",
     version="0.1.0",
     description=(
         "Every number in every answer is computed by Python and verified before it "

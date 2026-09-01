@@ -137,6 +137,11 @@ class DatabaseRecorder:
     #: an unset retention date should be visible, not silently mean "forever".
     RETENTION_DAYS = 365
 
+    #: Marks a row created purely so a conversation had something to hang off. Real
+    #: seeded households carry a real region; these carry this, which is what
+    #: `/api/households` filters on so mart accounts do not appear twice in the picker.
+    ANCHOR_REGION = "(conversation-anchor)"
+
     async def record(self, record: TurnRecord) -> int | None:
         try:
             async with get_sessionmaker()() as session, session.begin():
@@ -147,14 +152,21 @@ class DatabaseRecorder:
                 ).scalar_one_or_none()
 
                 if customer is None:
-                    # Seeded data is missing. Loud, because every later count is now
-                    # wrong and quietly dropping the row would hide that.
-                    log.error(
-                        "cannot record turn: no customer with external_ref=%s. "
-                        "Has `make api-seed` been run against this database?",
-                        record.customer_ref,
-                    )
-                    return None
+                    # Not an error — the household simply has no row in `public.customer`.
+                    #
+                    # That is the normal state for the nine ELT accounts: their data lives
+                    # in `kea.*` and `make api-seed` only creates rows for the five seeded
+                    # households. Returning None here meant 9 of the 14 logins were
+                    # answered and verified and then recorded NOTHING — and
+                    # "N answers, 0 fabricated figures" is counted from `app.verification`,
+                    # so the claim was quietly missing two thirds of its evidence.
+                    #
+                    # `conversation.customer_id` is a foreign key, so the spine needs a row
+                    # to hang off. This provisions the bare identity anchor and nothing
+                    # else: an external_ref and a region placeholder. It is not a customer
+                    # record — the real account data stays in the marts, and `Customer`
+                    # deliberately holds no personal details.
+                    customer = await self._anchor(session, record.customer_ref)
 
                 conversation = await self._conversation(session, customer, record)
 
@@ -204,6 +216,7 @@ class DatabaseRecorder:
                         fell_back_to_template=getattr(
                             record.report, "fell_back_to_template", False
                         ),
+                        provider_error=getattr(record.report, "provider_error", False),
                     )
                 )
                 if record.provider:
@@ -244,6 +257,57 @@ class DatabaseRecorder:
                 record.intent.value,
             )
             return record.conversation_id
+
+    @staticmethod
+    def _citation(bundle: FactBundle) -> dict | None:
+        """The short citation for `turn.cited_sources` (KEA-50, data-transparency panel).
+
+        Adjacent to `fact_bundle`, not a duplicate of it. The bundle is the full receipt
+        — every fact with its value, unit and label, kept so a disputed figure can be
+        reconstructed. This is what the *customer* is shown: which figures backed the
+        answer, over what period, for which household. Keys and provenance, no values.
+
+        Returns None for a bundle with no facts — a hardship reply carries none by
+        design, and an empty citation panel is better than one asserting we cited
+        nothing. `{}` would render as a panel; None renders as no panel.
+        """
+        if not bundle.facts:
+            return None
+        return {
+            "household": bundle.customer_id,
+            "period": bundle.period,
+            "intent": bundle.intent.value,
+            "fact_keys": [f.key for f in bundle.facts],
+            # Named rather than implied. Every figure in this project comes from the
+            # customer's own half-hourly meter data plus a benchmark that is
+            # deliberately not derived from them, and the panel should say so.
+            "basis": "half-hourly meter data for this household, and a benchmark drawn "
+            "from comparable homes rather than from this household",
+        }
+
+    async def _anchor(self, session, external_ref: str) -> Customer:
+        """Get or create the identity anchor a conversation can hang off.
+
+        `ON CONFLICT DO NOTHING` rather than catching IntegrityError: in PostgreSQL a
+        statement that raises aborts the whole transaction, so a caught IntegrityError
+        would poison the surrounding `session.begin()` and lose the turn we were trying
+        to save. The conflict clause keeps the transaction usable when two workers race
+        the same first turn.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        await session.execute(
+            pg_insert(Customer)
+            .values(external_ref=external_ref, region=self.ANCHOR_REGION)
+            .on_conflict_do_nothing(index_elements=["external_ref"])
+        )
+        anchor = (
+            await session.execute(
+                select(Customer).where(Customer.external_ref == external_ref)
+            )
+        ).scalar_one()
+        log.info("provisioned identity anchor for %s", external_ref)
+        return anchor
 
     async def _conversation(self, session, customer: Customer, record: TurnRecord):
         """Continue the caller's conversation, or open one bound to this customer.

@@ -49,3 +49,13 @@ Thumbs.db
 .obsidian/
 .trash/
 *.canvas
+
+# Rootless local Postgres cluster (infra/pg-local.sh) — never commit a data directory.
+.pg-local/
+
+# Generated alert emails (app/alerts/email.py FileSender). Real messages with real
+# recipient addresses in them — an artefact of running the demo, never source.
+var/
+services/api/var/
+# Local model daemon log (infra/ollama.sh). Runtime output, not source.
+.ollama.log

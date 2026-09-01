@@ -49,6 +49,14 @@ def _pk() -> Mapped[int]:
     return mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
 
+#: The conversation spine lives in `app`, per the namespace table in the data platform
+#: design: `app` is conversation history, written by the agent and invisible to the
+#: loader. The operational tables below it (customer, meter, reading, …) stay in
+#: `public` — they are this repo's local stand-in for the metering/billing/catalogue
+#: source systems, which in the real platform the app never reads directly.
+_APP_SCHEMA = {"schema": "app"}
+
+
 def _now() -> Mapped[dt.datetime]:
     return mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
 
@@ -216,6 +224,7 @@ class Conversation(Base):
         CheckConstraint(
             "ended_at IS NULL OR ended_at >= started_at", name="ck_conversation_dates_ordered"
         ),
+        _APP_SCHEMA,
     )
 
     id: Mapped[int] = _pk()
@@ -255,10 +264,11 @@ class Turn(Base):
     __tablename__ = "turn"
     __table_args__ = (
         UniqueConstraint("conversation_id", "seq", name="uq_turn_conversation_seq"),
+        _APP_SCHEMA,
     )
 
     id: Mapped[int] = _pk()
-    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversation.id"), nullable=False)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("app.conversation.id"), nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False)  # customer | agent
     body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -298,9 +308,10 @@ class FactBundleRow(Base):
     audited afterwards — if a figure is ever disputed, this is the receipt."""
 
     __tablename__ = "fact_bundle"
+    __table_args__ = (_APP_SCHEMA,)
 
     id: Mapped[int] = _pk()
-    turn_id: Mapped[int] = mapped_column(ForeignKey("turn.id"), unique=True, nullable=False)
+    turn_id: Mapped[int] = mapped_column(ForeignKey("app.turn.id"), unique=True, nullable=False)
     intent: Mapped[str] = mapped_column(String(48), nullable=False)
     period: Mapped[str] = mapped_column(String(64), nullable=False)
     facts: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -316,14 +327,25 @@ class VerificationRow(Base):
     """
 
     __tablename__ = "verification"
+    __table_args__ = (_APP_SCHEMA,)
 
     id: Mapped[int] = _pk()
-    turn_id: Mapped[int] = mapped_column(ForeignKey("turn.id"), unique=True, nullable=False)
+    turn_id: Mapped[int] = mapped_column(ForeignKey("app.turn.id"), unique=True, nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     checked: Mapped[list] = mapped_column(JSONB, nullable=False)
     unverified: Mapped[list] = mapped_column(JSONB, nullable=False)
     regenerated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fell_back_to_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    provider_error: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    """True when the template was served because the model was unreachable.
+
+    Without this column the two fallback paths are indistinguishable in the table, and
+    this table is what "N answers, 0 fabricated figures" is counted from. A day when
+    Ollama was down would read as a day the number-checker caught six fabrications —
+    the opposite claim, and a flattering one, which is exactly the kind of number this
+    product exists to refuse.
+    """
 
     turn: Mapped[Turn] = relationship(back_populates="verification")
 
@@ -337,9 +359,10 @@ class TokenUsageRow(Base):
     """
 
     __tablename__ = "token_usage"
+    __table_args__ = (_APP_SCHEMA,)
 
     id: Mapped[int] = _pk()
-    turn_id: Mapped[int] = mapped_column(ForeignKey("turn.id"), unique=True, nullable=False)
+    turn_id: Mapped[int] = mapped_column(ForeignKey("app.turn.id"), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)  # ollama | bedrock
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -357,13 +380,82 @@ class Escalation(Base):
     """
 
     __tablename__ = "escalation"
+    __table_args__ = (_APP_SCHEMA,)
 
     id: Mapped[int] = _pk()
-    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversation.id"), nullable=False)
-    turn_id: Mapped[int | None] = mapped_column(ForeignKey("turn.id"))
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("app.conversation.id"), nullable=False)
+    turn_id: Mapped[int | None] = mapped_column(ForeignKey("app.turn.id"))
     reason: Mapped[str] = mapped_column(String(48), nullable=False)
     """hardship | out_of_scope | model_unavailable"""
 
     created_at: Mapped[dt.datetime] = _now()
 
     conversation: Mapped[Conversation] = relationship(back_populates="escalations")
+
+
+class Alert(Base):
+    """Every proactive contact: what was sent, to whom, by which channel, and whether
+    it landed.
+
+    Harvey's `kea.alert` from the deferred schema, moved into `app` and given a tier.
+    Moved because the namespace rules give the app SELECT-only on `kea.*`, and this row
+    is written by the agent the moment a warning fires rather than by the nightly
+    loader.
+
+    **Tier is severity; channel is the pipe.** They are separate columns because the
+    mapping between them is policy, and policy changes — a customer who has opted out
+    of email still has a tier-1 alert, it just has to reach them another way. Today:
+
+    ==== ========= =========================================
+    tier channel   state
+    ==== ========= =========================================
+    1    email     delivering
+    2    sms       recorded and rendered, no gateway wired
+    3    voice     recorded and rendered, no gateway wired
+    ==== ========= =========================================
+
+    `status='suppressed'` is not a failure — it is a deliberate non-send, and the two
+    have to be distinguishable. From the customer's side an undelivered bill-shock
+    warning looks exactly like one that was never sent, which is the reason this table
+    exists at all rather than a log line.
+    """
+
+    __tablename__ = "alert"
+    __table_args__ = (
+        # One alert per customer, per cycle, per tier. The dashboard polls; without
+        # this constraint the first rehearsal sends the customer a hundred emails.
+        # Enforced in the database rather than in Python because the check and the
+        # insert would otherwise race across two workers.
+        UniqueConstraint("account_ref", "kind", "period", "tier", name="uq_alert_once_per_cycle"),
+        Index("ix_alert_account", "account_ref", "created_at"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    account_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+    """The customer as the marts know them. Not a foreign key — `kea` is separately
+    loaded and the app has to keep working across a reload."""
+
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="bill_shock")
+    tier: Mapped[int] = mapped_column(Integer, nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+
+    subject: Mapped[str | None] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    facts: Mapped[dict | None] = mapped_column(JSONB)
+    """The assessment that triggered it, stored whole. Same reasoning as `fact_bundle`:
+    an alert whose figures cannot be reproduced later is an alert we cannot defend."""
+
+    period: Mapped[str] = mapped_column(String(64), nullable=False)
+    as_at_day: Mapped[int | None] = mapped_column(Integer)
+
+    scheduled_for: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+
+    opened_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    acted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = _now()

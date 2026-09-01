@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Kea — the bill nobody explains</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #ffffff; }
+
+      :root {
+        --ink: #1a1d2b;
+        --muted: #2d3e7b;
+        --light: #9a9a9a;
+        --accent: #341fcd;
+        --canvas: #ffffff;
+        --tint: rgba(52, 31, 205, 0.04);
+        --tint-border: rgba(52, 31, 205, 0.2);
+      }
+
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--canvas); }
+      .clip { position: absolute; inset: 0; }
+      .stage { position: absolute; inset: 0; padding: 128px 160px; display: flex; flex-direction: column; justify-content: center; }
+
+      .eyebrow {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 22px; font-weight: 600; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--accent);
+      }
+      .accent-line { height: 2px; width: 120px; background: var(--accent); margin-top: 20px; transform-origin: left center; }
+      .body-copy { font-family: Inter, sans-serif; font-size: 30px; font-weight: 400; line-height: 1.6; color: var(--muted); }
+      .footnote { font-family: Inter, sans-serif; font-size: 20px; font-weight: 400; color: var(--light); }
+
+      .display-xl { font-family: "Space Grotesk", sans-serif; font-size: 210px; font-weight: 700; line-height: 1.0; letter-spacing: -0.02em; color: var(--ink); }
+      .h2 { font-family: "Space Grotesk", sans-serif; font-size: 76px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; color: var(--ink); }
+      .h3 { font-family: "Space Grotesk", sans-serif; font-size: 54px; font-weight: 500; line-height: 1.3; letter-spacing: -0.02em; color: var(--ink); }
+      .metric { font-family: "Space Grotesk", sans-serif; font-size: 78px; font-weight: 700; line-height: 1.0; color: var(--accent); white-space: nowrap; }
+      .num { color: var(--accent); font-weight: 700; position: relative; display: inline-block; }
+      .underline-sweep { position: absolute; left: 0; bottom: -8px; height: 4px; width: 100%; background: var(--accent); transform-origin: left center; }
+
+      /* ---- Frame 01 ---- */
+      #f1-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+      #f1-total { margin-top: 44px; }
+      #f1-sub { margin-top: 40px; max-width: 900px; }
+
+      /* ---- Frame 02 · the real MVP composer ----
+         Reproduced from services/web/src/index.css `.chat-composer` and
+         services/web/src/pages/AssistantPage.tsx, scaled 2x for 1080p legibility:
+         the 58px pill becomes 116px, the 44px send button 88px, 16px text 32px.
+         Brand purples are the app's own --purple #4a25ff / --purple2 #765fff. */
+      #f2-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 54px; }
+      .composer {
+        display: flex; align-items: center; gap: 10px;
+        width: 1300px; min-height: 116px; padding: 14px 18px;
+        background: #ffffff; border: 2px solid #d9deeb; border-radius: 64px;
+        box-shadow: 0 16px 56px rgb(32 43 88 / 10%);
+      }
+      .composer-icon { width: 76px; height: 76px; flex: 0 0 76px; display: grid; place-items: center; color: #9ba8cb; }
+      .composer-icon svg { width: 38px; height: 38px; }
+      #f2-field { flex: 1; min-width: 0; padding: 0 12px; font-family: Inter, sans-serif; font-size: 32px; line-height: 1.4; color: #34415f; white-space: pre; }
+      #f2-field.placeholder { color: #9ba8cb; }
+      .send-button {
+        width: 88px; height: 88px; flex: 0 0 88px; display: grid; place-items: center;
+        border-radius: 50%; color: #ffffff;
+        background: linear-gradient(135deg, #765fff, #4a25ff);
+      }
+      .send-button svg { width: 40px; height: 40px; }
+      .chat-footer { font-family: Inter, sans-serif; font-size: 26px; color: #7e8ba8; text-align: center; }
+      .chat-footer u { color: #4a25ff; text-decoration: underline; text-underline-offset: 3px; }
+      /* Sparky's orbit ring — components/sparky, the app's own violet */
+      .ring-wrap { position: relative; width: 76px; height: 76px; flex: 0 0 76px; }
+      .ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(74, 37, 255, 0.18); }
+      .ring-arc { position: absolute; inset: 0; border-radius: 50%; border: 3px solid transparent; border-top-color: #4a25ff; border-right-color: #4a25ff; }
+      .ring-core { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #4a25ff; }
+
+      /* ---- Frame 03 ---- */
+      #f3-inner { display: flex; flex-direction: column; height: 100%; justify-content: center; gap: 56px; }
+      .answer-line { font-family: "Space Grotesk", sans-serif; font-size: 50px; font-weight: 500; line-height: 1.3; letter-spacing: -0.02em; color: var(--ink); white-space: nowrap; }
+      .answer-line .w { display: inline-block; }
+      #f3-chart { display: flex; align-items: flex-end; gap: 9px; height: 260px; width: 100%; }
+      .bar { flex: 1 1 0; background: rgba(45, 62, 123, 0.16); border-radius: 3px 3px 0 0; transform-origin: bottom center; }
+      .bar.sustained { background: var(--accent); }
+      .bar.spike { background: rgba(45, 62, 123, 0.28); }
+      #f3-baseline { position: relative; height: 1px; background: var(--tint-border); width: 100%; }
+      #f3-foot { display: flex; justify-content: space-between; align-items: baseline; }
+
+      /* ---- Frame 04 ---- */
+      #f4-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 34px; }
+      .shield-row { display: flex; align-items: center; gap: 34px; }
+      #f4-rule { height: 2px; width: 760px; background: var(--accent); transform-origin: left center; }
+
+      /* ---- Frame 05 ----
+         The breath before the endline. Held on the canvas rather than cutting to black,
+         so the film stays one continuous white surface end to end. */
+      #f5 { background: var(--canvas); }
+
+      /* ---- Frame 06 ---- */
+      #f6 { background: var(--canvas); }
+      #f6-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 52px; }
+      #f6-lockup { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+      #f6-mark { font-family: "Space Grotesk", sans-serif; font-size: 96px; font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
+      /* The app's own purple, not the film's cobalt — this is the product lockup. */
+      #f6-sub { font-family: "Space Grotesk", sans-serif; font-size: 27px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #4a25ff; }
+      .endline { font-family: "Space Grotesk", sans-serif; font-size: 50px; font-weight: 500; line-height: 1.35; letter-spacing: -0.02em; color: var(--ink); text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="16.4"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ================= 01 · The bill · 0.0–2.0 ================= -->
+      <section id="f1" class="clip" data-start="0" data-duration="2.05" data-track-index="1">
+        <div class="stage">
+          <div id="f1-inner">
+            <div class="eyebrow" id="f1-eyebrow">July statement</div>
+            <div class="accent-line" id="f1-rule"></div>
+            <div class="display-xl" id="f1-total">$412.80</div>
+            <div class="body-copy" id="f1-sub">You paid it. Nobody told you why.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 02 · The question · 2.0–5.0 ================= -->
+      <section id="f2" class="clip" data-start="2.05" data-duration="2.95" data-track-index="1">
+        <div class="stage">
+          <div id="f2-inner">
+            <div class="eyebrow" id="f2-eyebrow">Sparky</div>
+            <div id="f2-card">
+              <div class="composer">
+                <!-- attachment · the app's paperclip control -->
+                <div class="composer-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </div>
+                <div id="f2-field" class="placeholder">Message Sparky</div>
+                <div class="ring-wrap" id="f2-ring">
+                  <div class="ring"></div>
+                  <div class="ring-arc" id="f2-arc"></div>
+                  <div class="ring-core" id="f2-core"></div>
+                </div>
+                <!-- voice · push-to-talk -->
+                <div class="composer-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="2" width="6" height="11" rx="3" />
+                    <path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4" />
+                  </svg>
+                </div>
+                <div class="send-button" id="f2-send">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                </div>
+              </div>
+              <div class="chat-footer" id="f2-foot" style="margin-top: 22px">
+                Sparky can make mistakes. <u>Check Terms &amp; Conditions</u> &middot; <u>Talk to a human</u>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 03 · The answer · 5.0–10.0 ================= -->
+      <section id="f3" class="clip" data-start="5" data-duration="5" data-track-index="1">
+        <div class="stage">
+          <div id="f3-inner">
+            <div>
+              <div class="answer-line" id="f3-line1"></div>
+              <div class="answer-line" id="f3-line2" style="margin-top: 14px"></div>
+            </div>
+            <div>
+              <div id="f3-chart"></div>
+              <div id="f3-baseline"></div>
+              <div id="f3-foot" style="margin-top: 26px">
+                <div class="footnote" id="f3-note">Illustrative 30c/kWh</div>
+                <div class="footnote" id="f3-scale">July · 31 days · household H-A</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 04 · The proof · 10.0–13.0 ================= -->
+      <section id="f4" class="clip" data-start="10" data-duration="3" data-track-index="1">
+        <div class="stage">
+          <div id="f4-inner">
+            <div class="eyebrow" id="f4-eyebrow">Verification log</div>
+            <div class="shield-row" id="f4-row">
+              <svg width="86" height="98" viewBox="0 0 24 28" fill="none" aria-hidden="true">
+                <path
+                  d="M12 1.5 22 5.2v8.4c0 6.1-4.1 11.2-10 12.9C6.1 24.8 2 19.7 2 13.6V5.2Z"
+                  stroke="#341fcd"
+                  stroke-width="1.7"
+                  stroke-linejoin="round"
+                />
+                <path
+                  id="f4-tick"
+                  d="M7.6 13.6 10.8 16.9 16.7 10.4"
+                  stroke="#341fcd"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <div class="metric" id="f4-metric">12 answers · 0 fabricated figures</div>
+            </div>
+            <div id="f4-rule"></div>
+            <div class="body-copy" id="f4-sub" style="text-align: center; max-width: 1100px">
+              Every figure traced to this household&rsquo;s own meter data.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 05 · Black · 13.0–13.4 ================= -->
+      <section id="f5" class="clip" data-start="13" data-duration="0.4" data-track-index="1"></section>
+
+      <!-- ================= 06 · Endline · 13.4–15.0 ================= -->
+      <section id="f6" class="clip" data-start="13.4" data-duration="3" data-track-index="1">
+        <div class="stage">
+          <div id="f6-inner">
+            <div id="f6-lockup">
+              <div id="f6-mark">Sparky</div>
+              <div id="f6-sub">AI assistant powered by Kea Energy</div>
+            </div>
+            <div>
+              <div class="endline" id="f6-l1">Words from AI.</div>
+              <div class="endline" id="f6-l2" style="margin-top: 10px">Numbers from your meter.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      /* Real July 2026 daily kWh, household H-A.
+         Source: services/api/tests/data/july_2026_daily.json — the measured series the
+         analytics engine is validated against. Index 10 is 11 July, the spike. */
+      const JULY = [
+        10.5, 9.9, 11.0, 9.2, 11.0, 10.3, 8.5, 7.1, 7.8, 14.1, 17.6, 8.8, 7.0, 7.2, 7.1, 8.4,
+        8.2, 7.9, 9.9, 10.5, 8.8, 11.2, 7.8, 9.5, 9.3, 11.5, 12.9, 12.3, 9.2, 7.8, 7.7,
+      ];
+      const PEAK = 17.6;
+      const SPIKE_INDEX = 10;
+
+      /* Build the 31-bar chart. The sustained band is cobalt; the one-day spike is
+         deliberately greyed — the whole point of the frame is that the spike is not the money. */
+      const chart = document.getElementById("f3-chart");
+      JULY.forEach((kwh, i) => {
+        const bar = document.createElement("div");
+        bar.className = "bar" + (i === SPIKE_INDEX ? " spike" : " sustained");
+        bar.style.height = ((kwh / PEAK) * 100).toFixed(2) + "%";
+        chart.appendChild(bar);
+      });
+      const bars = Array.from(chart.children);
+
+      /* Split a string into per-word spans so the reveal can stagger without a <br>. */
+      function words(el, text) {
+        el.textContent = "";
+        const out = [];
+        text.split(" ").forEach((word, i, arr) => {
+          const span = document.createElement("span");
+          span.className = "w";
+          span.textContent = word + (i < arr.length - 1 ? " " : "");
+          el.appendChild(span);
+          out.push(span);
+        });
+        return out;
+      }
+
+      const L1 = words(document.getElementById("f3-line1"), "The one-day spike cost $2.64.");
+      const L2 = words(
+        document.getElementById("f3-line2"),
+        "The steady overshoot no one shows you costs $290 a year."
+      );
+
+      /* Mark the two figures so each can take an underline sweep and a count-up. */
+      const spikeWord = L1[L1.length - 1];
+      spikeWord.classList.add("num");
+      const spikeRule = document.createElement("span");
+      spikeRule.className = "underline-sweep";
+      spikeWord.appendChild(spikeRule);
+
+      const costWord = L2[L2.length - 3];
+      costWord.classList.add("num");
+      const costText = document.createTextNode("$0");
+      costWord.textContent = "";
+      costWord.appendChild(costText);
+      const costRule = document.createElement("span");
+      costRule.className = "underline-sweep";
+      costWord.appendChild(costRule);
+      /* The word span carried its own trailing space; clearing it to host the counter
+         removed the gap before "a year". Put the space back outside the span so the
+         underline sweep still measures only the figure itself. */
+      costWord.insertAdjacentText("afterend", " ");
+
+      const QUESTION = "Why was my July bill so high?";
+      const qEl = document.getElementById("f2-field");
+
+      function build() {
+        const tl = gsap.timeline({ paused: true });
+
+        /* ---------- 01 · the bill ---------- */
+        tl.fromTo("#f1-eyebrow", { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: "power3.out" }, 0.1)
+          .fromTo("#f1-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.out" }, 0.2)
+          .fromTo("#f1-total", { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.3)
+          .fromTo("#f1-sub", { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.62);
+        /* then it simply holds — the discomfort is the hook */
+
+        /* ---------- 02 · the question ---------- */
+        tl.fromTo("#f2-eyebrow", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: "power3.out" }, 2.12)
+          .fromTo("#f2-card", { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.42, ease: "power3.out" }, 2.18);
+
+        /* Character-stepped type-on. Driven off a tweened counter and snapped to whole
+           characters, so scrubbing to any frame reproduces exactly this state. */
+        const typer = { n: 0 };
+        tl.to(
+          typer,
+          {
+            n: QUESTION.length,
+            duration: 1.25,
+            ease: "none",
+            snap: { n: 1 },
+            onUpdate: () => {
+              /* Before the first character the field shows the app's real placeholder,
+                 "Message Sparky", in its muted colour — so the frame opens on the
+                 composer at rest, exactly as a customer first meets it. */
+              const n = Math.round(typer.n);
+              qEl.textContent = n === 0 ? "Message Sparky" : QUESTION.slice(0, n);
+              qEl.classList.toggle("placeholder", n === 0);
+            },
+          },
+          2.42
+        );
+
+        /* Sparky's ring spins up as the question completes — the one rotation in the film. */
+        tl.fromTo("#f2-arc", { rotation: 0, autoAlpha: 0.35 }, { rotation: 540, autoAlpha: 1, duration: 1.2, ease: "power2.inOut", transformOrigin: "50% 50%" }, 3.72)
+          .fromTo("#f2-core", { scale: 0.6, autoAlpha: 0.5 }, { scale: 1, autoAlpha: 1, duration: 0.5, ease: "power3.out", transformOrigin: "50% 50%" }, 3.72);
+
+        /* ---------- 03 · the answer ---------- */
+        tl.fromTo(L1, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.34, ease: "power3.out", stagger: 0.055 }, 5.15);
+        tl.fromTo(spikeRule, { scaleX: 0 }, { scaleX: 1, duration: 0.2, ease: "power3.out" }, 5.72);
+
+        tl.fromTo(L2, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.34, ease: "power3.out", stagger: 0.05 }, 6.15);
+
+        /* $290 counts up as its word lands, then takes the same underline sweep. */
+        const counter = { v: 0 };
+        tl.to(
+          counter,
+          {
+            v: 290,
+            duration: 0.75,
+            ease: "power2.out",
+            snap: { v: 1 },
+            onUpdate: () => {
+              costText.nodeValue = "$" + Math.round(counter.v);
+            },
+          },
+          6.72
+        );
+        tl.fromTo(costRule, { scaleX: 0 }, { scaleX: 1, duration: 0.2, ease: "power3.out" }, 7.42);
+
+        /* The chart draws in beneath, left to right. The spike is in the series but not
+           the subject — it grows with everything else and stays grey. */
+        tl.fromTo(bars, { scaleY: 0 }, { scaleY: 1, duration: 0.5, ease: "power3.out", stagger: 0.018 }, 7.05);
+        tl.fromTo("#f3-baseline", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power3.out", transformOrigin: "left center" }, 7.05);
+        tl.fromTo("#f3-note", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, ease: "power2.out" }, 7.9);
+        tl.fromTo("#f3-scale", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, ease: "power2.out" }, 7.9);
+
+        /* ---------- 04 · the proof ---------- */
+        /* Hard cut: the card is already there, it just settles. No transition in. */
+        tl.fromTo("#f4-eyebrow", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "power3.out" }, 10.06)
+          .fromTo("#f4-row", { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: "power3.out" }, 10.1)
+          .fromTo("#f4-tick", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3, ease: "power2.out" }, 10.4)
+          .fromTo("#f4-sub", { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: "power3.out" }, 10.5)
+          .fromTo("#f4-rule", { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power2.out" }, 11.5);
+
+        /* ---------- 05 · black holds. Nothing is animated on purpose. ---------- */
+
+        /* ---------- 06 · endline ---------- */
+        tl.fromTo("#f6-mark", { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: "power3.out" }, 13.48)
+          .fromTo("#f6-sub", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, ease: "power2.out" }, 13.68)
+          .fromTo("#f6-l1", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.38, ease: "power3.out" }, 13.9)
+          .fromTo("#f6-l2", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.38, ease: "power3.out" }, 14.18);
+        /* final ~0.5s is a still hold */
+
+        window.__timelines["main"] = tl;
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>

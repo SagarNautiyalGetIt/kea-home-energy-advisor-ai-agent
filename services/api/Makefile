@@ -27,6 +27,9 @@ dev:  ## run the API with reload on :8000
 test:  ## run the test suite
 	$(VENV)/bin/pytest
 
+voice-smoke:  ## full voice loop with no browser and no microphone
+	$(PY) -m scripts.voice_smoke
+
 golden:  ## run the golden set on its own and show the headline (KEA-46 / KEA-57)
 	$(VENV)/bin/pytest tests/test_golden_set.py -v
 

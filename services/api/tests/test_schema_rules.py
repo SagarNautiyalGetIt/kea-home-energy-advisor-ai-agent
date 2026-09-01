@@ -96,5 +96,43 @@ def test_customer_table_holds_no_personal_details():
 @pytest.mark.parametrize("table", ["verification", "token_usage", "fact_bundle", "escalation"])
 def test_the_evidence_tables_exist(table: str):
     """These are deliverables, not debug output. 'N answers, 0 fabricated figures' and
-    'X per conversation' cannot be reconstructed if they were never recorded."""
-    assert table in Base.metadata.tables
+    'X per conversation' cannot be reconstructed if they were never recorded.
+
+    Qualified with `app.` since the merged schema: the spine is what this service
+    writes, and the namespace is part of that claim rather than incidental.
+    """
+    assert f"app.{table}" in Base.metadata.tables
+
+
+def test_the_agent_writes_app_and_only_reads_kea():
+    """The namespace split from the data platform design, pinned.
+
+    `kea` is the loader's; this service holds SELECT on it. `app` is ours. The failure
+    this catches is somebody adding a mart-shaped table to `app`, or worse an ORM model
+    that inserts into `kea` — at which point two writers own the same rows and the
+    freshness in `mart_load_log` becomes a lie.
+    """
+    from app.db import marts  # noqa: F401  — registers the kea models on Base
+
+    by_schema: dict[str | None, set[str]] = {}
+    for table in Base.metadata.tables.values():
+        by_schema.setdefault(table.schema, set()).add(table.name)
+
+    assert by_schema["app"] == {
+        "conversation",
+        "turn",
+        "fact_bundle",
+        "verification",
+        "token_usage",
+        "escalation",
+        "alert",
+    }
+    assert by_schema["kea"] == {
+        "mart_account_context",
+        "mart_daily_usage",
+        "mart_hourly_profile",
+        "mart_bill_explanation",
+        "mart_forecast_input",
+        "bill_forecast",
+        "mart_load_log",
+    }

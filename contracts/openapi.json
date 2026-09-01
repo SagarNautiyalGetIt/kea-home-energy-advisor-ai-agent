@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Kea Energy \u2014 Home Energy Advisor",
+    "title": "Sparky \u2014 Kea Energy's Home Energy Advisor",
     "description": "Every number in every answer is computed by Python and verified before it reaches the customer. The model writes the sentence; it never does the maths.",
     "version": "0.1.0"
   },
@@ -19,6 +19,68 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login",
+        "description": "Demo sign-in. See app/auth.py \u2014 this is not authentication.\n\n503 rather than 404 when the flag is off, because \"this deployment does not offer\ndemo logins\" and \"that email does not exist\" are different answers and only one of\nthem should ever be true in front of a real customer.",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/demo-accounts": {
+      "get": {
+        "summary": "Demo Accounts",
+        "description": "Every sign-in, passwords included, so the team can pick a scenario to test.\n\nThis endpoint hands out credentials. It is behind the same flag as the login itself\nand returns 503 when that flag is off \u2014 the accounts are entirely synthetic, but an\nendpoint that lists passwords should never be reachable by accident.",
+        "operationId": "demo_accounts_api_auth_demo_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DemoAccountCard"
+                  },
+                  "type": "array",
+                  "title": "Response Demo Accounts Api Auth Demo Accounts Get"
                 }
               }
             }
@@ -70,6 +132,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HouseholdSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/bill-shock": {
+      "get": {
+        "summary": "Bill Shock",
+        "description": "The bill-shock warning. A GET, because it has to reach the customer unprompted.\n\nEvery other endpoint answers a question somebody asked. A warning that only appears\nif you think to ask for it is not a warning, so this is polled by the dashboard\nrather than routed through chat.\n\n`as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded\nhousehold holds a complete July, and a warning delivered on day 31 is not a warning,\nit is a bill. Which days show what is not obvious from the data, so: H-JUL trips\n`above_comparable_homes` at every point in the cycle, and H-COLD trips\n`rising_within_cycle` on days 6-8 as the cold snap starts \u2014 that second one is the\nbetter demo, because there are still 25 days left to act on it.\n\nReads through the repository (KEA-33) rather than `fixtures` directly. The warning\nand the dashboard summary quote the same dollar figure, so they have to come from\nthe same source \u2014 a warning served from a Python file while `/households` serves\nfrom PostgreSQL is two numbers that disagree in front of a judge.",
+        "operationId": "bill_shock_api_households__customer_id__bill_shock_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "as_at_day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As At Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillShockWarning"
                 }
               }
             }
@@ -166,6 +284,180 @@
   },
   "components": {
     "schemas": {
+      "AlertSummary": {
+        "properties": {
+          "tier": {
+            "type": "integer",
+            "title": "Tier",
+            "description": "1 email \u00b7 2 sms \u00b7 3 voice. 0 when nothing triggered."
+          },
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Channels",
+            "description": "Every channel this tier calls for, lowest first."
+          },
+          "sent": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sent",
+            "description": "Channels that actually delivered."
+          },
+          "suppressed": {
+            "type": "boolean",
+            "title": "Suppressed",
+            "default": false
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination",
+            "description": "Where tier 1 landed \u2014 an .eml path under the file backend."
+          },
+          "already_sent": {
+            "type": "boolean",
+            "title": "Already Sent",
+            "description": "True when this cycle and tier were already alerted. The dashboard polls, so this is the normal steady state, not an error.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "tier"
+        ],
+        "title": "AlertSummary",
+        "description": "What the warning escalated to, reported alongside the warning itself.\n\nOn the response rather than behind its own endpoint because the UI has to show the\ntier next to the figures that produced it, and a second request could return a\ndifferent assessment.\n\n`sent` is what actually went out \u2014 today only `email` can appear in it. `channels`\nis what the tier calls for, so the UI can show the full ladder with the\nnot-yet-wired rungs greyed rather than pretending tier 3 does not exist."
+      },
+      "BillShockWarning": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "triggered": {
+            "type": "boolean",
+            "title": "Triggered"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "above_comparable_homes | rising_within_cycle. Empty when not triggered."
+          },
+          "days_elapsed": {
+            "type": "integer",
+            "title": "Days Elapsed"
+          },
+          "days_in_cycle": {
+            "type": "integer",
+            "title": "Days In Cycle"
+          },
+          "days_remaining": {
+            "type": "integer",
+            "title": "Days Remaining",
+            "description": "What makes this actionable rather than just bad news."
+          },
+          "usage_so_far_kwh": {
+            "type": "number",
+            "title": "Usage So Far Kwh"
+          },
+          "cost_so_far_nzd": {
+            "type": "number",
+            "title": "Cost So Far Nzd"
+          },
+          "projected_cycle_cost_nzd": {
+            "type": "number",
+            "title": "Projected Cycle Cost Nzd"
+          },
+          "comparable_home_cost_nzd": {
+            "type": "number",
+            "title": "Comparable Home Cost Nzd"
+          },
+          "overshoot_nzd": {
+            "type": "number",
+            "title": "Overshoot Nzd"
+          },
+          "overshoot_pct": {
+            "type": "number",
+            "title": "Overshoot Pct"
+          },
+          "recent_trend_pct": {
+            "type": "number",
+            "title": "Recent Trend Pct"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "type": "array",
+            "title": "Facts",
+            "description": "The same computed facts the narration is limited to, so the UI and the assistant can never disagree about a figure."
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Caveats"
+          },
+          "alert": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What was escalated, if anything. Null when the warning did not trigger."
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "period",
+          "triggered",
+          "days_elapsed",
+          "days_in_cycle",
+          "days_remaining",
+          "usage_so_far_kwh",
+          "cost_so_far_nzd",
+          "projected_cycle_cost_nzd",
+          "comparable_home_cost_nzd",
+          "overshoot_nzd",
+          "overshoot_pct",
+          "recent_trend_pct"
+        ],
+        "title": "BillShockWarning",
+        "description": "The proactive half of the product.\n\nEverything else in this API answers a question the customer asked. This one has to\nreach them *before* the bill does, so it is a GET the dashboard polls rather than a\nchat intent \u2014 a warning that only appears if you think to ask for it is not a\nwarning.\n\n`triggered` is the only field the UI should branch on. The figures are present either\nway so the dashboard can show a calm \"on track\" state without a second request."
+      },
       "ChatRequest": {
         "properties": {
           "customer_id": {
@@ -246,6 +538,40 @@
           "verification"
         ],
         "title": "ChatResponse"
+      },
+      "DemoAccountCard": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "customer_id",
+          "display_name",
+          "scenario"
+        ],
+        "title": "DemoAccountCard",
+        "description": "A sign-in the credentials panel can offer. Includes the password, which is only\nacceptable because every account behind it is synthetic \u2014 see app/auth.py."
       },
       "Fact": {
         "properties": {
@@ -347,6 +673,8 @@
           "what_will_i_pay",
           "using_more_than_usual",
           "what_costs_most",
+          "peak_usage",
+          "time_of_day",
           "compare_to_last_year",
           "tariff_check",
           "hardship",
@@ -354,6 +682,48 @@
         ],
         "title": "Intent",
         "description": "The questions we handle. Layer 0 maps free text onto exactly one of these.\n\nAdding an intent means adding: a router rule, an analytics path, a narration\nprompt, and golden-set cases. Don't add one without all four."
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "display_name",
+          "scenario"
+        ],
+        "title": "LoginResponse",
+        "description": "Who signed in, and which household to show them.\n\nCarries no token: the prototype session is `localStorage['kea-demo-session']` and\nthere is nothing to sign. `customer_id` is the whole point \u2014 it is what every\nsubsequent request scopes to, and what made one login show fourteen different\ncustomers instead of the same one fourteen times."
       },
       "ValidationError": {
         "properties": {
@@ -425,6 +795,12 @@
           "fell_back_to_template": {
             "type": "boolean",
             "title": "Fell Back To Template",
+            "default": false
+          },
+          "provider_error": {
+            "type": "boolean",
+            "title": "Provider Error",
+            "description": "True when the template was served because the model was unreachable, as distinct from the number-checker rejecting its drafts. Without this the two fallback paths are indistinguishable, and this report is what 'N answers, 0 fabricated figures' is counted from \u2014 a day Ollama was down would otherwise read as a day the checker caught six fabrications, which is the opposite claim and a flattering one.",
             "default": false
           }
         },

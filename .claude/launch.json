@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "./infra/ollama.sh start >/dev/null || echo 'WARNING: no local model — the assistant will serve the template fallback' >&2; cd services/api && exec .venv/bin/uvicorn app.main:app --port 8000 --reload"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd services/web && exec npm run dev"],
+      "port": 5173
+    }
+  ]
+}

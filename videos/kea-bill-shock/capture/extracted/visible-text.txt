@@ -1,0 +1,11 @@
+Kea Energy — Home Energy Advisor. Bill-shock prevention agent, Scenario 9, Team HAKAS.
+
+The one line that governs everything: the numbers are calculated by code; the AI only writes the sentence.
+
+July, household H-A: the one-day spike cost $2.64. The sustained overshoot no one shows you costs $290 a year. Dollar figures use an illustrative 30c/kWh because Kea's real tariff is not public.
+
+Verification: every answer given in the session, and what was checked before the customer saw it. N answers, 0 fabricated figures. Every figure traced to this household's own meter data.
+
+61.9% of surveyed customers named 'it might give me wrong or made-up information' as their top concern — the largest single answer.
+
+Endline: The model writes the sentence. It never does the maths.

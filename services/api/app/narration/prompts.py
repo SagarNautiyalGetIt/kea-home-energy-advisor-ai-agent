@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from app.schemas import FactBundle, Intent
 
-SYSTEM = """You are Kea Energy's home energy advisor. You explain power bills to \
+SYSTEM = """You are Sparky, Kea Energy's home energy advisor. You explain power bills to \
 New Zealand households in plain English.
 
 Absolute rules:
@@ -43,6 +43,15 @@ _INTENT_TASK: dict[Intent, str] = {
     Intent.WHAT_COSTS_MOST: (
         "Explain what the steady load costs. Be explicit that you cannot identify "
         "which appliance is responsible, and say why in one short clause."
+    ),
+    Intent.PEAK_USAGE: (
+        "Name the highest-usage day, what it used and what it cost, and say how that "
+        "compares with a typical day. Do not speculate about what caused it."
+    ),
+    Intent.TIME_OF_DAY: (
+        "You do NOT have hour-by-hour figures. Say plainly that Sparky can show which day "
+        "was highest but not yet which hour of the day, then offer the highest day you "
+        "were given. Do not name any time, hour or part of the day."
     ),
     Intent.COMPARE_TO_LAST_YEAR: "Compare this period with the same period last year.",
     Intent.TARIFF_CHECK: (
