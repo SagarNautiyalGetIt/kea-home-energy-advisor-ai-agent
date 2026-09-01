@@ -44,6 +44,16 @@ class Settings:
         )
     )
 
+    #: Write conversations, verification verdicts and token counts to PostgreSQL.
+    #:
+    #: Off by default, and that default is a deliberate trade. On would mean the four
+    #: people building the frontend cannot run the API without Docker and a seeded
+    #: database. Off means a rehearsal can silently record nothing — so `/health`
+    #: reports which recorder is live, and the demo checklist says to look at it.
+    #:
+    #: Turn it on with KEA_PERSIST=1 after `make db && make api-migrate && make api-seed`.
+    persist: bool = field(default_factory=lambda: _env("KEA_PERSIST", "0") == "1")
+
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -69,3 +79,21 @@ def get_provider():
     from app.providers.ollama import OllamaProvider
 
     return OllamaProvider(model=settings.ollama_model, base_url=settings.ollama_url)
+
+
+@lru_cache(maxsize=1)
+def get_repository():
+    """Where usage data is read from. Same opt-in flag as the recorder: one switch means
+    there is no state where the API writes to PostgreSQL but reads from a Python file."""
+    from app.analytics.repository import build_repository
+
+    return build_repository(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_recorder():
+    """The evidence writer. Cached for the same reason the provider is — it owns a
+    connection pool. `get_recorder.cache_clear()` in tests that swap it."""
+    from app.db.recorder import build_recorder
+
+    return build_recorder(settings.persist)

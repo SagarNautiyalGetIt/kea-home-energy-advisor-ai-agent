@@ -119,6 +119,14 @@ class FactBundle(BaseModel):
 class ChatRequest(BaseModel):
     customer_id: str
     message: str
+    conversation_id: int | None = Field(
+        default=None,
+        description=(
+            "Continue an existing conversation. Omit on the first message; send back "
+            "whatever the previous response returned. Ignored when persistence is off, "
+            "and ignored if it belongs to a different customer."
+        ),
+    )
 
 
 class VerificationReport(BaseModel):
@@ -138,6 +146,13 @@ class ChatResponse(BaseModel):
     facts: list[Fact]
     verification: VerificationReport
     escalate_to_human: bool = False
+    conversation_id: int | None = Field(
+        default=None,
+        description=(
+            "Send this back on the next message to keep the thread together. Null when "
+            "persistence is off — there is no conversation to continue."
+        ),
+    )
 
 
 class HouseholdSummary(BaseModel):

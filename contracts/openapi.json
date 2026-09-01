@@ -175,6 +175,18 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id",
+            "description": "Continue an existing conversation. Omit on the first message; send back whatever the previous response returned. Ignored when persistence is off, and ignored if it belongs to a different customer."
           }
         },
         "type": "object",
@@ -211,6 +223,18 @@
             "type": "boolean",
             "title": "Escalate To Human",
             "default": false
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id",
+            "description": "Send this back on the next message to keep the thread together. Null when persistence is off \u2014 there is no conversation to continue."
           }
         },
         "type": "object",

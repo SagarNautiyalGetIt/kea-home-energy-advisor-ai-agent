@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -25,7 +26,9 @@ from app.analytics.engine import (
     build_what_will_i_pay,
     build_why_high,
 )
-from app.config import get_provider
+from app.analytics.repository import UsageContext
+from app.config import get_provider, get_recorder, get_repository
+from app.db.recorder import TurnRecord
 from app.narration.narrator import narrate_verified
 from app.routing.intents import route
 from app.schemas import (
@@ -55,11 +58,15 @@ STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nz
 LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
 
 
-def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
-    """Layer 0's decision selects the layer 1 path. The model has no say in this."""
-    window = fixtures.get_window(customer_id)
+def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> FactBundle:
+    """Layer 0's decision selects the layer 1 path. The model has no say in this.
 
-    baseline = fixtures.comparison_baseline(customer_id)
+    Pure: everything it needs was fetched by the repository first. Keeping the I/O out
+    means this same function serves the database, the fixtures, and the golden set — one
+    builder, so the demo and the tests cannot drift apart.
+    """
+    window = ctx.window
+    baseline = ctx.baseline
 
     if intent is Intent.WHAT_WILL_I_PAY:
         return build_what_will_i_pay(window, DAYS_IN_JULY)
@@ -69,8 +76,7 @@ def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
 
     if intent is Intent.USING_MORE_THAN_USUAL:
         # "Was it just the cold snap?" — give the weather its due before anything else.
-        hdd, normal = fixtures.heating_degree_days(customer_id)
-        return build_weather_check(window, hdd, normal)
+        return build_weather_check(window, ctx.hdd, ctx.normal_hdd)
 
     if intent is Intent.WHAT_COSTS_MOST:
         # The honest refusal: we cannot name an appliance, but we can say where the money is.
@@ -105,6 +111,24 @@ def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
     )
 
 
+def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
+    """Fixture-backed convenience wrapper — synchronous, no I/O, no event loop.
+
+    The golden set and the contract tests use this. It deliberately routes through the
+    same `bundle_from_context` the request path uses, so there is exactly one bundle
+    builder and no second implementation to drift.
+    """
+    hdd, normal = fixtures.heating_degree_days(customer_id)  # validates the id
+    ctx = UsageContext(
+        window=fixtures.get_window(customer_id),
+        baseline=fixtures.comparison_baseline(customer_id),
+        label=fixtures.label(customer_id),
+        hdd=hdd,
+        normal_hdd=normal,
+    )
+    return bundle_from_context(intent, customer_id, ctx)
+
+
 @router.get("/health")
 async def health() -> dict[str, object]:
     provider = get_provider()
@@ -113,41 +137,42 @@ async def health() -> dict[str, object]:
         "provider": provider.name,
         "model": provider.model,
         "model_ready": await provider.health(),
+        # Which recorder is live. Surfaced because the failure mode it prevents is
+        # rehearsing all afternoon, then discovering the evidence tables are empty and
+        # the "N answers, 0 fabricated figures" number cannot be produced.
+        "recording": get_recorder().name,
+        # "fixtures" means the five households are being served from a Python file and
+        # the database is not in the request path at all. Worth being able to see at a
+        # glance before a rehearsal.
+        "data_source": get_repository().name,
     }
 
 
-@router.get("/households", response_model=list[HouseholdSummary])
-async def list_households() -> list[HouseholdSummary]:
-    out: list[HouseholdSummary] = []
-    for cid in fixtures.all_ids():
-        w = fixtures.get_window(cid)
-        out.append(
-            HouseholdSummary(
-                customer_id=cid,
-                label=fixtures.label(cid),
-                period=w.period,
-                daily_kwh=w.daily_kwh,
-                total_kwh=round(w.total_kwh, 2),
-                estimated_cost_nzd=round(w.cost_nzd, 2),
-            )
-        )
-    return out
-
-
-@router.get("/households/{customer_id}", response_model=HouseholdSummary)
-async def get_household(customer_id: str) -> HouseholdSummary:
-    try:
-        w = fixtures.get_window(customer_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
+    w = ctx.window
     return HouseholdSummary(
         customer_id=customer_id,
-        label=fixtures.label(customer_id),
+        label=ctx.label,
         period=w.period,
         daily_kwh=w.daily_kwh,
         total_kwh=round(w.total_kwh, 2),
         estimated_cost_nzd=round(w.cost_nzd, 2),
     )
+
+
+@router.get("/households", response_model=list[HouseholdSummary])
+async def list_households() -> list[HouseholdSummary]:
+    repo = get_repository()
+    return [_summary(cid, await repo.context(cid)) for cid in await repo.all_ids()]
+
+
+@router.get("/households/{customer_id}", response_model=HouseholdSummary)
+async def get_household(customer_id: str) -> HouseholdSummary:
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _summary(customer_id, ctx)
 
 
 # A sentence ends at . ? or ! followed by whitespace and a capital or a quote. Splitting
@@ -162,27 +187,65 @@ def _sentences(text: str) -> list[str]:
     return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
 
 
+async def _record(
+    req: ChatRequest,
+    routing,
+    bundle: FactBundle,
+    report,
+    text: str,
+    provider,
+    usage,
+    latency_ms: int,
+) -> int | None:
+    """Hand the exchange to the recorder. Never raises — see recorder.py on why an
+    evidence failure must not cost the customer their answer."""
+    return await get_recorder().record(
+        TurnRecord(
+            customer_ref=req.customer_id,
+            conversation_id=req.conversation_id,
+            question=req.message,
+            answer=text,
+            intent=routing.intent,
+            bundle=bundle,
+            report=report,
+            escalate=routing.is_escalation,
+            provider=getattr(provider, "name", None),
+            model=getattr(provider, "model", None),
+            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            latency_ms=latency_ms,
+        )
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
     """Non-streaming path. Simpler to test; /chat/stream is what the UI uses."""
     try:
-        fixtures.get_window(req.customer_id)
+        ctx = await get_repository().context(req.customer_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     routing = route(req.message)
-    bundle = _bundle_for(routing.intent, req.customer_id)
+    bundle = bundle_from_context(routing.intent, req.customer_id, ctx)
     provider = get_provider()
 
+    started = time.perf_counter()
     text, report = await narrate_verified(provider, bundle, req.message)
+    latency_ms = int((time.perf_counter() - started) * 1000)
 
     usage = getattr(provider, "last_usage", None)
     log.info(
-        "chat customer=%s intent=%s verified=%s tokens=%s",
+        "chat customer=%s intent=%s verified=%s tokens=%s latency_ms=%s",
         req.customer_id,
         routing.intent,
         report.passed,
         usage.total if usage else "n/a",
+        latency_ms,
+    )
+
+    conversation_id = await _record(
+        req, routing, bundle, report, text, provider, usage, latency_ms
     )
 
     return ChatResponse(
@@ -192,6 +255,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         facts=bundle.facts,
         verification=report,
         escalate_to_human=routing.is_escalation,
+        conversation_id=conversation_id,
     )
 
 
@@ -209,20 +273,35 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     # have committed a 200 and an SSE content-type, so an unknown customer surfaced as
     # a 500 with a half-open stream while /chat returned a clean 404 for the same input.
     try:
-        fixtures.get_window(req.customer_id)
+        ctx = await get_repository().context(req.customer_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     routing = route(req.message)
-    bundle = _bundle_for(routing.intent, req.customer_id)
+    bundle = bundle_from_context(routing.intent, req.customer_id, ctx)
     provider = get_provider()
 
     async def event_stream():
         meta = json.dumps({"intent": routing.intent, "escalate": routing.is_escalation})
         yield f"event: meta\ndata: {meta}\n\n"
+
+        started = time.perf_counter()
         text, report = await narrate_verified(provider, bundle, req.message)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+
         for chunk in _sentences(text):
             yield f"event: token\ndata: {json.dumps({'text': chunk + ' '})}\n\n"
-        yield f"event: done\ndata: {report.model_dump_json()}\n\n"
+
+        # Recorded before `done` is emitted, so a client that disconnects on `done` has
+        # not raced the evidence write. The recorder swallows its own failures, so this
+        # cannot break the stream.
+        usage = getattr(provider, "last_usage", None)
+        conversation_id = await _record(
+            req, routing, bundle, report, text, provider, usage, latency_ms
+        )
+
+        done = report.model_dump(mode="json")
+        done["conversation_id"] = conversation_id
+        yield f"event: done\ndata: {json.dumps(done)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

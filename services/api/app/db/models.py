@@ -25,6 +25,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -34,6 +35,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -191,7 +193,30 @@ class WeatherDay(Base):
 
 
 class Conversation(Base):
+    """One session with one customer.
+
+    The operational columns below (`outcome`, `was_escalated`, `retain_until`) come from
+    Harvey's `app.conversation` on the `elt` branch — see
+    `data/design/kea-data-platform-design.md`. They are the columns the *business case*
+    needs rather than the ones the pipeline needs, and we did not have them.
+
+    `was_escalated` is denormalised on purpose: "how many conversations became calls
+    anyway" is the deflection denominator, and it should not require a scan of `turn`.
+    """
+
     __tablename__ = "conversation"
+    __table_args__ = (
+        # Deflection and hardship reporting are both "count conversations where X, by
+        # date". Partial indexes keep those cheap without carrying the whole table.
+        Index("ix_conversation_escalated", "started_at", postgresql_where=text("was_escalated")),
+        Index(
+            "ix_conversation_hardship", "started_at", postgresql_where=text("hardship_detected")
+        ),
+        Index("ix_conversation_retention", "retain_until"),
+        CheckConstraint(
+            "ended_at IS NULL OR ended_at >= started_at", name="ck_conversation_dates_ordered"
+        ),
+    )
 
     id: Mapped[int] = _pk()
     customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"), nullable=False)
@@ -199,9 +224,31 @@ class Conversation(Base):
     started_at: Mapped[dt.datetime] = _now()
     ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False, default="ongoing")
+    """ongoing | resolved | escalated | abandoned."""
+
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    """Denormalised turn count, so the "resolved in under 10 questions" customer-effort
+    target does not need a scan of `turn`. Harvey's column."""
+
+    was_escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    hardship_detected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    """Detected *in conversation* — someone saying they are struggling. Deliberately
+    distinct from any payment-behaviour risk score, which is a different signal with a
+    different failure mode."""
+
+    retain_until: Mapped[dt.date | None] = mapped_column(Date)
+    """Deliberately no default. An unset retention date should be visible and fixable,
+    not silently mean "forever". Harvey's point, and it is a good one — this table holds
+    payment-difficulty disclosures, which is PII by design."""
+
     customer: Mapped[Customer] = relationship(back_populates="conversations")
-    turns: Mapped[list[Turn]] = relationship(back_populates="conversation")
-    escalations: Mapped[list[Escalation]] = relationship(back_populates="conversation")
+    turns: Mapped[list[Turn]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
+    escalations: Mapped[list[Escalation]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
 
 
 class Turn(Base):
@@ -218,12 +265,32 @@ class Turn(Base):
     intent: Mapped[str | None] = mapped_column(String(48))
     """Layer 0's decision, logged on every turn so misroutes are visible rather than inferred."""
 
+    cited_sources: Mapped[dict | None] = mapped_column(JSONB)
+    """What data backed this answer — fact keys, period, household. From Harvey's
+    `conversation_message.cited_sources`. Adjacent to `fact_bundle` but not the same
+    thing: the bundle is the full receipt, this is the short citation the UI can show
+    the customer (KEA-50, the data-transparency panel)."""
+
+    model_version: Mapped[str | None] = mapped_column(String(64))
+    """Which model produced this turn. Without it the Day 6 bake-off (KEA-47) cannot
+    attribute a regression to a model change after the fact."""
+
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    """Measured, not estimated. KEA-59 reports first-token and full-answer percentiles
+    against the ADR-0003 budget, and that is not reconstructable later."""
+
     created_at: Mapped[dt.datetime] = _now()
 
     conversation: Mapped[Conversation] = relationship(back_populates="turns")
-    fact_bundle: Mapped[FactBundleRow | None] = relationship(back_populates="turn")
-    verification: Mapped[VerificationRow | None] = relationship(back_populates="turn")
-    token_usage: Mapped[TokenUsageRow | None] = relationship(back_populates="turn")
+    fact_bundle: Mapped[FactBundleRow | None] = relationship(
+        back_populates="turn", cascade="all, delete-orphan"
+    )
+    verification: Mapped[VerificationRow | None] = relationship(
+        back_populates="turn", cascade="all, delete-orphan"
+    )
+    token_usage: Mapped[TokenUsageRow | None] = relationship(
+        back_populates="turn", cascade="all, delete-orphan"
+    )
 
 
 class FactBundleRow(Base):
