@@ -1,25 +1,27 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
+import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
 import type { PageId } from '../types/navigation'
 
-// Sprint 2: Plans is not a key feature yet. Keep its page and route intact, but
-// hide its navigation/search entry until the feature is ready to be exposed.
-// Sprint 2: keep the completed Plans page available in code, but hide its
-// navigation entry until the feature is brought back into scope.
-const SHOW_PLANS_NAV_ITEM = false
+// Plans is back in scope for Sprint 2, so its navigation and search entry are
+// exposed again. Set this to false to hide the entry without touching the route.
+const SHOW_PLANS_NAV_ITEM = true
 // Temporarily hide Profile from the navigation during Sprint 2. Its page and
 // route remain available; change this flag to true when it should be exposed.
 const SHOW_PROFILE_NAV_ITEM = false
 
-const allNavItems: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
-  { id: 'dashboard', label: 'Dashboard', icon: House, keywords: 'home overview cost projection' },
-  { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, keywords: 'graph energy kwh electricity' },
-  { id: 'billing', label: 'Billing', icon: CircleDollarSign, keywords: 'bill invoice payment history' },
-  { id: 'plans', label: 'Plans', icon: ListChecks, keywords: 'pricing compare tariff' },
-  { id: 'assistant', label: 'AI Assistant', icon: MessagesSquare, keywords: 'chat question help consumer care' },
-  { id: 'profile', label: 'Profile', icon: SquareUserRound, keywords: 'customer account details' },
+type NavItem = { id: PageId; label: string; icon: typeof House; description: string; keywords: string }
+
+// `description` is what the search panel shows; `keywords` only feeds the match,
+// so synonyms customers might type can live there without cluttering the list.
+const allNavItems: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: House, description: 'Cost summary, usage charts and Kea news', keywords: 'home overview projection bill shock warning today monthly' },
+  { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, description: 'Daily, weekly and monthly electricity use', keywords: 'graph chart energy kwh peak off-peak night consumption' },
+  { id: 'billing', label: 'Billing', icon: CircleDollarSign, description: 'Invoices, payment status and saved card', keywords: 'bill pay invoice history balance due receipt' },
+  { id: 'plans', label: 'Plans', icon: ListChecks, description: 'Pricing styles, terms and plan comparison', keywords: 'pricing compare tariff rate anytime time of use free weekends commitment credit' },
+  { id: 'assistant', label: 'Sparky AI', icon: MessagesSquare, description: 'Ask about your bill, usage and plans', keywords: 'ai assistant chat question explain bill explainer' },
+  { id: 'profile', label: 'Profile', icon: SquareUserRound, description: 'Your customer and contact details', keywords: 'account name address phone email password' },
 ]
 
 const nav = allNavItems.filter((item) => {
@@ -28,9 +30,9 @@ const nav = allNavItems.filter((item) => {
   return true
 })
 
-const utilityPages: Array<{ id: PageId; label: string; icon: typeof House; keywords: string }> = [
-  { id: 'settings', label: 'Settings', icon: Settings, keywords: 'theme alerts privacy preferences' },
-  { id: 'help', label: 'Help & Support', icon: CircleHelp, keywords: 'faq contact outage support' },
+const utilityPages: NavItem[] = [
+  { id: 'settings', label: 'Settings', icon: Settings, description: 'Theme, notifications and privacy', keywords: 'preferences alerts dark mode account' },
+  { id: 'help', label: 'Help & Support', icon: CircleHelp, description: 'FAQs and ways to reach the support team', keywords: 'contact call email customer care question answers' },
 ]
 
 type AppShellProps = {
@@ -42,6 +44,7 @@ type AppShellProps = {
 
 export default function AppShell({ active, onNavigate, onLogout, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(localStorage.getItem('kea-sidebar-collapsed') === 'true')
   const [openPanel, setOpenPanel] = useState<'search' | 'notifications' | 'profile' | null>(null)
   const topbarRef = useRef<HTMLElement>(null)
   const [query, setQuery] = useState('')
@@ -71,25 +74,34 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   const searchResults = useMemo(() => {
     const term = query.trim().toLowerCase()
     if (!term) return [...nav, ...utilityPages]
-    return [...nav, ...utilityPages].filter((item) => `${item.label} ${item.keywords}`.toLowerCase().includes(term))
+    return [...nav, ...utilityPages].filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(term))
   }, [query])
   const unread = notifications.filter((item) => item.unread).length
   const go = (page: PageId) => { onNavigate(page); setMobileOpen(false); setOpenPanel(null); setQuery('') }
   const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('kea-theme', next) }
+  const toggleSidebar = () => { const next = !collapsed; setCollapsed(next); localStorage.setItem('kea-sidebar-collapsed', String(next)) }
 
   const sidebarContent = <>
     <BrandMark />
+    <button
+      type="button"
+      className="sidebar-toggle"
+      aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+      aria-expanded={!collapsed}
+      title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+      onClick={toggleSidebar}
+    >{collapsed ? <PanelLeftOpen aria-hidden="true"/> : <PanelLeftClose aria-hidden="true"/>}</button>
     <nav aria-label="Primary navigation">
-      {nav.map((item) => <button type="button" key={item.id} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon" aria-hidden="true"/><span>{item.label}</span></button>)}
+      {nav.map((item) => <button type="button" key={item.id} title={collapsed ? item.label : undefined} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon" aria-hidden="true"/><span>{item.label}</span></button>)}
     </nav>
     <div className="sidebar-utilities">
-      {utilityPages.map((item) => <button type="button" key={item.id} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon"/><span>{item.label}</span></button>)}
+      {utilityPages.map((item) => <button type="button" key={item.id} title={collapsed ? item.label : undefined} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon"/><span>{item.label}</span></button>)}
     </div>
-    <button className="logout-button" onClick={onLogout}>Logout</button>
+    <button className="logout-button" title={collapsed ? 'Logout' : undefined} onClick={onLogout}><LogOut aria-hidden="true"/><span>Logout</span></button>
   </>
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>{sidebarContent}<button className="mobile-drawer-close" aria-label="Close menu" onClick={() => setMobileOpen(false)}><X/></button></aside>
       {mobileOpen && <button className="mobile-menu-backdrop" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
 
@@ -101,7 +113,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
           <div className="topbar-cluster">
             <div className="topbar-control search-control">
             <div className="search-box"><Search aria-hidden="true"/><input aria-label="Search pages" placeholder="Search" value={query} onFocus={() => setOpenPanel('search')} onChange={(event) => { setQuery(event.target.value); setOpenPanel('search') }}/>{query && <button aria-label="Clear search" onClick={() => setQuery('')}><X/></button>}</div>
-            {openPanel === 'search' && <div className="topbar-panel search-results"><header><strong>Quick navigation</strong><button onClick={() => setOpenPanel(null)}><X/></button></header>{searchResults.length ? searchResults.map((item) => <button key={item.id} onClick={() => go(item.id)}><item.icon/><span><strong>{item.label}</strong><small>{item.keywords}</small></span></button>) : <p>No matching pages found.</p>}</div>}
+            {openPanel === 'search' && <div className="topbar-panel search-results"><header><strong>Quick navigation</strong><button onClick={() => setOpenPanel(null)}><X/></button></header>{searchResults.length ? searchResults.map((item) => <button key={item.id} onClick={() => go(item.id)}><item.icon/><span><strong>{item.label}</strong><small>{item.description}</small></span></button>) : <p>No matching pages found.</p>}</div>}
             </div>
 
             <div className="topbar-control">

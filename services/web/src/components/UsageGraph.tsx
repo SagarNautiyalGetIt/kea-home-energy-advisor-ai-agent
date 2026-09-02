@@ -23,7 +23,9 @@ const formatMetric = (value: number, unit: UsageUnit, max: number) => {
 }
 
 export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false }: UsageGraphProps) {
-  const gradientId = `usage-fill-${useId().replaceAll(':', '')}`
+  const uid = useId().replaceAll(':', '')
+  const gradientId = `usage-fill-${uid}`
+  const tooltipGradientId = `usage-tooltip-${uid}`
   const graphRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(760)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
@@ -71,6 +73,10 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
             <stop offset="0" stopColor="#7259ff" stopOpacity=".38" />
             <stop offset="1" stopColor="#7259ff" stopOpacity=".03" />
           </linearGradient>
+          <linearGradient id={tooltipGradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#765fff" />
+            <stop offset="1" stopColor="#4a25ff" />
+          </linearGradient>
         </defs>
 
         {yTicks.map((ratio) => {
@@ -102,7 +108,7 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
           const tooltipLabel = tooltipLabels?.[activeIndex] ?? labels[activeIndex] ?? `Point ${activeIndex + 1}`
           const tooltipWidth = tooltipLabels ? 190 : 116
           const tooltipX = Math.min(width-tooltipWidth-4,Math.max(4,activePoint.x-tooltipWidth/2))
-          return <g className="chart-tooltip" pointerEvents="none"><line x1={activePoint.x} x2={activePoint.x} y1={margin.top} y2={baseline}/><rect x={tooltipX} y={Math.max(4,activePoint.y-47)} width={tooltipWidth} height="34" rx="8"/><text x={tooltipX+tooltipWidth/2} y={Math.max(25,activePoint.y-25)} textAnchor="middle">{tooltipLabel} · {formatMetric(activeValue,unit,ceiling)}</text></g>
+          return <g className="chart-tooltip" pointerEvents="none"><line x1={activePoint.x} x2={activePoint.x} y1={margin.top} y2={baseline}/><rect x={tooltipX} y={Math.max(4,activePoint.y-47)} width={tooltipWidth} height="34" rx="10" fill={`url(#${tooltipGradientId})`}/><text x={tooltipX+tooltipWidth/2} y={Math.max(25,activePoint.y-25)} textAnchor="middle">{tooltipLabel} · {formatMetric(activeValue,unit,ceiling)}</text></g>
         })()}
         {labels.map((label, index) => {
           if (index % xLabelInterval !== 0) return null

@@ -499,7 +499,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     </div>
 
     {termsOpen && (
-      <Modal title="AI Assistant terms" onClose={() => setTermsOpen(false)}>
+      <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)}>
         <p>Sparky explains your account using figures calculated from your own meter data. Every number in an answer is checked against those calculations before you see it.</p>
         <p>Sparky does not identify individual appliances from half-hourly meter data, and estimated costs use an illustrative rate.</p>
       </Modal>

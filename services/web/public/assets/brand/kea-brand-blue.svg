@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Kea Energy cycle logo</title>
+  <desc id="desc">A compact blue gradient lightning bolt surrounded by two spacious, softly rounded circular arrows.</desc>
+
+  <defs>
+    <linearGradient id="bolt-gradient" x1="102" y1="61" x2="158" y2="197" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4318FF"/>
+      <stop offset="0.54" stop-color="#5F45FF"/>
+      <stop offset="1" stop-color="#868CFF"/>
+    </linearGradient>
+
+  </defs>
+
+  <!-- Two exact circular arcs. Each arrowhead has both an outer and inner edge. -->
+  <path
+    d="M33 128A95 95 0 0 1 208.6 77.6"
+    stroke="#868CFF"
+    stroke-width="15"
+    stroke-linecap="round"
+  />
+  <path
+    d="M226 96L222 68L197 85Z"
+    fill="#868CFF"
+    stroke="#868CFF"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M223 128A95 95 0 0 1 47.4 178.4"
+    stroke="#868CFF"
+    stroke-width="15"
+    stroke-linecap="round"
+  />
+  <path
+    d="M30 160L34 188L59 171Z"
+    fill="#868CFF"
+    stroke="#868CFF"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+
+  <!-- A smaller, softly cornered bolt keeps clear air between symbol and cycle. -->
+  <path
+    d="M143 54L137 110L166.5 119.4Q178 123 170.1 131.9L109 201L117 149L89 139.4Q79 136 87 125.8Z"
+    fill="url(#bolt-gradient)"
+    stroke="url(#bolt-gradient)"
+    stroke-width="3.5"
+    stroke-linejoin="round"
+    transform="translate(-12.8 -12.8) scale(1.1)"
+  />
+</svg>

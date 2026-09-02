@@ -98,7 +98,7 @@
 html,body,#root{width:100%;height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}
 body{min-height:100svh;line-height:1.5}
 img,svg{max-width:100%}
-button{min-height:44px;transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease,color .18s ease}
+button{min-height:44px;transition:transform .3s ease,box-shadow .3s ease,background-color .3s ease,color .3s ease}
 button:hover{transform:translateY(-1px)}
 button:focus-visible,input:focus-visible{outline:3px solid rgb(74 37 255 / 24%);outline-offset:2px}
 :where(.card,.metric-row article,.article-card,.plan-card,.bubble,.invoice,.profile-card,.usage-summary-card)>*{min-width:0}
@@ -141,7 +141,7 @@ button:focus-visible,input:focus-visible{outline:3px solid rgb(74 37 255 / 24%);
 .article-card footer{gap:var(--space-2);margin-top:auto}
 .article-card footer small{font-size:10px}
 .article-card footer button{min-width:84px;min-height:40px;padding:8px 18px;border-radius:14px;background:var(--purple);box-shadow:var(--shadow-button);font-size:11px;font-weight:700}
-.shock-card button,.article-card footer button{border:1.5px solid transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-clip:padding-box;transition:color .2s ease,background-color .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.shock-card button,.article-card footer button{border:1.5px solid transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));transition:color .3s ease,background-color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
 .shock-card button:hover,.article-card footer button:hover{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%)}
 
 /* Usage */
@@ -294,7 +294,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,.app-ma
 
 .page-heading h1{margin-top:0;color:var(--ink);font-weight:800;letter-spacing:-.035em}
 .page-heading p{color:var(--muted);font-size:16px;font-weight:500}
-.welcome-customer,.settings-description,.help-description{margin-top:10px!important;/* Previous green: color:#2dad82!important; */color:#4318ff!important;font-size:clamp(17px,1.6vw,21px)!important;font-weight:600!important}
+.welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description{margin-top:10px!important;/* Previous green: color:#2dad82!important; */color:#4318ff!important;font-size:clamp(17px,1.6vw,21px)!important;font-weight:600!important}
 .welcome-customer strong{color:#56668f;font-size:.8em;font-weight:600}
 
 .sidebar nav button,.search-box input,.search-box input::placeholder,.login-content header p,.login-panel footer,.tariff-note,
@@ -337,7 +337,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,.app-ma
 .usage-summary-copy span{font-size:12px;font-weight:600}.usage-summary-copy small{font-size:12px;font-weight:400}
 
 .plans-grid{background:linear-gradient(145deg,#f5f6ff,#eef1ff)}
-.plan-card{border:1px solid #e1e5f2;border-top:5px solid #cfc7ff;border-radius:22px;box-shadow:0 14px 34px rgb(48 44 112 / 10%);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.plan-card{border:1px solid #e1e5f2;border-top:5px solid #cfc7ff;border-radius:22px;box-shadow:0 14px 34px rgb(48 44 112 / 10%);transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease}
 .plan-card:hover{transform:translateY(-4px);border-color:#cfc7ff;box-shadow:0 20px 42px rgb(48 44 112 / 16%)}
 .plan-badge{top:-14px;padding:6px 13px;border-radius:12px;box-shadow:0 6px 14px rgb(74 37 255 / 20%);font-size:11px;font-weight:700}
 .plan-card h2{margin-bottom:14px;font-weight:750;letter-spacing:-.025em}
@@ -360,7 +360,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,.app-ma
 
 @media(max-width:680px){
   .page-heading p{font-size:15px}
-  .welcome-customer,.settings-description,.help-description{font-size:17px!important}
+  .welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description{font-size:17px!important}
   .metric-row strong{font-size:17px}
   .bar-chart small{font-size:10px}
   .plan-card li{font-size:13px}
@@ -392,7 +392,7 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 .notifications-panel>button{width:100%;min-height:64px;display:flex;gap:10px;padding:12px 16px;border:0;border-bottom:1px solid #f0f2f7;background:#fff;text-align:left}.notifications-panel>button:hover{background:#fafaff;transform:none}.notifications-panel>button>span{width:8px;height:8px;flex:0 0 8px;margin-top:5px;border-radius:50%;background:#d9deeb}.notifications-panel>button.unread>span{background:#5c40ff;box-shadow:0 0 0 4px #ece9ff}.notifications-panel>button div,.notifications-panel>button strong,.notifications-panel>button small{display:block}.notifications-panel>button small{margin-top:3px;color:#7a88aa;font-size:11px;line-height:1.4}
 .profile-menu{width:250px}.profile-menu header{justify-content:flex-start}.profile-menu header img{width:48px;height:48px;border-radius:50%}.profile-menu header strong,.profile-menu header small{display:block}.profile-menu header small{color:#7f8caf}.profile-menu>button{width:100%;display:flex;align-items:center;gap:10px;padding:9px 16px;border:0;color:#536184;background:#fff;text-align:left}.profile-menu>button:hover{color:var(--purple);background:#f8f7ff;transform:none}.profile-menu>button svg{width:18px}.profile-menu>.profile-logout{color:#d94e61;border-top:1px solid #edf0f6}
 .sidebar-utilities{display:flex;flex-direction:column;gap:2px;margin-top:auto;padding:8px 0;border-top:1px solid #eef1fa}.sidebar-utilities button{height:44px;display:flex;align-items:center;gap:15px;padding:0 30px;border:0;color:#8290b3;background:transparent;text-align:left}.sidebar-utilities button.active{color:#4318ff;background:#f7f5ff}.sidebar .logout-button{margin-top:8px;border-radius:10px}.mobile-drawer-close,.mobile-menu-backdrop{display:none}
-.sidebar-collapsed{grid-template-columns:84px minmax(0,1fr)}.sidebar-collapsed .brand strong,.sidebar-collapsed .sidebar nav button span,.sidebar-collapsed .sidebar-utilities button span{display:none}.sidebar-collapsed .brand{padding:0}.sidebar-collapsed .brand-orbit{width:46px;height:46px}.sidebar-collapsed .sidebar nav button,.sidebar-collapsed .sidebar-utilities button{justify-content:center;padding:0}.sidebar-collapsed .sidebar nav button.active::after{height:34px}.sidebar-collapsed .logout-button{min-width:44px;width:44px;margin:8px auto 18px;padding:0;font-size:0}.sidebar-collapsed .logout-button::before{content:'↪';font-size:20px}
+.sidebar-collapsed{grid-template-columns:84px minmax(0,1fr)}.sidebar-collapsed .brand strong,.sidebar-collapsed .sidebar nav button span,.sidebar-collapsed .sidebar-utilities button span{display:none}.sidebar-collapsed .brand{padding:0}.sidebar-collapsed .brand-orbit{width:46px;height:46px}.sidebar-collapsed .sidebar nav button,.sidebar-collapsed .sidebar-utilities button{justify-content:center;padding:0}.sidebar-collapsed .sidebar nav button.active::after{height:34px}.sidebar-collapsed .logout-button{min-width:44px;width:44px;margin:8px auto 18px;padding:0}.sidebar-collapsed .logout-button span{display:none}
 
 /* Modal, toast and onboarding */
 .app-modal{width:min(560px,calc(100% - 32px));max-height:min(86vh,760px);display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:#fff;box-shadow:0 26px 90px rgb(25 33 72 / 26%)}
@@ -404,7 +404,7 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 
 /* Interactive charts */
 .comparison-line{fill:none;stroke:#f08b68;stroke-width:2;stroke-dasharray:7 6;opacity:.8}.interactive-point{cursor:pointer;transition:r .15s ease}.interactive-point:focus{outline:none;filter:drop-shadow(0 0 5px #5f45ff)}
-.chart-tooltip line{stroke:#9d92dd;stroke-width:1;stroke-dasharray:3 3}.chart-tooltip rect{fill:#29265f;filter:drop-shadow(0 5px 8px rgb(31 32 80 / 22%))}.chart-tooltip text{fill:#fff;font-size:10px;font-weight:600}
+.chart-tooltip line{stroke:#9d92dd;stroke-width:1;stroke-dasharray:3 3}.chart-tooltip rect{filter:drop-shadow(0 6px 12px rgb(74 37 255 / 30%))}.chart-tooltip text{fill:#fff;font-size:10px;font-weight:600}
 .chart-legend{display:flex;justify-content:center;gap:18px;margin-top:2px;color:#7080a5;font-size:11px}.chart-legend span{display:flex;align-items:center;gap:6px}.chart-legend i{width:18px;height:3px;border-radius:2px;background:#5f45ff}.chart-legend .legend-previous{height:2px;background:repeating-linear-gradient(90deg,#f08b68 0 5px,transparent 5px 8px)}
 .usage-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.date-selector{height:48px;display:flex;align-items:center;gap:7px;padding:0 10px;border:1px solid #e4e8f5;border-radius:12px;background:#fff;color:#7180a4;font-size:11px;font-weight:600}.date-selector input{border:0;outline:0;color:#3e4b70;background:transparent}.compare-selector{height:48px;display:flex;align-items:center;gap:7px;padding:0 12px;border:1px solid #e4e8f5;border-radius:12px;background:#fff;color:#59688d;font-size:12px}.compare-selector input{width:17px;height:17px;accent-color:var(--purple)}
 .refresh-usage{width:44px;height:44px;min-height:44px;display:grid;place-items:center;border:1px solid #e4e8f5;border-radius:12px;color:#5a44dc;background:#fff}.refresh-usage svg{width:18px}
@@ -421,7 +421,7 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 .assistant-heading{align-items:center}.assistant-heading h1{margin:0}.assistant-heading>button{margin-left:auto}.thinking{display:flex;align-items:center;gap:8px}.thinking svg{width:17px;animation:spin 1s linear infinite}.chat-composer.listening{border-color:#f05c73;box-shadow:0 0 0 4px rgb(240 92 115 / 10%)}.chat-composer.listening button[aria-pressed=true]{color:#e94f68}.chat-composer button:disabled{opacity:.45}
 
 /* Help, settings, feedback and 404 */
-.help-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.7fr);gap:20px}.help-faq{padding:22px}.help-faq>h2,.settings-card>h2{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:18px}.help-faq>h2 svg,.settings-card>h2 svg{width:21px;color:#6048e7}.help-faq article{border-top:1px solid #e9ecf4}.help-faq article>button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px;border:0;color:#3d4a6e;background:transparent;text-align:left;font-weight:600}.help-faq article>button svg{width:18px;transition:.2s}.help-faq article>button svg.rotate{transform:rotate(180deg)}.help-faq article>p{margin:0;padding:0 4px 16px;color:#667394;font-size:13px;line-height:1.6}.help-actions{display:grid;gap:12px}.help-actions article{padding:18px}.help-actions article>svg{width:25px;color:#5a43e8}.help-actions h3{margin:8px 0 3px;font-size:15px}.help-actions p{margin:0 0 12px;color:#7481a1;font-size:12px}.help-actions button{padding:8px 12px;border:1px solid #e0e3ef;border-radius:10px;color:#563fda;background:#fff;font-weight:600}.help-actions .urgent>svg{color:#ed596d}
+.help-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.7fr);gap:20px}.help-faq{padding:22px}.help-faq>h2,.settings-card>h2{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:18px}.help-faq>h2 svg,.settings-card>h2 svg{width:21px;color:#6048e7}.help-faq article{border-top:1px solid #e9ecf4}.help-faq article>button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px;border:0;color:#3d4a6e;background:transparent;text-align:left;font-weight:600}.help-faq article>button svg{width:18px;transition:.3s}.help-faq article>button svg.rotate{transform:rotate(180deg)}.help-faq article>p{margin:0;padding:0 4px 16px;color:#667394;font-size:13px;line-height:1.6}.help-actions{display:grid;gap:12px}.help-actions article{padding:18px}.help-actions article>svg{width:25px;color:#5a43e8}.help-actions h3{margin:8px 0 3px;font-size:15px}.help-actions p{margin:0 0 12px;color:#7481a1;font-size:12px}.help-actions button{padding:8px 12px;border:1px solid #e0e3ef;border-radius:10px;color:#563fda;background:#fff;font-weight:600}.help-actions .urgent>svg{color:#ed596d}
 .settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.settings-card{padding:22px}.settings-card:last-child{grid-column:1/-1}.theme-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}.theme-options button{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;border:1px solid #e0e4ef;border-radius:12px;color:#657394;background:#fff}.theme-options button.active{color:#fff;background:#5438e8;border-color:#5438e8}.theme-options svg{width:18px}.setting-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-top:1px solid #ebedf4}.setting-row span,.setting-row strong,.setting-row small{display:block}.setting-row small{color:#7f8baa;font-size:11px}.setting-row input{width:20px;height:20px;accent-color:var(--purple)}.settings-card>p{color:#647191}.settings-card>.primary-action,.settings-card>.secondary-action{margin-top:14px}
 .feedback-state{min-height:260px;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px;text-align:center}.feedback-state>svg{width:36px;color:#674ee9}.feedback-loading>svg{animation:spin 1s linear infinite}.feedback-state h3{margin:12px 0 4px}.feedback-state p{margin:0;color:#7582a2}.feedback-state button{display:flex;align-items:center;gap:7px;margin-top:14px;padding:8px 14px;border:0;border-radius:10px;color:#fff;background:#5437e8}.feedback-state button svg{width:17px}.not-found{min-height:60vh;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center}.not-found>svg{width:64px;height:64px;color:#6a51eb}.not-found h1{margin:15px 0 5px}.not-found p{color:#7380a0}.not-found button{display:flex;align-items:center;gap:8px;margin-top:14px;padding:10px 18px;border:0;border-radius:12px;color:#fff;background:#4c2ee8}.not-found button svg{width:18px}
 
@@ -478,15 +478,15 @@ body{font-size:14px}
 .sidebar-utilities button{position:relative;font-weight:600}
 .sidebar-utilities button.active{background:transparent}
 .sidebar-utilities button.active::after{content:"";position:absolute;right:0;width:4px;height:40px;border-radius:4px 0 0 4px;background:var(--purple)}
-.sidebar .logout-button{border:1.5px solid transparent;transition:color .2s ease,background-color .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.sidebar .logout-button{border:1.5px solid transparent;transition:color .3s ease,background-color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
 .sidebar .logout-button:hover{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
 .profile-card header{color:#263574;background:#fff;border-bottom:1px solid #e8ebf3}
 .status-badge{height:26px;min-height:26px;padding:3px 10px;line-height:1}
 .invoice-table>div{grid-template-columns:1fr 1.45fr .75fr .65fr 1fr}
 .invoice-actions .pay-action{color:#fff;background:#563dde}
-.balance-card>button{border:1.5px solid transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-clip:padding-box;box-shadow:var(--shadow-button);transition:color .2s ease,background .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.balance-card>button{border:1.5px solid transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button);transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
 .balance-card>button:not(:disabled):hover,.balance-card>button:not(:disabled):focus-visible{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%)}
-.invoice-actions .pay-action{background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 5px 12px rgb(67 24 255 / 22%);transition:box-shadow .2s ease,transform .2s ease}
+.invoice-actions .pay-action{background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 5px 12px rgb(67 24 255 / 22%);transition:box-shadow .3s ease,transform .3s ease}
 .invoice-actions .pay-action:hover,.invoice-actions .pay-action:focus-visible{box-shadow:0 8px 18px rgb(67 24 255 / 28%);transform:translateY(-1px)}
 .invoice-preview dl{grid-template-columns:minmax(110px,.7fr) minmax(0,1.3fr)}
 
@@ -505,7 +505,7 @@ html[data-theme=dark] .topbar-cluster{background:#1a2039}
 .assistant-heading{flex:0 0 auto;margin-bottom:8px}
 .assistant-heading p{margin:5px 0 0}
 .billing-heading p,.assistant-heading p{margin:10px 0 0;color:#4318ff;font-size:clamp(17px,1.6vw,21px);font-weight:600}
-.new-chat-action{min-height:52px;display:flex;align-items:center;gap:8px;padding:13px 18px;border:0;border-radius:28px;color:#7e8baa;background:#fff;font-weight:600;transition:color .2s ease,box-shadow .2s ease,transform .2s ease}
+.new-chat-action{min-height:52px;display:flex;align-items:center;gap:8px;padding:13px 18px;border:0;border-radius:28px;color:#7e8baa;background:#fff;font-weight:600;transition:color .3s ease,box-shadow .3s ease,transform .3s ease}
 .new-chat-action svg{width:18px}
 .assistant-heading .new-chat-action{margin:18px 0 0}
 .new-chat-action:hover,.new-chat-action:focus-visible{color:#4318ff;box-shadow:0 7px 18px rgb(67 24 255 / 12%);transform:translateY(-1px)}
@@ -533,9 +533,9 @@ html[data-theme=dark] .topbar-cluster{background:#1a2039}
 .attachment-menu>button{width:100%;height:auto;display:flex;align-items:center;justify-content:flex-start;gap:11px;padding:10px;border-radius:11px;text-align:left}.attachment-menu>button:hover{background:#f5f3ff}.attachment-menu>button>svg{flex:0 0 20px;color:#5942df}.attachment-menu span,.attachment-menu strong,.attachment-menu small{display:block}.attachment-menu strong{color:#34415f;font-size:13px}.attachment-menu small{margin-top:2px;color:#7e8ba8;font-size:11px}
 
 .contact-actions{display:flex;gap:8px}.contact-actions a,.contact-actions button{min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border:1px solid #e0e3ef;border-radius:10px;color:#563fda;background:#fff;font-size:12px;font-weight:700;text-decoration:none}.contact-actions a{color:#fff;background:#563fda}.contact-actions svg{width:15px}
-.contact-actions a{border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-clip:padding-box;box-shadow:var(--shadow-button);transition:color .2s ease,background .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease}
-.contact-actions a:hover,.contact-actions a:focus-visible{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
-.settings-list{width:100%;max-width:none;margin:0;padding:0 28px}.settings-list>section{padding:24px 0;border-bottom:1px solid #e8ebf3}.settings-list>section:last-child{border-bottom:0}.settings-section-title{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}.settings-section-title>svg{width:24px;color:#5c43e7}.settings-section-title h2{margin:0;color:#2f3e65;font-size:18px}.settings-section-title p{margin:4px 0 0;color:#7885a4;font-size:13px}.settings-list .theme-options{width:min(100%,320px);max-width:none;margin:0 0 16px auto}.settings-list .theme-options button{transition:color .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease,transform .2s ease}.settings-list .theme-options button.active{border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple))}.settings-list .theme-options button:not(.active):hover,.settings-list .theme-options button:not(.active):focus-visible{color:#4318ff;border-color:#4318ff;background:#fff;box-shadow:0 7px 18px rgb(67 24 255 / 12%);transform:translateY(-1px)}.settings-list .theme-options button.active:hover,.settings-list .theme-options button.active:focus-visible{box-shadow:0 8px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}.settings-link{width:100%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:15px 4px;border:0;border-bottom:1px solid #edf0f5;color:#556385;background:transparent;text-align:left}.settings-link:last-child{border-bottom:0}.settings-link>svg:first-child{width:22px;color:#5e46e7}.settings-link>svg:last-child{width:18px}.settings-link span,.settings-link strong,.settings-link small{display:block}.settings-link small{margin-top:3px;color:#8490ac;font-size:12px}
+.contact-actions a,.contact-actions .contact-primary{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button);transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.contact-actions a:hover,.contact-actions a:focus-visible,.contact-actions .contact-primary:hover,.contact-actions .contact-primary:focus-visible{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
+.settings-list{width:100%;max-width:none;margin:0;padding:0 28px}.settings-list>section{padding:24px 0;border-bottom:1px solid #e8ebf3}.settings-list>section:last-child{border-bottom:0}.settings-section-title{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}.settings-section-title>svg{width:24px;color:#5c43e7}.settings-section-title h2{margin:0;color:#2f3e65;font-size:18px}.settings-section-title p{margin:4px 0 0;color:#7885a4;font-size:13px}.settings-list .theme-options{width:min(100%,320px);max-width:none;margin:0 0 16px auto}.settings-list .theme-options button{transition:color .3s ease,border-color .3s ease,background .3s ease,box-shadow .3s ease,transform .3s ease}.settings-list .theme-options button.active{border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple))}.settings-list .theme-options button:not(.active):hover,.settings-list .theme-options button:not(.active):focus-visible{color:#4318ff;border-color:#4318ff;background:#fff;box-shadow:0 7px 18px rgb(67 24 255 / 12%);transform:translateY(-1px)}.settings-list .theme-options button.active:hover,.settings-list .theme-options button.active:focus-visible{box-shadow:0 8px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}.settings-link{width:100%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:15px 4px;border:0;border-bottom:1px solid #edf0f5;color:#556385;background:transparent;text-align:left}.settings-link:last-child{border-bottom:0}.settings-link>svg:first-child{width:22px;color:#5e46e7}.settings-link>svg:last-child{width:18px}.settings-link span,.settings-link strong,.settings-link small{display:block}.settings-link small{margin-top:3px;color:#8490ac;font-size:12px}
 
 html[data-theme=dark] .profile-card header{color:#eef1ff;background:#1a2039;border-color:#303953}
 html[data-theme=dark] :where(.new-chat-action,.attachment-menu,.assistant-start .prompt-grid>button,.contact-actions button,.settings-list){background:#1a2039;color:#e5e9f8;border-color:#303953}
@@ -675,3 +675,423 @@ html[data-theme=dark] .shock-card.shock-offline{background:#161a28;border-color:
 /* Inline in a chat bubble, next to "Sparky is checking your usage…". */
 .assistant-bubble.thinking{display:flex;align-items:center;gap:8px}
 .assistant-bubble.thinking canvas{flex:0 0 auto}
+/* Plans — pricing style and commitment picker */
+.plans-heading{align-items:flex-start}
+.plan-step{margin-top:var(--space-3);padding:clamp(var(--space-3),2.2vw,var(--space-4))}
+.plan-step-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:var(--space-3)}
+.plan-step-index{padding:5px 11px;border-radius:999px;color:#fe6601;background:#fff2e6;font-size:11px;font-weight:800;letter-spacing:.07em}
+.plan-step-head h2{margin:0;color:var(--ink);font-size:clamp(19px,1.7vw,23px);font-weight:750;letter-spacing:-.02em}
+.plan-step-head p{flex:1 1 100%;margin:0;color:var(--muted);font-size:13px}
+
+.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}
+.pricing-card{position:relative;display:flex;min-width:0;flex-direction:column;padding:var(--space-3);border:1.5px solid #e6e9f5;border-radius:var(--radius-md);background:linear-gradient(160deg,#fff,#fbfbff);transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease}
+.pricing-card:hover{transform:translateY(-3px);border-color:#c6bcff;box-shadow:0 16px 32px rgb(48 44 112 / 12%)}
+.pricing-card-selected{border-color:var(--purple);box-shadow:0 18px 36px rgb(67 24 255 / 16%)}
+.pricing-flag,.pricing-current{position:absolute;top:-11px;padding:5px 11px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.06em}
+.pricing-flag{left:var(--space-3);color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 6px 14px rgb(74 37 255 / 24%)}
+.pricing-current{right:var(--space-3);color:#fe6601;background:#fff2e6;border:1px solid #ffd9b8}
+.pricing-eyebrow{color:#8b99bc;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.pricing-card h3{margin:6px 0 0;color:var(--ink);font-size:clamp(21px,1.9vw,26px);font-weight:750;letter-spacing:-.025em}
+.pricing-summary{margin:8px 0 0;color:#5b6a8f;font-size:13px;line-height:1.55}
+.pricing-rates{display:grid;gap:2px;margin:var(--space-2) 0 0;padding:12px 14px;border-radius:14px;background:#f6f7fd}
+.pricing-rates>div{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:6px 0}
+.pricing-rates>div+div{border-top:1px solid #e9ecf7}
+.pricing-rates dt{min-width:0;color:#5b6a8f;font-size:12px;font-weight:600}
+.pricing-rates dt small{display:block;margin-top:2px;color:#98a4c4;font-size:10px;font-weight:500}
+.pricing-rates dd{margin:0;color:var(--ink);font-size:16px;font-weight:750;white-space:nowrap}
+.pricing-rates dd small{color:#8b99bc;font-size:11px;font-weight:600}
+.pricing-daily dd{font-size:14px}
+.pricing-points{margin:var(--space-2) 0 0;padding:0;list-style:none}
+.pricing-points li{display:flex;gap:9px;margin:9px 0;color:#4d5b7d;font-size:13px;line-height:1.5}
+.pricing-points svg{width:16px;height:16px;flex:0 0 16px;margin-top:2px;color:#fe6601;stroke-width:3}
+.pricing-bestfor{display:flex;flex-direction:column;gap:3px;margin:auto 0 0;padding-top:var(--space-2);border-top:1px solid #edf0f7}
+.pricing-bestfor span{color:#8b99bc;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.pricing-bestfor strong{color:var(--ink);font-size:14px;font-weight:700;line-height:1.4}
+.pricing-choose{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;margin-top:var(--space-2);padding:10px 16px;border:1.5px solid var(--purple);border-radius:14px;color:var(--purple);background:#fff;font-size:14px;font-weight:700;transition:color .3s ease,background .3s ease,box-shadow .3s ease}
+.pricing-choose svg{width:17px;height:17px;stroke-width:3}
+.pricing-choose:hover{background:#f2effe;box-shadow:0 8px 18px rgb(67 24 255 / 14%)}
+.pricing-card-selected .pricing-choose{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button)}
+
+.term-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}
+.term-card{position:relative;display:flex;min-width:0;flex-direction:column;padding:var(--space-3);border:1.5px solid #e6e9f5;border-radius:var(--radius-md);background:#fff;cursor:pointer;transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease}
+.term-card:hover{transform:translateY(-2px);border-color:#c6bcff;box-shadow:0 12px 26px rgb(48 44 112 / 10%)}
+.term-card input{position:absolute;top:var(--space-3);right:var(--space-3);width:19px;height:19px;margin:0;accent-color:var(--purple)}
+.term-card-selected{border-color:var(--purple);background:linear-gradient(160deg,#fff,#f6f3ff);box-shadow:0 16px 32px rgb(67 24 255 / 14%)}
+.term-flag{position:absolute;top:-11px;left:var(--space-3);padding:5px 11px;border-radius:999px;color:#fff;background:linear-gradient(135deg,#ff8a3d,#fe6601);box-shadow:0 6px 14px rgb(254 102 1 / 28%);font-size:10px;font-weight:800;letter-spacing:.06em}
+.term-name{padding-right:32px;color:var(--ink);font-size:18px;font-weight:750;letter-spacing:-.02em}
+.term-credit{margin:6px 0 12px;color:var(--purple);font-size:clamp(24px,2.2vw,30px);font-weight:800;letter-spacing:-.03em}
+.term-credit small{color:#8b99bc;font-size:13px;font-weight:600;letter-spacing:0}
+.term-line{margin-top:6px;color:#5b6a8f;font-size:12.5px;line-height:1.5}
+.term-total{color:#fe6601;font-weight:700}
+
+.plan-summary{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,2.1fr) minmax(200px,auto);align-items:center;gap:var(--space-3);margin-top:var(--space-3);padding:var(--space-3) clamp(var(--space-3),2.2vw,var(--space-4));border-radius:var(--radius-lg);color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 18px 40px rgb(74 37 255 / 26%)}
+.plan-summary-main span{color:#ded8ff;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.plan-summary-main strong{display:block;margin:4px 0 3px;font-size:clamp(20px,2vw,26px);font-weight:750;letter-spacing:-.025em}
+.plan-summary-main small{color:#e3dfff;font-size:12px}
+.plan-summary-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin:0}
+.plan-summary-stats>div{min-width:0}
+.plan-summary-stats dt{color:#d7d0ff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.plan-summary-stats dd{margin:4px 0 0;font-size:13px;font-weight:600;line-height:1.4}
+.plan-summary-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.plan-summary-cta{min-height:46px;padding:11px 22px;border:1.5px solid transparent;border-radius:14px;color:#3a1fd0;background:#fff;font-size:14px;font-weight:800;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease}
+.plan-summary-cta:hover:not(:disabled){background:#ffedd9;color:#b74b00;box-shadow:0 10px 22px rgb(0 0 0 / 22%)}
+.plan-summary-cta:disabled{color:#efecff;background:transparent;border-color:rgb(255 255 255 / 45%);opacity:1}
+.plan-summary-links{display:flex;justify-content:center;gap:14px;flex-wrap:wrap}
+.plan-summary-links button{padding:4px 0;border:0;color:#e6e2ff;background:transparent;font-size:12px;font-weight:600;text-decoration:underline}
+.plan-summary-links button:hover{color:#fff}
+
+.plan-inclusions{display:flex;flex-wrap:wrap;gap:10px var(--space-3);margin:var(--space-2) 0 0;padding:0 4px;list-style:none}
+.plan-inclusions li{display:flex;align-items:center;gap:7px;color:#68779f;font-size:12.5px}
+.plan-inclusions svg{width:15px;height:15px;flex:0 0 15px;color:#fe6601;stroke-width:3}
+
+.plan-rate-tables h3{margin:var(--space-2) 0 10px;color:var(--ink);font-size:15px}
+.plan-rate-tables h3:first-child{margin-top:0}
+.plan-rate-table{display:grid;overflow-x:auto}
+.plan-rate-table>div{min-width:520px;display:grid;grid-template-columns:1.1fr repeat(3,1fr);gap:10px;padding:11px 12px;border-bottom:1px solid #e8ebf3;color:#546184;font-size:12.5px}
+.plan-rate-table>div:first-child{color:#fff;background:#4c3ad2;border-radius:10px 10px 0 0;font-weight:700}
+.plan-rate-table>div:first-child span{color:#fff}
+.plan-rate-table>div>span:first-child{color:var(--ink);font-weight:600}
+.plan-rate-table-terms>div{min-width:640px;grid-template-columns:.8fr 1.5fr .9fr .8fr .9fr}
+
+@media(max-width:1180px){
+  .plan-summary{grid-template-columns:minmax(0,1fr);gap:var(--space-2)}
+  .plan-summary-actions{flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .plan-summary-cta{flex:1 1 220px}
+}
+@media(max-width:900px){
+  .pricing-grid,.term-grid{grid-template-columns:1fr}
+  .pricing-flag,.pricing-current,.term-flag{position:static;align-self:flex-start;margin-bottom:8px}
+  .pricing-current{margin-left:auto}
+}
+html[data-theme=dark] :where(.plan-step,.pricing-card,.term-card){background:#1a2039;border-color:#303953}
+html[data-theme=dark] .pricing-rates{background:#141a30}
+html[data-theme=dark] :where(.pricing-card h3,.pricing-bestfor strong,.term-name,.plan-step-head h2){color:#eef1ff}
+html[data-theme=dark] :where(.pricing-summary,.pricing-points li,.term-line,.pricing-rates dt){color:#aab5d2}
+html[data-theme=dark] .pricing-rates dd{color:#eef1ff}
+html[data-theme=dark] .pricing-choose{background:transparent}
+
+/* Help & Support — FAQ search, topic filters and grouped answers */
+.faq-tools{display:flex;flex-direction:column;gap:12px;margin-bottom:var(--space-2);padding-bottom:var(--space-2)}
+.faq-search{display:flex;align-items:center;gap:10px;height:46px;padding:0 16px;border:1.5px solid #e6e9f5;border-radius:14px;background:#f7f8fd;transition:border-color .3s ease,box-shadow .3s ease}
+.faq-search:focus-within{border-color:var(--purple);background:#fff;box-shadow:0 0 0 4px rgb(74 37 255 / 10%)}
+.faq-search svg{width:18px;height:18px;flex:0 0 18px;color:#8b99bc}
+.faq-search input{width:100%;min-width:0;border:0;outline:0;color:var(--ink);background:transparent;font-size:14px}
+.faq-search input::-webkit-search-cancel-button{cursor:pointer}
+.faq-chips{display:flex;flex-wrap:wrap;gap:8px}
+.faq-chips button{display:flex;align-items:center;gap:7px;min-height:38px;padding:8px 14px;border:1.5px solid #e6e9f5;border-radius:10px;color:#5b6a8f;background:#fff;font-size:12.5px;font-weight:600;transition:color .3s ease,background .3s ease,border-color .3s ease}
+.faq-chips button:hover{border-color:#c6bcff;color:#4318ff}
+.faq-chips button span{min-width:20px;padding:2px 6px;border-radius:6px;text-align:center;color:#8b99bc;background:#f1f3fb;font-size:11px;font-weight:700}
+.faq-chips button.active{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 6px 14px rgb(74 37 255 / 20%)}
+.faq-chips button.active span{color:#fff;background:rgb(255 255 255 / 22%)}
+.faq-group{margin-top:var(--space-2)}
+.faq-group h3{margin:0 0 2px;color:#fe6601;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}
+.help-faq article>p.faq-note{padding-top:0;color:#8b96b5;font-style:italic}
+.faq-empty{padding:var(--space-4) var(--space-2);text-align:center}
+.faq-empty p{margin:0 0 var(--space-2);color:#68779f;font-size:14px}
+.faq-empty .primary-action{margin:0 auto}
+html[data-theme=dark] .faq-search{background:#141a30;border-color:#303953}
+html[data-theme=dark] .faq-chips button:not(.active){background:#1a2039;border-color:#303953;color:#aab5d2}
+html[data-theme=dark] .faq-chips button:not(.active) span{background:#141a30}
+
+/* Billing — full-width layout and a lighter, colour-coded invoice */
+.billing-summary-grid{width:min(100%,1400px);grid-template-columns:minmax(260px,.85fr) minmax(0,1.15fr);gap:var(--space-3);margin:0 auto var(--space-3)}
+.balance-card{display:flex;flex-direction:column;justify-content:center;border-color:#e3e0fb;background:linear-gradient(150deg,#fff,#f4f2ff)}
+.balance-card span{color:#8b99bc;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.balance-card>strong{margin:6px 0 2px;font-size:clamp(30px,3vw,38px);font-weight:800;letter-spacing:-.03em}
+.balance-card>small{color:#68779f;font-size:12.5px}
+.payment-method{border-color:#e6ebfa;background:linear-gradient(150deg,#fff,#f6f8ff)}
+.payment-method>svg{width:44px;height:44px;padding:10px;border-radius:14px;color:#5b42ed;background:#eeebff}
+.payment-method span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.payment-method div strong{color:var(--ink);font-size:16px}
+
+.invoice{--invoice-pad:clamp(var(--space-3),3vw,44px);width:min(100%,1400px);display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.9fr);align-content:start;column-gap:clamp(var(--space-3),3vw,44px);padding:var(--invoice-pad);overflow:hidden;color:var(--ink)}
+.invoice>header{grid-column:1/-1;align-items:center;margin:calc(-1*var(--invoice-pad)) calc(-1*var(--invoice-pad)) var(--space-3);padding:var(--space-3) var(--invoice-pad);border-bottom:1px solid #e9ecf7;background:linear-gradient(120deg,#f1eeff,#fbfaff 58%,#fff5eb)}
+.invoice .plan-symbol{width:60px;height:60px;padding:9px;border:1px solid #ded8ff;border-radius:18px;background:#fff;box-shadow:0 8px 20px rgb(67 24 255 / 14%)}
+.invoice h2{margin:0 0 5px;color:var(--ink);font-size:clamp(21px,2vw,26px);font-weight:750;letter-spacing:-.025em}
+.invoice header p{margin:2px 0;color:#5b6a8f;font-size:13px}
+.invoice-columns{grid-column:1;padding:0}
+.invoice dl{row-gap:0}
+.invoice dt,.invoice dd{padding:11px 0;border-bottom:1px dashed #e9ecf7}
+.invoice dt{color:#8b99bc;font-size:12.5px;font-weight:600}
+.invoice dd{color:var(--ink);font-size:13.5px;font-weight:700}
+.invoice dl dt:last-of-type,.invoice dl dd:last-of-type{border-bottom:0}
+.invoice-note{grid-column:1;align-self:start;margin:var(--space-2) 0 0;padding:13px 16px;border:0;border-left:3px solid #fe6601;border-radius:0 12px 12px 0;color:#5b6a8f;background:#fff6ee;font-size:13px;line-height:1.55}
+.invoice-note strong{color:#b74b00}
+.invoice-totals{grid-column:2;grid-row:2/span 2;align-self:start;width:100%;margin:0;padding:var(--space-3);border:1px solid #e6eaf6;border-radius:18px;background:linear-gradient(160deg,#f9faff,#f3f1ff)}
+.invoice-totals span{padding:10px 2px;color:#5b6a8f;font-size:13px}
+.invoice-totals span+span{border-top:1px solid #e6eaf6}
+.invoice-totals strong{color:var(--ink);font-weight:750}
+.invoice-totals .total{color:var(--ink);font-weight:700}
+.invoice-totals .total:last-child{margin-top:12px;padding:15px 16px;border:0;border-radius:14px;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 10px 22px rgb(74 37 255 / 20%)}
+.invoice-totals .total:last-child strong{color:#fff;font-size:16px}
+.invoice footer{grid-column:1/-1;margin:var(--space-3) 0 0;padding-top:var(--space-2);border-top:1px solid #eceff8;color:#68779f;font-size:12.5px;line-height:1.6}
+.invoice footer strong{color:var(--ink);font-size:13.5px}
+
+.invoice-history{width:min(100%,1400px);margin:var(--space-3) auto 0;padding:clamp(var(--space-3),2.4vw,32px)}
+.invoice-history>header h2{font-size:19px;font-weight:750;letter-spacing:-.02em}
+.invoice-table .invoice-table-head{border-radius:10px 10px 0 0}
+.invoice-table>div{transition:background .3s ease}
+.invoice-table>div:not(.invoice-table-head):hover{background:#f8f9ff}
+.invoice-table>div>strong{color:var(--purple);font-weight:750}
+
+@media(max-width:1100px){
+  .invoice{grid-template-columns:minmax(0,1fr)}
+  .invoice-columns,.invoice-note,.invoice-totals{grid-column:1}
+  .invoice-totals{grid-row:auto;margin-top:var(--space-3)}
+}
+@media(max-width:760px){
+  .billing-summary-grid{grid-template-columns:1fr}
+}
+@media print{
+  .invoice{display:block;padding:0}
+  .invoice>header{margin:0 0 18px;padding:0 0 18px;background:none}
+  .invoice-totals{width:min(100%,540px);margin-left:auto;border:0;background:none}
+  .invoice-totals .total:last-child{color:#000;background:none;box-shadow:none}
+  .invoice-totals .total:last-child strong{color:#000}
+}
+html[data-theme=dark] .invoice>header{background:linear-gradient(120deg,#232a4a,#1a2039)}
+html[data-theme=dark] .invoice-totals{border-color:#303953;background:#141a30}
+html[data-theme=dark] .invoice-note{color:#e0c7ae;background:#2a2015}
+html[data-theme=dark] .invoice-note strong{color:#ffab63}
+html[data-theme=dark] :where(.invoice dd,.invoice-totals strong,.invoice footer strong,.payment-method div strong){color:#eef1ff}
+html[data-theme=dark] .invoice .plan-symbol{background:#1a2039;border-color:#3b3470}
+html[data-theme=dark] .invoice-table>div:not(.invoice-table-head):hover{background:#141a30}
+
+/* Collapsible sidebar */
+.app-shell{transition:grid-template-columns .22s ease}
+.sidebar-toggle{position:absolute;z-index:12;top:26px;right:-15px;width:30px;height:30px;display:grid;place-items:center;padding:0;border:1px solid #e6e9f5;border-radius:10px;color:#7c8ab0;background:#fff;box-shadow:0 6px 16px rgb(45 62 123 / 12%);transition:color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.sidebar-toggle svg{width:17px;height:17px}
+.sidebar-toggle:hover{color:var(--purple);border-color:#c6bcff;box-shadow:0 8px 20px rgb(67 24 255 / 18%);transform:scale(1.06)}
+.logout-button{display:flex;align-items:center;justify-content:center;gap:9px}
+.logout-button svg{width:18px;height:18px;flex:0 0 18px}
+.sidebar-collapsed .sidebar nav button,.sidebar-collapsed .sidebar-utilities button{gap:0}
+.sidebar-collapsed .sidebar-toggle{top:22px;right:-15px}
+html[data-theme=dark] .sidebar-toggle{color:#aab5d2;border-color:#303953;background:#1a2039}
+@media(max-width:900px){
+  .sidebar-toggle{display:none}
+}
+/* Collapsed: the brand block keeps only the circular mark.
+   Specificity here has to beat `.brand:not(.brand-compact) .brand-name`. */
+.sidebar-collapsed .brand:not(.brand-compact){height:98px;min-height:98px;align-items:center;justify-content:center;gap:0;padding:0}
+.sidebar-collapsed .brand:not(.brand-compact) .brand-name{display:none}
+.sidebar-collapsed .brand:not(.brand-compact) .brand-orbit{position:static;top:auto;left:auto;width:52px;height:52px}
+
+/* Sidebar wordmark — the logo mark's own blue ramp */
+.brand:not(.brand-compact) .brand-name{background:linear-gradient(135deg,#4318ff 0%,#5f45ff 50%,#868cff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+html[data-theme=dark] .brand:not(.brand-compact) .brand-name{background:linear-gradient(135deg,#7a68ff 0%,#9d95ff 50%,#c4c6ff 100%);-webkit-background-clip:text;background-clip:text}
+
+/* Logout confirmation — roomier card, smaller buttons matching the sidebar Logout */
+.logout-modal{width:min(400px,calc(100% - 32px));display:flex;flex-direction:column;justify-content:center;padding:54px 36px;border-radius:24px;box-shadow:0 28px 70px rgb(26 36 87 / 28%)}
+.logout-icon{width:80px;height:80px;margin:0 auto;padding:20px;border-radius:26px;color:var(--purple);background:#efecff}
+.logout-icon svg{width:40px;height:40px}
+.logout-modal h2{margin:36px 0 12px;color:var(--ink);font-size:23px;font-weight:750;letter-spacing:-.02em}
+.logout-modal p{margin:0 0 50px;color:#68779f;font-size:15px;line-height:1.55}
+.logout-modal>div:last-child{justify-content:center;gap:14px}
+.logout-modal button{flex:0 1 auto;min-width:140px;min-height:46px;padding:10px 28px;border:1.5px solid var(--purple);border-radius:999px;font-size:15px;font-weight:700;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.logout-modal button:first-child{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button)}
+.logout-modal button:first-child:hover{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
+.logout-modal button:last-child:hover{background:#fff;box-shadow:0 7px 16px rgb(67 24 255 / 12%);transform:translateY(-1px)}
+html[data-theme=dark] .logout-modal{color:#e5e9f8;background:#1a2039}
+html[data-theme=dark] .logout-modal h2{color:#eef1ff}
+html[data-theme=dark] .logout-modal p{color:#aab5d2}
+html[data-theme=dark] .logout-icon{background:#241f4d}
+html[data-theme=dark] .logout-modal button:last-child{color:#c9c0ff;background:transparent}
+
+/* Login — brand-blue panel, white lockup, gradient button */
+.brand-panel{color:#fff;background:linear-gradient(150deg,#868cff 0%,#5f45ff 45%,#4318ff 100%)}
+.brand-panel strong{color:#fff}
+html[data-theme=dark] .brand-panel{background:linear-gradient(150deg,#6f63ff 0%,#4b2ef0 45%,#2f14c4 100%)}
+.login-button{border:1.5px solid transparent;border-radius:999px;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button);transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.login-button:hover,.login-button:focus-visible{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
+/* Required-field markers on the login form — the remember row keeps the brand purple */
+.login-content label:not(.remember-row) span{color:#d94d61}
+/* Chrome paints autofilled inputs light blue and ignores `background`;
+   an inset shadow is the only way to keep them white. */
+.login-content input:-webkit-autofill,
+.login-content input:-webkit-autofill:hover,
+.login-content input:-webkit-autofill:focus,
+.login-content input:-webkit-autofill:active{-webkit-text-fill-color:var(--ink);-webkit-box-shadow:0 0 0 1000px #fff inset;box-shadow:0 0 0 1000px #fff inset;caret-color:var(--ink);transition:background-color 100000s ease-in-out 0s}
+html[data-theme=dark] .login-content input:-webkit-autofill,
+html[data-theme=dark] .login-content input:-webkit-autofill:hover,
+html[data-theme=dark] .login-content input:-webkit-autofill:focus{-webkit-text-fill-color:#e5e9f8;-webkit-box-shadow:0 0 0 1000px #141a30 inset;box-shadow:0 0 0 1000px #141a30 inset;caret-color:#e5e9f8}
+
+/* Auth pages — social sign-in, divider and the login/register switch */
+.auth-divider{display:flex;align-items:center;gap:14px;margin:24px 0 18px;color:#9aa7c6;font-size:12.5px}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:#e4e8f5}
+.social-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.social-row button{display:flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:12px 16px;border:1.5px solid #e0e5f2;border-radius:999px;color:var(--ink);background:#fff;font-size:15px;font-weight:600;transition:color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.social-row button:hover,.social-row button:focus-visible{border-color:#4318ff;color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 12%);transform:translateY(-1px)}
+.social-row svg{width:20px;height:20px;flex:0 0 20px}
+.auth-switch{margin:26px 0 0;color:#68779f;font-size:14px;text-align:center}
+.auth-switch button{padding:0;border:0;color:var(--purple);background:transparent;font-size:14px;font-weight:700;text-decoration:none;text-underline-offset:3px}
+.auth-switch button:hover,.auth-switch button:focus-visible{color:#3515ed;text-decoration:underline}
+.login-content form>label:not(:first-of-type){margin-top:14px}
+html[data-theme=dark] .social-row button{color:#e5e9f8;background:#1a2039;border-color:#303953}
+html[data-theme=dark] .auth-divider::before,html[data-theme=dark] .auth-divider::after{background:#303953}
+/* The login styles only covered email inputs; text fields need the same frame. */
+.login-content input[type=text]{width:100%;height:58px;padding:0 20px;border:2px solid #e0e5f2;border-radius:15px;color:var(--ink);outline:0;background:#fff}
+.login-content input[type=text]:focus{border-color:#6a50ff;box-shadow:0 0 0 4px rgb(91 69 255 / 10%)}
+.login-content input[type=text]::placeholder{color:#a9b6dc}
+@media(max-width:760px){.login-content input[type=text]{height:54px}}
+@media(max-height:760px) and (min-width:761px){.login-content input[type=text]{height:52px}}
+html[data-theme=dark] .login-content input[type=text]{color:#e5e9f8;background:#141a30;border-color:#38415c}
+/* The password input sits inside a rounded, bordered wrapper, so its autofill
+   fill needs the wrapper's inner radius or it squares off the corners. */
+.password-field input:-webkit-autofill{border-radius:13px}
+/* The sign-up page has no header paragraph, so the spacing the login page gets
+   from that paragraph has to be restored on the header itself. */
+.register-content header{margin-bottom:clamp(38px,6vh,62px)}
+.register-content form>label:not(:first-of-type){margin-top:22px}
+.register-content .password-field{margin-bottom:0}
+.register-content .login-button{margin-top:52px}
+.register-content .auth-switch{margin-top:22px}
+
+/* Profile — gradient header band, mascot overlapping it, pill action */
+.profile-card{padding:var(--space-3);overflow:hidden}
+.profile-card header{grid-column:1/-1;padding:26px clamp(var(--space-3),2.4vw,34px);border:0;border-radius:18px;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 14px 30px rgb(74 37 255 / 22%)}
+.profile-mascot{position:relative;z-index:2;margin:clamp(-84px,-6vw,-56px) auto var(--space-2)}
+.profile-card dl{padding:var(--space-3) clamp(var(--space-2),2vw,26px)}
+.profile-card dt,.profile-card dd{padding:12px;border-bottom:0}
+.profile-card dt{color:#68779f;font-size:14.5px;font-weight:500}
+.profile-card dd{color:var(--ink);font-size:15.5px;font-weight:700}
+.primary-small{border:1.5px solid transparent;border-radius:999px;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button);transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.primary-small:hover,.primary-small:focus-visible{color:#4318ff;background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
+html[data-theme=dark] .profile-card header{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple))}
+/* The action sits in a 1fr grid row, so it has to opt out of stretching. */
+.primary-small{align-self:center;justify-self:end;width:auto;min-width:136px;height:46px;min-height:46px;padding:0 26px;font-size:14px}
+.profile-mascot{width:clamp(150px,17vw,220px)}
+
+/* Gradient buttons carry no border at rest. The hover ring is drawn as an inset
+   outline so the button never changes size when it appears. */
+.shock-card button,.article-card footer button,.balance-card>button,.contact-actions a,.contact-actions .contact-primary,.login-button,.primary-small,.logout-modal button:first-child,.sidebar .logout-button,.pricing-card-selected .pricing-choose{border:0}
+.shock-card button:hover,.article-card footer button:hover,.balance-card>button:not(:disabled):hover,.contact-actions a:hover,.contact-actions .contact-primary:hover,.login-button:hover,.primary-small:hover,.logout-modal button:first-child:hover,.sidebar .logout-button:hover,
+.shock-card button:focus-visible,.article-card footer button:focus-visible,.balance-card>button:not(:disabled):focus-visible,.contact-actions a:focus-visible,.contact-actions .contact-primary:focus-visible,.login-button:focus-visible,.primary-small:focus-visible,.logout-modal button:first-child:focus-visible,.sidebar .logout-button:focus-visible{outline:1.5px solid #4318ff;outline-offset:-1.5px}
+/* Roomier profile card, matching the 1400px page width used elsewhere */
+.profile-card{width:min(100%,1180px);max-width:1180px;margin:clamp(32px,6vh,64px) auto 0;padding:clamp(var(--space-3),2.6vw,38px)}
+.profile-card header{padding:30px clamp(var(--space-3),2.6vw,38px)}
+.profile-card dl{padding:var(--space-4) clamp(var(--space-2),2.4vw,32px)}
+/* The dark-mode batch rule paints .topbar opaque, which turns the whole sticky
+   row into a band that covers the sidebar toggle. Only the cluster gets a fill. */
+html[data-theme=dark] .topbar{background:transparent}
+.sidebar-toggle{z-index:45}
+/* Dashboard actions as pills (the chart tooltip keeps its rectangle) */
+.shock-card button,.article-card footer button{border-radius:999px}
+.sidebar .logout-button{border-radius:999px}
+
+/* Billing actions — same size, mirrored hover: the primary starts filled and
+   goes outline, the secondary starts outline and fills in. */
+.balance-card>button,.payment-method>button{height:46px;min-height:46px;padding:0 24px;border-radius:999px;font-size:14px;font-weight:700}
+.payment-method>button{min-width:112px;border:1.5px solid var(--purple);color:var(--purple);background:#fff;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.payment-method>button:hover,.payment-method>button:focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:var(--shadow-button);transform:translateY(-1px)}
+html[data-theme=dark] .payment-method>button{background:transparent;color:#c9c0ff;border-color:#6a5cd6}
+/* Mirror the payment-method card: details on the left, action on the right */
+.balance-card{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;align-items:center;gap:0 var(--space-2)}
+.balance-card>span{grid-column:1;grid-row:1}
+.balance-card>strong{grid-column:1;grid-row:2}
+.balance-card>small{grid-column:1;grid-row:3}
+.balance-card>button{grid-column:2;grid-row:1/4;align-self:center;justify-self:end;width:auto;min-width:112px;margin-top:0}
+.billing-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* Due reads as an alert, so the badge and the invoice banner shift to red */
+.status-due{color:#d94d61;background:#ffedf0}
+.invoice>header{background:linear-gradient(120deg,#f1eeff,#fbfaff 58%,#ffeff2)}
+html[data-theme=dark] .status-due{color:#ff8a9c;background:#3a2029}
+/* Payment note uses the same orange as the Plans page (#fe6601 on #fff2e6) */
+.invoice-note{border-left-color:#fe6601;background:#fff2e6}
+.invoice-note strong{color:#fe6601}
+html[data-theme=dark] .invoice-note{color:#e0c7ae;background:#2a2015}
+html[data-theme=dark] .invoice-note strong{color:#ffab63}
+
+/* Invoice modals — align with the rest of the site */
+.invoice-preview>img{display:block;width:64px;height:64px;margin:0 auto 4px;padding:8px;border:1px solid #ded8ff;border-radius:18px;background:#fff;box-shadow:0 8px 20px rgb(67 24 255 / 12%)}
+.invoice-preview h3{margin:14px 0 0;color:var(--ink);font-size:clamp(28px,3vw,34px);font-weight:800;letter-spacing:-.03em}
+.invoice-preview>p{color:#68779f;font-size:13.5px}
+.invoice-preview dl{padding:18px;border-radius:16px}
+.payment-confirm>svg{width:64px;height:64px;padding:16px;border-radius:20px;color:var(--purple);background:#efecff}
+.payment-confirm p{margin:18px 0 6px;font-size:15px}
+.payment-confirm strong{color:var(--ink)}
+/* Modal actions use the same gradient, pill shape and inverse hover as the rest */
+.primary-action,.secondary-action{min-height:46px;padding:11px 24px;border-radius:999px;font-size:14px}
+.primary-action{background:linear-gradient(135deg,var(--purple2),var(--purple));transition:color .3s ease,background .3s ease,box-shadow .3s ease,transform .3s ease}
+.primary-action:hover,.primary-action:focus-visible{color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px);outline:1.5px solid #4318ff;outline-offset:-1.5px}
+.secondary-action{transition:color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.secondary-action:hover,.secondary-action:focus-visible{color:#4318ff;border-color:#4318ff;box-shadow:0 7px 16px rgb(67 24 255 / 12%);transform:translateY(-1px)}
+html[data-theme=dark] .invoice-preview>img{background:#1a2039;border-color:#3b3470}
+html[data-theme=dark] .payment-confirm>svg{background:#241f4d}
+/* text-align does not centre these icons, so lay the body out as a flex column */
+.payment-confirm{display:flex;flex-direction:column;align-items:center;gap:0;padding:var(--space-2) 0}
+.payment-confirm>svg{display:block;flex:0 0 auto;margin:0}
+.payment-confirm p{max-width:38ch;margin:20px 0 8px;color:#536184;line-height:1.55}
+.payment-confirm small{font-size:13px}
+
+/* Plans actions — pills, shared gradient, white hover on the outline buttons */
+.pricing-choose{border-radius:999px}
+.pricing-choose:hover,.pricing-choose:focus-visible{background:#fff;border-color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 16%);transform:translateY(-1px)}
+.pricing-card-selected .pricing-choose:hover,.pricing-card-selected .pricing-choose:focus-visible{color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);outline:1.5px solid #4318ff;outline-offset:-1.5px}
+.compare-action{border:0;border-radius:999px;min-height:46px;padding:11px 24px;background:linear-gradient(135deg,var(--purple2),var(--purple));transition:color .3s ease,background .3s ease,box-shadow .3s ease,transform .3s ease}
+.compare-action:hover,.compare-action:focus-visible{color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px);outline:1.5px solid #4318ff;outline-offset:-1.5px}
+html[data-theme=dark] .pricing-choose:hover{background:#1a2039}
+/* Every other small label on Plans is uppercase; these three were the exception */
+.plan-step-index,.pricing-current{text-transform:uppercase}
+/* Swap the two Step 1 badges: the recommendation goes orange (matching BEST
+   VALUE in Step 2), the current-plan marker takes the purple. */
+.pricing-flag{color:#fff;background:linear-gradient(135deg,#ff8a3d,#fe6601);box-shadow:0 6px 14px rgb(254 102 1 / 28%)}
+.pricing-current{border:0;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 6px 14px rgb(74 37 255 / 24%)}
+/* All three plan badges sit in the same place: the card's top-right corner */
+.pricing-flag,.term-flag{left:auto;right:var(--space-3)}
+/* On a flagged term card the radio drops a little so it clears the badge */
+.term-card:has(.term-flag) input{top:calc(var(--space-3) + 10px)}
+
+/* Compare-all-rates table: the header's first cell was losing to the generic
+   first-column rule, so it rendered dark on the purple band. */
+.plan-rate-table>div:first-child>span:first-child{color:#fff;font-weight:700}
+.plan-rate-table>div:first-child{background:linear-gradient(135deg,var(--purple2),var(--purple));border-radius:12px 12px 0 0}
+.plan-rate-table>div:last-child{border-bottom:0}
+.plan-rate-table>div:not(:first-child):hover{background:#f8f9ff}
+
+/* Terms & Conditions: give the headings and lists some structure */
+.terms-content>p:first-child{margin:0 0 var(--space-2);padding:0 0 16px;border-bottom:1px solid #eceff8;background:none;color:var(--ink);font-size:15px;line-height:1.6}
+.terms-content h3{margin:22px 0 10px;color:var(--ink);font-size:15px;font-weight:750;letter-spacing:-.01em}
+.terms-content ul{margin:0;padding:0;list-style:none}
+.terms-content li{position:relative;margin:9px 0;padding-left:20px;color:#536184;line-height:1.6}
+.terms-content li::before{content:"";position:absolute;top:9px;left:2px;width:6px;height:6px;border-radius:50%;background:#c3b9ff}
+html[data-theme=dark] .terms-content>p:first-child{border-color:#303953;color:#eef1ff}
+html[data-theme=dark] .plan-rate-table>div:not(:first-child):hover{background:#141a30}
+/* Modals scroll without showing a bar, matching the rest of the app */
+.app-modal-content,.plan-rate-table,.comparison-table{scrollbar-width:none;-ms-overflow-style:none}
+.app-modal-content::-webkit-scrollbar,.plan-rate-table::-webkit-scrollbar,.comparison-table::-webkit-scrollbar{width:0;height:0;display:none}
+/* Settings — theme buttons as pills, matching the rest of the site */
+.theme-options button{min-height:46px;padding:10px 22px;border-radius:999px}
+
+/* Settings — sub-rows belong to their section, so indent them to the section
+   heading's text (24px icon + 14px gap) instead of sitting outside it. */
+.setting-row{padding-left:38px}
+/* Preference toggles read better than native checkboxes in a settings list */
+.setting-row input{appearance:none;-webkit-appearance:none;position:relative;width:46px;height:26px;min-width:46px;border:0;border-radius:999px;background:#dfe3f0;cursor:pointer;transition:background .3s ease}
+.setting-row input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgb(45 62 123 / 22%);transition:transform .3s ease}
+.setting-row input:checked{background:linear-gradient(135deg,var(--purple2),var(--purple))}
+.setting-row input:checked::after{transform:translateX(20px)}
+.setting-row input:focus-visible{outline:2px solid #4318ff;outline-offset:3px}
+.setting-row:hover strong{color:var(--purple)}
+/* The two account rows are links, so they need hover feedback */
+.settings-link{border-radius:14px;padding-left:10px;padding-right:10px;transition:background .3s ease}
+.settings-link:hover,.settings-link:focus-visible{background:#f7f8fd}
+.settings-link>svg:last-child{transition:transform .3s ease}
+.settings-link:hover>svg:last-child{transform:translateX(4px);color:var(--purple)}
+html[data-theme=dark] .setting-row input{background:#38415c}
+html[data-theme=dark] .settings-link:hover{background:#141a30}
+/* Account-security rows are children of their section, like the toggles above */
+.settings-link{padding-left:38px}
+/* Sub-rows carry no icon of their own, so the grid drops its leading column */
+.settings-link{grid-template-columns:minmax(0,1fr) auto}
+/* Confirmation modals centre their content, so the footer follows suit */
+.app-modal:has(.payment-confirm)>footer{justify-content:center}
+/* Help & Support — filters and contact buttons follow the site's pill shape */
+.faq-chips button{border-radius:999px}
+.contact-actions a,.contact-actions button{min-height:44px;border-radius:999px}
+/* Help & Support — the two columns sized each other, so a short FAQ list left a
+   gap under it and a long one stretched the contact cards. Let both sit at their
+   natural height instead. */
+.help-grid{align-items:start}
+.help-actions{align-content:start}
+.help-faq{min-height:480px}

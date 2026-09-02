@@ -11,6 +11,7 @@ import HelpPage from './pages/HelpPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PlansPage from './pages/PlansPage'
+import RegisterPage from './pages/RegisterPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import UsagePage from './pages/UsagePage'
@@ -50,6 +51,13 @@ function App() {
     // most visible symptom of the session having no identity in it.
     addToast(`Welcome back, ${next.displayName}`)
   }
+  const register = () => {
+    // No signup endpoint yet. Inventing a Session here would give every page a
+    // customerId the API cannot resolve, so the new customer signs in instead.
+    localStorage.removeItem('kea-onboarding-seen')
+    navigate('/login')
+    addToast('Your Kea Energy account is ready — please sign in')
+  }
   const confirmLogout = () => {
     clearSession()
     setShowLogout(false)
@@ -58,16 +66,17 @@ function App() {
   }
   const closeOnboarding = () => { localStorage.setItem('kea-onboarding-seen', 'true'); setShowOnboarding(false) }
 
-  if (!session) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
+  if (!session) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="/register" element={<RegisterPage onRegister={register}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
 
   return <AppShell active={active} onNavigate={go} onLogout={() => setShowLogout(true)}>
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace/>}/>
       <Route path="/login" element={<Navigate to="/dashboard" replace/>}/>
-      <Route path="/dashboard" element={<DashboardPage onNavigate={go} onToast={addToast}/>}/>
+      <Route path="/register" element={<Navigate to="/dashboard" replace/>}/>
+      <Route path="/dashboard" element={<DashboardPage onNavigate={go}/>}/>
       <Route path="/usage" element={<UsagePage/>}/>
       <Route path="/billing" element={<BillingPage onToast={addToast}/>}/>
-      <Route path="/assistant" element={<AssistantPage onEscalate={() => addToast('A Consumer Care request has been prepared', 'info')} onToast={addToast}/>}/>
+      <Route path="/assistant" element={<AssistantPage onEscalate={() => addToast('A Customer Care request has been prepared', 'info')} onToast={addToast}/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>

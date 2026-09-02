@@ -72,7 +72,7 @@ function demoParams(): { household: string | null; day: number | undefined } {
   return { household: wanted, day: Number.isFinite(day) && day > 0 ? day : undefined }
 }
 
-export default function DashboardPage({ onNavigate, onToast }: { onNavigate: (page: PageId) => void; onToast: (message: string) => void }) {
+export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const [selectedArticle, setSelectedArticle] = useState<(typeof articles)[number] | null>(null)
   const [household, setHousehold] = useState<HouseholdSummary | null>(null)
   const [shock, setShock] = useState<BillShockWarning | null>(null)
@@ -157,20 +157,20 @@ export default function DashboardPage({ onNavigate, onToast }: { onNavigate: (pa
           ) : (
             <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
           )}
-          <div><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask AI Assistant</button></div>
+          <div><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
           <small className="shock-basis">Compared with similar homes, not with your own past bills — Kea does not hold your billing history. Estimated at an illustrative 30c/kWh.</small>
         </article>
       ) : shock ? (
         <article className="card shock-card shock-ok"><h3><span className="bill-status-dot bill-status-dot-normal" aria-hidden="true"/><ShieldCheck/>No bill shock expected</h3>
           <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with comparable homes at about {money(shock.comparable_home_cost_nzd)}.</p>
-          <div><button onClick={()=>onNavigate('assistant')}>Ask AI Assistant</button></div>
+          <div><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
           <small className="shock-basis">Compared with similar homes. Estimated at an illustrative 30c/kWh.</small>
         </article>
       ) : (
         <article className="card shock-card shock-ok"><h3>Checking your usage…</h3><p>Sparky is looking at this cycle so far.</p></article>
       )}
     </div>
-    <section className="article-grid" aria-label="Kea Energy news">{articles.map((article)=><article className="article-card" key={article.title}><div className="article-art"><img src={article.image} alt={article.imageAlt} loading="lazy" decoding="async"/></div><h3>{article.title}</h3><footer><small>{article.date}</small><button onClick={()=>{setSelectedArticle(article);onToast(`${article.title} opened`)}}>View</button></footer></article>)}</section>
+    <section className="article-grid" aria-label="Kea Energy news">{articles.map((article)=><article className="article-card" key={article.title}><div className="article-art"><img src={article.image} alt={article.imageAlt} loading="lazy" decoding="async"/></div><h3>{article.title}</h3><footer><small>{article.date}</small><button onClick={()=>setSelectedArticle(article)}>View</button></footer></article>)}</section>
     {selectedArticle&&<Modal title={selectedArticle.title} onClose={()=>setSelectedArticle(null)}><img className="article-modal-art" src={selectedArticle.image} alt={selectedArticle.imageAlt}/><p className="modal-meta">{selectedArticle.date}</p><p>{selectedArticle.body}</p></Modal>}
   </>
 }
