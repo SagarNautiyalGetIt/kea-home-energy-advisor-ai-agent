@@ -459,3 +459,159 @@ class Alert(Base):
     opened_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     acted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = _now()
+
+    deliveries: Mapped[list[AlertDelivery]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class AlertDelivery(Base):
+    """One attempt to reach the customer, on one channel.
+
+    Split out from `alert` because a tier-3 warning goes out on three channels and the
+    parent row has one `channel` column and one `status`. Collapsing three outcomes into
+    those two fields is what produced the bug this schema already had once: rows reading
+    `tier=2 channel=sms status=delivered` when no SMS gateway existed and the email had
+    done the work — a record claiming a delivery that never happened, in the one table
+    whose entire purpose is answering "through which channel, and did it land".
+
+    The parent stays the idempotency anchor (one row per customer, cycle and tier). This
+    is the ledger. `alert.channel` now holds the tier's headline channel purely as a
+    label; `alert.status` is the *aggregate* — delivered if any child delivered.
+    """
+
+    __tablename__ = "alert_delivery"
+    __table_args__ = (
+        # One attempt per alert per channel. The dashboard polls and the scheduler runs
+        # every hour; without this a deferred SMS is re-queued on every pass.
+        UniqueConstraint("alert_id", "channel", name="uq_alert_delivery_once_per_channel"),
+        Index("ix_alert_delivery_pending", "status", "scheduled_for"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    alert_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("app.alert.id", ondelete="CASCADE"), nullable=False
+    )
+    alert: Mapped[Alert] = relationship(back_populates="deliveries")
+
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    """email | sms | voice."""
+
+    provider: Mapped[str | None] = mapped_column(String(32))
+    """Which backend handled it — file, smtp, resend, textbelt, twilio. Recorded because
+    "the text did not arrive" has a completely different answer depending on this."""
+
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    """pending | scheduled | delivered | failed | skipped."""
+
+    destination: Mapped[str | None] = mapped_column(Text)
+    """A file path, an SMTP host, or the provider's message id. The provider id is what
+    a delivery receipt is checked against afterwards, which matters on trial accounts
+    that accept a message and fail it asynchronously."""
+
+    segments: Mapped[int | None] = mapped_column(Integer)
+    """SMS only. Carriers bill per 160-character segment and a trial account has few of
+    them, so the cost of a message is recorded rather than assumed to be one."""
+
+    scheduled_for: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    """Set when quiet hours held this channel back. The scheduler picks it up after."""
+
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = _now()
+
+
+class AlertPreferenceRow(Base):
+    """The customer's own alerting thresholds.
+
+    One row per household, created on first write. Absence means defaults — there is no
+    backfill and no row for a customer who has never opened Settings, because a table of
+    rows identical to the defaults is a table that has to be migrated every time a default
+    changes.
+
+    **Thresholds are stored as the customer set them, never as the tier that resulted.**
+    A stored tier would silently change meaning when the confidence floors move; a stored
+    percentage means the same thing in a year. The tier that actually fired is recorded on
+    the alert row, alongside the thresholds it was evaluated against.
+    """
+
+    __tablename__ = "alert_preference"
+    __table_args__ = (
+        CheckConstraint(
+            "tier1_pct <= tier2_pct AND tier2_pct <= tier3_pct",
+            name="ck_alert_preference_ladder_monotonic",
+        ),
+        CheckConstraint(
+            "tier1_pct >= 5 AND tier3_pct <= 200", name="ck_alert_preference_bounds"
+        ),
+        _APP_SCHEMA,
+    )
+
+    account_ref: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    tier1_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=15)
+    tier2_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=40)
+    tier3_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=75)
+    min_overshoot_nzd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=20
+    )
+
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sms_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    voice_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    email: Mapped[str | None] = mapped_column(String(320))
+    phone_e164: Mapped[str | None] = mapped_column(String(20))
+
+    quiet_hours_start: Mapped[int | None] = mapped_column(Integer, default=21)
+    quiet_hours_end: Mapped[int | None] = mapped_column(Integer, default=8)
+    timezone: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Pacific/Auckland"
+    )
+
+    offline_model_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    """The customer asked for an on-device model because their connection is unreliable.
+    See app/offline.py — the server never pushes a model, it only records the request and
+    serves the pack when the client asks."""
+
+    updated_at: Mapped[dt.datetime] = _now()
+
+
+class HouseholdContextRow(Base):
+    """What the customer has told us about their home, in answer to a question we asked.
+
+    Separate from `alert_preference` even though both are one row per household, because
+    they answer different questions and change at different rates: preferences are what
+    the customer *wants*, this is what is *true about their house*. Merging them would
+    mean a settings save and a conversational answer racing for the same row.
+
+    Every column is nullable, and null means "never asked" — which is deliberately
+    different from a recorded denial. `no_new_appliance = true` is a fact about the
+    household: it is what promotes the occupancy question from "also possible" to "the
+    next thing to ask". Storing a denial as absence would ask the same thing every cycle.
+    """
+
+    __tablename__ = "household_context"
+    __table_args__ = (_APP_SCHEMA,)
+
+    account_ref: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    new_appliance_since: Mapped[dt.date | None] = mapped_column(Date)
+    no_new_appliance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    extra_occupants: Mapped[int | None] = mapped_column(Integer)
+    extra_occupants_since: Mapped[dt.date | None] = mapped_column(Date)
+
+    works_from_home: Mapped[bool | None] = mapped_column(Boolean)
+    has_electric_heating: Mapped[bool | None] = mapped_column(Boolean)
+    hot_water_changed_since: Mapped[dt.date | None] = mapped_column(Date)
+
+    asked: Mapped[list | None] = mapped_column(JSONB)
+    """Question ids already put to this household. A question asked and ignored is still
+    asked — re-asking it next cycle is how an assistant becomes something people mute."""
+
+    updated_at: Mapped[dt.datetime] = _now()

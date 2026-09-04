@@ -3,7 +3,7 @@
 # Targets are prefixed by the team that owns them. Anything unprefixed is
 # cross-cutting (setup, check, db). Per-service detail lives in that service's
 # own Makefile; this file only delegates, so there is one place to look.
-.PHONY: help setup check db db-stop db-logs \
+.PHONY: help setup check hooks attribution db db-stop db-logs \
         ollama ollama-status api-migrate api-seed data-load data-reload api-dev api-test api-lint api-check api-spec \
         web-install web-dev web-build web-lint web-types \
         ml-pull ml-bench ml-golden voice-setup voice-check voice-smoke \
@@ -28,6 +28,16 @@ setup:  ## install every service's dependencies
 check:  ## run every team's CI checks — do this before you push
 	$(API) check
 	$(WEB) lint
+	@# Scoped to your own commits, same as CI. `make attribution` sweeps all history.
+	./scripts/check-attribution.sh origin/main..HEAD
+
+hooks:  ## install the shared git hooks — run once per clone
+	@git config core.hooksPath scripts/hooks
+	@chmod +x scripts/hooks/* scripts/check-attribution.sh
+	@echo "hooks installed: commit-msg, pre-push (see docs/attribution-checklist.md)"
+
+attribution:  ## full sweep for assistant attribution artefacts, all history
+	./scripts/check-attribution.sh
 
 ollama:  ## start the local model and pull it if missing (NATIVE, never Docker)
 	./infra/ollama.sh start

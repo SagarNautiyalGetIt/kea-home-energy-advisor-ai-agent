@@ -11,6 +11,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+# clarify.schemas imports nothing from the app — see app/clarify/schemas.py and
+# tests/test_import_graph.py. That is what lets the question be typed here rather than
+# being smuggled through as `object`.
+from app.clarify.schemas import ClarifyingQuestion
+
 
 class Intent(StrEnum):
     """The questions we handle. Layer 0 maps free text onto exactly one of these.
@@ -148,6 +153,16 @@ class VerificationReport(BaseModel):
     passed: bool
     checked: list[str] = Field(default_factory=list, description="numeric tokens in the draft")
     unverified: list[str] = Field(default_factory=list, description="tokens with no matching fact")
+    derived: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Computed *relationships* stated without a number — 'twice as much', 'half "
+            "your bill', 'a third of the increase'. These contain no numeric token, so a "
+            "token-by-token check passes them, but each one is a division the model "
+            "performed. Reported separately from `unverified` because they are a "
+            "different failure: not a wrong figure, an unauthorised calculation."
+        ),
+    )
     regenerated: bool = False
     fell_back_to_template: bool = False
     provider_error: bool = Field(
@@ -228,6 +243,18 @@ class AlertSummary(BaseModel):
     sent: list[str] = Field(
         default_factory=list, description="Channels that actually delivered."
     )
+    deferred: list[str] = Field(
+        default_factory=list,
+        description="Eligible, but held until the customer's quiet hours end.",
+    )
+    confidence: float = Field(
+        default=0.0,
+        description=(
+            "P(the cycle lands above the threshold this tier fired at), 0-1. Shown next "
+            "to the warning because it is the honest answer to 'how sure are you' — and "
+            "because the tier ladder now escalates on confidence as well as severity."
+        ),
+    )
     suppressed: bool = False
     detail: str | None = None
     destination: str | None = Field(
@@ -238,6 +265,54 @@ class AlertSummary(BaseModel):
         default=False,
         description="True when this cycle and tier were already alerted. The dashboard "
         "polls, so this is the normal steady state, not an error.",
+    )
+
+
+class ForecastSummary(BaseModel):
+    """How the projection was produced. On the response because a figure that does not
+    carry its method is a figure nobody can check — the weather-normalised and
+    straight-line projections disagree by real money on a cold cycle."""
+
+    method: str = Field(description="weather_normalised | straight_line")
+    detail: str | None = Field(
+        default=None,
+        description="The fitted relationship, or why the fit was not usable.",
+    )
+    cost_p10_nzd: float = Field(description="Low end of the 80% prediction interval.")
+    cost_p90_nzd: float = Field(description="High end of the 80% prediction interval.")
+    confidence_width_pct: float = Field(
+        description="Interval width as a percent of the point estimate. Narrows as the "
+        "cycle progresses; this is what stops a phone call on day four."
+    )
+    base_load_kwh_per_day: float | None = Field(
+        default=None, description="Fitted temperature-independent load. Null if not fitted."
+    )
+    heating_kwh_per_hdd: float | None = Field(
+        default=None, description="Fitted kWh per heating degree day. Null if not fitted."
+    )
+    r_squared: float | None = None
+
+
+class CauseBreakdown(BaseModel):
+    """Where the overshoot came from, in dollars that sum to it exactly.
+
+    `explained` false means the weather regression was not usable and the whole overshoot
+    sits in `everyday_load_nzd` unattributed. The UI must not draw a cause chart in that
+    state — an unexplained overshoot shown with a confident breakdown is worse than one
+    shown with none.
+    """
+
+    explained: bool
+    weather_nzd: float = 0.0
+    higher_use_nzd: float = 0.0
+    everyday_load_nzd: float = 0.0
+    dominant: str | None = Field(
+        default=None,
+        description=(
+            "weather | behaviour | everyday_load, or null when no single cause accounts "
+            "for at least 35% of the overshoot. Null is a real answer: '31/34/35' is a "
+            "pie chart pretending to be advice."
+        ),
     )
 
 
@@ -258,7 +333,10 @@ class BillShockWarning(BaseModel):
     triggered: bool
     reasons: list[str] = Field(
         default_factory=list,
-        description="above_comparable_homes | rising_within_cycle. Empty when not triggered.",
+        description=(
+            "above_expectation | colder_than_normal | higher_daily_use. Empty when "
+            "nothing triggered."
+        ),
     )
 
     days_elapsed: int
@@ -270,10 +348,39 @@ class BillShockWarning(BaseModel):
     usage_so_far_kwh: float
     cost_so_far_nzd: float
     projected_cycle_cost_nzd: float
-    comparable_home_cost_nzd: float
+    expected_cost_nzd: float = Field(
+        description="What this customer would not be surprised by. See `expectation_basis`."
+    )
+    expectation_basis: str = Field(
+        description=(
+            "own_same_period_last_year | own_recent_cycles | comparable_homes. The "
+            "honesty control for the whole feature: only the first two license 'more "
+            "than you usually pay'. The seeded demo households are on the third, and "
+            "the UI must word the comparison accordingly."
+        )
+    )
     overshoot_nzd: float
     overshoot_pct: float
-    recent_trend_pct: float
+    recent_trend_pct: float = Field(
+        description=(
+            "Opening third of the cycle against the closing third. Shown beside the usage "
+            "chart. Deliberately NOT a trigger: a rising trend says the cycle is getting "
+            "worse, not that it is already expensive."
+        )
+    )
+
+    forecast: ForecastSummary
+    causes: CauseBreakdown
+
+    thresholds_pct: dict[str, float] = Field(
+        default_factory=dict,
+        description="The customer's own tier thresholds, echoed so the UI can show the "
+        "warning against the level they set rather than a hard-coded one.",
+    )
+    tier_probabilities: dict[str, float] = Field(
+        default_factory=dict,
+        description="P(the cycle clears each tier's threshold), 0-1, keyed by tier.",
+    )
 
     facts: list[Fact] = Field(
         default_factory=list,
@@ -281,6 +388,17 @@ class BillShockWarning(BaseModel):
         "the assistant can never disagree about a figure.",
     )
     caveats: list[str] = Field(default_factory=list)
+
+    question: ClarifyingQuestion | None = Field(
+        default=None,
+        description=(
+            "A clarifying question, when layer 1 found a quantified gap it cannot close "
+            "on its own — an unexplained step in everyday load, or a weather fit that "
+            "would not converge. Null is the common case and the correct default: a "
+            "household whose bill is fully explained has nothing to be asked. Answer it "
+            "at POST /households/{id}/context/answers. See app/clarify/ for how it is chosen."
+        ),
+    )
 
     alert: AlertSummary | None = Field(
         default=None,

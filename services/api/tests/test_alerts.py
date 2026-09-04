@@ -1,366 +1,399 @@
-"""Tiered alerting — policy, rendering, and the file-backed sender.
+"""Preferences, the tier ladder, and the delivery gateways.
 
-Everything here runs without a database, a mail server or a model, which is the point
-of keeping `policy` and `render` pure. The database-level guarantee — that polling the
-endpoint does not re-send — is a unique constraint and is asserted in
-`test_alert_is_idempotent_per_cycle_and_tier` against real PostgreSQL when it is
-available.
+Everything here runs without a database, a mail server or a network. The policy layer is
+pure by design — the tier decides whether a customer's phone rings, and that has to be
+checkable against a table of settings rather than by sending real messages.
 """
 
 from __future__ import annotations
 
-import email
-import email.policy
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from app.alerts import decide, tier_for
-from app.alerts.email import FileSender, build_sender
-from app.alerts.policy import TIER_3_NZD, TIER_CHANNELS
-from app.alerts.render import BASIS, EARLY_CYCLE_HEDGE, body_for, subject_for
-from app.analytics.engine import BillShockAssessment
-
-
-def _assessment(
-    *,
-    overshoot_nzd: float,
-    overshoot_pct: float,
-    triggered: bool = True,
-    days_elapsed: int = 15,
-    reasons: list[str] | None = None,
-    trend: float = 0.0,
-) -> BillShockAssessment:
-    return BillShockAssessment(
-        days_elapsed=days_elapsed,
-        days_in_cycle=31,
-        usage_so_far_kwh=180.0,
-        cost_so_far_nzd=54.0,
-        projected_cost_nzd=200.0 + overshoot_nzd,
-        expected_cost_nzd=200.0,
-        overshoot_nzd=overshoot_nzd,
-        overshoot_pct=overshoot_pct,
-        recent_trend_pct=trend,
-        triggered=triggered,
-        reasons=(
-            reasons if reasons is not None
-            else (["above_comparable_homes"] if triggered else [])
-        ),
-    )
-
-
-# ── the ladder ──────────────────────────────────────────────────────────────
-
-
-def test_an_untriggered_assessment_is_tier_zero() -> None:
-    """Nothing escalates off an assessment that did not fire. The tier ladder is how
-    loudly to say it, never whether there is anything to say."""
-    assert tier_for(_assessment(overshoot_nzd=200.0, overshoot_pct=99.0, triggered=False)) == 0
-
-
-@pytest.mark.parametrize(
-    ("overshoot_nzd", "overshoot_pct", "expected"),
-    [
-        (25.0, 16.0, 1),
-        (59.9, 39.9, 1),  # just under both tier-2 gates
-        (60.0, 20.0, 2),  # dollars alone
-        (25.0, 40.0, 2),  # percent alone
-        (119.0, 50.0, 2),
-        (120.0, 20.0, 3),  # dollars alone
-        (30.0, 75.0, 3),  # percent alone — the low-user case
-    ],
+from app.alerts import render
+from app.alerts.channels import (
+    FileGateway,
+    Notification,
+    TextbeltGateway,
+    TwilioVoiceGateway,
+    build_registry,
 )
-def test_tier_takes_dollars_or_percent(
-    overshoot_nzd: float, overshoot_pct: float, expected: int
-) -> None:
-    """Either gate is enough, unlike the trigger itself which needs both.
+from app.alerts.policy import CONFIDENCE_FLOORS, decide, tier_for
+from app.alerts.preferences import AlertPreferences, defaults_for
+from app.analytics.billshock import BillShockAssessment
+from app.analytics.forecast import (
+    Attribution,
+    CycleForecast,
+    DayOfWeekMix,
+    Expectation,
+    ExpectationBasis,
+    ForecastMethod,
+    WeatherResponse,
+)
 
-    The percent-only row is the one that matters: a low-user household 75% over is a
-    real emergency for that household even when the dollar figure is modest, and low
-    fixed charge customers are exactly the shape this product is aimed at.
+CONTACTABLE = {"email": "someone@example.com", "phone_e164": "+64211234567"}
+
+
+def fake_assessment(
+    *,
+    probabilities: dict[int, float],
+    overshoot_nzd: float = 68.0,
+    reasons: list[str] | None = None,
+    explained: bool = True,
+) -> BillShockAssessment:
+    """A hand-built assessment.
+
+    Constructed rather than computed so the policy tests state the exact probabilities
+    they are about. Driving them through the real forecast would make a test of the
+    escalation ladder fail whenever the regression changed, which is a different subject.
     """
-    assessment = _assessment(overshoot_nzd=overshoot_nzd, overshoot_pct=overshoot_pct)
-    assert tier_for(assessment) == expected
-
-
-def test_a_rising_trend_alone_does_not_raise_the_tier() -> None:
-    """"Getting worse" is not "already expensive". Phoning someone on day 7 because
-    their curve turned upward is how a prevention agent teaches people to ignore it."""
-    modest_but_climbing = _assessment(
-        overshoot_nzd=22.0,
-        overshoot_pct=16.0,
-        reasons=["above_comparable_homes", "rising_within_cycle"],
-        trend=90.0,
+    response = WeatherResponse(
+        base_load_kwh_per_day=6.2,
+        heating_kwh_per_hdd=0.42,
+        r_squared=0.61,
+        residual_sd_kwh=1.4,
+        n_days=14,
+        mean_hdd=9.1,
+        hdd_sum_squares=42.0,
+        usable=explained,
     )
-    assert tier_for(modest_but_climbing) == 1
-
-
-def test_escalating_tiers_stack_rather_than_replace() -> None:
-    """A tier-3 customer gets the call *and* the email. A failed call leaves no record;
-    the written one is what the Consumer Care Obligations expect us to produce."""
-    decision = decide(_assessment(overshoot_nzd=TIER_3_NZD, overshoot_pct=80.0))
-    assert decision.tier == 3
-    assert decision.channels == ("email", "sms", "voice")
-
-
-def test_only_tier_one_has_a_gateway_behind_it() -> None:
-    decision = decide(_assessment(overshoot_nzd=TIER_3_NZD, overshoot_pct=80.0))
-    assert decision.deliverable_channels() == ("email",)
-
-
-def test_hardship_suppresses_the_alert_but_still_records_the_tier() -> None:
-    """An automated "you are about to spend $340" at someone who has just said they
-    cannot pay is at best useless. The tier is still computed, so the fact that we knew
-    and chose not to send is on the record rather than absent from it."""
-    decision = decide(
-        _assessment(overshoot_nzd=TIER_3_NZD, overshoot_pct=80.0), hardship_detected=True
+    forecast = CycleForecast(
+        days_elapsed=14,
+        days_in_cycle=31,
+        days_remaining=17,
+        usage_so_far_kwh=142.0,
+        cost_so_far_nzd=42.60,
+        unit_price_nzd=0.30,
+        projected_kwh=1040.0,
+        projected_cost_nzd=312.0,
+        cost_p10_nzd=288.0,
+        cost_p90_nzd=336.0,
+        cost_sd_nzd=18.7,
+        method=ForecastMethod.WEATHER_NORMALISED if explained else ForecastMethod.STRAIGHT_LINE,
+        method_detail="base load 6.2 kWh/day + 0.42 kWh per heating degree day",
+        response=response,
+        day_of_week=DayOfWeekMix(1.0, 1.0, False, "cycle start date unknown"),
     )
-    assert decision.tier == 3
-    assert decision.suppressed is True
-    assert decision.should_send is False
-    assert "person" in (decision.suppressed_because or "")
-
-
-def test_every_tier_maps_to_a_channel() -> None:
-    """A tier with no channel would compute, record, and silently never send."""
-    assert set(TIER_CHANNELS) == {1, 2, 3}
-
-
-# ── the message ─────────────────────────────────────────────────────────────
-
-
-def test_the_basis_line_is_on_every_message() -> None:
-    """The regression this repo has already had once, on the invoice PDF: an artefact
-    leaving the app carrying real-looking dollar figures with no disclaimer."""
-    body = body_for(
-        _assessment(overshoot_nzd=30.0, overshoot_pct=18.0),
-        decide(_assessment(overshoot_nzd=30.0, overshoot_pct=18.0)),
+    return BillShockAssessment(
+        account_ref="H-JUL",
+        period="July 2026",
+        forecast=forecast,
+        expectation=Expectation(
+            cost_nzd=244.0,
+            basis=ExpectationBasis.COMPARABLE_HOMES,
+            claim_rule="The comparison is against SIMILAR HOMES.",
+        ),
+        attribution=Attribution(
+            weather_nzd=41.0 if explained else 0.0,
+            behaviour_nzd=12.0 if explained else 0.0,
+            everyday_load_nzd=15.0 if explained else overshoot_nzd,
+            explained=explained,
+        ),
+        overshoot_nzd=overshoot_nzd,
+        overshoot_pct=27.9,
+        # No step: these tests are about the escalation ladder, and a fixture carrying a
+        # step change would drag the clarifying-question path into every one of them.
+        step=None,
+        recent_trend_pct=12.4,
+        triggered=probabilities.get(1, 0.0) >= CONFIDENCE_FLOORS[1],
+        reasons=reasons if reasons is not None else ["above_expectation"],
+        tier_probabilities=probabilities,
+        tier_thresholds_nzd={1: 280.0, 2: 341.0, 3: 427.0},
     )
-    assert BASIS in body
 
 
-def test_the_message_never_claims_a_comparison_with_past_bills() -> None:
-    """There is no billing history behind this. "More than similar homes" is supported;
-    "more than you usually pay" is not, and would be exactly the fabrication the product
-    exists to prevent."""
-    assessment = _assessment(overshoot_nzd=90.0, overshoot_pct=45.0)
-    body = body_for(assessment, decide(assessment)).lower()
-
-    for forbidden in ("than you usually", "your usual", "than last month", "more than normal"):
-        assert forbidden not in body, forbidden
-    assert "comparable home" in body
+# ───────────────────────── preferences ─────────────────────────
 
 
-def test_early_cycle_warnings_are_hedged_not_suppressed() -> None:
-    early = _assessment(overshoot_nzd=90.0, overshoot_pct=45.0, days_elapsed=6)
-    assert EARLY_CYCLE_HEDGE in body_for(early, decide(early))
-
-    settled = _assessment(overshoot_nzd=90.0, overshoot_pct=45.0, days_elapsed=20)
-    assert EARLY_CYCLE_HEDGE not in body_for(settled, decide(settled))
-
-
-def test_tier_one_subject_does_not_shout() -> None:
-    """A subject that alarms someone whose bill is $22 over teaches them to ignore the
-    one that matters. Escalation is the tier ladder's job, not the subject line's."""
-    subject = subject_for(_assessment(overshoot_nzd=22.0, overshoot_pct=16.0), tier=1)
-    assert "$" not in subject
-    assert subject.isupper() is False
+def test_defaults_reproduce_the_old_hard_coded_ladder():
+    """A preference system whose defaults change everybody's alerting is a migration,
+    not a feature."""
+    prefs = defaults_for("H-JUL")
+    assert (prefs.tier1_pct, prefs.tier2_pct, prefs.tier3_pct) == (15.0, 40.0, 75.0)
+    assert prefs.min_overshoot_nzd == 20.0
 
 
-def test_tier_three_body_says_a_person_is_coming() -> None:
-    assessment = _assessment(overshoot_nzd=TIER_3_NZD, overshoot_pct=80.0)
-    body = body_for(assessment, decide(assessment))
-    assert "reach you" in body
+def test_a_non_monotonic_ladder_is_rejected():
+    """A text at 60% and an email at 80% is not a ladder. Rejected rather than sorted,
+    because silently reordering means the screen no longer describes what will happen."""
+    with pytest.raises(ValueError, match="must increase"):
+        AlertPreferences(account_ref="H-JUL", tier1_pct=80, tier2_pct=60, tier3_pct=90)
 
 
-def test_the_trend_sentence_only_appears_when_the_trend_triggered() -> None:
-    """A bundle carrying a fact the message has no reason to mention is an invitation to
-    mention it."""
-    flat = _assessment(overshoot_nzd=90.0, overshoot_pct=45.0, trend=3.0)
-    assert "risen" not in body_for(flat, decide(flat))
+def test_thresholds_are_bounded():
+    with pytest.raises(ValueError):
+        AlertPreferences(account_ref="H-JUL", tier1_pct=1)
+    with pytest.raises(ValueError):
+        AlertPreferences(account_ref="H-JUL", tier3_pct=500)
 
-    climbing = _assessment(
-        overshoot_nzd=90.0,
-        overshoot_pct=45.0,
-        reasons=["above_comparable_homes", "rising_within_cycle"],
-        trend=31.0,
+
+def test_an_unknown_timezone_is_rejected():
+    with pytest.raises(ValueError, match="unknown timezone"):
+        AlertPreferences(account_ref="H-JUL", timezone="Middle/Earth")
+
+
+def test_voice_is_opt_in_and_the_others_are_not():
+    """An automated call is the most intrusive thing this product does and the one most
+    easily mistaken for a scam."""
+    prefs = defaults_for("H-JUL")
+    assert prefs.email_enabled and prefs.sms_enabled
+    assert not prefs.voice_enabled
+
+
+def test_quiet_hours_wrap_around_midnight():
+    """21:00-08:00 is two ranges on the clock and one range in a person's head. The
+    obvious implementation (`start <= hour < end`) inverts the window, so the only hours
+    we would text are the ones they asked us not to."""
+    prefs = AlertPreferences(
+        account_ref="H-JUL", quiet_hours_start=21, quiet_hours_end=8, timezone="Pacific/Auckland"
     )
-    assert "risen 31%" in body_for(climbing, decide(climbing))
+    # 22:00 NZST on 15 July 2026 == 10:00 UTC.
+    assert prefs.in_quiet_hours(datetime(2026, 7, 15, 10, 0, tzinfo=UTC))
+    # 03:00 NZST == 15:00 UTC the previous day. Still inside.
+    assert prefs.in_quiet_hours(datetime(2026, 7, 14, 15, 0, tzinfo=UTC))
+    # 13:00 NZST == 01:00 UTC. Outside.
+    assert not prefs.in_quiet_hours(datetime(2026, 7, 15, 1, 0, tzinfo=UTC))
 
 
-# ── delivery ────────────────────────────────────────────────────────────────
+def test_next_open_lands_after_the_window():
+    prefs = AlertPreferences(account_ref="H-JUL", quiet_hours_start=21, quiet_hours_end=8)
+    inside = datetime(2026, 7, 15, 10, 0, tzinfo=UTC)  # 22:00 NZST
+    opens = prefs.next_open(inside)
+    assert opens is not None
+    assert opens > inside
+    assert not prefs.in_quiet_hours(opens)
 
 
-def test_file_sender_writes_a_parseable_message(tmp_path: Path) -> None:
-    """Not a mock — the bytes have to be a real message, or "here is the email" during
-    the demo is a claim about a text file."""
-    sender = FileSender(outbox=tmp_path, sender="Kea <no-reply@kea.example>")
-    outcome = sender.send(to="someone@example.com", subject="Heads up", body="Body text")
-
-    assert outcome.delivered is True
-    written = list(tmp_path.glob("*.eml"))
-    assert len(written) == 1
-
-    parsed = email.message_from_bytes(written[0].read_bytes(), policy=email.policy.default)
-    assert parsed["To"] == "someone@example.com"
-    assert parsed["Subject"] == "Heads up"
-    assert "Body text" in parsed.get_content()
+def test_next_open_is_none_outside_quiet_hours():
+    prefs = defaults_for("H-JUL")
+    assert prefs.next_open(datetime(2026, 7, 15, 1, 0, tzinfo=UTC)) is None
 
 
-def test_file_sender_keeps_the_address_inside_the_outbox(tmp_path: Path) -> None:
-    """The address reaches a filename. One line of sanitising, and the failure it
-    prevents is writing outside the outbox entirely."""
-    sender = FileSender(outbox=tmp_path, sender="Kea <no-reply@kea.example>")
-    outcome = sender.send(to="../../etc/passwd", subject="x", body="y")
-
-    assert outcome.delivered is True
-    assert list(tmp_path.glob("*.eml")), "nothing landed in the outbox"
-    assert not (tmp_path.parent.parent / "etc").exists()
+# ───────────────────────── the tier ladder ─────────────────────────
 
 
-def test_an_unwritable_outbox_is_reported_not_raised(tmp_path: Path) -> None:
-    """Dispatch failures are recorded on the alert row; they never take down the
-    warning the customer can see on screen."""
-    blocked = tmp_path / "afile"
-    blocked.write_text("not a directory")
+def test_confidence_gates_the_tier_even_when_the_overshoot_is_huge():
+    """The property that makes a customer-set threshold safe to expose.
 
-    outcome = FileSender(outbox=blocked / "outbox", sender="k@example.com").send(
-        to="a@example.com", subject="s", body="b"
-    )
-    assert outcome.delivered is False
-    assert "outbox" in (outcome.detail or "")
-
-
-def test_smtp_backend_refuses_to_start_without_a_credential(tmp_path: Path) -> None:
-    """Loud at construction rather than a silent no-op at send time. A mail path that
-    quietly degrades to "no mail" is the failure this module exists to make visible."""
-    with pytest.raises(RuntimeError, match="KEA_SMTP_PASSWORD"):
-        build_sender(
-            backend="smtp",
-            outbox=tmp_path,
-            sender="k@example.com",
-            host="smtp.example.com",
-            username="k",
-            password="",
-        )
-
-
-def test_an_unknown_backend_falls_back_to_file(tmp_path: Path) -> None:
-    """A typo in an env var should not take the API down — but it must not be silent
-    either, which is what the warning in `build_sender` is for."""
-    sender = build_sender(backend="carrier-pigeon", outbox=tmp_path, sender="k@example.com")
-    assert sender.name == "file"
-
-
-# ── idempotency, against a real database ────────────────────────────────────
-#
-# This is the property that keeps a polling dashboard from emailing the customer every
-# few seconds, and it is a unique constraint rather than a Python check — a
-# check-then-insert races itself the moment there are two workers. A constraint can
-# only be tested against something that enforces it, so this needs PostgreSQL and
-# skips without it.
-
-
-async def _database_available() -> bool:
-    try:
-        from sqlalchemy import text
-        from sqlalchemy.ext.asyncio import create_async_engine
-
-        from app.config import settings
-
-        engine = create_async_engine(settings.database_url)
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-        finally:
-            await engine.dispose()
-        return True
-    except Exception:
-        return False
-
-
-async def test_alert_is_idempotent_per_cycle_and_tier(tmp_path: Path) -> None:
-    """Two dispatches for the same customer, cycle and tier — one email, not two."""
-    if not await _database_available():
-        pytest.skip("no PostgreSQL on KEA_DATABASE_URL")
-
-    from sqlalchemy import delete
-
-    from app.alerts.service import AlertDispatcher
-    from app.db.models import Alert
-    from app.db.session import get_sessionmaker
-
-    sessionmaker = get_sessionmaker()
-    dispatcher = AlertDispatcher(
-        sender=FileSender(outbox=tmp_path, sender="Kea <no-reply@kea.example>"),
-        sessionmaker=sessionmaker,
-    )
-    assessment = _assessment(overshoot_nzd=90.0, overshoot_pct=45.0)
-    account = "H-TEST-IDEMPOTENT"
-
-    async with sessionmaker() as session:
-        await session.execute(delete(Alert).where(Alert.account_ref == account))
-        await session.commit()
-
-    try:
-        first = await dispatcher.dispatch(
-            account_ref=account,
-            assessment=assessment,
-            period="July 2026",
-            recipient_email="someone@example.com",
-        )
-        second = await dispatcher.dispatch(
-            account_ref=account,
-            assessment=assessment,
-            period="July 2026",
-            recipient_email="someone@example.com",
-        )
-
-        assert first.sent == ("email",)
-        assert first.already_sent is False
-
-        assert second.sent == ()
-        assert second.already_sent is True, "the second poll re-sent the alert"
-        assert second.tier == first.tier, "the UI still needs the tier on a repeat poll"
-
-        assert len(list(tmp_path.glob("*.eml"))) == 1
-    finally:
-        async with sessionmaker() as session:
-            await session.execute(delete(Alert).where(Alert.account_ref == account))
-            await session.commit()
-
-
-def test_the_greeting_never_uses_the_household_label() -> None:
-    """`ctx.label` describes the demo scenario — "Cold-snap driven, not behaviour" — and
-    passing it as a name produced exactly that as a greeting.
-
-    There is no name to substitute: `models.Customer` holds none, deliberately, because
-    47.6% of surveyed customers said they would not trust an AI with their data and the
-    schema is meant to back that up. A plain "Hi," is the honest greeting for a record
-    that contains no person.
+    Somebody who sets 20% across the board still cannot be rung on day four, because on
+    day four no threshold has a 90% probability attached. That comes from the maths, not
+    from a `if days_elapsed < 10` guard which anything constructing an assessment
+    differently could bypass — and which the previous version had.
     """
-    assessment = _assessment(overshoot_nzd=45.0, overshoot_pct=70.0)
-    assert body_for(assessment, decide(assessment)).startswith("Hi,")
+    a = fake_assessment(probabilities={1: 0.99, 2: 0.95, 3: 0.62})
+    tier, confidence = tier_for(a, defaults_for("H-JUL"))
+    assert tier == 2
+    assert confidence == 0.95
 
 
-def test_the_recorded_channel_is_the_one_that_actually_carries_it() -> None:
-    """A tier-2 row must not say `channel=sms delivered` when no SMS gateway exists.
-
-    The table's whole purpose is answering "what was sent, through which channel, and
-    did it land". Recording a delivery on a channel that cannot deliver is the
-    flattering-but-false record this project refuses everywhere else.
-    """
-    decision = decide(_assessment(overshoot_nzd=90.0, overshoot_pct=45.0))
-    assert decision.tier == 2
-    assert decision.channels == ("email", "sms")
-
-    # What the row's `channel` column is built from.
-    assert (decision.deliverable_channels() or ("none",))[-1] == "email"
+def test_nothing_fires_below_the_tier_one_floor():
+    a = fake_assessment(probabilities={1: 0.40, 2: 0.10, 3: 0.01})
+    assert decide(a, defaults_for("H-JUL")).tier == 0
 
 
-def test_the_ungated_rungs_are_recorded_rather_than_hidden() -> None:
-    """Tiers 2 and 3 are real decisions with no gateway behind them yet. That gap
-    belongs on the row, not only in a docstring."""
-    decision = decide(_assessment(overshoot_nzd=TIER_3_NZD, overshoot_pct=80.0))
-    not_wired = [c for c in decision.channels if c not in decision.deliverable_channels()]
-    assert not_wired == ["sms", "voice"]
+def test_escalating_tiers_stack_rather_than_replace():
+    """A tier-3 customer gets the email *and* the call. A call that goes to voicemail is
+    not a substitute for the written record."""
+    prefs = AlertPreferences(account_ref="H-JUL", voice_enabled=True, **CONTACTABLE)
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.97, 3: 0.95}), prefs)
+    assert d.tier == 3
+    assert d.channels == ("email", "sms", "voice")
+
+
+def test_a_disabled_channel_is_skipped_not_failed():
+    """Recording a failed SMS when we never had a number puts 'we tried to text you' in
+    a customer's record untruthfully."""
+    prefs = AlertPreferences(
+        account_ref="H-JUL", sms_enabled=False, email="a@example.com", phone_e164="+64211234567"
+    )
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.97, 3: 0.10}), prefs)
+    assert d.tier == 2
+    assert "sms" in d.channels
+    assert "sms" not in d.eligible
+
+
+def test_a_channel_with_no_address_is_not_eligible():
+    prefs = AlertPreferences(account_ref="H-JUL", email="a@example.com", phone_e164=None)
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.97, 3: 0.10}), prefs)
+    assert d.eligible == ("email",)
+
+
+def test_everything_off_suppresses_with_a_reason():
+    prefs = AlertPreferences(account_ref="H-JUL", email=None, phone_e164=None)
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.1, 3: 0.0}), prefs)
+    assert d.suppressed
+    assert "contact address" in (d.suppressed_because or "")
+
+
+def test_the_master_switch_suppresses_everything():
+    prefs = AlertPreferences(account_ref="H-JUL", enabled=False, **CONTACTABLE)
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.99, 3: 0.99}), prefs)
+    assert d.tier == 0
+    assert d.suppressed
+
+
+def test_hardship_suppresses_but_still_records_the_tier():
+    """An automated 'you are about to spend $340' is at best useless and at worst cruel.
+    The tier is still computed so the record shows we knew and chose not to send."""
+    prefs = AlertPreferences(account_ref="H-JUL", **CONTACTABLE)
+    d = decide(
+        fake_assessment(probabilities={1: 0.99, 2: 0.97, 3: 0.10}),
+        prefs,
+        hardship_detected=True,
+    )
+    assert d.tier == 2
+    assert d.suppressed
+    assert d.sendable == ()
+    assert "needs a person" in (d.suppressed_because or "")
+
+
+def test_quiet_hours_defer_the_phone_but_never_the_email():
+    """Email does not make a sound at 3am, and holding it back would delay the one
+    artefact the Consumer Care Obligations expect us to be able to produce."""
+    prefs = AlertPreferences(
+        account_ref="H-JUL", quiet_hours_start=21, quiet_hours_end=8, **CONTACTABLE
+    )
+    inside = datetime(2026, 7, 15, 10, 0, tzinfo=UTC)  # 22:00 NZST
+    d = decide(fake_assessment(probabilities={1: 0.99, 2: 0.97, 3: 0.10}), prefs, now=inside)
+
+    assert "sms" in d.deferred
+    assert "email" not in d.deferred
+    assert d.sendable == ("email",)
+
+
+# ───────────────────────── rendering ─────────────────────────
+
+
+def test_the_email_carries_its_basis_disclosure():
+    """An alert that leaves the app without its caveat is the regression this repo has
+    already had once, on the invoice PDF."""
+    a = fake_assessment(probabilities={1: 0.9, 2: 0.1, 3: 0.0})
+    prefs = AlertPreferences(account_ref="H-JUL", **CONTACTABLE)
+    body = render.body_for(a, decide(a, prefs))
+    assert "similar homes" in body
+    assert "30c/kWh" in body
+
+
+def test_the_email_says_how_confident_we_are():
+    a = fake_assessment(probabilities={1: 0.84, 2: 0.1, 3: 0.0})
+    prefs = AlertPreferences(account_ref="H-JUL", **CONTACTABLE)
+    assert "84%" in render.body_for(a, decide(a, prefs))
+
+
+def test_the_email_names_the_dominant_cause_only_when_there_is_one():
+    with_cause = fake_assessment(probabilities={1: 0.9, 2: 0.1, 3: 0.0}, explained=True)
+    prefs = AlertPreferences(account_ref="H-JUL", **CONTACTABLE)
+    assert "weather" in render.body_for(with_cause, decide(with_cause, prefs))
+
+    without = fake_assessment(probabilities={1: 0.9, 2: 0.1, 3: 0.0}, explained=False)
+    body = render.body_for(without, decide(without, prefs))
+    assert "colder-than-usual" not in body
+
+
+def test_the_sms_fits_a_segment_and_makes_no_comparative_claim():
+    """160 characters cannot carry the basis disclosure, so the message must make no
+    claim that needs one."""
+    message = render.sms_for(fake_assessment(probabilities={1: 0.9, 2: 0.8, 3: 0.1}))
+    assert render.sms_segments(message) <= 2
+    assert "similar homes" not in message
+    assert "usually pay" not in message
+    assert "Kea" in message
+
+
+def test_the_voice_script_identifies_itself_and_asks_for_nothing():
+    """An automated call that opens with a dollar figure is indistinguishable from a
+    scam, and one that asks a customer to identify themselves trains them to do it for
+    the next caller, who will not be us."""
+    script = render.voice_script_for(fake_assessment(probabilities={1: 0.99, 2: 0.98, 3: 0.95}))
+    assert script.index("Kea Energy") < script.index("$")
+    assert "never ask you for payment" in script
+
+
+# ───────────────────────── gateways ─────────────────────────
+
+
+async def test_the_file_gateway_writes_a_real_message_per_channel(tmp_path: Path):
+    """Not a mock. For email the bytes are a valid RFC 5322 message; for SMS the file
+    holds the exact payload a carrier would carry."""
+    for channel, suffix in (("email", ".eml"), ("sms", ".txt"), ("voice", ".txt")):
+        gateway = FileGateway(tmp_path, channel, sender="kea@example.com")
+        outcome = await gateway.send(
+            Notification(
+                channel=channel,
+                to="someone@example.com",
+                subject="Heads up",
+                body="Your cycle is tracking high.",
+                voice_script="Hello. This is Kea Energy.",
+            )
+        )
+        assert outcome.delivered
+        written = Path(outcome.destination)
+        assert written.suffix == suffix
+        assert written.parent.name == channel
+
+
+async def test_the_file_gateway_cannot_write_outside_the_outbox(tmp_path: Path):
+    """`to` reaches a filename. Not attacker-controlled here, but it is one line and the
+    failure it prevents is writing outside the outbox."""
+    gateway = FileGateway(tmp_path, "sms", sender="kea@example.com")
+    outcome = await gateway.send(
+        Notification(channel="sms", to="../../etc/passwd", subject="s", body="b")
+    )
+    assert outcome.delivered
+    assert tmp_path in Path(outcome.destination).parents
+
+
+def test_an_unknown_backend_falls_back_to_file_rather_than_raising(tmp_path: Path):
+    """A typo in an environment variable should not take the API down. It must not be
+    silent either — hence the warning, and the `/health` disclosure."""
+    registry = build_registry(
+        outbox=tmp_path,
+        email_backend="carrier-pigeon",
+        sms_backend="semaphore",
+        voice_backend="tin-can",
+        email_from="kea@example.com",
+    )
+    assert registry.describe() == {"email": "file", "sms": "file", "voice": "file"}
+
+
+def test_a_misconfigured_real_backend_falls_back_to_file(tmp_path: Path):
+    """Twilio selected with no credentials. Falling back is right; falling back silently
+    is not, which is what `describe()` on /health is for."""
+    registry = build_registry(
+        outbox=tmp_path,
+        email_backend="file",
+        sms_backend="twilio",
+        voice_backend="twilio",
+        email_from="kea@example.com",
+    )
+    assert registry.describe()["sms"] == "file"
+    assert registry.describe()["voice"] == "file"
+
+
+def test_textbelt_is_selectable_with_no_credentials(tmp_path: Path):
+    """The one SMS path needing no account, no card and no number verification. One
+    message per day is exactly enough to prove the tier-2 rung works."""
+    registry = build_registry(
+        outbox=tmp_path,
+        email_backend="file",
+        sms_backend="textbelt",
+        voice_backend="file",
+        email_from="kea@example.com",
+    )
+    gateway = registry.for_channel("sms")
+    assert isinstance(gateway, TextbeltGateway)
+
+
+def test_the_voice_twiml_escapes_and_speaks_new_zealand_english():
+    """An unescaped `&` in a rendered figure is enough for Twilio to reject the document,
+    and debugging that during a rehearsal is not how anyone should spend the morning."""
+    gateway = TwilioVoiceGateway(
+        account_sid="AC0", auth_token="t", from_number="+6499999999"
+    )
+    twiml = gateway.twiml_for("Power & heating are up <significantly>")
+
+    assert "&amp;" in twiml
+    assert "&lt;significantly&gt;" in twiml
+    assert 'language="en-NZ"' in twiml

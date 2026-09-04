@@ -1,0 +1,281 @@
+import { Mail, MessageSquare, Phone, TriangleAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  CHANNEL_LABEL,
+  MAX_THRESHOLD_PCT,
+  MIN_THRESHOLD_PCT,
+  formatMb,
+  getAlertPreferences,
+  getOfflineModels,
+  ladderError,
+  saveAlertPreferences,
+  thresholdInDollars,
+  withThreshold,
+  type AlertPreferences,
+  type OfflineModelOption,
+  type Tier,
+} from '../lib/alerts'
+
+/**
+ * Where the customer sets how far over their bill has to be tracking before we
+ * interrupt them, and on which channel.
+ *
+ * The design decision worth knowing: **each tier shows its threshold in dollars as well
+ * as a percentage.** 71.4% of surveyed customers asked for the bill-shock warning in
+ * dollars, and a settings screen expressed only in percent asks them to do the
+ * conversion themselves — on the one screen where getting it wrong means never hearing
+ * from us. The dollar figure disappears rather than being estimated when there is no
+ * expectation to apply it to; a fabricated figure on a settings screen is the same
+ * offence as one in an answer.
+ *
+ * The confidence floors are deliberately absent. See lib/alerts.ts.
+ */
+
+const TIER_ICON: Record<Tier, typeof Mail> = { 1: Mail, 2: MessageSquare, 3: Phone }
+
+const TIER_NOTE: Record<Tier, string> = {
+  1: 'Always in writing, so you have a record.',
+  2: 'Interrupts your day — set this higher than the email.',
+  3: 'Sparky calls you. Off unless you turn it on.',
+}
+
+type Props = {
+  customerId: string
+  /** What this cycle would normally come to, from the bill-shock response. Null until it
+   *  loads, or when the household has no baseline — in which case no dollar figure is
+   *  shown rather than a guessed one. */
+  expectedCostNzd?: number | null
+  onToast: (message: string) => void
+}
+
+export default function BillShockThresholds({ customerId, expectedCostNzd = null, onToast }: Props) {
+  const [prefs, setPrefs] = useState<AlertPreferences | null>(null)
+  const [models, setModels] = useState<OfflineModelOption[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    getAlertPreferences(customerId)
+      .then((loaded) => live && setPrefs(loaded))
+      .catch((error: Error) => live && setLoadError(error.message))
+    // A failed catalogue fetch is not an error worth showing: it only affects one
+    // optional row, and the alert thresholds above it are the point of the screen.
+    getOfflineModels()
+      .then((options) => live && setModels(options))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [customerId])
+
+  const update = (next: AlertPreferences) => {
+    setPrefs(next)
+    setDirty(true)
+  }
+
+  const save = async () => {
+    if (!prefs) return
+    setSaving(true)
+    try {
+      setPrefs(await saveAlertPreferences(customerId, prefs))
+      setDirty(false)
+      onToast('Alert settings saved')
+    } catch (error) {
+      // Never report success on a failed save. A customer who believes they will be told
+      // at 25% and will not is the worst version of this feature.
+      onToast(`Could not save: ${(error as Error).message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Smallest first — the recommended option, and the one whose size sets the customer's
+  // expectation. Quoting the largest would be quoting a cost they did not agree to.
+  const smallestModel = models.length
+    ? models.reduce((a, b) => (a.download_mb <= b.download_mb ? a : b))
+    : null
+
+  if (loadError) {
+    return (
+      <p className="settings-inline-error" role="alert">
+        <TriangleAlert aria-hidden="true" /> Could not load your alert settings: {loadError}
+      </p>
+    )
+  }
+  if (!prefs) return <p className="settings-loading">Loading your alert settings…</p>
+
+  const ladder = ladderError(prefs)
+
+  return (
+    <div className="threshold-editor">
+      <label className="setting-row">
+        <span>
+          <strong>Bill-shock alerts</strong>
+          <small>
+            Tell me when this cycle is heading somewhere I would not expect. Turning this
+            off stops the messages; the warning still shows in the app.
+          </small>
+        </span>
+        <input
+          type="checkbox"
+          checked={prefs.enabled}
+          onChange={(event) => update({ ...prefs, enabled: event.target.checked })}
+        />
+      </label>
+
+      <fieldset className="threshold-ladder" disabled={!prefs.enabled}>
+        <legend>Tell me when my bill is tracking this far above normal</legend>
+
+        {([1, 2, 3] as Tier[]).map((tier) => {
+          const pct = tier === 1 ? prefs.tier1_pct : tier === 2 ? prefs.tier2_pct : prefs.tier3_pct
+          const channelOn =
+            tier === 1 ? prefs.email_enabled : tier === 2 ? prefs.sms_enabled : prefs.voice_enabled
+          const dollars = thresholdInDollars(pct, expectedCostNzd)
+          const Icon = TIER_ICON[tier]
+
+          return (
+            <div className="threshold-row" key={tier}>
+              <div className="threshold-head">
+                <span className="threshold-channel">
+                  <Icon aria-hidden="true" />
+                  <strong>{CHANNEL_LABEL[tier]}</strong>
+                </span>
+                <input
+                  type="checkbox"
+                  aria-label={`Enable ${CHANNEL_LABEL[tier]}`}
+                  checked={channelOn}
+                  onChange={(event) =>
+                    update({
+                      ...prefs,
+                      ...(tier === 1
+                        ? { email_enabled: event.target.checked }
+                        : tier === 2
+                          ? { sms_enabled: event.target.checked }
+                          : { voice_enabled: event.target.checked }),
+                    })
+                  }
+                />
+              </div>
+
+              <input
+                className="threshold-slider"
+                type="range"
+                min={MIN_THRESHOLD_PCT}
+                max={MAX_THRESHOLD_PCT}
+                step={5}
+                value={pct}
+                aria-label={`${CHANNEL_LABEL[tier]} threshold, percent above normal`}
+                aria-valuetext={
+                  dollars === null ? `${pct} percent` : `${pct} percent, about $${dollars}`
+                }
+                onChange={(event) => update(withThreshold(prefs, tier, Number(event.target.value)))}
+              />
+
+              <p className="threshold-value">
+                <strong>{pct}% above normal</strong>
+                {dollars !== null && <span> — about ${dollars} for this cycle</span>}
+              </p>
+              <small className="threshold-note">{TIER_NOTE[tier]}</small>
+            </div>
+          )
+        })}
+
+        {ladder && (
+          <p className="settings-inline-error" role="alert">
+            <TriangleAlert aria-hidden="true" /> {ladder}
+          </p>
+        )}
+
+        <label className="setting-row">
+          <span>
+            <strong>Never alert me under</strong>
+            <small>
+              A percentage on its own fires constantly on small bills. This is the dollar
+              floor underneath every level above.
+            </small>
+          </span>
+          <span className="threshold-money-input">
+            $
+            <input
+              type="number"
+              min={0}
+              max={500}
+              step={5}
+              value={prefs.min_overshoot_nzd}
+              aria-label="Minimum overshoot in dollars"
+              onChange={(event) =>
+                update({ ...prefs, min_overshoot_nzd: Number(event.target.value) })
+              }
+            />
+          </span>
+        </label>
+
+        <label className="setting-row">
+          <span>
+            <strong>Quiet hours</strong>
+            <small>
+              Texts and calls wait until the morning. Emails still arrive — they do not
+              make a sound.
+            </small>
+          </span>
+          <span className="threshold-quiet">
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={prefs.quiet_hours_start ?? 21}
+              aria-label="Quiet hours start"
+              onChange={(event) =>
+                update({ ...prefs, quiet_hours_start: Number(event.target.value) })
+              }
+            />
+            :00 to
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={prefs.quiet_hours_end ?? 8}
+              aria-label="Quiet hours end"
+              onChange={(event) =>
+                update({ ...prefs, quiet_hours_end: Number(event.target.value) })
+              }
+            />
+            :00
+          </span>
+        </label>
+      </fieldset>
+
+      {smallestModel && (
+        <label className="setting-row">
+          <span>
+            <strong>Answers without a connection</strong>
+            <small>
+              Keep a small assistant on this device so Sparky still works when you have no
+              signal. About {formatMb(smallestModel.download_mb)}, downloaded over wifi only.
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            checked={prefs.offline_model_opt_in}
+            onChange={(event) =>
+              update({ ...prefs, offline_model_opt_in: event.target.checked })
+            }
+          />
+        </label>
+      )}
+
+      <div className="threshold-actions">
+        <button
+          type="button"
+          className="primary-action"
+          disabled={!dirty || saving || Boolean(ladder)}
+          onClick={save}
+        >
+          {saving ? 'Saving…' : 'Save alert settings'}
+        </button>
+      </div>
+    </div>
+  )
+}

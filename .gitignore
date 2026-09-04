@@ -54,6 +54,20 @@ hyperframes.json
 .cursor/
 .aider*
 .codeium/
+.cursorrules
+.cursorignore
+.continue/
+.windsurf/
+.windsurfrules
+.antigravity/
+.zed/
+.roo/
+.clinerules
+.github/copilot-instructions.md
+.github/instructions/
+CLAUDE.local.md
+GEMINI.md
+# Enforced by scripts/check-attribution.sh and the `attribution` CI job.
 
 # --- Vault leakage guard ----------------------------------------------------
 # This repo lives inside an Obsidian vault directory tree. Nothing belonging to

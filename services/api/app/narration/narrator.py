@@ -27,11 +27,12 @@ async def _generate(
     bundle: FactBundle,
     question: str,
     rejected: list[str] | None = None,
+    derived: list[str] | None = None,
 ) -> str:
     chunks: list[str] = []
     async for piece in provider.narrate(
         system=SYSTEM,
-        user=build_user_prompt(bundle, question, rejected),
+        user=build_user_prompt(bundle, question, rejected, derived),
         max_tokens=300,
     ):
         chunks.append(piece)
@@ -46,12 +47,15 @@ async def narrate_verified(
     """Produce prose that is guaranteed not to contain an uncomputed number."""
     report = VerificationReport(passed=False)
     rejected: list[str] = []
+    derived: list[str] = []
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             # Attempt 2 is told which tokens were refused. Re-sending an identical
             # prompt at temperature 0.2 mostly reproduces the identical failure.
-            draft = await _generate(provider, bundle, question, rejected or None)
+            draft = await _generate(
+                provider, bundle, question, rejected or None, derived or None
+            )
         except Exception as exc:  # noqa: BLE001 - any provider failure degrades, never 500s
             # Model unreachable, throttled, or timed out. A boring correct answer beats
             # a stack trace, and it means the frontend can integrate before anyone has
@@ -71,15 +75,21 @@ async def narrate_verified(
         if report.passed:
             return draft, report
 
+        # Both classes go back to the model, because both are things it must not do
+        # again — but they need different corrections, so `build_user_prompt` is given
+        # them separately rather than as one list of strings.
         rejected = list(report.unverified)
         log.warning(
-            "number-checker rejected draft (attempt %d/%d) intent=%s customer=%s unverified=%s",
+            "number-checker rejected draft (attempt %d/%d) intent=%s customer=%s "
+            "unverified=%s derived=%s",
             attempt,
             MAX_ATTEMPTS,
             bundle.intent,
             bundle.customer_id,
             report.unverified,
+            report.derived,
         )
+        derived = list(report.derived)
 
     report.fell_back_to_template = True
     log.error(

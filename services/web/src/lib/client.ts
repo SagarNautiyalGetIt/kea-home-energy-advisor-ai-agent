@@ -91,15 +91,80 @@ async function getJSON<T>(path: string): Promise<T> {
  * `triggered` is the only field to branch on. The figures are present either way, so a
  * calm "on track" state costs no extra request.
  *
- * Read `reasons` before writing any copy: `above_comparable_homes` means the projection
- * exceeds what a *similar home* would spend. It does **not** mean "more than you usually
- * pay" — there is no billing history behind this, and claiming otherwise is the exact
- * fabrication the product exists to prevent. The backend repeats this in `caveats`.
+ * **Read `expectation_basis` before writing any comparative copy.** It says what the
+ * projection was compared against, and only two of the three values license "more than
+ * you usually pay":
+ *
+ *   comparable_homes           → "more than similar homes". Nothing else. This is what
+ *                                the seeded demo households return, because there is no
+ *                                billing history behind them — claiming otherwise is the
+ *                                exact fabrication the product exists to prevent.
+ *   own_recent_cycles          → "more than your recent bills"
+ *   own_same_period_last_year  → "more than the same time last year"
+ *
+ * The backend repeats this in `caveats`, and the narration layer is handed it as a rule
+ * it may not break. The UI is the one surface with no such enforcement, so it is on you.
  */
+export interface ForecastSummary {
+  /** `weather_normalised` | `straight_line`. A figure without its method cannot be
+   *  checked; the two disagree by real money on a cold cycle. */
+  method: string;
+  detail: string | null;
+  /** 80% central prediction interval, not 95% — a 95% band on a fortnight of daily
+   *  electricity is so wide it communicates nothing. */
+  cost_p10_nzd: number;
+  cost_p90_nzd: number;
+  /** Interval width as a percent of the point estimate. Wide early, narrow late. Show the
+   *  range instead of the single figure when this is above about 25%. */
+  confidence_width_pct: number;
+  base_load_kwh_per_day: number | null;
+  heating_kwh_per_hdd: number | null;
+  r_squared: number | null;
+}
+
+export interface CauseBreakdown {
+  /** False means the weather fit was not usable and the whole overshoot is unattributed.
+   *  Do not draw a cause chart in that state — a confident breakdown of an unexplained
+   *  overshoot is worse than showing none. */
+  explained: boolean;
+  weather_nzd: number;
+  higher_use_nzd: number;
+  everyday_load_nzd: number;
+  /** `weather` | `behaviour` | `everyday_load`, or null when no single cause reaches 35%.
+   *  Null is a real answer, not a missing one. */
+  dominant: string | null;
+}
+
+/**
+ * The disclosure that must appear wherever a comparison does.
+ *
+ * Driven by `expectation_basis` rather than hard-coded, because the sentence that is
+ * true depends on what the projection was actually compared against. The previous
+ * version printed "compared with similar homes" unconditionally — correct while only one
+ * basis existed, and a false statement the moment billing history lands.
+ *
+ * The unknown-value branch says the least, not the most. A basis this client does not
+ * recognise is a server ahead of it, and inventing a comparison to describe it is the
+ * one thing that must not happen on a disclosure line.
+ */
+export const basisNote = (basis: string): string => {
+  switch (basis) {
+    case 'own_same_period_last_year':
+      return 'Compared with your own bill for the same period last year.';
+    case 'own_recent_cycles':
+      return 'Compared with your own recent bills.';
+    case 'comparable_homes':
+      return 'Compared with similar homes, not with your own past bills — Kea does not hold your billing history.';
+    default:
+      return 'Compared with a reference figure for this cycle.';
+  }
+};
+
 export interface BillShockWarning {
   customer_id: string;
   period: string;
   triggered: boolean;
+  /** `above_expectation` | `colder_than_normal` | `higher_daily_use`. */
   reasons: string[];
   days_elapsed: number;
   days_in_cycle: number;
@@ -107,10 +172,21 @@ export interface BillShockWarning {
   usage_so_far_kwh: number;
   cost_so_far_nzd: number;
   projected_cycle_cost_nzd: number;
-  comparable_home_cost_nzd: number;
+  expected_cost_nzd: number;
+  expectation_basis: string;
   overshoot_nzd: number;
   overshoot_pct: number;
+  /** Opening third of the cycle against the closing third. Shown beside the usage chart.
+   *  Deliberately NOT a trigger — a rising trend says the cycle is getting worse, not
+   *  that it is already expensive. Computed by layer 1 like every other figure; do not
+   *  derive a trend in the browser. */
   recent_trend_pct: number;
+  forecast: ForecastSummary;
+  causes: CauseBreakdown;
+  /** The customer's own thresholds, keyed by tier. Show the warning against the level
+   *  they set, not a hard-coded one. */
+  thresholds_pct: Record<string, number>;
+  tier_probabilities: Record<string, number>;
   facts: { key: string; value: number; unit: string; label: string; display: string }[];
   caveats: string[];
 }

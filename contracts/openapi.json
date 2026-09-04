@@ -152,7 +152,7 @@
     "/api/households/{customer_id}/bill-shock": {
       "get": {
         "summary": "Bill Shock",
-        "description": "The bill-shock warning. A GET, because it has to reach the customer unprompted.\n\nEvery other endpoint answers a question somebody asked. A warning that only appears\nif you think to ask for it is not a warning, so this is polled by the dashboard\nrather than routed through chat.\n\n`as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded\nhousehold holds a complete July, and a warning delivered on day 31 is not a warning,\nit is a bill. Which days show what is not obvious from the data, so: H-JUL trips\n`above_comparable_homes` at every point in the cycle, and H-COLD trips\n`rising_within_cycle` on days 6-8 as the cold snap starts \u2014 that second one is the\nbetter demo, because there are still 25 days left to act on it.\n\nReads through the repository (KEA-33) rather than `fixtures` directly. The warning\nand the dashboard summary quote the same dollar figure, so they have to come from\nthe same source \u2014 a warning served from a Python file while `/households` serves\nfrom PostgreSQL is two numbers that disagree in front of a judge.",
+        "description": "The bill-shock warning. A GET, because it has to reach the customer unprompted.\n\nEvery other endpoint answers a question somebody asked. A warning that only appears\nif you think to ask for it is not a warning, so this is polled by the dashboard\nrather than routed through chat.\n\n`as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded\nhousehold holds a complete July, and a warning delivered on day 31 is not a warning,\nit is a bill.\n\nWhich days show what is not obvious from the data:\n\n* **H-COLD is the demo household.** It is the only one whose usage actually tracks\n  the HDD series, so it is the only one that reaches the weather-normalised path and\n  produces a cause breakdown (\"$41 of this is the cold snap\"). Read it around day 14.\n* **H-JUL always falls back to the straight line.** Its daily totals are real measured\n  data and `_HDD_JULY` is an invented series built for H-COLD, so the two do not\n  correspond and the regression correctly refuses to fit. That is the honest state of\n  the fixture data \u2014 manufacturing a correlated weather series for it would be\n  inventing the exact kind of figure this product exists to prevent. The response says\n  `method: straight_line` and the narration is forbidden from attributing anything to\n  temperature.\n\nReads through the repository (KEA-33) rather than `fixtures` directly. The warning\nand the dashboard summary quote the same dollar figure, so they have to come from\nthe same source \u2014 a warning served from a Python file while `/households` serves\nfrom PostgreSQL is two numbers that disagree in front of a judge.",
         "operationId": "bill_shock_api_households__customer_id__bill_shock_get",
         "parameters": [
           {
@@ -188,6 +188,247 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BillShockWarning"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/alert-preferences": {
+      "get": {
+        "summary": "Get Alert Preferences",
+        "description": "What this household asked to be told about, and how.\n\nReturns defaults for a customer who has never opened Settings rather than 404. There\nis no such thing as a household with no alerting behaviour \u2014 there is only one whose\nbehaviour nobody has changed, and the screen has to render either way.",
+        "operationId": "get_alert_preferences_api_households__customer_id__alert_preferences_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Put Alert Preferences",
+        "description": "Set the thresholds.\n\nThe path parameter wins over the body. A body carrying a different `account_ref` is a\nrequest to write one customer's settings under another's id, and it is the shape a\nbroken client produces long before it is the shape an attacker does \u2014 either way the\nonly safe reading is the one in the URL.\n\nValidation (monotonic ladder, 5-200% bounds, real timezone) happens in the Pydantic\nmodel, so an invalid ladder is a 422 with a readable message rather than a policy\nlayer quietly sorting the numbers behind the customer's back.",
+        "operationId": "put_alert_preferences_api_households__customer_id__alert_preferences_put",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/context": {
+      "get": {
+        "summary": "Get Household Context",
+        "description": "What this household has told us about their home.\n\nReturns an empty context for a household that has never been asked, rather than 404 \u2014\n\"nothing known\" is a real state and the app has to render it.",
+        "operationId": "get_household_context_api_households__customer_id__context_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdContext"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/context/answers": {
+      "post": {
+        "summary": "Answer Question",
+        "description": "Record an answer to a clarifying question.\n\nThe answer is a closed set \u2014 yes, no, not sure \u2014 plus at most a date and a count.\nDeliberately not free text: taking prose back and pasting it into the next prompt\nwould put uncomputed figures into the model's context (\"probably 400 kWh\"), which is\nthe exact failure the FactBundle exists to prevent. See `app/clarify/schemas.py`.\n\nA 404 for an unknown question id rather than silently recording it: an id we do not\nrecognise means the client is out of date, and storing it would mark a question as\nasked that this backend has no way to ask again.",
+        "operationId": "answer_question_api_households__customer_id__context_answers_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdContext"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/offline/models": {
+      "get": {
+        "summary": "Offline Models",
+        "description": "What can be downloaded to a device, and how big it is.\n\nServed rather than hard-coded in the app so the sign-up prompt quotes a size that\nmatches what will actually be downloaded. A customer agreeing to \"about 530 MB\" and\nreceiving 1.8 GB on a metered rural connection is a real cost we imposed on them.",
+        "operationId": "offline_models_api_offline_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OfflineModelOption"
+                  },
+                  "type": "array",
+                  "title": "Response Offline Models Api Offline Models Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/offline-pack": {
+      "get": {
+        "summary": "Offline Pack",
+        "description": "Everything a device needs to answer this household's questions with no network.\n\nFetched by the client while it still has a connection, on the customer's schedule \u2014\nthe server never pushes. Carries pre-computed fact bundles, not meter readings: a\ndevice holding the raw series is a device whose on-device model can be asked to add\nit up, which is the one thing this architecture exists to prevent, on the platform\nwhere it is hardest to audit.\n\nSee `app/offline.py` and `docs/adr/0007-offline-first-narration.md`.",
+        "operationId": "offline_pack_api_households__customer_id__offline_pack_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflinePack"
                 }
               }
             }
@@ -284,6 +525,137 @@
   },
   "components": {
     "schemas": {
+      "AlertPreferences": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Master switch. False means no bill-shock alerting at all on any channel \u2014 the assessment is still computed and still visible in the app, because turning off the interruption is not the same as turning off the product.",
+            "default": true
+          },
+          "tier1_pct": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Tier1 Pct",
+            "description": "Percent over expectation at which an email goes out.",
+            "default": 15.0
+          },
+          "tier2_pct": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Tier2 Pct",
+            "description": "Percent over expectation at which a text message goes out.",
+            "default": 40.0
+          },
+          "tier3_pct": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Tier3 Pct",
+            "description": "Percent over expectation at which the assistant calls them.",
+            "default": 75.0
+          },
+          "min_overshoot_nzd": {
+            "type": "number",
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Min Overshoot Nzd",
+            "description": "Dollar floor under every tier. A percentage alone fires constantly on small bills \u2014 20% over on a $40 cycle is $8, which nobody wants a text about.",
+            "default": 20.0
+          },
+          "email_enabled": {
+            "type": "boolean",
+            "title": "Email Enabled",
+            "default": true
+          },
+          "sms_enabled": {
+            "type": "boolean",
+            "title": "Sms Enabled",
+            "default": true
+          },
+          "voice_enabled": {
+            "type": "boolean",
+            "title": "Voice Enabled",
+            "description": "Opt-IN, unlike the other two. An automated call is the most intrusive thing this product can do and the one most easily mistaken for a scam, so it is off until the customer asks for it.",
+            "default": false
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone_e164": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone E164"
+          },
+          "quiet_hours_start": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 23.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours Start",
+            "description": "Local hour after which the phone is off limits.",
+            "default": 21
+          },
+          "quiet_hours_end": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 23.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Hours End",
+            "description": "Local hour at which it is fair game again.",
+            "default": 8
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Pacific/Auckland"
+          },
+          "offline_model_opt_in": {
+            "type": "boolean",
+            "title": "Offline Model Opt In",
+            "description": "The customer asked for an on-device model because their connection is unreliable. Lives here rather than in a separate table because it is the same shape of thing \u2014 a per-customer choice about how the product reaches them \u2014 and because the mobile app fetches both in one request on launch.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref"
+        ],
+        "title": "AlertPreferences",
+        "description": "One household's alerting settings. Pydantic rather than a dataclass because this\ncrosses the API boundary in both directions and the validation below is the whole\npoint \u2014 a threshold ladder that is not monotonic is not a coherent instruction, and\nit must be rejected at the edge rather than sorted out in the policy layer."
+      },
       "AlertSummary": {
         "properties": {
           "tier": {
@@ -306,6 +678,20 @@
             "type": "array",
             "title": "Sent",
             "description": "Channels that actually delivered."
+          },
+          "deferred": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Deferred",
+            "description": "Eligible, but held until the customer's quiet hours end."
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "description": "P(the cycle lands above the threshold this tier fired at), 0-1. Shown next to the warning because it is the honest answer to 'how sure are you' \u2014 and because the tier ladder now escalates on confidence as well as severity.",
+            "default": 0.0
           },
           "suppressed": {
             "type": "boolean",
@@ -349,6 +735,15 @@
         "title": "AlertSummary",
         "description": "What the warning escalated to, reported alongside the warning itself.\n\nOn the response rather than behind its own endpoint because the UI has to show the\ntier next to the figures that produced it, and a second request could return a\ndifferent assessment.\n\n`sent` is what actually went out \u2014 today only `email` can appear in it. `channels`\nis what the tier calls for, so the UI can show the full ladder with the\nnot-yet-wired rungs greyed rather than pretending tier 3 does not exist."
       },
+      "Answer": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "no",
+          "unsure"
+        ],
+        "title": "Answer"
+      },
       "BillShockWarning": {
         "properties": {
           "customer_id": {
@@ -369,7 +764,7 @@
             },
             "type": "array",
             "title": "Reasons",
-            "description": "above_comparable_homes | rising_within_cycle. Empty when not triggered."
+            "description": "above_expectation | colder_than_normal | higher_daily_use. Empty when nothing triggered."
           },
           "days_elapsed": {
             "type": "integer",
@@ -396,9 +791,15 @@
             "type": "number",
             "title": "Projected Cycle Cost Nzd"
           },
-          "comparable_home_cost_nzd": {
+          "expected_cost_nzd": {
             "type": "number",
-            "title": "Comparable Home Cost Nzd"
+            "title": "Expected Cost Nzd",
+            "description": "What this customer would not be surprised by. See `expectation_basis`."
+          },
+          "expectation_basis": {
+            "type": "string",
+            "title": "Expectation Basis",
+            "description": "own_same_period_last_year | own_recent_cycles | comparable_homes. The honesty control for the whole feature: only the first two license 'more than you usually pay'. The seeded demo households are on the third, and the UI must word the comparison accordingly."
           },
           "overshoot_nzd": {
             "type": "number",
@@ -410,7 +811,30 @@
           },
           "recent_trend_pct": {
             "type": "number",
-            "title": "Recent Trend Pct"
+            "title": "Recent Trend Pct",
+            "description": "Opening third of the cycle against the closing third. Shown beside the usage chart. Deliberately NOT a trigger: a rising trend says the cycle is getting worse, not that it is already expensive."
+          },
+          "forecast": {
+            "$ref": "#/components/schemas/ForecastSummary"
+          },
+          "causes": {
+            "$ref": "#/components/schemas/CauseBreakdown"
+          },
+          "thresholds_pct": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Thresholds Pct",
+            "description": "The customer's own tier thresholds, echoed so the UI can show the warning against the level they set rather than a hard-coded one."
+          },
+          "tier_probabilities": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Tier Probabilities",
+            "description": "P(the cycle clears each tier's threshold), 0-1, keyed by tier."
           },
           "facts": {
             "items": {
@@ -426,6 +850,17 @@
             },
             "type": "array",
             "title": "Caveats"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClarifyingQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A clarifying question, when layer 1 found a quantified gap it cannot close on its own \u2014 an unexplained step in everyday load, or a weather fit that would not converge. Null is the common case and the correct default: a household whose bill is fully explained has nothing to be asked. Answer it at POST /households/{id}/context/answers. See app/clarify/ for how it is chosen."
           },
           "alert": {
             "anyOf": [
@@ -450,13 +885,57 @@
           "usage_so_far_kwh",
           "cost_so_far_nzd",
           "projected_cycle_cost_nzd",
-          "comparable_home_cost_nzd",
+          "expected_cost_nzd",
+          "expectation_basis",
           "overshoot_nzd",
           "overshoot_pct",
-          "recent_trend_pct"
+          "recent_trend_pct",
+          "forecast",
+          "causes"
         ],
         "title": "BillShockWarning",
         "description": "The proactive half of the product.\n\nEverything else in this API answers a question the customer asked. This one has to\nreach them *before* the bill does, so it is a GET the dashboard polls rather than a\nchat intent \u2014 a warning that only appears if you think to ask for it is not a\nwarning.\n\n`triggered` is the only field the UI should branch on. The figures are present either\nway so the dashboard can show a calm \"on track\" state without a second request."
+      },
+      "CauseBreakdown": {
+        "properties": {
+          "explained": {
+            "type": "boolean",
+            "title": "Explained"
+          },
+          "weather_nzd": {
+            "type": "number",
+            "title": "Weather Nzd",
+            "default": 0.0
+          },
+          "higher_use_nzd": {
+            "type": "number",
+            "title": "Higher Use Nzd",
+            "default": 0.0
+          },
+          "everyday_load_nzd": {
+            "type": "number",
+            "title": "Everyday Load Nzd",
+            "default": 0.0
+          },
+          "dominant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dominant",
+            "description": "weather | behaviour | everyday_load, or null when no single cause accounts for at least 35% of the overshoot. Null is a real answer: '31/34/35' is a pie chart pretending to be advice."
+          }
+        },
+        "type": "object",
+        "required": [
+          "explained"
+        ],
+        "title": "CauseBreakdown",
+        "description": "Where the overshoot came from, in dollars that sum to it exactly.\n\n`explained` false means the weather regression was not usable and the whole overshoot\nsits in `everyday_load_nzd` unattributed. The UI must not draw a cause chart in that\nstate \u2014 an unexplained overshoot shown with a confident breakdown is worse than one\nshown with none."
       },
       "ChatRequest": {
         "properties": {
@@ -539,6 +1018,51 @@
         ],
         "title": "ChatResponse"
       },
+      "ClarifyingQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Stable. Used to record that it was asked and answered."
+          },
+          "gap": {
+            "$ref": "#/components/schemas/Gap"
+          },
+          "hypothesis": {
+            "$ref": "#/components/schemas/Hypothesis"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "description": "The question as the customer reads it. Composed by Python, not the model \u2014 a model that writes its own questions is a model choosing what to ask about somebody's home."
+          },
+          "explains_nzd": {
+            "type": "number",
+            "title": "Explains Nzd"
+          },
+          "since_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since Day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "gap",
+          "hypothesis",
+          "prompt",
+          "explains_nzd"
+        ],
+        "title": "ClarifyingQuestion",
+        "description": "One question, and the arithmetic that justifies asking it."
+      },
       "DemoAccountCard": {
         "properties": {
           "email": {
@@ -611,6 +1135,136 @@
         "title": "Fact",
         "description": "One computed value. Every number the customer ever sees starts life here.\n\n`display` is the canonical rendering. The narration prompt tells the model to\ncopy these strings verbatim rather than formatting numbers itself, which both\nraises pass rate on small models and gives the verifier an exact string to match."
       },
+      "FactBundle": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "human phrase for the window, e.g. 'July 2026'"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Caveats",
+            "description": "Claims the narrator must NOT make. Half-hourly data cannot identify an appliance, so 'do not name an appliance' belongs here on most bundles."
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "intent",
+          "period"
+        ],
+        "title": "FactBundle",
+        "description": "Everything layer 2 is allowed to know, and nothing else.\n\nDeliberately does NOT carry raw meter readings, name, address or account number.\nLayer 1 computes; the model narrates. Keeping PII out of here is both the privacy\ncontrol and \u2014 once we move to a hosted model \u2014 the prompt-cache boundary."
+      },
+      "ForecastSummary": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "weather_normalised | straight_line"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "The fitted relationship, or why the fit was not usable."
+          },
+          "cost_p10_nzd": {
+            "type": "number",
+            "title": "Cost P10 Nzd",
+            "description": "Low end of the 80% prediction interval."
+          },
+          "cost_p90_nzd": {
+            "type": "number",
+            "title": "Cost P90 Nzd",
+            "description": "High end of the 80% prediction interval."
+          },
+          "confidence_width_pct": {
+            "type": "number",
+            "title": "Confidence Width Pct",
+            "description": "Interval width as a percent of the point estimate. Narrows as the cycle progresses; this is what stops a phone call on day four."
+          },
+          "base_load_kwh_per_day": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Load Kwh Per Day",
+            "description": "Fitted temperature-independent load. Null if not fitted."
+          },
+          "heating_kwh_per_hdd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heating Kwh Per Hdd",
+            "description": "Fitted kWh per heating degree day. Null if not fitted."
+          },
+          "r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Squared"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "cost_p10_nzd",
+          "cost_p90_nzd",
+          "confidence_width_pct"
+        ],
+        "title": "ForecastSummary",
+        "description": "How the projection was produced. On the response because a figure that does not\ncarry its method is a figure nobody can check \u2014 the weather-normalised and\nstraight-line projections disagree by real money on a cold cycle."
+      },
+      "Gap": {
+        "type": "string",
+        "enum": [
+          "base_load_step",
+          "unexplained_remainder",
+          "no_weather_fit",
+          "weekday_shift"
+        ],
+        "title": "Gap",
+        "description": "What we could not work out. One per question the catalogue can ask."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -623,6 +1277,113 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HouseholdContext": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "new_appliance_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Appliance Since"
+          },
+          "no_new_appliance": {
+            "type": "boolean",
+            "title": "No New Appliance",
+            "default": false
+          },
+          "extra_occupants": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Occupants"
+          },
+          "extra_occupants_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Occupants Since"
+          },
+          "works_from_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Works From Home"
+          },
+          "has_electric_heating": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Electric Heating"
+          },
+          "hot_water_changed_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hot Water Changed Since"
+          },
+          "asked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asked"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref"
+        ],
+        "title": "HouseholdContext",
+        "description": "What the customer has told us about their home, as typed facts.\n\nFed back into layer 1, never into the prompt. A confirmed new appliance since a date\nlets the attribution *name* the step it already found rather than leaving it in the\nunexplained bucket \u2014 and that is the entire payoff of asking.\n\nEvery field is nullable and null means \"never asked\", which is deliberately different\nfrom `False` meaning \"asked and denied\". See the module docstring."
       },
       "HouseholdSummary": {
         "properties": {
@@ -665,6 +1426,18 @@
         ],
         "title": "HouseholdSummary",
         "description": "Shape the frontend charts against. Fixture-backed until Day 2."
+      },
+      "Hypothesis": {
+        "type": "string",
+        "enum": [
+          "new_appliance",
+          "more_occupants",
+          "working_from_home",
+          "electric_heating",
+          "hot_water_change"
+        ],
+        "title": "Hypothesis",
+        "description": "What a question is testing. One per thing a household can tell us that changes the\narithmetic."
       },
       "Intent": {
         "type": "string",
@@ -724,6 +1497,187 @@
         ],
         "title": "LoginResponse",
         "description": "Who signed in, and which household to show them.\n\nCarries no token: the prototype session is `localStorage['kea-demo-session']` and\nthere is nothing to sign. `customer_id` is the whole point \u2014 it is what every\nsubsequent request scopes to, and what made one login show fourteen different\ncustomers instead of the same one fourteen times."
+      },
+      "OfflineAnswer": {
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "bundle": {
+            "$ref": "#/components/schemas/FactBundle"
+          },
+          "template": {
+            "type": "string",
+            "title": "Template"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent",
+          "bundle",
+          "template"
+        ],
+        "title": "OfflineAnswer",
+        "description": "One precomputed intent, ready for the device to narrate."
+      },
+      "OfflineModelOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "download_mb": {
+            "type": "integer",
+            "title": "Download Mb"
+          },
+          "ram_required_mb": {
+            "type": "integer",
+            "title": "Ram Required Mb"
+          },
+          "quantisation": {
+            "type": "string",
+            "title": "Quantisation"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "download_mb",
+          "ram_required_mb",
+          "quantisation"
+        ],
+        "title": "OfflineModelOption",
+        "description": "One downloadable on-device model.\n\nSizes are the quantised download, not the parameter count, because that is the number\nthe customer is agreeing to spend. Quoting \"1B parameters\" to somebody deciding\nwhether to use their data is not an answer to the question they asked."
+      },
+      "OfflinePack": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "built_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Built At"
+          },
+          "fresh_until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fresh Until"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineAnswer"
+            },
+            "type": "array",
+            "title": "Answers"
+          },
+          "system_prompt": {
+            "type": "string",
+            "title": "System Prompt"
+          },
+          "bill_shock": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Shock"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "description": "Bumped when the pack's shape changes. A device on an older app must refuse a pack it does not understand rather than reading fields positionally \u2014 the failure mode otherwise is a stale answer with confident wrong numbers.",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "period",
+          "built_at",
+          "fresh_until",
+          "answers",
+          "system_prompt"
+        ],
+        "title": "OfflinePack",
+        "description": "Everything a device needs to answer without a network.\n\nCarries no raw meter series, and that is deliberate rather than a size optimisation.\nA device holding `daily_kwh` is a device whose model can be asked to add it up, and\nthe first time someone wires the chat box straight to the readings \"to make offline\nsmarter\", the no-arithmetic guarantee is gone on the platform where it is hardest to\naudit."
+      },
+      "QuestionResponse": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "title": "Question Id"
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since",
+            "description": "When it started, if they know. Optional and often absent \u2014 most people remember 'a few weeks ago', not a date, and a required field here would make them invent one."
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count",
+            "description": "Extra people, for MORE_OCCUPANTS. Bounded because a typo should not become a household of 4,000."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "answer"
+        ],
+        "title": "QuestionResponse",
+        "description": "What the customer sent back."
       },
       "ValidationError": {
         "properties": {
@@ -786,6 +1740,14 @@
             "type": "array",
             "title": "Unverified",
             "description": "tokens with no matching fact"
+          },
+          "derived": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Derived",
+            "description": "Computed *relationships* stated without a number \u2014 'twice as much', 'half your bill', 'a third of the increase'. These contain no numeric token, so a token-by-token check passes them, but each one is a division the model performed. Reported separately from `unverified` because they are a different failure: not a wrong figure, an unauthorised calculation."
           },
           "regenerated": {
             "type": "boolean",

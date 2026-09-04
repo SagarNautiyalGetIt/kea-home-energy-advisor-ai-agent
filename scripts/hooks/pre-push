@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# pre-push guard — blocks anything that is not Kea Energy project material, and anything
+# that leaks the vault, a secret, or an assistant attribution artefact.
+#
+# Committed and shared, unlike the version this replaces. That one lived in .git/hooks/
+# and so protected exactly one machine — which is why `elt` accumulated 61 commits with a
+# session trailer while the author's own checks all passed.
+#
+# Install with: make hooks
+# Bypass in a genuine emergency with: git push --no-verify
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+fail=0
+say() { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=1; }
+ok()  { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+
+echo ""
+echo "pre-push guard — kea-agent"
+echo "─────────────────────────────────────────────"
+
+# 1. Secrets and key material must never be tracked.
+if git ls-files | grep -qE '(^|/)\.env$|\.pem$|\.key$|(^|/)credentials$'; then
+  say "secret file is tracked:"
+  git ls-files | grep -E '(^|/)\.env$|\.pem$|\.key$|(^|/)credentials$' | sed 's/^/      /'
+else
+  ok "no secret files tracked"
+fi
+
+# 2. Vault paths — broken for teammates, and they publish a private layout.
+#    This file is excluded because it has to contain the patterns to search for them.
+#    Without that it reports itself, which is both useless and the fastest way to teach
+#    somebody that the guard cries wolf.
+hits=$(git grep -lI -e 'Documents/Friday' -e 'Documents/Iris' -e '/home/akash' \
+       -- . ':!scripts/hooks/pre-push' 2>/dev/null)
+if [ -n "$hits" ]; then
+  say "local vault path referenced in:"
+  echo "$hits" | sed 's/^/      /'
+else
+  ok "no vault paths referenced"
+fi
+
+# 3. Obsidian / vault artefacts.
+if git ls-files | grep -qE '\.obsidian/|\.canvas$|(^|/)\.trash/'; then
+  say "vault artefact is tracked (.obsidian/, .canvas, .trash/)"
+else
+  ok "no vault artefacts tracked"
+fi
+
+# 4. Data directories and generated artefacts. Neither of these is caught by any
+#    pattern above, and both have shipped before: a 46 MB .pg-local/ in three commits,
+#    and generated alert emails carrying real recipient addresses.
+if git ls-files | grep -qE '^\.pg-local/|^services/api/var/|\.eml$'; then
+  say "a data directory or generated artefact is tracked:"
+  git ls-files | grep -E '^\.pg-local/|^services/api/var/|\.eml$' | head -5 | sed 's/^/      /'
+else
+  ok "no data directories or generated artefacts tracked"
+fi
+
+# 5. Attribution. Delegated to the script CI runs, so the hook and the pipeline can
+#    never disagree about what counts.
+echo "─────────────────────────────────────────────"
+if ! ./scripts/check-attribution.sh "@{push}..HEAD" 2>/dev/null \
+  && ! ./scripts/check-attribution.sh "origin/main..HEAD"; then
+  fail=1
+fi
+
+echo "─────────────────────────────────────────────"
+if [ "$fail" -ne 0 ]; then
+  echo "PUSH BLOCKED. Fix the above, or override with: git push --no-verify"
+  echo ""
+  exit 1
+fi
+echo "clear to push"
+echo ""
+exit 0

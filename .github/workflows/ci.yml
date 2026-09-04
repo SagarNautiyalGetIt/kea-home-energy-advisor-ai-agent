@@ -93,11 +93,38 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  # This repository is assessed as the team's own engineering work. Assistant tooling
+  # config, session links and commit trailers are not part of the system and do not
+  # belong in the record. See docs/attribution-checklist.md.
+  #
+  # Scoped to the PR's own commits, not to all history. You are answerable for the
+  # commits you wrote; a branch that inherited a trailer from someone else's merge base
+  # should not be unmergeable because of it. Pre-existing history is cleaned by the
+  # coordinated process in §4 of the checklist, not by blocking unrelated work.
+  attribution:
+    name: no assistant attribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit-message half of the check needs real history. The default
+          # shallow clone has one commit and would pass every time — a green check
+          # that verifies nothing is worse than no check.
+          fetch-depth: 0
+      - name: Check tracked files, contents and this branch's commit messages
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -n "$BASE" ]; then
+            ./scripts/check-attribution.sh "$BASE..HEAD"
+          else
+            ./scripts/check-attribution.sh "HEAD~1..HEAD"
+          fi
+
   # The single required check. Mark THIS one in branch protection and nothing else,
   # then adding or renaming a job above never touches the ruleset.
   check:
     name: check
-    needs: [api, contract, web]
+    needs: [api, contract, web, attribution]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -106,8 +133,10 @@ jobs:
           echo "api=${{ needs.api.result }}"
           echo "contract=${{ needs.contract.result }}"
           echo "web=${{ needs.web.result }}"
+          echo "attribution=${{ needs.attribution.result }}"
           if [ "${{ needs.api.result }}" != "success" ] \
           || [ "${{ needs.contract.result }}" != "success" ] \
+          || [ "${{ needs.attribution.result }}" != "success" ] \
           || [ "${{ needs.web.result }}" != "success" ]; then
             echo "::error::At least one CI job did not succeed."
             exit 1

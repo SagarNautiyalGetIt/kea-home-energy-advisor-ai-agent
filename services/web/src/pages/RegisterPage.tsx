@@ -1,6 +1,8 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import OfflineModelPrompt from '../components/OfflineModelPrompt'
+import { rememberOfflineOptIn } from '../lib/alerts'
 
 type RegisterErrors = { name?: string; email?: string; password?: string; confirm?: string }
 
@@ -13,6 +15,7 @@ export default function RegisterPage({ onRegister }: { onRegister: () => void })
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<RegisterErrors>({})
+  const [askOffline, setAskOffline] = useState(false)
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -22,10 +25,22 @@ export default function RegisterPage({ onRegister }: { onRegister: () => void })
     if (password.length < 8) nextErrors.password = 'Password must contain at least 8 characters.'
     if (confirm !== password) nextErrors.confirm = 'Both passwords must match.'
     setErrors(nextErrors)
-    if (!Object.keys(nextErrors).length) onRegister()
+    // The connectivity question goes here rather than before the form: asking somebody
+    // about their internet quality before they have an account is a question with no
+    // context. It is asked once, and declining is a complete answer — the same switch
+    // lives in Settings for anyone who changes their mind.
+    if (!Object.keys(nextErrors).length) setAskOffline(true)
+  }
+
+  const finishRegistration = (optIn: boolean) => {
+    rememberOfflineOptIn(optIn)
+    setAskOffline(false)
+    onRegister()
   }
 
   return (
+    <>
+    {askOffline && <OfflineModelPrompt onDecision={finishRegistration} />}
     <main className="login-page">
       <section className="login-panel" aria-labelledby="register-title">
         <div className="login-content register-content">
@@ -61,5 +76,6 @@ export default function RegisterPage({ onRegister }: { onRegister: () => void })
       </section>
       <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
     </main>
+    </>
   )
 }

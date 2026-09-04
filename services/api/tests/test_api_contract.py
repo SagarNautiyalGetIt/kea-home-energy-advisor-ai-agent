@@ -128,7 +128,10 @@ def test_settings_reads_env_at_construction_not_import(monkeypatch):
 
 def test_settings_default_survives_a_missing_env(monkeypatch):
     monkeypatch.delenv("KEA_PROVIDER", raising=False)
-    assert Settings().provider == "ollama"
+    # Changed from "ollama" in Sprint 3. A local model sized to whatever hardware happened
+    # to be present was right for a laptop demo and wrong as an architecture — see
+    # app/providers/resolver.py. Local is still reachable, but only by asking for it.
+    assert Settings().provider == "bedrock"
     assert os.environ.get("KEA_PROVIDER") is None
 
 

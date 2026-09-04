@@ -1,248 +1,365 @@
-"""Bill-shock warning — the proactive half of the product.
+"""The bill-shock assessment — forecast, expectation, attribution, trigger.
 
-The thresholds are the whole design. A warning that fires on every household is
-ignored within a week, and one that never fires is decoration, so most of these tests
-are about *not* triggering: three of the five demo households must stay quiet.
+These run with no model, no database and no network. That is the point of layer 1 being
+pure: the figures the product is judged on are checkable in milliseconds.
 
-The claim boundary is tested too. This compares against **comparable homes**, never
-against the customer's own history — there is no billing history behind the demo data,
-and "more than you usually pay" would be a fabrication of exactly the kind the product
-exists to prevent. `test_never_claims_to_know_their_usual_bill` pins that.
+The cases below are chosen to pin the four properties the redesign exists to provide,
+each of which the previous straight-line detector got wrong:
+
+* a cold cycle is not read as overspending
+* the projection carries an interval, and the interval narrows as the cycle runs
+* the trigger is a probability against the *customer's own* threshold
+* the overshoot decomposes into causes that sum to it
 """
 
 from __future__ import annotations
 
+import math
+
 import pytest
-from fastapi.testclient import TestClient
 
+from app.alerts.preferences import AlertPreferences, defaults_for
 from app.analytics import fixtures
-from app.analytics.engine import (
-    EARLY_CYCLE_DAYS,
-    SHOCK_NZD_THRESHOLD,
-    SHOCK_PCT_THRESHOLD,
-    UsageWindow,
-    assess_bill_shock,
-    build_bill_shock,
-    recent_trend_pct,
+from app.analytics.billshock import assess, build_bill_shock
+from app.analytics.engine import UsageWindow
+from app.analytics.forecast import (
+    ExpectationBasis,
+    ForecastMethod,
+    choose_expectation,
+    day_of_week_adjustment,
+    fit_weather_response,
+    forecast_cycle,
 )
-from app.main import app
 
-DAYS = 31
-
-client = TestClient(app)
+DAYS_IN_JULY = 31
 
 
 def window(customer_id: str, days: int | None = None) -> UsageWindow:
     full = fixtures.get_window(customer_id)
+    if days is None:
+        return full
     return UsageWindow(
-        customer_id=customer_id,
+        customer_id=full.customer_id,
         period=full.period,
-        daily_kwh=full.daily_kwh[:days] if days else full.daily_kwh,
+        daily_kwh=full.daily_kwh[:days],
         unit_price_nzd=full.unit_price_nzd,
     )
 
 
-def assess(customer_id: str, days: int | None = None):
-    return assess_bill_shock(
-        window(customer_id, days), DAYS, fixtures.comparison_baseline(customer_id)
+def assessment(customer_id: str, days: int | None = None, prefs: AlertPreferences | None = None):
+    w = window(customer_id, days)
+    hdd, normal = fixtures.heating_degree_days(customer_id)
+    return assess(
+        w,
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=hdd[: len(w.daily_kwh)],
+        normal_hdd_per_day=normal,
+        comparable_home_kwh_per_day=fixtures.comparison_baseline(customer_id),
+        preferences=prefs or defaults_for(customer_id),
     )
 
 
-# ───────────────────────────── triggering ─────────────────────────────
+# ───────────────────────── the weather regression ─────────────────────────
 
 
-def test_the_real_july_household_triggers() -> None:
-    """H-JUL genuinely runs above comparable homes — that is the published finding."""
-    a = assess("H-JUL", 14)
-    assert a.triggered
-    assert "above_comparable_homes" in a.reasons
-    assert a.projected_cost_nzd > a.expected_cost_nzd
+def test_fit_recovers_a_known_base_load_and_slope():
+    """Synthetic data with no noise must return the coefficients it was built from.
 
-
-@pytest.mark.parametrize("day", [6, 7, 8])
-def test_cold_snap_is_caught_while_there_is_still_time(day: int) -> None:
-    """The case the product is named for: caught early, with the cycle still open.
-
-    H-COLD's snap runs days 3-9. Assessed inside it, daily use has risen sharply against
-    the opening of the cycle and both signals fire — with 23+ days left to act on it.
-    A warning on day 31 is not a warning, it is a bill.
+    Written by hand rather than against a fixture because a regression that is subtly
+    wrong still produces plausible output, and the only way to catch that is to know the
+    answer in advance.
     """
-    a = assess("H-COLD", day)
-    assert a.triggered
-    assert "rising_within_cycle" in a.reasons
-    assert a.days_remaining >= 23
+    hdd = [float(h) for h in range(2, 18)]
+    kwh = [6.0 + 0.5 * h for h in hdd]
+
+    fit = fit_weather_response(kwh, hdd)
+
+    assert fit.usable
+    assert fit.base_load_kwh_per_day == pytest.approx(6.0, abs=1e-6)
+    assert fit.heating_kwh_per_hdd == pytest.approx(0.5, abs=1e-6)
+    assert fit.r_squared == pytest.approx(1.0, abs=1e-6)
+    assert fit.residual_sd_kwh == pytest.approx(0.0, abs=1e-6)
 
 
-def test_cold_snap_stops_triggering_once_it_has_passed() -> None:
-    """By the full month the snap has washed out and H-COLD is only 24.5% above
-    comparable homes — real, but not worth alarming someone about."""
-    assert not assess("H-COLD").triggered
+def test_fit_refuses_when_the_weather_did_not_move():
+    """No HDD variation means the slope is unidentifiable.
 
-
-@pytest.mark.parametrize("customer_id", ["H-SPIKE", "H-DROP", "H-TARIFF"])
-def test_households_without_bill_shock_settle_quiet(customer_id: str) -> None:
-    """Once enough of the cycle has happened, three of five must be quiet.
-
-    H-SPIKE sits 15-30% above but on a small bill, so the dollar floor holds it back.
-    H-DROP ends *below* comparable homes — its story is hardship, not bill shock.
-    H-TARIFF is 1.7% above, which is noise.
-
-    Deliberately checked from day 14 onward, not from day 7. Both H-SPIKE and H-DROP do
-    fire around day 7, and that is correct rather than a bug: on day 7 H-SPIKE's spike
-    day is a seventh of the evidence and H-DROP has not yet collapsed, so both really
-    are heading somewhere expensive on the data available. See
-    `test_early_warnings_are_hedged_rather_than_suppressed`.
+    OLS does not know that. It returns a large slope with a tiny denominator and no
+    complaint, which then extrapolates catastrophically onto the remaining days.
     """
-    for day in (14, 21, DAYS):
-        assert not assess(customer_id, day).triggered, f"{customer_id} fired on day {day}"
+    fit = fit_weather_response([9.0, 11.0, 10.0, 12.0, 9.5, 10.5, 11.5, 10.0], [7.0] * 8)
+
+    assert not fit.usable
+    assert "varied" in (fit.unusable_because or "")
 
 
-@pytest.mark.parametrize("customer_id,day", [("H-SPIKE", 7), ("H-DROP", 7)])
-def test_early_warnings_are_hedged_rather_than_suppressed(customer_id: str, day: int) -> None:
-    """The judgement call, pinned so it is not silently reversed.
+def test_fit_refuses_a_negative_heating_slope():
+    """Colder weather associated with less electricity is a house with no electric
+    heating, or a data problem. Projecting it forecasts the bill *down* as winter
+    deepens."""
+    hdd = [float(h) for h in range(2, 14)]
+    kwh = [20.0 - 0.4 * h for h in hdd]
 
-    Both of these fire early on evidence that later settles. We do **not** suppress them
-    — warning early enough to act is the entire point of a prevention agent, and on the
-    data available at that moment the concern is real. What we do instead is refuse to
-    sound confident: the bundle carries an explicit instruction not to present the figure
-    as what they will pay.
+    fit = fit_weather_response(kwh, hdd)
+
+    assert not fit.usable
+    assert "negative" in (fit.unusable_because or "")
+
+
+def test_fit_refuses_too_few_days():
+    fit = fit_weather_response([10.0] * 5, [5.0, 8.0, 12.0, 6.0, 9.0])
+    assert not fit.usable
+    assert "days elapsed" in (fit.unusable_because or "")
+
+
+def test_unusable_fit_still_carries_a_spread():
+    """The fallback path needs an uncertainty to build an interval from. Returning None
+    would push a branch into every caller and leave the straight line with no error bar."""
+    fit = fit_weather_response([8.0, 12.0, 10.0, 14.0], [6.0] * 4)
+    assert not fit.usable
+    assert fit.residual_sd_kwh > 0
+
+
+# ───────────────────────── the forecast ─────────────────────────
+
+
+def test_remaining_days_are_projected_at_seasonal_normal_not_at_the_cold_snap():
+    """The single most important line in the module.
+
+    H-COLD read on day 8 is mid-southerly. A straight-line projection assumes the
+    southerly lasts the month; this one assumes the weather returns to normal, which is
+    the defensible assumption when no forecast is available. The weather-normalised
+    projection must therefore be the *lower* of the two.
     """
-    a = assess(customer_id, day)
-    assert a.triggered
-    assert a.days_elapsed < EARLY_CYCLE_DAYS
-    caveats = " ".join(build_bill_shock(a, window(customer_id, day)).caveats)
-    assert "genuinely uncertain" in caveats
-    assert "early estimate" in caveats
+    w = window("H-COLD", 8)
+    hdd, normal = fixtures.heating_degree_days("H-COLD")
+
+    f = forecast_cycle(
+        w, days_in_cycle=DAYS_IN_JULY, daily_hdd=hdd[:8], normal_hdd_per_day=normal
+    )
+    straight_line = w.mean_kwh * DAYS_IN_JULY * w.unit_price_nzd
+
+    assert f.method is ForecastMethod.WEATHER_NORMALISED
+    assert f.projected_cost_nzd < straight_line
 
 
-def test_a_settled_cycle_carries_no_uncertainty_hedge() -> None:
-    """The hedge must disappear once it stops being true, or it becomes noise people
-    learn to skip past."""
-    a = assess("H-JUL", 21)
-    caveats = " ".join(build_bill_shock(a, window("H-JUL", 21)).caveats)
-    assert "genuinely uncertain" not in caveats
+def test_the_interval_narrows_as_the_cycle_runs():
+    """This is what replaces the EARLY_CYCLE_DAYS constant.
+
+    The old code hedged in prose about a warning it had already decided to send. Here the
+    uncertainty is in the number, so the decision can use it.
+
+    Asserted end-to-end rather than step-by-step, deliberately. The width is not
+    monotonic day by day and should not be: it is driven by observed variance, so a
+    genuinely unusual day *widens* the interval, which is the correct response to new
+    evidence that the household is less predictable than it looked. What must hold is
+    that a nearly-complete cycle is far more certain than a barely-started one.
+    """
+    hdd, normal = fixtures.heating_degree_days("H-JUL")
+    widths = {}
+    for day in (9, 15, 22, 29):
+        f = forecast_cycle(
+            window("H-JUL", day),
+            days_in_cycle=DAYS_IN_JULY,
+            daily_hdd=hdd[:day],
+            normal_hdd_per_day=normal,
+        )
+        widths[day] = f.confidence_width_pct
+
+    assert widths[29] < widths[22] < widths[15], widths
+    assert widths[29] < widths[9] / 2, widths
 
 
-def test_both_thresholds_are_required() -> None:
-    """A percentage alone fires constantly on small bills; a dollar amount alone never
-    fires on large ones. H-SPIKE is the case that proves the pair is needed: it clears
-    the percentage comfortably and is held back only by the dollar floor."""
-    a = assess("H-SPIKE", 14)
-    assert a.overshoot_pct >= SHOCK_PCT_THRESHOLD
-    assert a.overshoot_nzd < SHOCK_NZD_THRESHOLD
-    assert not a.triggered
+def test_the_interval_brackets_the_point_estimate():
+    f = forecast_cycle(
+        window("H-JUL", 14),
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=fixtures.heating_degree_days("H-JUL")[0][:14],
+        normal_hdd_per_day=fixtures.heating_degree_days("H-JUL")[1],
+    )
+    assert f.cost_p10_nzd <= f.projected_cost_nzd <= f.cost_p90_nzd
 
 
-def test_usage_collapse_produces_a_negative_overshoot() -> None:
-    a = assess("H-DROP", 21)
-    assert a.overshoot_nzd < 0
-    assert not a.triggered
+def test_a_complete_cycle_has_no_uncertainty_left():
+    """Nothing remains to forecast on day 31, so the interval must collapse. A residual
+    band on a finished cycle would be an error bar on measured data."""
+    hdd, normal = fixtures.heating_degree_days("H-JUL")
+    f = forecast_cycle(
+        window("H-JUL"), days_in_cycle=DAYS_IN_JULY, daily_hdd=hdd, normal_hdd_per_day=normal
+    )
+    assert f.days_remaining == 0
+    assert f.cost_sd_nzd == pytest.approx(0.0, abs=1e-9)
+    assert f.projected_cost_nzd == pytest.approx(f.cost_so_far_nzd, abs=0.01)
 
 
-# ───────────────────────────── arithmetic ─────────────────────────────
+def test_probability_above_is_a_real_distribution():
+    f = forecast_cycle(
+        window("H-JUL", 12),
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=fixtures.heating_degree_days("H-JUL")[0][:12],
+        normal_hdd_per_day=fixtures.heating_degree_days("H-JUL")[1],
+    )
+    assert f.probability_above(f.projected_cost_nzd) == pytest.approx(0.5, abs=0.01)
+    assert f.probability_above(f.cost_p90_nzd) == pytest.approx(0.10, abs=0.01)
+    assert f.probability_above(0.0) > 0.99
 
 
-def test_cost_so_far_and_usage_agree() -> None:
-    """The dashboard shows both. Two figures on one screen that cannot both be true is
-    the failure this feature exists to avoid."""
-    a = assess("H-COLD", 6)
-    assert a.cost_so_far_nzd == pytest.approx(a.usage_so_far_kwh * 0.30, abs=0.01)
-
-
-def test_days_remaining_is_the_rest_of_the_cycle() -> None:
-    a = assess("H-JUL", 14)
-    assert a.days_elapsed == 14
-    assert a.days_in_cycle == DAYS
-    assert a.days_remaining == 17
-
-
-def test_projection_scales_to_the_full_cycle() -> None:
-    a = assess("H-TARIFF", 10)
-    w = window("H-TARIFF", 10)
-    assert a.projected_cost_nzd == pytest.approx(w.mean_kwh * DAYS * 0.30, abs=0.01)
-
-
-def test_more_days_than_the_cycle_is_rejected() -> None:
+def test_readings_longer_than_the_cycle_are_rejected():
     with pytest.raises(ValueError):
-        assess_bill_shock(window("H-JUL"), 10, 7.06)
+        forecast_cycle(
+            window("H-JUL"), days_in_cycle=10, daily_hdd=[5.0] * 31, normal_hdd_per_day=5.0
+        )
 
 
-def test_trend_needs_enough_days_to_mean_anything() -> None:
-    """Fewer than six days returns 0.0 rather than a small number that looks like a
-    finding. Silence is the honest answer when there is nothing to say."""
-    assert recent_trend_pct(window("H-COLD", 5)) == 0.0
-    assert recent_trend_pct(window("H-COLD", 6)) != 0.0
+def test_day_of_week_correction_is_inert_without_a_start_date():
+    """Not a stub. Guessing the start date from a period phrase would apply a real
+    adjustment off a guessed calendar."""
+    mix = day_of_week_adjustment([10.0] * 14, None, DAYS_IN_JULY)
+    assert not mix.applied
+    assert mix.adjustment == 1.0
 
 
-# ───────────────────────────── the fact bundle ─────────────────────────────
+# ───────────────────────── the expectation anchor ─────────────────────────
 
 
-def test_the_trend_fact_is_omitted_when_it_did_not_trigger() -> None:
-    """A bundle carrying a fact the narration has no reason to mention is an invitation
-    to mention it, and "usage is up 3%" stated as a finding is noise dressed as insight."""
-    quiet = assess("H-JUL", 14)
-    assert "rising_within_cycle" not in quiet.reasons
-    keys = {f.key for f in build_bill_shock(quiet, window("H-JUL", 14)).facts}
-    assert "recent_trend_pct" not in keys
+def test_own_history_beats_the_neighbourhood():
+    """Bill shock is a violated *personal* expectation. A household that has always run
+    hot is not surprised by another hot month."""
+    own = choose_expectation(
+        days_in_cycle=31,
+        unit_price_nzd=0.30,
+        comparable_home_kwh_per_day=7.0,
+        same_period_last_year_nzd=240.0,
+    )
+    assert own.basis is ExpectationBasis.OWN_SAME_PERIOD_LAST_YEAR
+    assert own.cost_nzd == 240.0
 
-    rising = assess("H-COLD", 6)
-    rising_keys = {f.key for f in build_bill_shock(rising, window("H-COLD", 6)).facts}
-    assert "recent_trend_pct" in rising_keys
+    recent = choose_expectation(
+        days_in_cycle=31,
+        unit_price_nzd=0.30,
+        comparable_home_kwh_per_day=7.0,
+        recent_cycle_costs_nzd=[210.0, 260.0, 230.0],
+    )
+    assert recent.basis is ExpectationBasis.OWN_RECENT_CYCLES
+    assert recent.cost_nzd == 230.0  # median, not mean
 
 
-def test_never_claims_to_know_their_usual_bill() -> None:
-    """The claim boundary, pinned.
+def test_the_demo_households_fall_back_to_comparable_homes_and_say_so():
+    """The honest state of the seeded data — and the caveat that goes with it is the
+    thing that stops the narration claiming 'more than you usually pay'."""
+    e = choose_expectation(
+        days_in_cycle=31, unit_price_nzd=0.30, comparable_home_kwh_per_day=7.06
+    )
+    assert e.basis is ExpectationBasis.COMPARABLE_HOMES
+    assert "similar homes" in e.claim_rule.lower()
+    assert "usually pay" in e.claim_rule
 
-    There is no billing history in the demo data, so "more than you usually pay" is
-    unknowable. The caveats must say so explicitly — this is the guard that stops the
-    narration inventing a personal baseline out of a comparable-homes figure.
-    """
-    caveats = " ".join(build_bill_shock(assess("H-JUL", 14), window("H-JUL", 14)).caveats)
+
+def test_the_basis_claim_rule_reaches_the_narration_bundle():
+    caveats = " ".join(build_bill_shock(assessment("H-JUL", 14)).caveats).lower()
     assert "similar homes" in caveats
-    assert "billing history" in caveats
     assert "usually pay" in caveats
 
 
-def test_every_figure_in_the_bundle_is_verifiable() -> None:
-    """Layer 3 checks narration against `allowed_values()`. A figure the warning shows
-    but the bundle omits could never be quoted by the assistant without being rejected."""
-    a = assess("H-COLD", 6)
-    bundle = build_bill_shock(a, window("H-COLD", 6))
-    allowed = bundle.allowed_values()
-    for value in (a.projected_cost_nzd, a.expected_cost_nzd, a.overshoot_nzd):
-        assert value in allowed
+# ───────────────────────── attribution ─────────────────────────
 
 
-# ───────────────────────────── the endpoint ─────────────────────────────
+def test_the_causes_sum_to_the_overshoot():
+    """They add up by construction, and the test is here because a decomposition whose
+    parts do not add up to its headline is what gets picked apart on stage."""
+    a = assessment("H-COLD", 20)
+    total = (
+        a.attribution.weather_nzd
+        + a.attribution.behaviour_nzd
+        + a.attribution.everyday_load_nzd
+    )
+    assert total == pytest.approx(a.overshoot_nzd, abs=0.05)
 
 
-def test_endpoint_returns_a_triggered_warning() -> None:
-    body = client.get("/api/households/H-COLD/bill-shock?as_at_day=6").json()
-    assert body["triggered"] is True
-    assert set(body["reasons"]) == {"above_comparable_homes", "rising_within_cycle"}
-    assert body["days_remaining"] == 25
-    assert body["facts"]
+def test_no_cause_is_offered_when_the_regression_was_not_usable():
+    """An unexplained overshoot presented with a confident cause is worse than one
+    presented with none, so the bundle must forbid it outright."""
+    w = window("H-JUL", 6)
+    a = assess(
+        w,
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=fixtures.heating_degree_days("H-JUL")[0][:6],
+        normal_hdd_per_day=fixtures.heating_degree_days("H-JUL")[1],
+        comparable_home_kwh_per_day=fixtures.comparison_baseline("H-JUL"),
+        preferences=defaults_for("H-JUL"),
+    )
+    assert not a.attribution.explained
+    assert a.dominant_cause is None
+
+    caveats = " ".join(build_bill_shock(a).caveats)
+    assert "NO breakdown" in caveats
+    assert "not even a hedged one" in caveats
 
 
-def test_endpoint_returns_a_calm_state_rather_than_nothing() -> None:
-    """The figures are present either way, so the dashboard can show "on track" without
-    a second request."""
-    body = client.get("/api/households/H-TARIFF/bill-shock?as_at_day=14").json()
-    assert body["triggered"] is False
-    assert body["reasons"] == []
-    assert body["projected_cycle_cost_nzd"] > 0
+def test_attribution_facts_are_absent_when_unexplained():
+    """Not merely forbidden in prose — the numbers are not in the bundle at all, so
+    there is nothing on the page for the model to reach for."""
+    a = assessment("H-JUL", 6)
+    keys = {f.key for f in build_bill_shock(a).facts}
+    assert not {"weather_share_nzd", "higher_use_share_nzd"} & keys
 
 
-def test_endpoint_defaults_to_the_whole_window() -> None:
-    body = client.get("/api/households/H-JUL/bill-shock").json()
-    assert body["days_elapsed"] == DAYS
-    assert body["days_remaining"] == 0
+# ───────────────────────── the trigger ─────────────────────────
 
 
-@pytest.mark.parametrize("day", [0, -1, 99])
-def test_endpoint_rejects_a_day_outside_the_cycle(day: int) -> None:
-    assert client.get(f"/api/households/H-JUL/bill-shock?as_at_day={day}").status_code == 422
+def test_the_customers_threshold_changes_whether_it_fires():
+    """The feature, in one test. Same household, same day, same data — two settings."""
+    sensitive = AlertPreferences(account_ref="H-JUL", tier1_pct=5, tier2_pct=10, tier3_pct=20)
+    tolerant = AlertPreferences(account_ref="H-JUL", tier1_pct=150, tier2_pct=175, tier3_pct=200)
+
+    assert assessment("H-JUL", 20, sensitive).triggered
+    assert not assessment("H-JUL", 20, tolerant).triggered
 
 
-def test_endpoint_404s_for_an_unknown_household() -> None:
-    assert client.get("/api/households/H-NOPE/bill-shock").status_code == 404
+def test_the_dollar_floor_holds_under_a_low_percentage():
+    """A percentage alone fires constantly on small bills. Someone who sets 5% must still
+    not be texted about $8."""
+    prefs = AlertPreferences(
+        account_ref="H-FLAT", tier1_pct=5, tier2_pct=10, tier3_pct=20, min_overshoot_nzd=200
+    )
+    a = assessment("H-JUL", 20, prefs)
+    assert a.tier_thresholds_nzd[1] >= a.expected_cost_nzd + 200
+
+
+def test_probabilities_are_monotonic_across_the_ladder():
+    """A higher threshold can never be more likely to be exceeded. If this fails the
+    thresholds or the CDF are the wrong way round."""
+    a = assessment("H-JUL", 18)
+    p = a.tier_probabilities
+    assert p[1] >= p[2] >= p[3]
+    assert all(0.0 <= v <= 1.0 for v in p.values())
+
+
+def test_a_household_on_track_does_not_trigger():
+    a = assessment("H-FLAT", 20) if "H-FLAT" in fixtures.all_ids() else None
+    if a is None:
+        pytest.skip("no on-track fixture household")
+    assert not a.triggered
+
+
+def test_every_fixture_household_assesses_without_raising():
+    """Cheap breadth. The forecast has several fallback paths and each fixture exercises
+    a different one; a household that raises here is a household the dashboard 500s on."""
+    for customer_id in fixtures.all_ids():
+        for day in (7, 14, 21, 31):
+            a = assessment(customer_id, day)
+            assert math.isfinite(a.projected_cost_nzd)
+            assert a.forecast.cost_p10_nzd <= a.forecast.cost_p90_nzd
+
+
+def test_the_bundle_never_carries_a_raw_series():
+    """The load-bearing property of the whole architecture.
+
+    You cannot ban a language model from doing arithmetic — you can only decline to hand
+    it the operands. Every fact must be a scalar; a list reaching this bundle is a model
+    that can be asked to add it up.
+    """
+    bundle = build_bill_shock(assessment("H-JUL", 20))
+    for fact in bundle.facts:
+        assert isinstance(fact.value, int | float)
+    assert "daily_kwh" not in bundle.model_dump()

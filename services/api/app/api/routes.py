@@ -18,17 +18,32 @@ import logging
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
-from app import auth, hardware, voice
-from app.analytics.engine import UsageWindow, assess_bill_shock, build_bill_shock
+from app import auth, hardware, offline, voice
+from app.alerts.preferences import AlertPreferences
+from app.analytics import billshock
+from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
-from app.config import get_dispatcher, get_provider, get_recorder, get_repository, settings
+from app.clarify import apply, detect, questions
+from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
+from app.config import (
+    get_context_store,
+    get_dispatcher,
+    get_preferences_store,
+    get_provider,
+    get_recorder,
+    get_repository,
+    settings,
+)
+from app.narration.prompts import SYSTEM
 from app.pipeline import DAYS_IN_JULY, UnknownCustomerError, answer, narrate, plan
 from app.schemas import (
     AlertSummary,
     BillShockWarning,
+    CauseBreakdown,
     ChatRequest,
     ChatResponse,
     DemoAccountCard,
+    ForecastSummary,
     HouseholdSummary,
     LoginRequest,
     LoginResponse,
@@ -63,6 +78,17 @@ async def health() -> dict[str, object]:
         # The UI decides whether to render a mic button from this. Asking for the
         # microphone and then failing is worse than not offering it.
         "voice": voice.status(),
+        # Which gateway each alert channel resolved to. A misconfigured backend falls
+        # back to the file sink with a warning rather than raising, so without this line
+        # "no texts were sent" and "SMS is writing to disk" look identical from outside —
+        # the same class of silent degradation the recorder disclosure exists for.
+        "alerts": {
+            "dispatcher": getattr(dispatcher := get_dispatcher(), "name", "off"),
+            "gateways": dispatcher.describe(),
+        },
+        # Where a customer's thresholds are stored. "memory" means the Settings screen
+        # saves for the life of the process and no longer.
+        "preferences": get_preferences_store().name,
     }
 
 
@@ -148,10 +174,20 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
 
     `as_at_day` truncates the cycle so the warning can be seen mid-cycle. Each seeded
     household holds a complete July, and a warning delivered on day 31 is not a warning,
-    it is a bill. Which days show what is not obvious from the data, so: H-JUL trips
-    `above_comparable_homes` at every point in the cycle, and H-COLD trips
-    `rising_within_cycle` on days 6-8 as the cold snap starts — that second one is the
-    better demo, because there are still 25 days left to act on it.
+    it is a bill.
+
+    Which days show what is not obvious from the data:
+
+    * **H-COLD is the demo household.** It is the only one whose usage actually tracks
+      the HDD series, so it is the only one that reaches the weather-normalised path and
+      produces a cause breakdown ("$41 of this is the cold snap"). Read it around day 14.
+    * **H-JUL always falls back to the straight line.** Its daily totals are real measured
+      data and `_HDD_JULY` is an invented series built for H-COLD, so the two do not
+      correspond and the regression correctly refuses to fit. That is the honest state of
+      the fixture data — manufacturing a correlated weather series for it would be
+      inventing the exact kind of figure this product exists to prevent. The response says
+      `method: straight_line` and the narration is forbidden from attributing anything to
+      temperature.
 
     Reads through the repository (KEA-33) rather than `fixtures` directly. The warning
     and the dashboard summary quote the same dollar figure, so they have to come from
@@ -179,12 +215,37 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
             unit_price_nzd=full.unit_price_nzd,
         )
 
-    assessment = assess_bill_shock(window, DAYS_IN_JULY, ctx.baseline)
-    bundle = build_bill_shock(assessment, window)
+    preferences = await _preferences_for(customer_id)
+    assessment = billshock.assess(
+        window,
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=ctx.hdd[: len(window.daily_kwh)],
+        normal_hdd_per_day=ctx.normal_hdd,
+        comparable_home_kwh_per_day=ctx.baseline,
+        preferences=preferences,
+    )
+    # The clarifying-question path. Python decides there is a gap worth asking about;
+    # the model only delivers the question it is handed. See app/clarify/.
+    household = await get_context_store().get(customer_id)
+    gaps = detect.find_gaps(
+        daily_kwh=window.daily_kwh,
+        daily_hdd=ctx.hdd[: len(window.daily_kwh)],
+        response=assessment.forecast.response,
+        unit_price_nzd=window.unit_price_nzd,
+        overshoot_nzd=assessment.overshoot_nzd,
+        unexplained_nzd=assessment.attribution.everyday_load_nzd,
+        attribution_explained=assessment.attribution.explained,
+    )
+    question = questions.select(gaps, household, period=window.period)
+    bundle = billshock.build_bill_shock(
+        assessment, context=household, question=question
+    )
 
     # Escalation. Idempotent by database constraint, so polling this endpoint does not
-    # re-send; failures are recorded on the row and never raised into the response,
-    # because a customer's warning must not disappear because a mail server is down.
+    # re-send; failures are recorded on the delivery rows and never raised into the
+    # response, because a customer's warning must not disappear because a mail server is
+    # down.
+    #
     # No `customer_name`. `ctx.label` is the demo household's *description* — "Cold-snap
     # driven, not behaviour" — and greeting somebody with it produced "Hi Cold-snap
     # driven, not behaviour,". There is no name to use instead: `models.Customer` holds
@@ -195,18 +256,22 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
     dispatch = await get_dispatcher().dispatch(
         account_ref=customer_id,
         assessment=assessment,
+        preferences=preferences,
         period=window.period,
-        recipient_email=settings.demo_recipient,
     )
 
+    f = assessment.forecast
     log.info(
-        "bill-shock customer=%s day=%d/%d triggered=%s reasons=%s projected=%.2f",
+        "bill-shock customer=%s day=%d/%d triggered=%s method=%s reasons=%s "
+        "projected=%.2f p(tier1)=%.2f",
         customer_id,
         assessment.days_elapsed,
         assessment.days_in_cycle,
         assessment.triggered,
+        f.method,
         assessment.reasons,
         assessment.projected_cost_nzd,
+        assessment.tier_probabilities.get(1, 0.0),
     )
 
     return BillShockWarning(
@@ -217,19 +282,49 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
         days_elapsed=assessment.days_elapsed,
         days_in_cycle=assessment.days_in_cycle,
         days_remaining=assessment.days_remaining,
-        usage_so_far_kwh=assessment.usage_so_far_kwh,
-        cost_so_far_nzd=assessment.cost_so_far_nzd,
+        usage_so_far_kwh=f.usage_so_far_kwh,
+        cost_so_far_nzd=f.cost_so_far_nzd,
         projected_cycle_cost_nzd=assessment.projected_cost_nzd,
-        comparable_home_cost_nzd=assessment.expected_cost_nzd,
+        expected_cost_nzd=assessment.expected_cost_nzd,
+        expectation_basis=assessment.expectation.basis.value,
         overshoot_nzd=assessment.overshoot_nzd,
         overshoot_pct=assessment.overshoot_pct,
         recent_trend_pct=assessment.recent_trend_pct,
+        forecast=ForecastSummary(
+            method=f.method.value,
+            detail=f.method_detail,
+            cost_p10_nzd=f.cost_p10_nzd,
+            cost_p90_nzd=f.cost_p90_nzd,
+            confidence_width_pct=f.confidence_width_pct,
+            base_load_kwh_per_day=(
+                f.response.base_load_kwh_per_day if f.response.usable else None
+            ),
+            heating_kwh_per_hdd=(
+                f.response.heating_kwh_per_hdd if f.response.usable else None
+            ),
+            r_squared=f.response.r_squared if f.response.usable else None,
+        ),
+        causes=CauseBreakdown(
+            explained=assessment.attribution.explained,
+            weather_nzd=assessment.attribution.weather_nzd,
+            higher_use_nzd=assessment.attribution.behaviour_nzd,
+            everyday_load_nzd=assessment.attribution.everyday_load_nzd,
+            dominant=assessment.dominant_cause,
+        ),
+        # Keys are stringified because JSON object keys are strings and an int-keyed dict
+        # round-trips as one anyway. Doing it here means the generated TypeScript says
+        # `Record<string, number>` and the frontend is not surprised at runtime.
+        thresholds_pct={str(k): v for k, v in preferences.thresholds.items()},
+        tier_probabilities={str(k): v for k, v in assessment.tier_probabilities.items()},
         facts=bundle.facts,
         caveats=bundle.caveats,
+        question=question,
         alert=AlertSummary(
             tier=dispatch.tier,
             channels=list(dispatch.channels),
             sent=list(dispatch.sent),
+            deferred=list(dispatch.deferred),
+            confidence=dispatch.confidence,
             suppressed=dispatch.suppressed,
             detail=dispatch.detail,
             destination=dispatch.destination,
@@ -238,6 +333,177 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
         if dispatch.tier
         else None,
     )
+
+
+async def _preferences_for(customer_id: str) -> AlertPreferences:
+    """The customer's thresholds, with the demo contact points filled in if they have none.
+
+    The fallback exists because the seeded households carry no personal details by design
+    (see `models.Customer`), so a rehearsal would otherwise always resolve to "no email
+    address on file" and never demonstrate a delivery. It applies **only when the customer
+    has not set an address themselves** — a real preference always wins, and a deployment
+    that leaves `KEA_DEMO_RECIPIENT` unset correctly reports the gap rather than mailing
+    the operator about a stranger's bill.
+    """
+    prefs = await get_preferences_store().get(customer_id)
+    patch: dict[str, str] = {}
+    if not prefs.email and settings.demo_recipient:
+        patch["email"] = settings.demo_recipient
+    if not prefs.phone_e164 and settings.demo_phone:
+        patch["phone_e164"] = settings.demo_phone
+    return prefs.model_copy(update=patch) if patch else prefs
+
+
+@router.get(
+    "/households/{customer_id}/alert-preferences", response_model=AlertPreferences
+)
+async def get_alert_preferences(customer_id: str) -> AlertPreferences:
+    """What this household asked to be told about, and how.
+
+    Returns defaults for a customer who has never opened Settings rather than 404. There
+    is no such thing as a household with no alerting behaviour — there is only one whose
+    behaviour nobody has changed, and the screen has to render either way.
+    """
+    return await get_preferences_store().get(customer_id)
+
+
+@router.put(
+    "/households/{customer_id}/alert-preferences", response_model=AlertPreferences
+)
+async def put_alert_preferences(
+    customer_id: str, prefs: AlertPreferences
+) -> AlertPreferences:
+    """Set the thresholds.
+
+    The path parameter wins over the body. A body carrying a different `account_ref` is a
+    request to write one customer's settings under another's id, and it is the shape a
+    broken client produces long before it is the shape an attacker does — either way the
+    only safe reading is the one in the URL.
+
+    Validation (monotonic ladder, 5-200% bounds, real timezone) happens in the Pydantic
+    model, so an invalid ladder is a 422 with a readable message rather than a policy
+    layer quietly sorting the numbers behind the customer's back.
+    """
+    return await get_preferences_store().put(
+        prefs.model_copy(update={"account_ref": customer_id})
+    )
+
+
+@router.get(
+    "/households/{customer_id}/context", response_model=HouseholdContext
+)
+async def get_household_context(customer_id: str) -> HouseholdContext:
+    """What this household has told us about their home.
+
+    Returns an empty context for a household that has never been asked, rather than 404 —
+    "nothing known" is a real state and the app has to render it.
+    """
+    return await get_context_store().get(customer_id)
+
+
+@router.post(
+    "/households/{customer_id}/context/answers", response_model=HouseholdContext
+)
+async def answer_question(
+    customer_id: str, response: QuestionResponse
+) -> HouseholdContext:
+    """Record an answer to a clarifying question.
+
+    The answer is a closed set — yes, no, not sure — plus at most a date and a count.
+    Deliberately not free text: taking prose back and pasting it into the next prompt
+    would put uncomputed figures into the model's context ("probably 400 kWh"), which is
+    the exact failure the FactBundle exists to prevent. See `app/clarify/schemas.py`.
+
+    A 404 for an unknown question id rather than silently recording it: an id we do not
+    recognise means the client is out of date, and storing it would mark a question as
+    asked that this backend has no way to ask again.
+    """
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    household = await get_context_store().get(customer_id)
+    question = _rebuild_question(response.question_id, customer_id, ctx, household)
+    if question is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"no open question with id {response.question_id!r} for this household — "
+                "it may already be answered, or no longer applicable."
+            ),
+        )
+
+    updated = apply.record(household, question, response)
+    return await get_context_store().put(updated)
+
+
+def _rebuild_question(
+    question_id: str,
+    customer_id: str,
+    ctx: UsageContext,
+    household: HouseholdContext,
+) -> ClarifyingQuestion | None:
+    """Re-derive the question the client is answering, and check it is still the open one.
+
+    The alternative — trusting the id in the request body — would let a client record an
+    answer to a question that was never asked, or to one that no longer applies because
+    the data moved. Re-deriving costs one pure assessment and makes the id unforgeable in
+    the only way that matters: it has to be the question this household would be asked
+    right now.
+    """
+    from app.alerts.preferences import defaults_for
+
+    assessment = billshock.assess(
+        ctx.window,
+        days_in_cycle=DAYS_IN_JULY,
+        daily_hdd=ctx.hdd[: len(ctx.window.daily_kwh)],
+        normal_hdd_per_day=ctx.normal_hdd,
+        comparable_home_kwh_per_day=ctx.baseline,
+        preferences=defaults_for(customer_id),
+    )
+    gaps = detect.find_gaps(
+        daily_kwh=ctx.window.daily_kwh,
+        daily_hdd=ctx.hdd[: len(ctx.window.daily_kwh)],
+        response=assessment.forecast.response,
+        unit_price_nzd=ctx.window.unit_price_nzd,
+        overshoot_nzd=assessment.overshoot_nzd,
+        unexplained_nzd=assessment.attribution.everyday_load_nzd,
+        attribution_explained=assessment.attribution.explained,
+    )
+    question = questions.select(gaps, household, period=ctx.window.period)
+    return question if question and question.id == question_id else None
+
+
+@router.get("/offline/models", response_model=list[offline.OfflineModelOption])
+async def offline_models() -> list[offline.OfflineModelOption]:
+    """What can be downloaded to a device, and how big it is.
+
+    Served rather than hard-coded in the app so the sign-up prompt quotes a size that
+    matches what will actually be downloaded. A customer agreeing to "about 530 MB" and
+    receiving 1.8 GB on a metered rural connection is a real cost we imposed on them.
+    """
+    return offline.OFFLINE_MODELS
+
+
+@router.get("/households/{customer_id}/offline-pack", response_model=offline.OfflinePack)
+async def offline_pack(customer_id: str) -> offline.OfflinePack:
+    """Everything a device needs to answer this household's questions with no network.
+
+    Fetched by the client while it still has a connection, on the customer's schedule —
+    the server never pushes. Carries pre-computed fact bundles, not meter readings: a
+    device holding the raw series is a device whose on-device model can be asked to add
+    it up, which is the one thing this architecture exists to prevent, on the platform
+    where it is hardest to audit.
+
+    See `app/offline.py` and `docs/adr/0008-offline-first-narration.md`.
+    """
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return offline.PackBuilder(system_prompt=SYSTEM).build(customer_id, ctx)
 
 
 @router.post("/chat", response_model=ChatResponse)

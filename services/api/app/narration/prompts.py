@@ -22,6 +22,9 @@ New Zealand households in plain English.
 Absolute rules:
 - Use ONLY the figures given to you. Never calculate, estimate, infer or round to a \
 new number. Copy the figures exactly as they are written.
+- Never compare two figures in words either. Do not say "twice", "double", "half", \
+"a third", "three times" or anything like them unless that exact comparison is one of \
+the figures you were given. Working it out yourself is still calculating.
 - If a figure you need is not provided, say you don't have it. Never fill the gap.
 - Never name or guess an appliance. Half-hourly meter data cannot identify appliances.
 - Plain language, no jargon. Say "kilowatt hours" or "units", not "kWh consumption".
@@ -90,6 +93,7 @@ def build_user_prompt(
     bundle: FactBundle,
     question: str,
     rejected: list[str] | None = None,
+    derived: list[str] | None = None,
 ) -> str:
     """`rejected` names the tokens layer 3 refused on the previous attempt.
 
@@ -98,6 +102,13 @@ def build_user_prompt(
     tokens is the cheapest correction signal available and costs one short paragraph.
     Whether it actually lifts the pass rate is a golden-set question (KEA-46), not a
     matter of taste: measure it before assuming.
+
+    `derived` names the *worded comparisons* it refused — "twice as much", "half your
+    bill". Kept separate from `rejected` and given its own correction, because the two
+    need different instructions. "That figure is not in your data" tells a model to look
+    at the list again; a model that wrote "double" is not looking at a wrong figure, it
+    is looking at two right ones and dividing them, and telling it to re-check the list
+    does not address that.
     """
     task = _INTENT_TASK.get(bundle.intent, _INTENT_TASK[Intent.OUT_OF_SCOPE])
     parts: list[str] = []
@@ -119,6 +130,17 @@ def build_user_prompt(
             "as written. Do not calculate, convert, annualise or round to a new number. "
             "If you cannot make the point without a figure you were not given, leave the "
             "point out.\n"
+        )
+
+    if derived:
+        phrases = ", ".join(f'"{p}"' for p in sorted(set(derived)))
+        parts.append(
+            "YOUR PREVIOUS ANSWER WAS REJECTED for comparing figures yourself. It said: "
+            f"{phrases}\n"
+            "That is a calculation even though it contains no number — you divided one "
+            "figure by another to get it. Write the answer again and simply state the "
+            "figures side by side, letting the reader see the difference for themselves. "
+            "Do not characterise the size of a gap in words at all.\n"
         )
 
     parts.append(f"The customer asked: \"{question}\"\n")

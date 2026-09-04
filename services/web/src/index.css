@@ -1095,3 +1095,53 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
 .help-grid{align-items:start}
 .help-actions{align-content:start}
 .help-faq{min-height:480px}
+
+/* ── Bill-shock threshold editor (Settings) ─────────────────────────────────
+   The one control on Settings backed by the server rather than local state.
+   Laid out as rows rather than a grid so it reads the same on a phone, which is
+   where the mobile app will render the identical endpoints. */
+.threshold-editor{display:flex;flex-direction:column;gap:4px}
+.threshold-ladder{margin:8px 0 0;padding:0;border:0}
+.threshold-ladder:disabled{opacity:.45}
+.threshold-ladder legend{padding:0 0 8px;color:#7885a4;font-size:12px;font-weight:600}
+.threshold-row{padding:14px 0;border-top:1px solid #ebedf4}
+.threshold-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.threshold-channel{display:inline-flex;align-items:center;gap:10px;color:#2f3e65}
+.threshold-channel svg{width:18px;color:#5c43e7}
+.threshold-head input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple)}
+.threshold-slider{width:100%;margin:12px 0 6px;accent-color:var(--purple)}
+/* 44px hit target on the handle — this is dragged on a phone. */
+.threshold-slider::-webkit-slider-thumb{width:22px;height:22px}
+.threshold-value{margin:0;color:#2f3e65;font-size:14px}
+.threshold-value span{color:#647191}
+.threshold-note{display:block;margin-top:4px;color:#8490ac;font-size:12px}
+.threshold-money-input,.threshold-quiet{display:inline-flex;align-items:center;gap:6px;color:#2f3e65;font-size:14px}
+.threshold-money-input input,.threshold-quiet input{width:64px;min-height:38px;padding:6px 8px;border:1px solid #e0e4ef;border-radius:10px;text-align:center}
+.threshold-actions{display:flex;justify-content:flex-end;padding-top:16px}
+.threshold-actions .primary-action:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.settings-loading{color:#7885a4;font-size:13px}
+.settings-inline-error{display:flex;align-items:center;gap:8px;margin:8px 0 0;color:#b4231f;font-size:13px}
+.settings-inline-error svg{flex-shrink:0;width:18px}
+
+/* ── Offline-model prompt (sign-up) ────────────────────────────────────────
+   Nothing is downloaded unless somebody says yes, so this reads as an offer and
+   not as a notification. */
+.offline-prompt{display:flex;flex-direction:column;gap:14px;color:#4a5877}
+.offline-prompt-mark{width:36px;height:36px;color:#5c43e7}
+.offline-prompt p{margin:0;line-height:1.55}
+.offline-prompt-points{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.offline-prompt-points li{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;font-size:13px;line-height:1.5}
+.offline-prompt-points svg{width:18px;color:#5c43e7}
+.offline-prompt small{color:#8490ac}
+
+@media (max-width:600px){
+  .threshold-head{flex-wrap:wrap}
+  .threshold-money-input,.threshold-quiet{flex-wrap:wrap}
+}
+
+:root[data-theme=dark]{
+  .threshold-row{border-top-color:rgb(255 255 255 / 8%)}
+  .threshold-channel,.threshold-value,.threshold-money-input,.threshold-quiet{color:#e6e9f5}
+  .threshold-money-input input,.threshold-quiet input{border-color:rgb(255 255 255 / 14%);color:#e6e9f5;background:rgb(255 255 255 / 4%)}
+  .offline-prompt{color:#c8cfe4}
+}

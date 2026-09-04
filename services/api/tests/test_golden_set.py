@@ -127,34 +127,43 @@ def test_legitimate_answers_are_not_rejected(case: dict) -> None:
     report = verify(case["draft"], _bundle(case))
     assert report.passed, (
         f"{case['id']}: a legitimate answer was rejected. "
-        f"unverified={report.unverified}. Reason this case exists: {case['why']}"
+        f"unverified={report.unverified} derived={report.derived}. "
+        f"Reason this case exists: {case['why']}"
     )
 
 
 @pytest.mark.parametrize("case", MUST_REJECT, ids=_ids(MUST_REJECT))
 def test_fabricated_figures_are_caught(case: dict) -> None:
-    """The claim itself. Every one of these drafts contains an invented figure."""
+    """The claim itself. Every one of these drafts contains an invented figure.
+
+    Both rejection lists count. `unverified` holds figures with no matching fact;
+    `derived` holds computed *relationships* stated without a number — "doubled", "a
+    third". They are reported separately because they are different failures and need
+    different corrections on the retry, but from this test's point of view a draft that
+    lands in either one was correctly refused.
+    """
     report = verify(case["draft"], _bundle(case))
     assert not report.passed, (
         f"{case['id']}: a fabricated figure passed verification. "
         f"Draft: {case['draft']!r}. Why this must fail: {case['why']}"
     )
+    refused = [*report.unverified, *report.derived]
     for token in case["must_reject_tokens"]:
         stripped = token.lstrip("$")
-        assert any(stripped in u for u in report.unverified), (
-            f"{case['id']}: expected {token!r} among the unverified tokens, "
-            f"got {report.unverified}"
+        assert any(stripped in u for u in refused), (
+            f"{case['id']}: expected {token!r} among the refused tokens, got {refused}"
         )
 
 
 @pytest.mark.parametrize("case", KNOWN_GAP, ids=_ids(KNOWN_GAP))
 def test_known_gaps_still_behave_as_documented(case: dict) -> None:
-    """Pins the gaps `number_checker.py` admits to.
+    """Pins any gap `number_checker.py` admits to, by asserting the CURRENT behaviour —
+    so closing one breaks this loudly and the docstring gets updated with the code.
 
-    Worded quantities ("doubled", "twice") carry no numeric token, so layer 3 cannot see
-    them. That is documented rather than fixed. This test asserts the *current* behaviour
-    so that closing the gap breaks it loudly — at which point the docstring, and this
-    case, need updating together.
+    Empty as of 4 September 2026. The one entry it held (V-201, worded quantities such as
+    "doubled" carrying no numeric token) was closed by the derived-claim pass and moved
+    into `verification_must_reject` as V-110. An empty list here is the correct state, not
+    a missing fixture — add a case when a new gap is knowingly accepted.
     """
     report = verify(case["draft"], _bundle(case))
     assert report.passed, (

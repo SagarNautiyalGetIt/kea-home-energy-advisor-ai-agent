@@ -4,6 +4,7 @@ import AreaChart from '../components/AreaChart'
 import Modal from '../components/Modal'
 import { profile } from '../data/mockData'
 import {
+  basisNote,
   getBillShock,
   getHouseholds,
   type BillShockWarning,
@@ -142,8 +143,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         <article className="card shock-card shock-offline"><h3><CircleAlert/>Usage data unavailable</h3><p>Kea can&rsquo;t reach your meter data right now, so there is no projection to show. Nothing here is estimated in the meantime.</p></article>
       ) : shock?.triggered ? (
         <article className="card shock-card"><h3><span className="bill-status-dot bill-status-dot-alert" aria-hidden="true"/>Power Bill Shock Warning</h3>
-          <p>You are <strong>{shock.days_elapsed} of {shock.days_in_cycle} days</strong> into this cycle and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>. A comparable home would run to about {money(shock.comparable_home_cost_nzd)} — that is <strong>{money(shock.overshoot_nzd)}</strong> more, or {shock.overshoot_pct.toFixed(0)}%.</p>
-          {shock.reasons.includes('rising_within_cycle') && (
+          <p>You are <strong>{shock.days_elapsed} of {shock.days_in_cycle} days</strong> into this cycle and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>. You would normally expect about {money(shock.expected_cost_nzd)} — that is <strong>{money(shock.overshoot_nzd)}</strong> more, or {shock.overshoot_pct.toFixed(0)}%.</p>
+          {shock.reasons.includes('higher_daily_use') && (
             <p>Daily use is up {shock.recent_trend_pct.toFixed(0)}% since the start of the cycle.</p>
           )}
           {/* At day 31 of 31 there is nothing left to prevent, and the old copy said
@@ -158,13 +159,13 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
             <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
           )}
           <div><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">Compared with similar homes, not with your own past bills — Kea does not hold your billing history. Estimated at an illustrative 30c/kWh.</small>
+          <small className="shock-basis">{basisNote(shock.expectation_basis)} Estimated at an illustrative 30c/kWh.</small>
         </article>
       ) : shock ? (
         <article className="card shock-card shock-ok"><h3><span className="bill-status-dot bill-status-dot-normal" aria-hidden="true"/><ShieldCheck/>No bill shock expected</h3>
-          <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with comparable homes at about {money(shock.comparable_home_cost_nzd)}.</p>
+          <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with the {money(shock.expected_cost_nzd)} you would normally expect.</p>
           <div><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">Compared with similar homes. Estimated at an illustrative 30c/kWh.</small>
+          <small className="shock-basis">{basisNote(shock.expectation_basis)} Estimated at an illustrative 30c/kWh.</small>
         </article>
       ) : (
         <article className="card shock-card shock-ok"><h3>Checking your usage…</h3><p>Sparky is looking at this cycle so far.</p></article>

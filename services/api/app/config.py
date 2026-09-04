@@ -57,10 +57,22 @@ def _env(key: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Settings:
-    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "ollama"))
+    #: One name, or a `+`-separated fallback chain. See `app.providers.resolver`.
+    #:
+    #:   bedrock          the default — Claude on Bedrock
+    #:   ollama           local development, chosen deliberately
+    #:   bedrock+ollama   Bedrock, dropping to the local model only if it is unreachable
+    #:
+    #: The default changed from `ollama` in Sprint 3. A local model sized to whatever
+    #: hardware happened to be present was right for a laptop demo and wrong as an
+    #: architecture — the answer a customer gets should not depend on which machine served
+    #: it. Nothing falls back automatically: a chain has to be written out, because a
+    #: silent model downgrade looks like an answer and reads as the product getting worse.
+    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "bedrock"))
 
     #: Sized to the machine — see `app.hardware`. On the 48 GB M4 this is `gemma3:27b`,
     #: on the 16 GB M5 `gemma3:12b`, and `gemma3:4b` everywhere else including CI.
+    #: Only consulted when `ollama` appears in the provider chain.
     #:
     #: `select_ollama_model()` reads KEA_OLLAMA_MODEL itself and returns it unchanged
     #: when set, so an explicit choice still wins and the bake-off is unaffected. The
@@ -71,7 +83,6 @@ class Settings:
         default_factory=lambda: _env("KEA_OLLAMA_URL", "http://localhost:11434")
     )
 
-    # Sprint 3 — unused until BedrockProvider is implemented.
     bedrock_model: str = field(
         default_factory=lambda: _env("KEA_BEDROCK_MODEL", "anthropic.claude-sonnet-5")
     )
@@ -134,9 +145,22 @@ class Settings:
         default_factory=lambda: _env("KEA_ALERTS_ENABLED", "0").lower() in {"1", "true", "yes"}
     )
 
-    #: `file` writes a real .eml to `email_outbox`; `smtp` sends. See app/alerts/email.py
-    #: for why a file is the default on a machine that will be on conference wifi.
+    #: One backend per channel, all defaulting to `file`. See app/alerts/channels.py for
+    #: what each one's free tier actually means — the limits are real and a demo that
+    #: quietly depends on a trial account fails on the one day it matters.
+    #:
+    #:   email   file | smtp | resend
+    #:   sms     file | textbelt | twilio
+    #:   voice   file | twilio
+    #:
+    #: The university AWS account cannot use SES, SNS or Connect, which is why these are
+    #: third parties rather than the obvious AWS services. An `SesGateway` slots into the
+    #: same protocol when that changes.
     email_backend: str = field(default_factory=lambda: _env("KEA_EMAIL_BACKEND", "file"))
+    sms_backend: str = field(default_factory=lambda: _env("KEA_SMS_BACKEND", "file"))
+    voice_backend: str = field(default_factory=lambda: _env("KEA_VOICE_BACKEND", "file"))
+
+    #: Shared by all three file backends; each writes into a per-channel subdirectory.
     email_outbox: str = field(default_factory=lambda: _env("KEA_EMAIL_OUTBOX", "var/outbox"))
     email_from: str = field(
         default_factory=lambda: _env("KEA_EMAIL_FROM", "Kea Energy <no-reply@kea.example>")
@@ -150,12 +174,28 @@ class Settings:
     smtp_password: str = field(default_factory=lambda: _env("KEA_SMTP_PASSWORD", ""))
     smtp_timeout: int = field(default_factory=lambda: int(_env("KEA_SMTP_TIMEOUT", "10")))
 
-    #: Where the tier-1 email goes in the demo. The seeded households carry no personal
-    #: details by design (see models.Customer), so there is no address to read off the
-    #: account — this is the operator's own inbox, set for a rehearsal.
+    resend_api_key: str = field(default_factory=lambda: _env("KEA_RESEND_API_KEY", ""))
+
+    #: `textbelt` is the documented free key — one message per day per IP, no signup.
+    textbelt_key: str = field(default_factory=lambda: _env("KEA_TEXTBELT_KEY", "textbelt"))
+
+    twilio_account_sid: str = field(
+        default_factory=lambda: _env("KEA_TWILIO_ACCOUNT_SID", "")
+    )
+    twilio_auth_token: str = field(default_factory=lambda: _env("KEA_TWILIO_AUTH_TOKEN", ""))
+    twilio_from_number: str = field(
+        default_factory=lambda: _env("KEA_TWILIO_FROM_NUMBER", "")
+    )
+
+    #: Fallback contact points for households with no preference row — the seeded demo
+    #: accounts carry no personal details by design (see models.Customer), so there is no
+    #: address to read off the account. Set for a rehearsal; a real deployment reads them
+    #: off `app.alert_preference` and leaves these empty, which correctly produces
+    #: "no email address on file" rather than mailing the operator about a stranger.
     demo_recipient: str = field(
         default_factory=lambda: _env("KEA_DEMO_RECIPIENT", "demo@kea.example")
     )
+    demo_phone: str = field(default_factory=lambda: _env("KEA_DEMO_PHONE", ""))
 
     @property
     def cors_list(self) -> list[str]:
@@ -174,14 +214,15 @@ def get_provider():
     chat turn, and made token accounting per-request state that nothing could
     aggregate. `get_provider.cache_clear()` in tests that need a different provider.
     """
-    if settings.provider == "bedrock":
-        from app.providers.bedrock import BedrockProvider
+    from app.providers.resolver import build_provider
 
-        return BedrockProvider(model=settings.bedrock_model, aws_region=settings.aws_region)
-
-    from app.providers.ollama import OllamaProvider
-
-    return OllamaProvider(model=settings.ollama_model, base_url=settings.ollama_url)
+    return build_provider(
+        settings.provider,
+        bedrock_model=settings.bedrock_model,
+        aws_region=settings.aws_region,
+        ollama_model=settings.ollama_model,
+        ollama_url=settings.ollama_url,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -213,7 +254,7 @@ def get_dispatcher():
     """
     from pathlib import Path
 
-    from app.alerts.email import build_sender
+    from app.alerts.channels import build_registry
     from app.alerts.service import AlertDispatcher, NullDispatcher
 
     if not (settings.alerts_enabled and settings.persist):
@@ -221,14 +262,48 @@ def get_dispatcher():
 
     from app.db.session import get_sessionmaker
 
-    sender = build_sender(
-        backend=settings.email_backend,
+    registry = build_registry(
         outbox=Path(settings.email_outbox),
-        sender=settings.email_from,
-        host=settings.smtp_host,
-        port=settings.smtp_port,
-        username=settings.smtp_username,
-        password=settings.smtp_password,
-        timeout=settings.smtp_timeout,
+        email_backend=settings.email_backend,
+        sms_backend=settings.sms_backend,
+        voice_backend=settings.voice_backend,
+        email_from=settings.email_from,
+        smtp_host=settings.smtp_host,
+        smtp_port=settings.smtp_port,
+        smtp_username=settings.smtp_username,
+        smtp_password=settings.smtp_password,
+        smtp_timeout=settings.smtp_timeout,
+        resend_api_key=settings.resend_api_key,
+        textbelt_key=settings.textbelt_key,
+        twilio_account_sid=settings.twilio_account_sid,
+        twilio_auth_token=settings.twilio_auth_token,
+        twilio_from_number=settings.twilio_from_number,
     )
-    return AlertDispatcher(sender=sender, sessionmaker=get_sessionmaker())
+    return AlertDispatcher(registry=registry, sessionmaker=get_sessionmaker())
+
+
+@lru_cache(maxsize=1)
+def get_preferences_store():
+    """Where a customer's alert thresholds are read from and written to.
+
+    Falls back to an in-memory store when persistence is off, rather than to a constant:
+    the frontend team needs the Settings screen to actually save something while they
+    build it, and a read-only default would make every save appear to fail.
+    """
+    from app.alerts.store import build_preferences_store
+
+    return build_preferences_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_context_store():
+    """What each household has told us about their home — see `app/clarify/`.
+
+    Separate from the preferences store even though both are per-household, because they
+    change for different reasons: preferences are what the customer wants, this is what is
+    true about their house. One flag chooses both backends, so there is no state where one
+    is persisted and the other is not.
+    """
+    from app.clarify.store import build_context_store
+
+    return build_context_store(settings.persist)

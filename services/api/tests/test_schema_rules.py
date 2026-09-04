@@ -61,11 +61,27 @@ def test_every_timestamp_is_timezone_aware():
     assert not offenders, "use DateTime(timezone=True): " + ", ".join(offenders)
 
 
-def test_ids_are_bigint():
-    """Readings grow fastest; a 32-bit id is a future outage."""
+def test_surrogate_ids_are_bigint():
+    """Readings grow fastest; a 32-bit id is a future outage.
+
+    Scoped to surrogate keys — columns actually named `id`. A natural primary key is not
+    a counter and cannot overflow: `alert_preference.account_ref` is one row per
+    household, keyed by the household. Widening it to a bigint would mean inventing a
+    surrogate id for a table that has no use for one, and then needing a unique
+    constraint on `account_ref` anyway to say the thing the primary key already said.
+    """
     for table in Base.metadata.sorted_tables:
         for col in table.primary_key.columns:
+            if col.name != "id":
+                continue
             assert "BIGINT" in str(col.type).upper(), f"{table.name}.{col.name} is {col.type}"
+
+
+def test_every_table_has_a_primary_key():
+    """The rule the one above no longer covers on its own. A table with no primary key
+    cannot be updated by row, replicated safely, or de-duplicated."""
+    for table in Base.metadata.sorted_tables:
+        assert list(table.primary_key.columns), f"{table.name} has no primary key"
 
 
 def test_readings_are_indexed_for_the_query_we_actually_run():
@@ -126,6 +142,14 @@ def test_the_agent_writes_app_and_only_reads_kea():
         "token_usage",
         "escalation",
         "alert",
+        # The per-channel delivery ledger under `alert`, and the customer's own
+        # thresholds. Both are ours to write, so both belong here — `alert_preference`
+        # in particular is a customer setting and could never come from the loader.
+        "alert_delivery",
+        "alert_preference",
+        # What the customer told us about their home, in answer to a question we asked.
+        # Ours to write by definition — the loader has no way to know it.
+        "household_context",
     }
     assert by_schema["kea"] == {
         "mart_account_context",

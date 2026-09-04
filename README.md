@@ -82,6 +82,9 @@ Voice is the same pipeline with a different transport
 | [0005](docs/adr/0005-two-speed-models.md) | A second "fast" model is the wrong tool here |
 | [0006](docs/adr/0006-postgres-in-sprint-2.md) | PostgreSQL from Sprint 2, not SQLite |
 | [0007](docs/adr/0007-mobile-stack-expo.md) | React Native + Expo for mobile (iOS & Android) |
+| [0008](docs/adr/0008-offline-first-narration.md) | Bedrock by default; local models are for customers with no connection |
+| [0009](docs/adr/0009-smart-home-integration.md) | Smart-home devices lift the appliance caveat, per device |
+| [0010](docs/adr/0010-aws-deployment.md) | Cost-optimised AWS — Lambda, RDS t4g.micro, no NAT Gateway |
 
 Disagree with one? Open an ADR, not a PR.
 

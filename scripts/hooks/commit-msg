@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Block assistant trailers before they enter a commit message.
+#
+# This is the cheapest place to catch them. Once a trailer is in a message it is in the
+# object, and taking it out means rewriting every commit after it — which on a shared
+# branch is a team decision, not a cleanup. That is exactly what happened on `elt`: 61
+# commits carry a `Claude-Session:` line, and the local-only hook in place at the time
+# only looked for `co-authored-by: claude`.
+#
+# Installed for everyone by `make hooks`, which sets core.hooksPath to this directory.
+# The previous guard lived in .git/hooks/ and was therefore personal to one machine —
+# which is the reason it protected one person's commits and nobody else's.
+#
+# Trailers are matched ANCHORED to the start of a line, because that is what a trailer
+# is. An unanchored match blocks any commit message that discusses the guard — which
+# is precisely what happened to the commit that introduced this file, and a rule that
+# fires on its own documentation trains people to reach for --no-verify.
+#
+# Bypass in a genuine emergency with: git commit --no-verify
+
+set -uo pipefail
+MSG_FILE="$1"
+
+PATTERN='^[[:space:]]*(Claude-Session:|Co-authored-by:[[:space:]]*(Claude|Copilot|Cursor|Codex|Gemini|Devin|Aider))|noreply@anthropic\.com|claude\.ai/(code|chat|share)|^[[:space:]]*🤖[[:space:]]*Generated|^[[:space:]]*Generated with \[?(Claude|Cursor|Copilot)'
+
+if grep -qiE "$PATTERN" "$MSG_FILE"; then
+  printf '\033[31mCOMMIT BLOCKED\033[0m — the message carries an assistant attribution line:\n\n'
+  grep -inE "$PATTERN" "$MSG_FILE" | sed 's/^/    /'
+  cat <<'EOF'
+
+This repository is submitted as the team's own engineering work. Remove the line and
+commit again.
+
+If your tool adds it automatically, turn that off rather than deleting it each time —
+see docs/attribution-checklist.md §2.
+EOF
+  exit 1
+fi
+exit 0
