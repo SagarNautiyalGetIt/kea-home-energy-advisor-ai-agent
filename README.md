@@ -122,17 +122,3 @@ team research archive, which is deliberately not published — the customer surv
 respondent data collected for analysis, not publication. Ask the maintainer for anything
 you need from it. The deck generators live in a separate repository.
 
-## Status
-
-- [x] Provider seam, schemas, layer 0, layer 3, fixture API
-- [x] Measured July values ported — analytics validated against real data, not fixtures
-- [x] Device benchmarking kit → `ml/benchmarks/device/`
-- [x] PostgreSQL schema + Alembic migration (13 tables, ADR-0006)
-- [x] Seeder — 5 households x 31 days x 48 intervals; July household reproduces the measurement
-- [x] Weather / tariff / hardship analytics — all 7 demo lines have maths behind them
-- [x] Monorepo restructure — five team directories, contract committed, CI split per service
-- [ ] Frontend: `npm install` and first real screens (scaffold is a harness, not the UI)
-- [ ] Repository layer to replace `fixtures.py`
-- [ ] **Unverified:** `make db && make api-migrate && make api-seed` has never run — no Docker on the dev machine
-- [ ] Golden set + model bake-off (Day 6)
-- [ ] Voice (Day 8)
