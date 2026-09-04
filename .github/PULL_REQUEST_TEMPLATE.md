@@ -19,13 +19,18 @@ Closes #
 - [ ] `make check` passes locally (N tests)
 - [ ] Ran on a second machine
 - [ ] `make api-spec` regenerated `contracts/openapi.json` (endpoints changed)
-- [ ] `make web-types` regenerated frontend types (the contract changed)
+- [ ] Regenerated frontend/mobile types (the contract changed)
+- [ ] Mobile: Verified on iOS (Simulator / iPhone) and Android (Emulator / device)
+- [ ] Mobile: Attached UI screenshot or screen recording
+- [ ] Mobile: Safe area insets (Dynamic Island, notch, home indicator) checked
+- [ ] Mobile: Push notification permission / payload handling checked
 - [ ] Manually checked against the demo script line: ___
 
 ## Definition of Done
 
-- [ ] Tests added for new analytics functions
+- [ ] Tests added for new analytics/feature functions
 - [ ] Any new external figure carries a source link
+- [ ] Illustrative tariff disclaimer ($) and escalate_to_human surfaced on web/mobile screens
 - [ ] Docs / ADR updated if a decision changed
 - [ ] No non-Kea-Energy files included in this PR
 - [ ] No secrets, `.env`, credentials, or personal data added

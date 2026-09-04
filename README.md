@@ -35,10 +35,11 @@ make check            # everything CI runs — do this before you push
 ```
 services/api/     Backend team    FastAPI, the four-layer pipeline, Postgres
 services/web/     Frontend team   React 19 + TypeScript + Tailwind + Vite
+services/mobile/  Mobile team     React Native + Expo + TypeScript (iOS & Android)
 ml/               AI team         Prompts, golden set, evals, model benchmarks
 data/             Data team       Raw extracts, analysis, data dictionary
 infra/            AWS team        docker-compose, IaC, deployment
-contracts/        —               openapi.json: the frozen interface between api and web
+contracts/        —               openapi.json: the frozen interface between api and web/mobile
 docs/             —               ADRs, PRD, ERD, sprint boards, team onboarding
 ```
 
@@ -80,6 +81,7 @@ Voice is the same pipeline with a different transport
 | [0004](docs/adr/0004-llm-provider-interface.md) | One provider interface — Ollama now, Bedrock later |
 | [0005](docs/adr/0005-two-speed-models.md) | A second "fast" model is the wrong tool here |
 | [0006](docs/adr/0006-postgres-in-sprint-2.md) | PostgreSQL from Sprint 2, not SQLite |
+| [0007](docs/adr/0007-mobile-stack-expo.md) | React Native + Expo for mobile (iOS & Android) |
 
 Disagree with one? Open an ADR, not a PR.
 

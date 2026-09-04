@@ -43,6 +43,18 @@ Thumbs.db
 .vscode/
 *.swp
 
+# --- AI tool configs — never commit -----------------------------------------
+# These are local developer tool configurations, not project source material.
+.claude/
+CLAUDE.md
+AGENTS.md
+.hyperframes/
+hyperframes.json
+.copilot/
+.cursor/
+.aider*
+.codeium/
+
 # --- Vault leakage guard ----------------------------------------------------
 # This repo lives inside an Obsidian vault directory tree. Nothing belonging to
 # the vault may ever be committed. See the absolute rule in CONTRIBUTING.md.

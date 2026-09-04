@@ -1,6 +1,6 @@
 # Teams
 
-Five teams, one repository. Each page below is the first thing a new member of that team
+Six teams, one repository. Each page below is the first thing a new member of that team
 should read — what you own, where it lives, how to run it, and the rules specific to your
 work.
 
@@ -8,6 +8,7 @@ work.
 |---|---|---|
 | Backend | `services/api/` — the API, the four-layer pipeline | [backend.md](backend.md) |
 | Frontend | `services/web/` — the React app | [frontend.md](frontend.md) |
+| Mobile | `services/mobile/` — React Native + Expo (iOS & Android) | [mobile.md](mobile.md) |
 | AI | `ml/`, plus `app/narration/` and `app/providers/` | [ai.md](ai.md) |
 | Data | `data/`, plus `app/analytics/` and `app/db/` | [data.md](data.md) |
 | AWS | `infra/` — local Postgres today, Bedrock and deployment in Sprint 3 | [aws.md](aws.md) |

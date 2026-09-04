@@ -87,6 +87,7 @@ Refs: KEA-64
 |---|---|
 | Backend | `api` · `schemas` · `routing` |
 | Frontend | `web` |
+| Mobile | `mobile` |
 | AI | `narration` · `providers` · `evals` · `voice` |
 | Data | `analytics` · `db` · `data` |
 | AWS | `infra` · `deploy` |
@@ -158,9 +159,11 @@ A card is done when **all** of these are true. This is not negotiable per-card.
 
 - [ ] Merged to `main` via PR with at least one approval, CI green
 - [ ] Runs on a **second** teammate's machine, not only the author's
+- [ ] Mobile changes verified on iOS & Android (screenshot or screen recording attached to PR)
 - [ ] New analytics functions have unit tests
 - [ ] Any new external figure carries a source link
 - [ ] `contracts/openapi.json` regenerated (`make api-spec`) if any endpoint changed
+- [ ] Illustrative tariff disclaimer ($) and escalate_to_human surfaced on web/mobile screens
 - [ ] Anything cut is written into the tech-debt register with a reason
 
 ---

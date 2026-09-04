@@ -42,3 +42,8 @@
 /CONTRIBUTING.md                    @nair-akash
 /SECURITY.md                        @nair-akash
 /.github/                           @nair-akash
+
+# Client services
+/services/web/                      @nair-akash
+/services/mobile/                   @nair-akash
+
