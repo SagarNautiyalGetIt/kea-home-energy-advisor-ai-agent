@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
+import { loadSession } from '../lib/session'
 import type { PageId } from '../types/navigation'
 
 // Plans is back in scope for Sprint 2, so its navigation and search entry are
@@ -43,6 +44,9 @@ type AppShellProps = {
 }
 
 export default function AppShell({ active, onNavigate, onLogout, children }: AppShellProps) {
+  const session = loadSession()
+  const customerName = session?.displayName ?? 'Adela Parkson'
+  const customerId = session?.customerId ?? '110733ap'
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(localStorage.getItem('kea-sidebar-collapsed') === 'true')
   const [openPanel, setOpenPanel] = useState<'search' | 'notifications' | 'profile' | null>(null)
@@ -125,7 +129,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
 
             <div className="topbar-control profile-control">
               <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/assets/profile/kea-profile.png" alt=""/></button>
-              {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>Adela Parkson</strong><small>CID: 110733ap</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My Profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; Support</button><button onClick={onLogout}><LogOut/>Logout</button></div>}
+              {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>{customerName}</strong><small>CID: {customerId}</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My Profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; Support</button><button onClick={onLogout}><LogOut/>Logout</button></div>}
             </div>
           </div>
         </header>

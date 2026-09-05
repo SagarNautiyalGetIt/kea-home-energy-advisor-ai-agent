@@ -2,6 +2,7 @@ import { CreditCard, Download, Eye, Printer, WalletCards } from 'lucide-react'
 import { useState } from 'react'
 import Modal from '../components/Modal'
 import { commitmentTerms, currentPlan, pricingStyles } from '../data/mockData'
+import { loadSession } from '../lib/session'
 import { downloadTextPdf } from '../utils/downloadPdf'
 
 const invoices = [
@@ -11,13 +12,19 @@ const invoices = [
 ]
 type Invoice = (typeof invoices)[number]
 const currentInvoice = invoices[0] ?? { number:'367274627', period:'05 Aug 2026 – 19 Aug 2026', due:'01 Sep 2026', amount:'$184.50', status:'Due' }
-const customer = { name:'Adela Parkson', id:'110733ap', address:'6 Mount Street, Auckland Central, Auckland 1010, NZ', payment:'Visa ending in 4242' }
 // The invoice header follows the same source as the Plans page, so the two
 // pages cannot drift apart when the plan model changes.
 const plan = pricingStyles.find((style) => style.id === currentPlan.pricingStyle) ?? pricingStyles[0]!
 const planTerm = commitmentTerms.find((term) => term.id === currentPlan.term) ?? commitmentTerms[0]!
 
 export default function BillingPage({ onToast }: { onToast: (message:string,tone?:'success'|'info'|'warning')=>void }) {
+  const session = loadSession()
+  const customer = {
+    name: session?.displayName ?? 'Adela Parkson',
+    id: session?.customerId ?? '110733ap',
+    address: '6 Mount Street, Auckland Central, Auckland 1010, NZ',
+    payment: 'Visa ending in 4242',
+  }
   const [selected,setSelected] = useState<Invoice>(currentInvoice)
   const [previewOpen,setPreviewOpen] = useState(false)
   const [paymentOpen,setPaymentOpen] = useState(false)

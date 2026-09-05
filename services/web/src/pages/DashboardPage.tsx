@@ -154,7 +154,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
               lands here by default because no ?day= is set, so this is the sentence a
               judge reads first. */}
           {shock.days_remaining > 0 ? (
-            <p><strong>{shock.days_remaining} days left</strong> in this cycle — enough to change the outcome.</p>
+            <p><strong>{shock.days_remaining} {shock.days_remaining === 1 ? 'day' : 'days'} left</strong> in this cycle — enough to change the outcome.</p>
           ) : (
             <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
           )}
