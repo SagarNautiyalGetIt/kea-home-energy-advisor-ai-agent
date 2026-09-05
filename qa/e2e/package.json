@@ -1,0 +1,21 @@
+{
+  "name": "@kea/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end functional tests — drives the running Kea Energy stack through a real browser.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen http://localhost:5173"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.4.1",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0"
+  }
+}
