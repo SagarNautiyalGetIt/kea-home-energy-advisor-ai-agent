@@ -55,6 +55,27 @@ ACKNOWLEDGEMENTS: dict[Intent, str] = {
     Intent.TARIFF_CHECK: "Let me compare your plans.",
     Intent.HARDSHIP: "I hear you. Let me get you to the right person.",
     Intent.OUT_OF_SCOPE: "Let me check whether I can answer that.",
+    # ── added with the driver decomposition ──
+    Intent.USAGE_TOTAL: "Let me add up your usage for that period.",
+    Intent.COMPARE_TO_SIMILAR: "Let me compare you against similar homes.",
+    Intent.BILL_BREAKDOWN: "Let me go through the charges on that bill.",
+    Intent.HOW_TO_REDUCE: "Let me see where your money is actually going.",
+    Intent.SOLAR_EXPORT: "Let me check what your panels sent back.",
+    Intent.SUPPLY_QUALITY: "Let me check how your meter was read.",
+    # ── account lookups. Shorter, because they are a lookup rather than a
+    # computation and the pause before the answer is correspondingly brief; a
+    # three-second acknowledgement in front of a half-second answer sounds broken.
+    Intent.ACCOUNT_BALANCE: "Let me check your balance.",
+    Intent.BILL_DUE: "Let me check that date.",
+    Intent.PLAN_DETAILS: "Let me look up your plan.",
+    Intent.RATE_DETAILS: "Let me look up your rates.",
+    Intent.PAYMENT_METHOD: "Let me check how your bill is paid.",
+    Intent.ACCOUNT_IDENTITY: "Let me pull up your account details.",
+    Intent.BILLING_CYCLE: "Let me check your billing dates.",
+    # Like HARDSHIP: acknowledges without conceding the point or defending the bill.
+    # Neither "you're right" nor "our figures are correct" is ours to say before a
+    # person has looked at it.
+    Intent.DISPUTE: "I understand. Let me get you to someone who can look into that.",
 }
 
 

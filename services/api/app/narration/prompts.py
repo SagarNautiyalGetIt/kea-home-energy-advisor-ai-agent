@@ -35,8 +35,10 @@ the figures you were given. Working it out yourself is still calculating.
 
 _INTENT_TASK: dict[Intent, str] = {
     Intent.WHY_HIGH: (
-        "Explain what drove the bill. Lead with the steady everyday load rather than "
-        "the one-off spike, because that is where the money actually is."
+        "Name the biggest cause of the change FIRST, in your opening clause, using the "
+        "first figure you were given — it is already the largest one. Then give the "
+        "change itself, then the next one or two causes. Do not open with a general "
+        "statement about their usage and do not save the reason for the end."
     ),
     Intent.WHAT_WILL_I_PAY: (
         "Give the projected amount for the full month and make clear it is an "
@@ -68,6 +70,58 @@ _INTENT_TASK: dict[Intent, str] = {
     Intent.OUT_OF_SCOPE: (
         "Say plainly that this is outside what you can help with, and offer to "
         "connect them with the team."
+    ),
+    Intent.USAGE_TOTAL: "State how much they used and what it cost. No interpretation.",
+    Intent.COMPARE_TO_SIMILAR: (
+        "Compare them with the peer figure you were given. Be clear it is a comparison "
+        "against other homes in this dataset, not a New Zealand average."
+    ),
+    Intent.BILL_BREAKDOWN: (
+        "List the charges you were given, largest first, and say what each one is for. "
+        "Do not total them yourself — the total is one of the figures."
+    ),
+    Intent.HOW_TO_REDUCE: (
+        "Point at the specific thing on THIS bill that is worth acting on, using the "
+        "figures given. Never offer generic energy-saving tips, and never name an "
+        "appliance. If the increase was price or fixed charges, say plainly that using "
+        "less will not undo it."
+    ),
+    Intent.SOLAR_EXPORT: "Say how much they exported and what they were credited.",
+    Intent.SUPPLY_QUALITY: (
+        "Say plainly whether the readings were actual or estimated, and when the meter "
+        "was last read. This is a trust question — answer it directly, do not reassure."
+    ),
+    # ── account lookups ──
+    #
+    # One shared instruction, because the failure mode is identical across all seven and
+    # it is not the one the computed intents have. A lookup cannot produce a wrong
+    # number; it produces a *helpful embellishment* — explaining what an ICP is for,
+    # offering to change the payment method, adding "which is quite low for a household
+    # like yours". Every one of those is a claim nothing computed, and none of them
+    # contains a numeric token for layer 3 to catch.
+    Intent.ACCOUNT_BALANCE: (
+        "State the balance and stop. Do not characterise it as high, low or normal."
+    ),
+    Intent.BILL_DUE: "State the due date and the amount. Do not add payment advice.",
+    Intent.PLAN_DETAILS: (
+        "Name their plan and category. Do not evaluate whether it suits them — that is "
+        "a different question with a different analysis behind it."
+    ),
+    Intent.RATE_DETAILS: (
+        "State the rates you were given. Do not compare them with anything, and do not "
+        "say whether they are competitive."
+    ),
+    Intent.PAYMENT_METHOD: "State how the bill is paid. Nothing else.",
+    Intent.ACCOUNT_IDENTITY: (
+        "Give the detail asked for, exactly as written. Do not read it back "
+        "character-by-character and do not reformat it."
+    ),
+    Intent.BILLING_CYCLE: "State the dates. Do not explain how billing cycles work.",
+    Intent.DISPUTE: (
+        "Acknowledge that they think something is wrong, warmly and without argument. "
+        "Do NOT defend the bill, do not re-explain the charges, and do not agree that "
+        "it is wrong either — you cannot know. Say you are putting them through to "
+        "someone who can look into it."
     ),
 }
 

@@ -409,7 +409,7 @@
     "/api/households/{customer_id}/offline-pack": {
       "get": {
         "summary": "Offline Pack",
-        "description": "Everything a device needs to answer this household's questions with no network.\n\nFetched by the client while it still has a connection, on the customer's schedule \u2014\nthe server never pushes. Carries pre-computed fact bundles, not meter readings: a\ndevice holding the raw series is a device whose on-device model can be asked to add\nit up, which is the one thing this architecture exists to prevent, on the platform\nwhere it is hardest to audit.\n\nSee `app/offline.py` and `docs/adr/0007-offline-first-narration.md`.",
+        "description": "Everything a device needs to answer this household's questions with no network.\n\nFetched by the client while it still has a connection, on the customer's schedule \u2014\nthe server never pushes. Carries pre-computed fact bundles, not meter readings: a\ndevice holding the raw series is a device whose on-device model can be asked to add\nit up, which is the one thing this architecture exists to prevent, on the platform\nwhere it is hardest to audit.\n\nSee `app/offline.py` and `docs/adr/0008-offline-first-narration.md`.",
         "operationId": "offline_pack_api_households__customer_id__offline_pack_get",
         "parameters": [
           {
@@ -1451,10 +1451,24 @@
           "compare_to_last_year",
           "tariff_check",
           "hardship",
-          "out_of_scope"
+          "out_of_scope",
+          "usage_total",
+          "compare_to_similar",
+          "bill_breakdown",
+          "how_to_reduce",
+          "solar_export",
+          "supply_quality",
+          "account_balance",
+          "bill_due",
+          "plan_details",
+          "rate_details",
+          "payment_method",
+          "account_identity",
+          "billing_cycle",
+          "dispute"
         ],
         "title": "Intent",
-        "description": "The questions we handle. Layer 0 maps free text onto exactly one of these.\n\nAdding an intent means adding: a router rule, an analytics path, a narration\nprompt, and golden-set cases. Don't add one without all four."
+        "description": "The questions we handle. Layer 0 maps free text onto exactly one of these.\n\nAdding an intent means adding: a router entry, an analytics path, a narration\nprompt, and golden-set cases. Don't add one without all four.\n\n## Two families, and why the second one exists\n\nThe **usage** intents below the divider are the original ten: they all answer a\nquestion about consumption, and every one of them needs analytics to run first.\n\nThe **account** intents are facts about the customer's own account \u2014 balance, plan,\nrates, connection, payment method. They were unroutable before, which meant \"what\nplan am I on?\" and \"when is my bill due?\" returned `OUT_OF_SCOPE`. That is a bad\nanswer to a question the service can answer perfectly from one mart row, and it is\na large share of what a real energy assistant is asked.\n\nThey are a separate family rather than more of the same because the layer-3\ncontract differs: an account fact is a *lookup*, so its bundle is a copy of stored\nvalues rather than the output of a computation. Nothing is derived, so nothing can\nbe derived wrongly."
       },
       "LoginRequest": {
         "properties": {

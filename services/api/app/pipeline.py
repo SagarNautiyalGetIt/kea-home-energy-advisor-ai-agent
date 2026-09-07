@@ -36,7 +36,8 @@ import re
 import time
 from dataclasses import dataclass
 
-from app.analytics import fixtures
+from app.analytics import explain, fixtures
+from app.analytics.account import AccountContext
 from app.analytics.engine import (
     NO_APPLIANCE,
     TariffOption,
@@ -72,6 +73,49 @@ DAYS_IN_JULY = 31
 STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
 LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
 
+#: The intents whose builders take an `AccountContext` rather than a `UsageWindow`.
+#:
+#: A table rather than another `if` chain because every entry has exactly the same
+#: shape, and because the pipeline should not be where somebody has to remember to add
+#: a branch: `test_schema_rules` asserts this covers every intent in the family, so a
+#: new one fails a test rather than silently falling through to the empty bundle at the
+#: bottom of `bundle_from_context` — which would answer "I have no figures for that"
+#: to a question the service can answer.
+#:
+#: `WHY_HIGH` is deliberately NOT here — it picks its builder from the data it has; see
+#: `bundle_from_context`.
+_ACCOUNT_CONTEXT_INTENTS = {
+    Intent.HOW_TO_REDUCE: explain.build_how_to_reduce,
+    Intent.COMPARE_TO_SIMILAR: explain.build_compare_to_similar,
+    Intent.BILL_BREAKDOWN: explain.build_bill_breakdown,
+    Intent.USAGE_TOTAL: explain.build_usage_total,
+    Intent.SOLAR_EXPORT: explain.build_solar_export,
+    Intent.SUPPLY_QUALITY: explain.build_supply_quality,
+    Intent.ACCOUNT_BALANCE: explain.build_account_balance,
+    Intent.BILL_DUE: explain.build_bill_due,
+    Intent.PLAN_DETAILS: explain.build_plan_details,
+    Intent.RATE_DETAILS: explain.build_rate_details,
+    Intent.PAYMENT_METHOD: explain.build_payment_method,
+    Intent.ACCOUNT_IDENTITY: explain.build_account_identity,
+    Intent.BILLING_CYCLE: explain.build_billing_cycle,
+}
+
+
+def _account_context(customer_id: str, ctx: UsageContext) -> AccountContext:
+    """The wide context for this request, however much of it the source could fill.
+
+    `UsageContext` carries one when the repository built one — `MartRepository` reads
+    the plan, the bills and the account row. The fixture and seeded paths do not have
+    those, so the thin `from_window` context is built instead and the account lookups
+    answer honestly that they cannot see the detail.
+    """
+    existing = getattr(ctx, "account", None)
+    if existing is not None:
+        return existing
+    return AccountContext.from_window(
+        customer_id, ctx.window, label=ctx.label, hdd=ctx.hdd, peer_baseline=ctx.baseline
+    )
+
 
 def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> FactBundle:
     """Layer 0's decision selects the layer 1 path. The model has no say in this.
@@ -87,6 +131,21 @@ def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> 
         return build_what_will_i_pay(window, DAYS_IN_JULY)
 
     if intent is Intent.WHY_HIGH:
+        # Two answers to the same question, chosen by what the data supports.
+        #
+        # With two bills we can decompose the *change* — which is what the customer is
+        # actually asking about, and what `analytics/drivers.py` exists for. Without
+        # them there is no change to attribute, and the fallback is the peer-benchmark
+        # analysis: the standing-load finding the pitch turns on, measured against what
+        # comparable homes use.
+        #
+        # The order matters and is not a preference. The benchmark answer is true but
+        # generic — it says the same thing about every household because it is built
+        # from the same two inputs every time. It is the right answer only when there is
+        # nothing better available, never in preference to a real attribution.
+        account = _account_context(customer_id, ctx)
+        if account.has_bill_comparison:
+            return explain.build_why_high_v2(account)
         return build_why_high(window, baseline)
 
     if intent is Intent.USING_MORE_THAN_USUAL:
@@ -137,6 +196,30 @@ def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> 
         # No figures at all — nothing to get wrong, and a number has no place here.
         bundle = build_hardship()
         return bundle.model_copy(update={"customer_id": customer_id})
+
+    if intent is Intent.DISPUTE:
+        # Same shape as hardship and for a related reason: the answer is a person. A
+        # customer saying the bill is wrong is making a claim about the world, and
+        # re-quoting our own figures at them is not an answer to it — it is the same
+        # data they are already disputing, said again with more confidence.
+        return FactBundle(
+            customer_id=customer_id,
+            intent=intent,
+            period=window.period,
+            caveats=[
+                "Acknowledge that they believe something is wrong, warmly and without "
+                "argument. Do NOT quote any figure, do NOT defend the bill, and do NOT "
+                "agree that it is wrong — you cannot know. Say you are putting them "
+                "through to someone who can look into it, and stop there.",
+            ],
+        )
+
+    if intent in _ACCOUNT_CONTEXT_INTENTS:
+        # The wide-context family. On the fixture and seeded-household paths there is no
+        # plan, bill or account row to read, so these return their "I cannot see that"
+        # bundles. `MartRepository` is what fills the context in properly; see
+        # analytics/account.py on why a placeholder is not offered here.
+        return _ACCOUNT_CONTEXT_INTENTS[intent](_account_context(customer_id, ctx))
 
     # No analytics path for this intent yet — COMPARE_TO_LAST_YEAR is routable but
     # unimplemented (KEA-69), and OUT_OF_SCOPE never had one. Either way the model gets

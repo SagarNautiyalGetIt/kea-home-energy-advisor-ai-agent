@@ -31,9 +31,85 @@ from typing import Protocol
 
 from sqlalchemy import func, select
 
+from app.analytics.account import (
+    AccountContext,
+    BillingFacts,
+    ConnectionFacts,
+    DataQuality,
+    DayUsage,
+    PlanFacts,
+)
+from app.analytics.drivers import BillPeriod
 from app.analytics.engine import UsageWindow
 
 log = logging.getLogger(__name__)
+
+
+def _maybe_float(value: object) -> float | None:
+    """`Decimal | None` out of the marts, `float | None` into the analytics.
+
+    Numeric columns come back as `Decimal`, and mixing those with the floats the engine
+    computes raises `TypeError` on the first multiplication rather than producing a
+    wrong number — but it raises it deep inside a driver calculation, where the message
+    says nothing about which mart column was null. Converting at the boundary keeps the
+    failure where the data is.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _periods_from_explanation(
+    row: object, daily_fixed_nzd: float | None
+) -> tuple[BillPeriod | None, BillPeriod | None]:
+    """Turn one `kea.mart_bill_explanation` row into the two sides of the comparison.
+
+    Returns `(current, None)` when `prior_bill_id` is null. That is a first bill, and
+    the schema comment is explicit that it is *itself a complete explanation* — the
+    narration should say so rather than treat the absence as missing data.
+
+    Both periods are built with `BillPeriod.from_bill`, which derives the effective unit
+    rate from the total. Using a posted tariff rate here instead would push the
+    difference into `delta_unexplained`, where it would read to the customer as an
+    increase we could not account for.
+    """
+    total = _maybe_float(getattr(row, "total_amount", None))
+    kwh = _maybe_float(getattr(row, "total_kwh", None))
+    days = getattr(row, "period_days", None)
+    if total is None or kwh is None or not days:
+        return None, None
+
+    period_end = getattr(row, "period_end", None)
+    current = BillPeriod.from_bill(
+        f"{period_end:%B %Y}" if period_end else "this period",
+        days=int(days),
+        total_nzd=total,
+        total_kwh=kwh,
+        daily_fixed_nzd=daily_fixed_nzd or 0.0,
+        base_load_kwh_per_day=_maybe_float(getattr(row, "base_load_kwh_day_this", None)),
+        heating_degree_days=_maybe_float(getattr(row, "hdd_this_period", None)),
+        estimated_read_pct=_maybe_float(getattr(row, "estimated_read_pct", None)) or 0.0,
+    )
+
+    prior_total = _maybe_float(getattr(row, "prior_total_amount", None))
+    prior_kwh = _maybe_float(getattr(row, "prior_total_kwh", None))
+    prior_days = getattr(row, "prior_period_days", None)
+    if getattr(row, "prior_bill_id", None) is None or prior_total is None or not prior_days:
+        return current, None
+
+    prior = BillPeriod.from_bill(
+        "the period before",
+        days=int(prior_days),
+        total_nzd=prior_total,
+        total_kwh=prior_kwh or 0.0,
+        daily_fixed_nzd=daily_fixed_nzd or 0.0,
+        base_load_kwh_per_day=_maybe_float(getattr(row, "base_load_kwh_day_prior", None)),
+        heating_degree_days=_maybe_float(getattr(row, "hdd_prior_period", None)),
+    )
+    return current, prior
 
 
 @dataclass(frozen=True)
@@ -51,6 +127,20 @@ class UsageContext:
     label: str
     hdd: list[float]
     normal_hdd: float
+
+    account: AccountContext | None = None
+    """The wide context — plan, bills, connection, account row, read quality.
+
+    Optional because the three repositories can fill different amounts of it, and the
+    field is additive so every existing caller and test keeps working untouched.
+    `MartRepository` populates it; the fixture and seeded-household paths leave it None
+    and the account intents answer that they cannot see the detail.
+
+    This is the field whose absence made the bill explanation generic. Layer 1 had five
+    numbers to work with while the marts held the plan, both bills and a pre-computed
+    driver decomposition — so the explanation could only ever be as specific as a daily
+    kWh series allows, no matter how the prompt was written.
+    """
 
 
 class UsageRepository(Protocol):
@@ -308,6 +398,154 @@ class MartRepository:
             label=account.customer_name,
             hdd=hdd,
             normal_hdd=NORMAL_HDD_PER_DAY,
+            account=await self._account_context(customer_id, account),
+        )
+
+    async def _account_context(self, customer_id: str, account: object) -> AccountContext:
+        """Assemble the wide context from the marts the old path never read.
+
+        `mart_bill_explanation` is the important one, and it is why this reads a mart
+        rather than recomputing: the decomposition there is **the definition of record**.
+        It is built in dbt, so it is version-controlled, reviewable, tested, and
+        identical for every customer. Recomputing the same attribution in Python at
+        request time would give two answers to the same question — the dashboard's and
+        the assistant's — that agree until the day somebody edits one of them.
+
+        `analytics/drivers.py` is not redundant with that. It is what runs when the mart
+        row is absent (a first bill, an account the pipeline has not reached, the local
+        `public.*` households), and it is the executable statement of the same method,
+        so the two can be tested against each other. Where the mart has a row, the mart
+        wins.
+
+        Failures here are swallowed to a bare context rather than raised. A missing mart
+        must cost the customer their account details, not their answer — the usage half
+        of every intent works without any of this, and `make data-load` not having run
+        is the normal state of a fresh checkout.
+        """
+
+        from app.db.marts import MartBillExplanation, MartDailyUsage
+        from app.db.session import get_sessionmaker
+
+        icp_id = getattr(account, "icp_id", None)
+        account_id = getattr(account, "account_id", None)
+
+        plan = PlanFacts(
+            code=getattr(account, "plan_code", "") or "",
+            name=getattr(account, "plan_name", "") or "",
+            user_type=getattr(account, "user_type", "standard") or "standard",
+            is_tou=bool(getattr(account, "is_tou", False)),
+            daily_fixed_nzd=_maybe_float(getattr(account, "daily_fixed_charge", None)),
+        )
+        connection = ConnectionFacts(
+            icp_number=getattr(account, "icp_number", "") or "",
+            address_display=getattr(account, "address_display", None),
+            climate_region=getattr(account, "climate_region", None),
+            network_name=getattr(account, "network_name", None),
+            network_code=getattr(account, "network_code", None),
+            has_solar=bool(getattr(account, "has_solar", False)),
+            has_controlled_load=bool(getattr(account, "has_controlled_load", False)),
+        )
+        billing = BillingFacts(
+            account_number=getattr(account, "account_number", customer_id) or customer_id,
+            payment_method=getattr(account, "payment_method", None),
+            billing_cycle_day=getattr(account, "billing_cycle_day", None),
+            current_period_start=getattr(account, "current_period_start", None),
+            current_period_end=getattr(account, "current_period_end", None),
+            days_into_period=getattr(account, "days_into_period", None),
+        )
+        quality = DataQuality(
+            estimated_read_pct=_maybe_float(getattr(account, "estimated_read_pct", 0)) or 0.0,
+            last_read_at=getattr(account, "last_read_at", None),
+            is_quarantined=bool(getattr(account, "is_quarantined", False)),
+            quarantine_reason=getattr(account, "quarantine_reason", None),
+            mart_built_at=getattr(account, "built_at", None),
+        )
+
+        days: list[DayUsage] = []
+        current = prior = None
+        sensitivity = None
+
+        try:
+            async with get_sessionmaker()() as session:
+                rows = (
+                    await session.execute(
+                        select(MartDailyUsage)
+                        .where(MartDailyUsage.icp_id == icp_id)
+                        .order_by(MartDailyUsage.usage_date)
+                    )
+                ).scalars().all()
+                days = [
+                    DayUsage(
+                        date=r.usage_date,
+                        import_kwh=float(r.import_kwh or 0),
+                        export_kwh=float(r.export_kwh or 0),
+                        controlled_kwh=float(r.controlled_kwh or 0),
+                        uncontrolled_kwh=float(r.uncontrolled_kwh or 0),
+                        base_load_kwh=_maybe_float(r.base_load_kwh),
+                        peak_kwh=_maybe_float(r.peak_kwh),
+                        off_peak_kwh=_maybe_float(r.off_peak_kwh),
+                        temp_mean_c=_maybe_float(r.temp_mean_c),
+                        heating_degree_days=_maybe_float(r.heating_degree_days),
+                        is_weekend=bool(r.is_weekend),
+                        is_public_holiday=bool(r.is_public_holiday),
+                        estimated_count=int(r.estimated_count or 0),
+                        interval_count=int(r.interval_count or 48),
+                        expected_intervals=int(r.expected_intervals or 48),
+                    )
+                    for r in rows
+                ]
+
+                explanation = (
+                    await session.execute(
+                        select(MartBillExplanation)
+                        .where(MartBillExplanation.account_id == account_id)
+                        .order_by(MartBillExplanation.period_end.desc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+
+            if explanation is not None:
+                sensitivity = _maybe_float(explanation.heating_sensitivity_kwh_per_hdd)
+                current, prior = _periods_from_explanation(explanation, plan.daily_fixed_nzd)
+                quality = DataQuality(
+                    estimated_read_pct=_maybe_float(explanation.estimated_read_pct) or 0.0,
+                    missing_intervals=int(explanation.missing_interval_count or 0),
+                    last_read_at=quality.last_read_at,
+                    is_quarantined=quality.is_quarantined,
+                    quarantine_reason=quality.quarantine_reason,
+                    mart_built_at=explanation.built_at or quality.mart_built_at,
+                )
+                billing = BillingFacts(
+                    account_number=billing.account_number,
+                    last_bill_total_nzd=_maybe_float(explanation.total_amount),
+                    payment_method=billing.payment_method,
+                    billing_cycle_day=billing.billing_cycle_day,
+                    current_period_start=billing.current_period_start
+                    or explanation.period_start,
+                    current_period_end=billing.current_period_end or explanation.period_end,
+                    days_into_period=billing.days_into_period,
+                )
+        except Exception:  # noqa: BLE001
+            log.warning(
+                "could not assemble the wide account context for %s; "
+                "usage answers are unaffected, account lookups will decline",
+                customer_id,
+                exc_info=True,
+            )
+
+        return AccountContext(
+            account_ref=customer_id,
+            display_name=getattr(account, "customer_name", "") or "",
+            plan=plan if plan.name else None,
+            connection=connection if connection.icp_number else None,
+            billing=billing,
+            quality=quality,
+            days=days,
+            current_bill=current,
+            prior_bill=prior,
+            heating_sensitivity_kwh_per_hdd=sensitivity,
+            is_medically_dependent=bool(getattr(account, "is_medically_dependent", False)),
+            is_vulnerable=bool(getattr(account, "is_vulnerable", False)),
         )
 
 

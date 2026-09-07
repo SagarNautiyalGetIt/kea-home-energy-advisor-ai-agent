@@ -7,6 +7,7 @@ model's prose against it. If a number is not in here, it must not reach the user
 
 from __future__ import annotations
 
+import datetime as dt
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -20,10 +21,27 @@ from app.clarify.schemas import ClarifyingQuestion
 class Intent(StrEnum):
     """The questions we handle. Layer 0 maps free text onto exactly one of these.
 
-    Adding an intent means adding: a router rule, an analytics path, a narration
+    Adding an intent means adding: a router entry, an analytics path, a narration
     prompt, and golden-set cases. Don't add one without all four.
+
+    ## Two families, and why the second one exists
+
+    The **usage** intents below the divider are the original ten: they all answer a
+    question about consumption, and every one of them needs analytics to run first.
+
+    The **account** intents are facts about the customer's own account — balance, plan,
+    rates, connection, payment method. They were unroutable before, which meant "what
+    plan am I on?" and "when is my bill due?" returned `OUT_OF_SCOPE`. That is a bad
+    answer to a question the service can answer perfectly from one mart row, and it is
+    a large share of what a real energy assistant is asked.
+
+    They are a separate family rather than more of the same because the layer-3
+    contract differs: an account fact is a *lookup*, so its bundle is a copy of stored
+    values rather than the output of a computation. Nothing is derived, so nothing can
+    be derived wrongly.
     """
 
+    # ── usage: needs analytics ──
     WHY_HIGH = "why_bill_high"
     WHAT_WILL_I_PAY = "what_will_i_pay"
     USING_MORE_THAN_USUAL = "using_more_than_usual"
@@ -34,6 +52,60 @@ class Intent(StrEnum):
     TARIFF_CHECK = "tariff_check"
     HARDSHIP = "hardship"
     OUT_OF_SCOPE = "out_of_scope"
+
+    # ── usage: added with the driver decomposition ──
+    USAGE_TOTAL = "usage_total"
+    """'How much did I use in July?' — a total, not an explanation."""
+
+    COMPARE_TO_SIMILAR = "compare_to_similar"
+    """'Am I using more than other people?' — against the peer cohort, explicitly."""
+
+    BILL_BREAKDOWN = "bill_breakdown"
+    """'What are all these charges?' — the bill's own lines, itemised."""
+
+    HOW_TO_REDUCE = "how_to_reduce"
+    """'What can I do about it?' — advice grounded in this household's own drivers."""
+
+    SOLAR_EXPORT = "solar_export"
+    SUPPLY_QUALITY = "supply_quality"
+    """'Is this an estimate?' — read quality, gaps and freshness, said out loud."""
+
+    # ── account: a lookup, not a computation ──
+    ACCOUNT_BALANCE = "account_balance"
+    BILL_DUE = "bill_due"
+    PLAN_DETAILS = "plan_details"
+    RATE_DETAILS = "rate_details"
+    PAYMENT_METHOD = "payment_method"
+    ACCOUNT_IDENTITY = "account_identity"
+    BILLING_CYCLE = "billing_cycle"
+
+    # ── neither: the answer is a person ──
+    DISPUTE = "dispute"
+    """'This bill is wrong.' Routes to a human like HARDSHIP does. An AI must not
+    adjudicate a billing dispute, and a customer who says the meter is wrong is
+    making a claim about the world that no amount of our own data can settle."""
+
+    @property
+    def is_account_lookup(self) -> bool:
+        return self in _ACCOUNT_LOOKUPS
+
+    @property
+    def needs_human(self) -> bool:
+        """Escalates regardless of how well we could answer it."""
+        return self in (Intent.HARDSHIP, Intent.DISPUTE)
+
+
+_ACCOUNT_LOOKUPS = frozenset(
+    {
+        Intent.ACCOUNT_BALANCE,
+        Intent.BILL_DUE,
+        Intent.PLAN_DETAILS,
+        Intent.RATE_DETAILS,
+        Intent.PAYMENT_METHOD,
+        Intent.ACCOUNT_IDENTITY,
+        Intent.BILLING_CYCLE,
+    }
+)
 
 
 class Fact(BaseModel):
@@ -81,6 +153,49 @@ class Fact(BaseModel):
         return cls(key=key, value=round(value, 1), unit="%", label=label, display=f"{value:.0f}%")
 
     @classmethod
+    def reference(cls, key: str, text: str, label: str) -> Fact:
+        """A stored value that is not a quantity — a plan name, an ICP, an address.
+
+        The account-lookup intents are the reason this exists. "Your ICP is
+        0160647002LCFCF" and "your bill is due on 15 October 2026" are correct answers
+        containing digits that are not *measurements*, and layer 3 rejects them: the
+        token pass pulls `0160647002` out of the ICP, finds no fact with that value, and
+        marks a verbatim copy of the customer's own connection number as a fabrication.
+
+        `unit="text"` is what tells the verifier to check this fact by **string
+        containment against `display` instead of by numeric tolerance**. That is a
+        narrower licence than it sounds, and deliberately so: it permits only characters
+        the model was handed, so it can copy the ICP and cannot assemble a different one.
+        `value` stays 0.0 and never enters `allowed_values()`, so a reference fact can
+        never license an unrelated *number* elsewhere in the sentence.
+        """
+        return cls(key=key, value=0.0, unit="text", label=label, display=text)
+
+    @classmethod
+    def on_date(cls, key: str, value: dt.date, label: str) -> Fact:
+        """A date, rendered the way a New Zealand bill prints it."""
+        return cls.reference(key, f"{value:%-d %B %Y}", label)
+
+    @classmethod
+    def duration(cls, key: str, value: int, label: str) -> Fact:
+        """A count of days — "21 days", not "day 21".
+
+        Distinct from `day_of_period` because the two read as the same integer and mean
+        opposite things: "day 21" points at a date in a period, "21 days" measures a
+        span until one. Rendering a countdown with `day_of_period` produced "your bill is
+        due in day 21", which is the kind of wrongness that survives review because every
+        figure in it is correct.
+        """
+        n = int(value)
+        return cls(
+            key=key,
+            value=n,
+            unit="days",
+            label=label,
+            display=f"{n} day" if n == 1 else f"{n} days",
+        )
+
+    @classmethod
     def day_of_period(cls, key: str, value: int, label: str) -> Fact:
         """A 1-based day number within the period — "day 18 of July 2026".
 
@@ -116,7 +231,18 @@ class FactBundle(BaseModel):
         return {f.key: f.value for f in self.facts}
 
     def allowed_values(self) -> list[float]:
-        return [f.value for f in self.facts]
+        """Numeric claims the narration may make.
+
+        Reference facts are excluded: their `value` is a placeholder 0.0, and letting it
+        into this list would license a bare "0" anywhere in the answer for every bundle
+        that happens to carry a plan name.
+        """
+        return [f.value for f in self.facts if f.unit != "text"]
+
+    def allowed_literals(self) -> list[str]:
+        """Verbatim strings the narration was given and may copy — ICPs, plan names,
+        dates. Checked by containment rather than by value; see `Fact.reference`."""
+        return [f.display for f in self.facts if f.unit == "text"]
 
     def allowed_displays(self) -> list[str]:
         return [f.display for f in self.facts]
