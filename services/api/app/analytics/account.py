@@ -261,6 +261,39 @@ class AccountContext:
     def has_gaps(self) -> bool:
         return any(not d.is_complete for d in self.days)
 
+    def controlled_load_shift(self, tail_days: int = 10) -> float | None:
+        """Change in daily controlled-load kWh, recent window against the rest.
+
+        ## Why this is the one appliance signal that is not a fabrication
+
+        `NO_APPLIANCE` is stated everywhere in this service and it is correct: a
+        whole-house meter reads one number, so attributing it to a dryer is invention.
+
+        **Controlled load is different, and the difference is physical rather than
+        statistical.** A ripple-controlled circuit is its own register — the network
+        switches it, and `mart_daily_usage.controlled_kwh` is metered separately from
+        `uncontrolled_kwh`. In New Zealand that circuit is the hot-water cylinder in the
+        overwhelming majority of homes. So a rise here is not an inference about which
+        appliance moved; it is a reading from the circuit that appliance is on.
+
+        That still does not license *asserting* it was the cylinder — a controlled
+        circuit can carry other things, and "typically hot water" is not "certainly". It
+        licenses **asking**, which is the honest use of a signal this strong: the
+        household knows what is on their controlled circuit and we do not.
+
+        Returns None when the account has no controlled register or too short a series.
+        None means "no signal", never "no change" — the hot-water question then falls
+        back to its position at the bottom of the ladder rather than being promoted.
+        """
+        if len(self.days) < tail_days * 2:
+            return None
+        controlled = [d.controlled_kwh for d in self.days]
+        if not any(controlled):
+            return None
+        recent = controlled[-tail_days:]
+        earlier = controlled[:-tail_days]
+        return sum(recent) / len(recent) - sum(earlier) / len(earlier)
+
     @classmethod
     def from_window(
         cls,

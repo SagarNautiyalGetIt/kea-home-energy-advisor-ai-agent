@@ -50,7 +50,8 @@ from app.analytics.engine import (
     build_why_high,
 )
 from app.analytics.repository import UsageContext
-from app.config import get_provider, get_recorder, get_repository
+from app.clarify.schemas import HouseholdContext
+from app.config import get_context_store, get_provider, get_recorder, get_repository
 from app.db.recorder import TurnRecord
 from app.narration.narrator import narrate_verified
 from app.routing.intents import route
@@ -59,6 +60,37 @@ from app.schemas import FactBundle, Intent, VerificationReport
 log = logging.getLogger(__name__)
 
 DAYS_IN_JULY = 31
+"""The demo cohort's cycle length. **A fallback, not a fact about any real account.**
+
+Retailers stagger billing cycle days across the month precisely so that mid-cycle
+alerting does not all fire on the same day — `billing.account.billing_cycle_day` exists
+for that, and `mart_account_context` carries the resulting period dates. A real cohort
+therefore has cycles of 28 to 33 days that start on different dates, and assuming 31 for
+all of them puts a straight-line month-end projection out by up to 10% in the direction
+that matters: it *understates* the bill for a household on a longer cycle, which is the
+one group a bill-shock warning exists to reach.
+
+Use `days_in_cycle()` below. This constant is what it falls back to when nothing knows
+better, which on the fixture households is the honest answer.
+"""
+
+
+def days_in_cycle(ctx: UsageContext) -> int:
+    """How many days this account's current billing period actually covers.
+
+    Read from the account's own period dates when the marts have them, so an account
+    billed 15th-to-14th is projected over its real 30 or 31 days rather than a calendar
+    month it does not use.
+    """
+    account = getattr(ctx, "account", None)
+    billing = getattr(account, "billing", None) if account else None
+    start = getattr(billing, "current_period_start", None)
+    end = getattr(billing, "current_period_end", None)
+    if start and end and end >= start:
+        # Inclusive of both endpoints, matching `bill.period_days` on the platform side —
+        # a period from the 1st to the 31st is 31 days, not 30.
+        return (end - start).days + 1
+    return DAYS_IN_JULY
 
 # Illustrative plans — Kea's real tariffs are not public, and every surface showing a
 # dollar figure has to say so. Standard trades a higher daily charge for a lower unit
@@ -101,6 +133,22 @@ _ACCOUNT_CONTEXT_INTENTS = {
 }
 
 
+def _household(customer_id: str) -> HouseholdContext | None:
+    """What this household has already told us, for the clarifying-question path.
+
+    Swallows store failures to None, which disables the question rather than the answer.
+    A clarifying question is an enhancement; the explanation is the product. Losing the
+    store must not cost a customer their bill explanation — and returning a *blank*
+    context on failure would be worse than None, because a blank one reads as "never
+    asked anything" and would re-ask a question they already answered.
+    """
+    try:
+        return get_context_store().get(customer_id)
+    except Exception:  # noqa: BLE001
+        log.warning("household context unavailable for %s", customer_id, exc_info=True)
+        return None
+
+
 def _account_context(customer_id: str, ctx: UsageContext) -> AccountContext:
     """The wide context for this request, however much of it the source could fill.
 
@@ -128,7 +176,8 @@ def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> 
     baseline = ctx.baseline
 
     if intent is Intent.WHAT_WILL_I_PAY:
-        return build_what_will_i_pay(window, DAYS_IN_JULY)
+        # The account's real cycle length, not a calendar month — see `days_in_cycle`.
+        return build_what_will_i_pay(window, max(days_in_cycle(ctx), len(window.daily_kwh)))
 
     if intent is Intent.WHY_HIGH:
         # Two answers to the same question, chosen by what the data supports.
@@ -145,7 +194,7 @@ def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> 
         # nothing better available, never in preference to a real attribution.
         account = _account_context(customer_id, ctx)
         if account.has_bill_comparison:
-            return explain.build_why_high_v2(account)
+            return explain.build_why_high_v2(account, household=_household(customer_id))
         return build_why_high(window, baseline)
 
     if intent is Intent.USING_MORE_THAN_USUAL:

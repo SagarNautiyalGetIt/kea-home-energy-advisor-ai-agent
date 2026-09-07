@@ -27,6 +27,9 @@ from __future__ import annotations
 
 from app.analytics.account import AccountContext
 from app.analytics.drivers import Confidence, Decomposition, decompose
+from app.clarify import from_drivers
+from app.clarify import questions as clarify_questions
+from app.clarify.schemas import ClarifyingQuestion, HouseholdContext
 from app.schemas import Fact, FactBundle, Intent
 
 NO_APPLIANCE = (
@@ -94,10 +97,42 @@ def _shell(
     )
 
 
+def _question_for(
+    ctx: AccountContext,
+    result: Decomposition,
+    household: HouseholdContext | None,
+) -> ClarifyingQuestion | None:
+    """One question, when the decomposition left something only the customer can explain.
+
+    Returns None whenever anything is uncertain about *asking* — no household record, a
+    medically-dependent or vulnerable customer, a fully explained bill. None is the
+    common case and the right default: an assistant that finds a question every time is
+    running an intake form.
+
+    The hardship rule is enforced in `clarify.select` and repeated here through
+    `escalation_reason`, because the two catch different things. `select` knows the
+    customer *said* they are struggling; this knows the account is flagged medically
+    dependent or vulnerable, which they never had to say.
+    """
+    if household is None or ctx.escalation_reason() is not None or ctx.is_vulnerable:
+        return None
+    gaps = from_drivers.gaps_from_decomposition(result, ctx)
+    if not gaps:
+        return None
+    return clarify_questions.select(
+        gaps,
+        household,
+        period=result.current.label,
+        evidenced=from_drivers.preferred_hypothesis(ctx),
+    )
+
+
 # ──────────────────────────── the flagship ────────────────────────────
 
 
-def build_why_high_v2(ctx: AccountContext) -> FactBundle:
+def build_why_high_v2(
+    ctx: AccountContext, household: HouseholdContext | None = None
+) -> FactBundle:
     """"Why is my bill so high?" — answered against their own last bill.
 
     Falls back to a declared inability rather than to the peer-benchmark answer when
@@ -130,10 +165,14 @@ def build_why_high_v2(ctx: AccountContext) -> FactBundle:
         heating_sensitivity_kwh_per_hdd=ctx.heating_sensitivity_kwh_per_hdd,
         weather_fit_r2=ctx.weather_fit_r2,
     )
-    return _bundle_from_decomposition(ctx, result)
+    return _bundle_from_decomposition(ctx, result, household=household)
 
 
-def _bundle_from_decomposition(ctx: AccountContext, result: Decomposition) -> FactBundle:
+def _bundle_from_decomposition(
+    ctx: AccountContext,
+    result: Decomposition,
+    household: HouseholdContext | None = None,
+) -> FactBundle:
     facts: list[Fact] = []
     caveats: list[str] = [NO_APPLIANCE]
 
@@ -177,6 +216,14 @@ def _bundle_from_decomposition(ctx: AccountContext, result: Decomposition) -> Fa
             "Some of this bill's charges could not be reconciled against its total. Do "
             "not present the breakdown as complete."
         )
+
+    # The clarifying question. Python decides there is a quantified gap worth asking
+    # about; the model only delivers the sentence it is handed, word for word. See
+    # app/clarify/ — and note the residual is what makes this honest, because a bill the
+    # drivers account for produces no gap and therefore no question.
+    question = _question_for(ctx, result, household)
+    if question is not None:
+        caveats += clarify_questions.caveats_for(question)
 
     bundle = _shell(ctx, Intent.WHY_HIGH, facts, caveats, period=result.current.label)
     # Headline, the two bill totals, the change, the percent, then the next two causes.

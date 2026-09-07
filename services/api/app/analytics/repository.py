@@ -321,7 +321,7 @@ class MartRepository:
             return [r for (r,) in rows.all()]
 
     async def context(self, customer_id: str) -> UsageContext:
-        from app.analytics.fixtures import NORMAL_HDD_PER_DAY
+        from app.analytics import climate
         from app.db.marts import MartAccountContext, MartDailyUsage
         from app.db.session import get_sessionmaker
 
@@ -392,12 +392,21 @@ class MartRepository:
         hdd = [float(h) for _, _, h in in_month if h is not None]
         period = f"{in_month[0][0]:%B %Y}"
 
+        # The region's own normal for the month actually being answered about — not the
+        # Auckland-July constant the fixtures use. "Colder than normal" is what the whole
+        # weather attribution rests on, and scoring a Dunedin January against an Auckland
+        # July would read as dramatically warmer than normal every time. See
+        # analytics/climate.py.
+        normal = climate.normal_hdd_per_day(
+            getattr(account, "climate_region", None), in_month[0][0].month
+        )
+
         return UsageContext(
             window=UsageWindow(customer_id=customer_id, period=period, daily_kwh=daily),
             baseline=float(cohort),
             label=account.customer_name,
             hdd=hdd,
-            normal_hdd=NORMAL_HDD_PER_DAY,
+            normal_hdd=normal,
             account=await self._account_context(customer_id, account),
         )
 
