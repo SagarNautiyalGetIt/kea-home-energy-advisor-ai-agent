@@ -1163,6 +1163,18 @@
             "type": "array",
             "title": "Caveats",
             "description": "Claims the narrator must NOT make. Half-hourly data cannot identify an appliance, so 'do not name an appliance' belongs here on most bundles."
+          },
+          "narration_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narration Limit",
+            "description": "How many facts the *model* is shown, when that should be fewer than the API returns. Null means all of them, which is the right default for every bundle small enough to narrate whole."
           }
         },
         "type": "object",

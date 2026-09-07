@@ -34,6 +34,17 @@ NO_APPLIANCE = (
     "data cannot identify appliances, and claiming otherwise is a fabrication."
 )
 
+#: How many of the decomposition's facts the model is shown. See `FactBundle.narration_limit`.
+#:
+#: Six, because that is the headline driver, both bill totals, the change, the percent,
+#: and one more cause — the shape of a complete answer. Seven would add a second minor
+#: driver that a four-sentence reply has no room for anyway.
+#:
+#: This is a guess, and it should not stay one. It is exactly the kind of number the
+#: golden set exists to settle: run the bake-off at 4, 6 and 10 and keep whichever holds
+#: the layer-3 pass rate highest without dropping the cause from the answer.
+NARRATION_FACT_LIMIT = 6
+
 
 def _shell(
     ctx: AccountContext,
@@ -167,7 +178,12 @@ def _bundle_from_decomposition(ctx: AccountContext, result: Decomposition) -> Fa
             "not present the breakdown as complete."
         )
 
-    return _shell(ctx, Intent.WHY_HIGH, facts, caveats, period=result.current.label)
+    bundle = _shell(ctx, Intent.WHY_HIGH, facts, caveats, period=result.current.label)
+    # Headline, the two bill totals, the change, the percent, then the next two causes.
+    # Enough to say "it went up $151, mostly the extra 12 days, and prices rose too" —
+    # which is the whole answer — without handing a small model ten figures and four
+    # sentences to fit them into. The rest stay on the response for the dashboard.
+    return bundle.model_copy(update={"narration_limit": NARRATION_FACT_LIMIT})
 
 
 def build_how_to_reduce(ctx: AccountContext) -> FactBundle:

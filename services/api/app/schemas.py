@@ -247,10 +247,42 @@ class FactBundle(BaseModel):
     def allowed_displays(self) -> list[str]:
         return [f.display for f in self.facts]
 
+    narration_limit: int | None = Field(
+        default=None,
+        description=(
+            "How many facts the *model* is shown, when that should be fewer than the API "
+            "returns. Null means all of them, which is the right default for every bundle "
+            "small enough to narrate whole."
+        ),
+    )
+    """Why a bundle would hand the model less than it carries.
+
+    Layer 3 rejects a **whole draft** if any single figure in it is wrong, so the chance
+    of a rejection grows with the number of figures on offer, not with their usefulness.
+    The driver decomposition made that concrete: it produces up to ten facts where the
+    old bill explanation produced five, against a system prompt that asks for two to four
+    sentences. A small model handed ten figures and room for four sentences has twice the
+    surface area to garble one and lose the entire answer to the template fallback.
+
+    The facts are already ordered by size, so the cheap fix is to show the model the ones
+    that carry the answer and keep the rest for the response body — the dashboard wants
+    every driver to draw a chart, the sentence does not.
+
+    Note this only ever *narrows* what the model sees. `allowed_values()` stays complete,
+    so a figure omitted from the prompt is still accepted if the model somehow produces
+    it. That asymmetry is deliberate and safe: withholding an operand cannot cause a
+    fabrication, and layer 3's job is to catch invented numbers rather than to police
+    which real ones got used.
+    """
+
+    def narration_facts(self) -> list[Fact]:
+        """The facts the model is shown — the leading `narration_limit`, or all of them."""
+        return self.facts if self.narration_limit is None else self.facts[: self.narration_limit]
+
     def render_for_prompt(self) -> str:
         """The only representation of data the model ever sees."""
         lines = [f"Period: {self.period}"]
-        lines += [f"- {f.label}: {f.display}" for f in self.facts]
+        lines += [f"- {f.label}: {f.display}" for f in self.narration_facts()]
         if self.caveats:
             lines.append("You must NOT claim any of the following:")
             lines += [f"- {c}" for c in self.caveats]

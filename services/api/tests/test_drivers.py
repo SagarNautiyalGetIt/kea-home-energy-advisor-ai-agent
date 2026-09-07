@@ -227,3 +227,62 @@ def test_zero_consumption_does_not_divide_by_zero() -> None:
     assert sum(d.amount_nzd for d in result.drivers) == pytest.approx(
         result.total_delta_nzd, abs=0.05
     )
+
+
+# ───────────────────────── what the model is shown ─────────────────────────
+
+
+def _decomposed_bundle():
+    import datetime as dt
+
+    from app.analytics.account import AccountContext, DayUsage
+    from app.analytics.explain import build_why_high_v2
+
+    return build_why_high_v2(
+        AccountContext(
+            account_ref="ACC-1",
+            days=[
+                DayUsage(date=dt.date(2026, 7, 1) + dt.timedelta(days=i), import_kwh=18.0)
+                for i in range(31)
+            ],
+            current_bill=_bill("August 2026", days=43, total_nzd=331.0, total_kwh=810.0,
+                               daily_fixed_nzd=1.62, base_load_kwh_per_day=7.6,
+                               heating_degree_days=390.0),
+            prior_bill=_bill("July 2026", **JUNE),
+            heating_sensitivity_kwh_per_hdd=0.45,
+        )
+    )
+
+
+def test_the_narrator_is_shown_fewer_facts_than_the_api_returns() -> None:
+    """Layer 3 rejects a whole draft over one bad figure, so the rejection risk scales
+    with how many figures are on offer. The decomposition produces up to ten against a
+    prompt asking for two to four sentences; the dashboard wants all ten, the sentence
+    does not."""
+    bundle = _decomposed_bundle()
+    assert len(bundle.facts) > len(bundle.narration_facts())
+    assert len(bundle.narration_facts()) <= 6
+
+
+def test_the_headline_survives_the_narration_cap() -> None:
+    """Trimming must never cut the cause off the front — that would restore exactly the
+    complaint the decomposition was built to fix."""
+    bundle = _decomposed_bundle()
+    shown = bundle.narration_facts()
+    assert shown[0].key == "driver_headline"
+    rendered = bundle.render_for_prompt()
+    assert shown[0].display in rendered
+
+
+def test_the_cap_narrows_the_prompt_but_not_what_is_verifiable() -> None:
+    """A figure withheld from the prompt is still accepted if the model produces it.
+
+    Withholding an operand cannot cause a fabrication, and layer 3's job is catching
+    invented numbers rather than policing which real ones got used.
+    """
+    bundle = _decomposed_bundle()
+    hidden = bundle.facts[len(bundle.narration_facts()):]
+    assert hidden, "expected at least one fact held back from the prompt"
+    allowed = bundle.allowed_values()
+    for fact in hidden:
+        assert fact.value in allowed
