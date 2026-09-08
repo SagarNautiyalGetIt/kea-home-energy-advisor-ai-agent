@@ -18,8 +18,10 @@ export type UsageGraphProps = {
 }
 
 const formatMetric = (value: number, unit: UsageUnit, max: number) => {
-  const decimals = max <= 2 ? 1 : 0
-  return unit === '$' ? `$${value.toFixed(decimals)}` : `${value.toFixed(decimals)} kWh`
+  if (unit === '$') return `$${value.toFixed(2)}`
+
+const decimals = max <= 2 ? 1 : 0
+  return `${value.toFixed(decimals)} kWh`
 }
 
 export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false }: UsageGraphProps) {
@@ -34,7 +36,16 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
   const chartWidth = width - margin.left - margin.right
   const chartHeight = height - margin.top - margin.bottom
   const safeValues = values.length ? values : [0]
-  const ceiling = Math.max(max ?? Math.max(...safeValues) * 1.15, 1)
+  const highestValue = Math.max(
+  0,
+  ...safeValues,
+  ...(comparisonValues ?? []),
+)
+
+  const ceiling = Math.max(
+  max ?? 0,
+  highestValue * 1.15,
+) || 1
   const baseline = margin.top + chartHeight
 
   const points = safeValues.map((value, index) => ({
