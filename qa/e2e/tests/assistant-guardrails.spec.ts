@@ -162,7 +162,7 @@ test.describe('Guard rails · the page', () => {
 
     // Straight into the next one, without waiting for the body to finish streaming.
     const second = await assistant.askByTyping('Which day was my highest usage?')
-    expect(second.intent).toBe('peak_usage')
+    expect(second.tools).toContain('get_daily_usage')
 
     // One user bubble per question, one assistant bubble per answer, and no orphan.
     await expect(assistant.userBubbles).toHaveCount(2)
@@ -183,35 +183,50 @@ test.describe('Guard rails · the page', () => {
     await expect(assistant.offlineBanner.getByRole('button', { name: 'Talk to a human' })).toBeVisible()
   })
 
-  test('an answer it cannot stand behind is withheld, not shown', async ({ assistant, page }) => {
-    // `isSafeToDisplay` false must render the refusal rather than the text. Forced by
-    // rewriting the `done` event, because no demo account reliably produces one — and a
-    // path that only fires on bad luck is a path nobody has ever seen work.
+  test('when no answer could be produced the page says so and invents nothing', async ({
+    assistant,
+    page,
+  }) => {
+    // This used to force `isSafeToDisplay` false by rewriting the verification verdict.
+    // There is no verdict now, and the failure it stood for has a frame of its own: the
+    // model was unreachable, so the stream carries `event: error` and NO answer.
+    //
+    // The behaviour under test is the same one and it matters more than it did. The old
+    // architecture served a template built from the fact bundle here, which worked
+    // because the model was only formatting figures Python had computed. Nothing stands
+    // in for reasoning, so this path must show the message and nothing else — a fluent
+    // paragraph with no data behind it is precisely what the product exists not to do.
+    //
+    // Forced rather than waited for, because a path that only fires when the provider
+    // happens to be down is a path nobody has ever seen work.
     await page.route('**/api/chat/stream', async (route) => {
-      const response = await route.fetch()
-      const body = (await response.text()).replace(
-        /event: done\ndata: (.+)/,
-        (_m, data: string) => {
-          const done = JSON.parse(data)
-          return `event: done\ndata: ${JSON.stringify({
-            ...done,
-            passed: false,
-            fell_back_to_template: false,
-            unverified: ['$999.99'],
-          })}`
-        },
-      )
-      await route.fulfill({ response, body })
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body:
+          'event: error\ndata: ' +
+          JSON.stringify({
+            message: "Sparky can't reach your account data right now, so there's nothing reliable to tell you. Please try again shortly.",
+            retryable: true,
+          }) +
+          '\n\n',
+      })
     })
 
     await assistant.goto()
     await assistant.askByChip('Why is my power bill so high?')
 
     await expect(assistant.withheldAnswers).toHaveCount(1)
-    await expect(assistant.withheldAnswers).toContainText(/rather not guess/i)
-    // And no badge on a withheld answer — claiming verification over a refusal would be
-    // the opposite of the point.
+    await expect(assistant.withheldAnswers).toContainText(/nothing reliable to tell you/i)
+
+    // No provenance panel over a non-answer — claiming the data was consulted when it
+    // was not is the same class of lie the old badge told over Julia's $0.00.
     await expect(assistant.verifiedBadge(assistant.lastAnswer)).toHaveCount(0)
+
+    // And it must not read as a handoff. The old copy here said "let me put you through
+    // to someone who can help", which turned every provider hiccup into a fake
+    // escalation and was indistinguishable from a real one.
+    await expect(assistant.lastAnswer).not.toContainText(/connect you with|put you through/i)
   })
 
   test('attachments are refused honestly rather than silently dropped', async ({

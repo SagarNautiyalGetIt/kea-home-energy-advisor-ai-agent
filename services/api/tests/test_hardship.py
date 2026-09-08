@@ -152,6 +152,35 @@ def test_corroboration_promotes_to_a_person() -> None:
     assert hardship.decide(assessment).tier is hardship.Tier.HUMAN_ONLY
 
 
+def test_an_account_signal_alone_watches_but_does_not_page() -> None:
+    """The product is bill-shock prevention, so a bill that jumped is its NORMAL case.
+
+    Tama trips `bill_shock` on a plain "why is my bill so high?" with no distress in the
+    message at all. Escalating the tier is right — an agent should be able to see it — but
+    paging on it would page on a large share of the cohort every cycle, and a queue that
+    full is one nobody reads. That is how the real disclosure underneath gets missed.
+    """
+    from app.hardship.signals import HardshipAssessment
+
+    account_only = HardshipAssessment(
+        signals=[
+            Signal(
+                key="bill_shock",
+                source=Source.ACCOUNT,
+                weight=0.45,
+                detail="this bill is far larger than the last one",
+            )
+        ]
+    )
+    decision = hardship.decide(account_only)
+    assert decision.tier is hardship.Tier.MONITORED
+    assert decision.notify_agent is False, "account data alone must not page a person"
+
+    # The same score WITH something the customer said does page.
+    spoken = hardship.assess("I lost my job last month")
+    assert hardship.decide(spoken).notify_agent is True
+
+
 def test_the_care_register_is_never_left_unwatched() -> None:
     """A medically dependent customer is a category of person, not a state of a
     conversation. The duty exists before they say anything."""

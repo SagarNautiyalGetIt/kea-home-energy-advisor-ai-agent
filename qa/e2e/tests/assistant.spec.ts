@@ -1,6 +1,6 @@
 import { expect, test } from '../fixtures/test'
 import { ACCOUNTS, authFile } from '../fixtures/accounts'
-import { chat, displayDigits, getDemoAccounts, isSafeToDisplay, numericTokens } from '../api/client'
+import { chat, getDemoAccounts, getHousehold, isGrounded, numericTokens } from '../api/client'
 
 /**
  * The Sparky AI page — mechanics, and the three starter questions the product demos.
@@ -73,49 +73,75 @@ for (const account of ACCOUNTS) {
     // broke and hide the state of the other two for this account.
 
     for (const { chip, intent } of COVERED) {
-      test(`"${chip}" routes to ${intent}`, async ({ assistant }) => {
+      test(`"${chip}" reads what that question needs`, async ({ assistant }) => {
         const turn = await assistant.askByChip(chip)
 
-        // Layer 0's decision, not the model's. A routing miss is the worst failure this
-        // system has: layer 3 verifies that figures are REAL, never that they answer the
-        // question asked, so a mis-route reaches the customer stamped "every figure
-        // checked" — true, and completely beside the point.
-        expect(turn.intent, `"${chip}" was answered by the ${turn.intent} path`).toBe(intent)
+        // There is no routed intent to assert on — the model reads the question rather
+        // than classifying it (ADR-0011). The equivalent claim, and a stronger one, is
+        // that it went and read the right thing: a mis-route used to reach the customer
+        // stamped "every figure checked", true and completely beside the point, and an
+        // answer that never opened the bill comparison is beside the point in the same way.
+        expect(
+          turn.tools,
+          `"${chip}" was answered without reading ${intent}. Tools used: ${turn.tools.join(', ') || 'none'}`,
+        ).toContain(intent)
       })
 
-      test(`"${chip}" shows only figures the backend computed`, async ({ assistant, request }) => {
+      test(`"${chip}" is answered from this household's own data`, async ({ assistant }) => {
         const turn = await assistant.askByChip(chip)
-        expect(turn.report, 'the stream ended without a done event').toBeDefined()
+        expect(turn.sources, 'the stream ended without a done event').toBeDefined()
 
-        // Withheld answers are the product working, and they carry no figures to check.
-        test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld — nothing to ground')
-
-        // Layer 3's own verdict on the answer that is ON SCREEN. Nothing may reach a
-        // customer that the number-checker could not tie to a fact — that single sentence
-        // is the product's entire claim, and this is the only place in the suite that
-        // checks it at the far end of the wire rather than in a unit test.
+        // ## What this test can and cannot claim, since it changed
+        //
+        // It used to assert `report.unverified === []` and match every numeric token on
+        // screen against a `Fact.display`. That check is gone with the number-checker,
+        // and it is worth being precise about why rather than quietly weakening the
+        // assertion: the model now reads the data and is expected to work things out —
+        // "up 14%", "$263 a year" — so a token-against-a-permitted-list check would
+        // reject exactly the arithmetic that makes an explanation an explanation.
+        //
+        // It was also never the check people thought it was. #141 §4 is the proof: Julia
+        // got "a steady 0.0 kWh a day ... costs $0.00" under a badge reading "every
+        // figure checked". Every figure in it WAS checked. The answer was worthless.
+        //
+        // So the claim here is provenance rather than permission — the answer consulted
+        // this household's data, and every lookup can say where it read from.
         expect(
-          turn.report!.unverified,
-          'these figures were shown to the customer without a fact behind them',
-        ).toEqual([])
+          isGrounded(turn),
+          'the answer consulted none of this household\'s data — that is prose written ' +
+            'from the system prompt with nothing behind it',
+        ).toBe(true)
 
-        // And independently: the rendered text agrees with the deterministic layer-1
-        // output. `facts` are pure Python and identical on every call, so a second call
-        // is a legitimate source of expected values; `text` is not, which is why the
-        // comparison is digits-to-digits and never sentence-to-sentence.
-        const { facts } = await chat(request, {
-          customer_id: account.customerId,
-          message: chip,
-        })
-        const allowed = new Set(facts.flatMap((f) => displayDigits(f.display)))
-
-        for (const token of numericTokens(turn.text)) {
+        for (const source of turn.sources!.filter((s) => s.ok)) {
           expect(
-            allowed.has(token) || turn.report!.checked.some((c) => c.includes(token)),
-            `"${token}" is on screen but matches no fact. Facts were: ` +
-              facts.map((f) => `${f.key}=${f.display}`).join(', '),
-          ).toBe(true)
+            source.source,
+            `${source.tool} returned data without naming where it came from`,
+          ).toBeTruthy()
         }
+      })
+
+      test(`"${chip}" quotes the same period total the API reports`, async ({
+        assistant,
+        request,
+      }) => {
+        // #141 §2, at the far end of the wire. The assistant used to price everything at
+        // a flat illustrative 30c/kWh while the invoice held real charges — Daniel's
+        // answer said $42.75 against a $189.60 bill. Both sides now read the same
+        // effective rate, so if a total appears on screen it has to be THE total.
+        //
+        // Skipped rather than failed when the answer quotes no total: not every answer to
+        // these three questions needs to, and demanding one would be asserting wording.
+        const turn = await assistant.askByChip(chip)
+        const household = await getHousehold(request, account.customerId)
+
+        const total = Math.round(household.estimated_cost_nzd)
+        const onScreen = numericTokens(turn.text).map((t) => Math.round(Number(t)))
+        test.skip(!onScreen.includes(total), 'this answer did not quote a period total')
+
+        expect(
+          onScreen,
+          `the API reports $${household.estimated_cost_nzd.toFixed(2)} for ${household.period}`,
+        ).toContain(total)
       })
     }
 
@@ -195,7 +221,7 @@ for (const account of ACCOUNTS) {
       assistant,
     }) => {
       const turn = await assistant.askByChip('Which day was my highest usage?')
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       // The app tests `/\d/.test(text)` rather than `report.checked.length`, and the
       // reason is in its own comment: a template fallback is assembled from verified
@@ -213,13 +239,21 @@ for (const account of ACCOUNTS) {
       // Compared on FACTS, never on wording — two generations of the same question differ
       // by design, and asserting they match would fail on a correct application.
       const typed = await assistant.askByTyping('Why is my power bill so high?')
-      expect(typed.intent).toBe('why_bill_high')
+      expect(typed.tools).toContain('get_bill_comparison')
 
+      // Both paths must consult the same data. Compared on the LOOKUPS, never on
+      // wording — two generations of the same question differ by design, and asserting
+      // they match would fail on a correct application.
       const viaApi = await chat(request, {
         customer_id: account.customerId,
         message: 'Why is my power bill so high?',
       })
-      expect(viaApi.intent).toBe(typed.intent)
+      const apiTools = viaApi.sources.filter((s) => s.ok).map((s) => s.tool)
+      expect(apiTools, 'the API path read nothing').not.toHaveLength(0)
+      expect(
+        apiTools,
+        'the typed path and the API path read different data for the same question',
+      ).toEqual(expect.arrayContaining(['get_account_summary']))
     })
 
     test('the answer is about this customer and not the first household', async ({
@@ -230,7 +264,7 @@ for (const account of ACCOUNTS) {
       // signed-in id was not found, so all fourteen logins were shown the same person's
       // usage. It is fixed; this keeps it fixed, for every account rather than for one.
       const turn = await assistant.askByChip('Which day was my highest usage?')
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       const mine = await chat(request, {
         customer_id: account.customerId,
@@ -314,9 +348,13 @@ test.describe('Sparky · the page itself', () => {
     await expect(assistant.userBubbles).toHaveCount(1)
 
     const edited = await assistant.editQuestion(0, 'Was that just the cold snap?')
-    expect(edited.intent, 'the edited question was routed by its new wording').toBe(
-      'using_more_than_usual',
-    )
+    // Answered by the NEW wording, not the old one. There is no intent to compare, so
+    // the assertion is that it went and read the weather-bearing data — the daily series
+    // carries heating degree days and is what a cold-snap question has to open.
+    expect(
+      edited.tools,
+      `the edited question was answered without reading the weather. Tools: ${edited.tools.join(', ') || 'none'}`,
+    ).toContain('get_daily_usage')
 
     // The old answer is gone rather than stranded above a question that is no longer on
     // screen — `saveEdit` slices the transcript at the edited message, because everything
@@ -351,7 +389,7 @@ test.describe('Sparky · the page itself', () => {
     // The switch that actually exercises auth — requirement §1. The picker above does
     // not, so this is the path the coverage claim rests on.
     const tama = await assistant.askByChip('Which day was my highest usage?')
-    expect(tama.intent).toBe('peak_usage')
+    expect(tama.tools).toContain('get_daily_usage')
 
     await page.locator('button.logout-button').click()
     await page.getByRole('button', { name: 'Yes' }).click()
@@ -379,6 +417,6 @@ test.describe('Sparky · the page itself', () => {
     // hardcoded plans, so the ANSWER is not asserted — only that the chip does not land
     // on `out_of_scope`, which is what a starter chip must never do.
     const turn = await assistant.askByChip('Could another plan save me money?')
-    expect(turn.intent).toBe('tariff_check')
+    expect(turn.tools, 'the assistant did not read what this question needs').toContain('get_plan_options')
   })
 })

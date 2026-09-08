@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures/test'
 import { ACCOUNTS, authFile } from '../fixtures/accounts'
 import { dominantDriver, driversOf } from '../fixtures/db'
-import { chat, getHousehold, isSafeToDisplay } from '../api/client'
+import { chat, getHousehold, isGrounded } from '../api/client'
 
 /**
  * "Why is my power bill so high?" — the specification, written as tests.
@@ -164,7 +164,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       // Rangi's latest bill is $151.04 → $144.65. He asks why it is so high and is told
       // "Most of your bill is from using 0.3 kWh more each day than similar homes" —
@@ -247,7 +247,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const keys = facts.map((f) => f.key)
@@ -282,7 +282,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const ranked = driversOf(explanation!)
@@ -311,7 +311,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       expect(
         turn.text.toLowerCase(),
@@ -333,7 +333,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld — which is also honest')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       // Not a wording match: a hedge is a *structural* property here, so the assertion is
       // that SOMETHING marks the answer as uncertain. Failing this means the assistant
@@ -377,7 +377,7 @@ for (const account of MART_ACCOUNTS) {
     }, async ({ assistant, request }) => {
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const zeroed = facts.filter((f) => f.value === 0)
@@ -398,7 +398,7 @@ for (const account of MART_ACCOUNTS) {
     }, async ({ assistant, request }) => {
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const substantive = facts.filter((f) => f.key !== 'period_cost' && f.value !== 0)
@@ -443,19 +443,24 @@ test.describe('Bill explainer · the second turn', () => {
     }) => {
       await assistant.goto()
       const first = await assistant.askByChip(WHY)
-      expect(first.intent).toBe('why_bill_high')
+      expect(first.tools).toContain('get_bill_comparison')
 
       const second = await assistant.askByTyping(reply)
 
-      // `route()` sees one message and no history (`pipeline.plan`), and `conversation_id`
-      // reaches the recorder and nothing else — so every reply that is only meaningful in
-      // context lands on the empty bundle whose caveat is "You have NO figures for this
-      // question". A customer confirming what Sparky just offered is told Sparky cannot
-      // help, which is the worst possible moment to say it.
+      // The failure this pins: a reply that is only meaningful in context used to land on
+      // the empty bundle whose caveat is "You have NO figures for this question", because
+      // the router saw one message with no history. A customer confirming what Sparky just
+      // offered was told Sparky cannot help — the worst possible moment to say it.
+      //
+      // With history threaded there is no router to misroute to, so the assertion is the
+      // outcome rather than the intent: the reply is answered from this household's data
+      // rather than deflected.
       expect(
-        second.intent,
-        `"${reply}" after "${WHY}" routed to ${second.intent} — the turn before it was ignored`,
-      ).not.toBe('out_of_scope')
+        isGrounded(second),
+        `"${reply}" after "${WHY}" was answered without reading anything — the turn ` +
+          'before it was ignored',
+      ).toBe(true)
+      expect(second.text).not.toMatch(/connect you with|put you through|cannot help with/i)
     })
   }
 
@@ -467,13 +472,20 @@ test.describe('Bill explainer · the second turn', () => {
       await assistant.askByChip(WHY)
       const second = await assistant.askByTyping(reply)
 
-      // `clarify/apply.py` already knows how to re-attribute a confirmed cause; it is
-      // reachable only from `GET /bill-shock`. Nothing on the chat path can record this.
+      // `clarify/apply.py` knows how to re-attribute a confirmed cause, and the chat path
+      // can now reach it: `answer_clarifying_question` records the reply against the open
+      // question and the pipeline writes it after the turn (KEA-142 point 4).
+      //
+      // Asserted on the outcome rather than on the tool call, because whether the model
+      // recognises THIS phrasing as a reply is a model question, and the suite's rule is
+      // to assert structure. What must hold either way: the reply is answered from the
+      // household's data and not deflected.
       expect(
-        second.intent,
-        `"${reply}" answers the appliance question in clarify/questions.py, and the chat ` +
-          'path has no way to receive it',
-      ).not.toBe('out_of_scope')
+        isGrounded(second),
+        `"${reply}" answers the appliance question in clarify/questions.py and was ` +
+          'answered without reading anything',
+      ).toBe(true)
+      expect(second.text).not.toMatch(/connect you with|put you through|cannot help with/i)
     })
   }
 
@@ -486,7 +498,7 @@ test.describe('Bill explainer · the second turn', () => {
 
     await assistant.goto()
     const turn = await assistant.askByChip(WHY)
-    test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+    expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
     // Contract A. The trigger is computed, never judged by the model — `clarify/detect.py`
     // opens with why. `is_explainable = false` means the named drivers cover under 60% of
@@ -502,7 +514,7 @@ test.describe('Bill explainer · the second turn', () => {
   test('asks at most one question, never a form', { annotation: tdd }, async ({ assistant }) => {
     await assistant.goto()
     const turn = await assistant.askByChip(WHY)
-    test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+    expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
     // `questions.select` returns at most one and says why: "A person answering three
     // questions about their house has been given homework in exchange for an explanation
@@ -548,7 +560,7 @@ test.describe('Bill explainer · "was that just the cold snap?"', () => {
 
         await assistant.goto()
         const turn = await assistant.askByChip(COLD)
-        test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+        expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
         const { facts } = await chat(request, { customer_id: account.customerId, message: COLD })
         const share = facts.find((f) => f.key === 'weather_share')
@@ -613,7 +625,7 @@ test.describe('Bill explainer · hardship', () => {
     await assistant.goto()
     const turn = await assistant.askByTyping("I can't afford this bill")
 
-    expect(turn.intent).toBe('hardship')
+    expect(turn.tier, 'a hardship disclosure must reach a person').toBe(3)
     expect(turn.escalate, 'hardship must route to a human').toBe(true)
     expect(turn.text, 'a clarifying question was asked of a household in hardship').not.toMatch(/\?/)
   })
@@ -624,7 +636,7 @@ test.describe('Bill explainer · hardship', () => {
     await assistant.goto()
     const turn = await assistant.askByTyping('I am struggling to pay')
 
-    expect(turn.intent).toBe('hardship')
+    expect(turn.tier, 'a hardship disclosure must reach a person').toBe(3)
     expect(turn.text, 'a figure appeared in a hardship reply').not.toMatch(/\d/)
     await expect(assistant.escalationPrompt).toBeVisible()
     await expect(assistant.verifiedBadge(assistant.lastAnswer)).toHaveCount(0)
