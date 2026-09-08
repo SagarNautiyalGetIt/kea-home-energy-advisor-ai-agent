@@ -65,7 +65,10 @@ jobs:
             "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
           git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
           git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
-      - run: python3 -m venv .venv && .venv/bin/pip install -q --upgrade pip
+      # `--clear` because a checkout can already contain a `.venv` path — one was
+      # committed as a symlink and broke every run of this job with
+      # "[Errno 17] File exists" before a single test ran.
+      - run: rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install -q --upgrade pip
       - run: .venv/bin/pip install -q -e ".[dev]"
       - run: .venv/bin/ruff check app tests
       - run: .venv/bin/pytest
@@ -87,6 +90,7 @@ jobs:
       - name: Install the API
         working-directory: services/api
         run: |
+          rm -rf .venv
           python3 -m venv .venv
           .venv/bin/pip install -q --upgrade pip
           .venv/bin/pip install -q -e ".[dev]"
