@@ -71,7 +71,8 @@ from app.agent.loop import (
 from app.agent.tools import ToolContext
 from app.analytics.account import AccountContext
 from app.analytics.repository import UsageContext
-from app.config import get_provider, get_recorder, get_repository
+from app.clarify import conversation as clarify_conversation
+from app.config import get_context_store, get_provider, get_recorder, get_repository
 from app.db.recorder import TurnRecord
 
 log = logging.getLogger(__name__)
@@ -220,7 +221,22 @@ async def build_context(customer_id: str) -> ToolContext:
             peer_baseline=usage.baseline,
         )
 
-    return ToolContext(customer_id=customer_id, usage=usage, account=account)
+    ctx = ToolContext(customer_id=customer_id, usage=usage, account=account)
+
+    # The question Sparky asked last turn, re-derived rather than stored. A question is a
+    # pure function of the account's data and the household's recorded context, so this
+    # returns the same one until an answer is recorded — see clarify/conversation.py.
+    # Swallowed to None on failure: a household should never lose their answer because
+    # the question could not be rebuilt.
+    try:
+        household = await get_context_store().get(customer_id)
+        ctx.open_question = clarify_conversation.question_for(
+            account, household, period=usage.window.period, hardship_detected=False
+        )
+    except Exception:  # noqa: BLE001
+        log.warning("could not resolve an open question for %s", customer_id, exc_info=True)
+
+    return ctx
 
 
 async def _record(
@@ -271,6 +287,46 @@ async def _record(
     )
 
 
+
+async def _settle_question(ctx: ToolContext) -> str | None:
+    """Write any recorded answer, then return the question to append — verbatim.
+
+    Two halves of one exchange, in this order on purpose. Recording first means the
+    question we then select already reflects the answer just given, so a household that
+    confirms a new appliance is asked about occupancy next rather than about the appliance
+    again.
+
+    Returns the exact `ClarifyingQuestion.prompt`. It is appended to the answer rather
+    than handed to the model to phrase, because the property that makes multi-turn
+    testable is that **Sparky bounds the reply space** — we only have to handle answers to
+    a question we wrote. A model paraphrasing loses that on the first turn.
+    """
+    try:
+        household = await get_context_store().get(ctx.customer_id)
+
+        if ctx.answered_question is not None:
+            question, response = ctx.answered_question
+            household = clarify_conversation.record_answer(household, question, response)
+            household = await get_context_store().put(household)
+            log.info(
+                "clarify answered customer=%s question=%s answer=%s",
+                ctx.customer_id, question.id, response.answer.value,
+            )
+            # Re-derive against the updated context: the one just answered is settled.
+            ctx.open_question = clarify_conversation.question_for(
+                ctx.account, household,
+                period=ctx.usage.window.period, hardship_detected=False,
+            )
+
+        return ctx.open_question.prompt if ctx.open_question else None
+    except Exception:  # noqa: BLE001 - a question is an addition to the answer, never a
+        # reason to lose it.
+        log.warning(
+            "could not settle the clarifying question for %s", ctx.customer_id, exc_info=True
+        )
+        return None
+
+
 async def answer(
     customer_id: str,
     message: str,
@@ -309,6 +365,16 @@ async def answer(
     # the phrase bank does not. It can only raise the tier, never lower it.
     tiering = hardship.decide(assessment, model_requested_handoff=result.escalate)
 
+    # Appended after the model has finished, never composed by it. Skipped entirely on a
+    # monitored turn for the same reason the alert path skips it: a household under
+    # financial pressure gets an answer, not a questionnaire.
+    question = (
+        await _settle_question(ctx)
+        if tiering.tier is hardship.Tier.AUTONOMOUS
+        else None
+    )
+    text = f"{result.text}\n\n{question}" if question else result.text
+
     latency_ms = int((time.perf_counter() - started) * 1000)
     recorded_id = await _record(
         ctx,
@@ -322,7 +388,7 @@ async def answer(
 
     return Answer(
         customer_id=customer_id,
-        text=result.text,
+        text=text,
         tools_used=result.tools_used,
         escalate=tiering.tier is not hardship.Tier.AUTONOMOUS,
         escalation_reason=result.escalation_reason or (
@@ -469,6 +535,17 @@ async def answer_stream(
     # The model may have escalated from inside the turn; re-decide so it can raise the
     # tier. `decide` never lowers one.
     tiering = hardship.decide(assessment, model_requested_handoff=result.escalate)
+
+    # Same as the non-streaming path: appended verbatim, and never on a turn where
+    # somebody is under financial pressure. Streamed as one more token frame so a client
+    # that only implements `token` still shows it.
+    question = (
+        await _settle_question(ctx)
+        if tiering.tier is hardship.Tier.AUTONOMOUS
+        else None
+    )
+    if question:
+        yield "token", {"text": f"\n\n{question}"}
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     recorded_id = await _record(

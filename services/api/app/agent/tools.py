@@ -118,6 +118,19 @@ class ToolContext:
     escalated: bool = False
     escalation_reason: str | None = None
 
+    open_question: object | None = None
+    """The clarifying question Python asked on the previous turn, if any.
+
+    Re-derived each turn rather than stored — see `app/clarify/conversation.py`. Present
+    means the customer is being replied to, so `answer_clarifying_question` is live and
+    the model is told what was asked. None means there is nothing to answer and the tool
+    says so rather than inventing a question to attach the answer to."""
+
+    answered_question: object | None = None
+    """Set by `answer_clarifying_question` when the model maps a reply onto a typed
+    answer. The pipeline writes it to the household context after the turn — the tool
+    itself does no I/O, so a tool call cannot half-commit a fact about somebody's home."""
+
 
 # ---------------------------------------------------------------------------
 # The catalogue
@@ -258,6 +271,47 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 }
             },
             "required": [],
+        },
+    },
+    {
+        "name": "answer_clarifying_question",
+        "description": (
+            "Record the customer's reply to the clarifying question Sparky asked at the "
+            "end of the previous turn. ONLY call this when there is an open question — "
+            "get_account_summary tells you the exact wording if there is — and only when "
+            "this message is genuinely a reply to it. 'Yes', 'yeah we got a heat pump', "
+            "'no nothing new', 'not sure' are replies. A new question is not, even if it "
+            "is about the same subject. Answering it lets the bill explanation be "
+            "recomputed with the cause confirmed, so the next answer is more specific."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string",
+                    "description": (
+                        "yes | no | unsure. Use 'unsure' for 'I don't know' or 'maybe' — "
+                        "it closes the question without confirming anything, which is "
+                        "different from 'no'."
+                    ),
+                },
+                "since": {
+                    "type": "string",
+                    "description": (
+                        "ISO date the change started, ONLY if the customer gave one and "
+                        "the answer is yes. Omit for 'a few weeks ago' — do not convert a "
+                        "vague phrase into a date."
+                    ),
+                },
+                "count": {
+                    "type": "integer",
+                    "description": (
+                        "How many extra people, for an occupancy question, and only with "
+                        "a yes."
+                    ),
+                },
+            },
+            "required": ["answer"],
         },
     },
     {
@@ -450,6 +504,19 @@ def get_account_summary(ctx: ToolContext) -> dict[str, Any]:
             "handoff_to_human if the conversation goes near those."
         )
         summary["consumer_care"] = care
+
+    if ctx.open_question is not None:
+        summary["open_question"] = {
+            "asked": ctx.open_question.prompt,
+            "about": str(ctx.open_question.hypothesis),
+            "worth_nzd": _round(ctx.open_question.explains_nzd),
+            "guidance": (
+                "Sparky asked this at the end of the previous turn. If this message is a "
+                "reply to it — 'yes', 'no', 'not sure', or anything that answers it — "
+                "call answer_clarifying_question. If it is a new question, ignore this "
+                "and answer what they actually asked."
+            ),
+        }
 
     summary["tariff_note"] = tariff_note(ctx)
     return summary
@@ -905,6 +972,75 @@ def project_this_bill(ctx: ToolContext, as_at_day: int | None = None) -> dict[st
     }
 
 
+def answer_clarifying_question(
+    ctx: ToolContext,
+    answer: str,
+    since: str | None = None,
+    count: int | None = None,
+) -> dict[str, Any]:
+    """Map the customer's reply onto the typed answer, and stage it for the pipeline.
+
+    Does no I/O on purpose. The tool validates and parks the result on the context;
+    `pipeline.answer()` writes it once the turn has completed. A tool that wrote directly
+    would let a turn that later failed leave a half-committed fact about somebody's home
+    in the household context, which nothing downstream could distinguish from something
+    they actually said.
+    """
+    from app.clarify.schemas import Answer, QuestionResponse
+
+    if ctx.open_question is None:
+        return _unavailable(
+            "there is no open question to answer. Sparky did not ask anything on the "
+            "previous turn, so treat this message as a new question rather than a reply."
+        )
+
+    try:
+        parsed = Answer(answer.strip().lower())
+    except ValueError:
+        return {
+            "error": f"{answer!r} is not a valid answer",
+            "hint": "Use exactly one of: yes, no, unsure.",
+        }
+
+    since_date: dt.date | None = None
+    if since:
+        try:
+            since_date = dt.date.fromisoformat(since[:10])
+        except ValueError:
+            # Not fatal. A yes with an unparseable date is still a yes, and the detector's
+            # own step date is a better fallback than refusing the answer.
+            log.warning("unparseable `since` %r on a clarifying answer", since)
+
+    try:
+        response = QuestionResponse(
+            question_id=ctx.open_question.id,
+            answer=parsed,
+            since=since_date,
+            count=count,
+        )
+    except Exception as exc:  # noqa: BLE001 - the validator's message is the useful part
+        # `QuestionResponse` refuses a date or a count attached to anything but "yes",
+        # because that would write a confirmed change into the record off a denial.
+        return {
+            "error": f"that answer is not valid: {exc}",
+            "hint": "A date or a count may only accompany 'yes'.",
+        }
+
+    ctx.answered_question = (ctx.open_question, response)
+    return {
+        "recorded": True,
+        "question": ctx.open_question.prompt,
+        "answer": parsed.value,
+        "guidance": (
+            "Recorded. Tell them briefly what it means for their bill — a 'yes' lets the "
+            "change be attributed to a cause instead of sitting in the unexplained "
+            "remainder, and a 'no' or 'unsure' narrows what is left. Do not ask another "
+            "question; if there is one worth asking it is appended for you."
+        ),
+        "source": "recorded against this household's own context, app/clarify/",
+    }
+
+
 def handoff_to_human(ctx: ToolContext, reason: str) -> dict[str, Any]:
     ctx.escalated = True
     ctx.escalation_reason = reason
@@ -933,6 +1069,7 @@ _SYNC = {
     "get_plan_options": get_plan_options,
     "project_this_bill": project_this_bill,
     "handoff_to_human": handoff_to_human,
+    "answer_clarifying_question": answer_clarifying_question,
 }
 _ASYNC = {
     "get_hourly_profile": get_hourly_profile,

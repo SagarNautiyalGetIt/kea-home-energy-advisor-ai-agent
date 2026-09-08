@@ -36,12 +36,20 @@ from app.agent.tools import TOOL_NAMES, TOOL_SCHEMAS, dispatch
 from app.analytics import fixtures
 from app.pipeline import build_context
 
-ARGUMENTLESS = {
-    "get_account_summary",
-    "get_bill_comparison",
-    "compare_to_similar_homes",
-    "get_plan_options",
-}
+#: A plausible value per declared type, so the sweep can call a tool that has a required
+#: argument without the test carrying a hand-maintained list of names. Derived from the
+#: schema rather than hardcoded: a new required argument should be exercised by the sweep
+#: automatically, not silently skipped until somebody remembers to add it here.
+_SAMPLE_BY_TYPE = {"string": "unsure", "integer": 1, "number": 1.0, "boolean": True}
+
+
+def _minimal_args(tool: dict) -> dict:
+    schema = tool["input_schema"]
+    properties = schema.get("properties") or {}
+    return {
+        name: _SAMPLE_BY_TYPE.get(str(properties[name].get("type", "string")), "unsure")
+        for name in schema.get("required") or []
+    }
 
 
 @pytest.fixture
@@ -109,8 +117,7 @@ async def test_every_tool_answers_for_every_demo_household(customer_id: str) -> 
     """
     ctx = await build_context(customer_id)
     for tool in TOOL_SCHEMAS:
-        args = {"reason": "test"} if tool["name"] == "handoff_to_human" else {}
-        result = await dispatch(ctx, tool["name"], args)
+        result = await dispatch(ctx, tool["name"], _minimal_args(tool))
 
         assert result, f"{tool['name']} returned nothing for {customer_id}"
         assert "error" not in result, f"{tool['name']} errored on {customer_id}: {result}"
@@ -128,8 +135,11 @@ async def test_available_results_name_their_source(customer_id: str) -> None:
     """The provenance claim, enforced. A figure whose origin cannot be stated is exactly
     the kind of number this product exists to refuse."""
     ctx = await build_context(customer_id)
-    for name in sorted(TOOL_NAMES - {"handoff_to_human"}):
-        result = await dispatch(ctx, name, {})
+    by_name = {t["name"]: t for t in TOOL_SCHEMAS}
+    # Neither of these returns data — one signals an escalation, the other records an
+    # answer — so there is no source to assert on.
+    for name in sorted(TOOL_NAMES - {"handoff_to_human", "answer_clarifying_question"}):
+        result = await dispatch(ctx, name, _minimal_args(by_name[name]))
         if result.get("available"):
             assert result.get("source"), f"{name} returned data with no source"
 
