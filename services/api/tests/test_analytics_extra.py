@@ -33,14 +33,23 @@ def _window(daily: list[float], ref: str = "H-TEST") -> UsageWindow:
 
 class TestHeatingDegreeDays:
     def test_cold_day_needs_heating(self):
-        assert heating_degree_days(8.0) == pytest.approx(10.0)
+        assert heating_degree_days(8.0) == pytest.approx(8.0)
 
     def test_warm_day_needs_none(self):
         assert heating_degree_days(21.0) == 0.0
 
-    def test_the_base_is_18_degrees(self):
-        """NZ convention. Changing it silently would move every weather figure."""
-        assert heating_degree_days(18.0) == 0.0
+    def test_the_base_is_16_degrees(self):
+        """The data platform's design §8.4 fixes it at 16, and every mart is
+        derived there. This test previously asserted 18 and so PROTECTED the
+        discrepancy: a fix to the function would have failed the suite."""
+        assert heating_degree_days(16.0) == 0.0
+        assert heating_degree_days(15.0) == pytest.approx(1.0)
+
+    def test_warm_weather_does_not_run_a_heater_backwards(self):
+        """The floor is the whole point: it collapses the no-heating range to
+        zero and leaves a segment a coefficient can multiply. Without it, a
+        22 °C day would subtract from the winter total."""
+        assert heating_degree_days(22.0) == 0.0
 
 
 class TestWeatherAttribution:

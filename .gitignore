@@ -43,32 +43,6 @@ Thumbs.db
 .vscode/
 *.swp
 
-# --- AI tool configs — never commit -----------------------------------------
-# These are local developer tool configurations, not project source material.
-.claude/
-CLAUDE.md
-AGENTS.md
-.hyperframes/
-hyperframes.json
-.copilot/
-.cursor/
-.aider*
-.codeium/
-.cursorrules
-.cursorignore
-.continue/
-.windsurf/
-.windsurfrules
-.antigravity/
-.zed/
-.roo/
-.clinerules
-.github/copilot-instructions.md
-.github/instructions/
-CLAUDE.local.md
-GEMINI.md
-# Enforced by scripts/check-attribution.sh and the `attribution` CI job.
-
 # --- Vault leakage guard ----------------------------------------------------
 # This repo lives inside an Obsidian vault directory tree. Nothing belonging to
 # the vault may ever be committed. See the absolute rule in CONTRIBUTING.md.
@@ -91,13 +65,3 @@ data/raw/*
 !data/raw/.gitkeep
 # Derived from raw/lcl by cohort.py; ~1 MB, rebuilt in a minute.
 data/pipeline/scripts/gen_source/coverage.json
-
-# Rootless local Postgres cluster (infra/pg-local.sh) — never commit a data directory.
-.pg-local/
-
-# Generated alert emails (app/alerts/email.py FileSender). Real messages with real
-# recipient addresses in them — an artefact of running the demo, never source.
-var/
-services/api/var/
-# Local model daemon log (infra/ollama.sh). Runtime output, not source.
-.ollama.log

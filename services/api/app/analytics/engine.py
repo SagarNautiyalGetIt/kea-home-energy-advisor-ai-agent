@@ -19,6 +19,8 @@ import statistics
 from dataclasses import dataclass
 from functools import cached_property
 
+from app.analytics.hardship import CollapseSignal as CollapseSignal
+from app.analytics.hardship import detect_usage_collapse as detect_usage_collapse
 from app.schemas import Fact, FactBundle, Intent
 
 #: Illustrative only — Kea's real tariff is not public. Label it wherever it shows.
@@ -228,8 +230,23 @@ def build_what_will_i_pay(window: UsageWindow, days_in_month: int) -> FactBundle
 # ───────────────────────────── weather ─────────────────────────────
 
 
-def heating_degree_days(mean_temp_c: float, base_c: float = 18.0) -> float:
-    """How much heating a day called for. NZ convention uses an 18 °C base."""
+def heating_degree_days(mean_temp_c: float, base_c: float = 16.0) -> float:
+    """How much heating a day called for, in degree days above a 16 °C base.
+
+    16, NOT 18, and the difference is not cosmetic. The data platform's design
+    §8.4 fixes the base at 16 with reasoning, `generate_scenarios.py` computes
+    `GREATEST(16.0 - temp_c, 0)` in four places, and every figure in
+    `mart_daily_usage`, `mart_bill_explanation` and `mart_forecast_input` is
+    derived at 16. An earlier version of this function defaulted to 18 and said
+    "NZ convention uses an 18 °C base", which was unsourced.
+
+    Nothing in the API calls this yet -- the served HDD comes from
+    `fixtures.heating_degree_days`, a different function of the same name -- so
+    the two bases have never disagreed in production. That is exactly why it is
+    worth correcting now: the first caller to reach for this would have got 18
+    and a docstring telling them it was right, and once the marts are populated
+    from real NIWA temperatures the same day would carry two different HDD.
+    """
     return max(0.0, base_c - mean_temp_c)
 
 
@@ -302,42 +319,6 @@ def compare_tariffs(
 
 
 # ───────────────────────────── hardship ─────────────────────────────
-
-
-@dataclass(frozen=True)
-class CollapseSignal:
-    """A usage collapse — often someone rationing heat they cannot afford."""
-
-    detected: bool
-    earlier_mean: float
-    recent_mean: float
-    drop_pct: float
-
-
-def detect_usage_collapse(
-    window: UsageWindow,
-    tail_days: int = 7,
-    threshold_pct: float = 40.0,
-) -> CollapseSignal:
-    """Compare the most recent week against the rest of the period.
-
-    Consumer Care Obligations cl. 9.3(c) names "significant consumption changes" as a
-    signal that puts a retailer on notice of possible payment difficulty. Detecting this
-    is the premise of the whole product — and it raises Kea's obligations rather than
-    lowering them, which we say ourselves rather than waiting to be asked.
-
-    **This is a signal, never a diagnosis.** A collapse might be a holiday. It routes to a
-    human; it must never produce an accusation, and the hardship reply carries no figures
-    at all — nothing to get wrong.
-    """
-    daily = window.daily_kwh
-    if len(daily) <= tail_days:
-        return CollapseSignal(False, 0.0, 0.0, 0.0)
-
-    earlier = statistics.fmean(daily[:-tail_days])
-    recent = statistics.fmean(daily[-tail_days:])
-    drop = (earlier - recent) / earlier * 100 if earlier else 0.0
-    return CollapseSignal(drop >= threshold_pct, earlier, recent, drop)
 
 
 def build_weather_check(
