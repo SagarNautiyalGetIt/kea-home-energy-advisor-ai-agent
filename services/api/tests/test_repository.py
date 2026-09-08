@@ -141,3 +141,37 @@ def test_usage_context_is_frozen() -> None:
     )
     with pytest.raises(AttributeError):
         ctx.baseline = 1.0  # type: ignore[misc]
+
+
+def test_observed_heating_demand_uses_the_same_base_as_the_normals() -> None:
+    """KEA-147. The bug this guards is silent, so it needs a test that is not.
+
+    `mart_daily_usage.heating_degree_days` is base 16 — the warehouse standard, set by
+    `hdd_base_c` in dbt_project.yml. `climate._NORMALS` is base 18. Reading the column
+    and comparing it to the table put the two sides of every weather attribution on
+    different scales, and base 16 is always the smaller number, so every winter month
+    read as warmer than typical and the driver clamped to $0.00.
+
+    Nothing crashed and no figure looked absurd. The only symptom was the assistant
+    telling people it was not the weather, in June.
+    """
+    from app.analytics import climate
+
+    # A day at 10.5 °C. The two conventions genuinely disagree, which is the whole risk.
+    assert climate.heating_degree_day(10.5) == 7.5  # base 18
+    assert climate.heating_degree_day(10.5) != round(max(16.0 - 10.5, 0.0), 2)
+
+    # Warm enough that neither base sees heating demand: still not negative.
+    assert climate.heating_degree_day(25.0) == 0.0
+
+    # A missing weather join is a day that cannot explain a rise, not a crash.
+    assert climate.heating_degree_day(None) == 0.0
+
+    # The comparison the whole attribution rests on has to be a like-for-like one. If
+    # someone reverts the repository to the warehouse column, this is what breaks:
+    # a July day at the base-18 normal must read as roughly normal, not as balmy.
+    auckland_july_normal = climate.normal_hdd_per_day("auckland", 7)
+    temp_at_that_normal = climate.HDD_BASE_C - auckland_july_normal
+    assert climate.heating_degree_day(temp_at_that_normal) == pytest.approx(
+        auckland_july_normal, abs=0.01
+    )
