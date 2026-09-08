@@ -51,10 +51,22 @@ test.describe.configure({ mode: 'parallel' })
 test.setTimeout(TURN_TIMEOUT_MS)
 
 /** The three the product demos and this suite covers. The fourth is excluded above. */
+/**
+ * The starter chips, and the lookup each one has to open.
+ *
+ * This used to name the INTENT each chip routed to. There is no router now, so the
+ * column is the tool instead — a stronger assertion, because it checks the assistant read
+ * the thing that can answer the question rather than that a keyword matcher fired.
+ *
+ * `get_daily_usage` for the cold-snap question rather than a weather-specific lookup:
+ * heating degree days ride on the daily series, so that is where the answer has to come
+ * from. `get_bill_comparison` for the bill question because §8.5's decomposition is the
+ * definition of record for what moved.
+ */
 const COVERED = [
-  { chip: 'Why is my power bill so high?', intent: 'why_bill_high' },
-  { chip: 'Which day was my highest usage?', intent: 'peak_usage' },
-  { chip: 'Was that just the cold snap?', intent: 'using_more_than_usual' },
+  { chip: 'Why is my power bill so high?', tool: 'get_bill_comparison' },
+  { chip: 'Which day was my highest usage?', tool: 'get_daily_usage' },
+  { chip: 'Was that just the cold snap?', tool: 'get_daily_usage' },
 ] as const
 
 for (const account of ACCOUNTS) {
@@ -72,8 +84,8 @@ for (const account of ACCOUNTS) {
     // affected case (CONVENTIONS.md §8), and a loop would stop at the first question that
     // broke and hide the state of the other two for this account.
 
-    for (const { chip, intent } of COVERED) {
-      test(`"${chip}" reads what that question needs`, async ({ assistant }) => {
+    for (const { chip, tool } of COVERED) {
+      test(`"${chip}" reads ${tool}`, async ({ assistant }) => {
         const turn = await assistant.askByChip(chip)
 
         // There is no routed intent to assert on — the model reads the question rather
@@ -83,8 +95,8 @@ for (const account of ACCOUNTS) {
         // answer that never opened the bill comparison is beside the point in the same way.
         expect(
           turn.tools,
-          `"${chip}" was answered without reading ${intent}. Tools used: ${turn.tools.join(', ') || 'none'}`,
-        ).toContain(intent)
+          `"${chip}" was answered without reading ${tool}. Tools used: ${turn.tools.join(', ') || 'none'}`,
+        ).toContain(tool)
       })
 
       test(`"${chip}" is answered from this household's own data`, async ({ assistant }) => {
