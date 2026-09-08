@@ -292,6 +292,11 @@ class Turn(Base):
     created_at: Mapped[dt.datetime] = _now()
 
     conversation: Mapped[Conversation] = relationship(back_populates="turns")
+    tool_calls: Mapped[list[AgentToolCallRow]] = relationship(
+        back_populates="turn",
+        cascade="all, delete-orphan",
+        order_by="AgentToolCallRow.seq",
+    )
     fact_bundle: Mapped[FactBundleRow | None] = relationship(
         back_populates="turn", cascade="all, delete-orphan"
     )
@@ -303,9 +308,65 @@ class Turn(Base):
     )
 
 
+class AgentToolCallRow(Base):
+    """What the agent actually looked up to produce one answer, in the order it looked.
+
+    This is the provenance record, and it replaced `fact_bundle` as the receipt when the
+    agent replaced the pipeline (ADR-0011). The two are not the same claim and the
+    difference matters if a figure is ever disputed:
+
+    * `fact_bundle` recorded what Python decided to compute *before* the model saw the
+      question. It described the pipeline's intent, and it was identical for every
+      customer who tripped the same keyword — so it could not tell you what any
+      particular answer was based on.
+    * This records the calls the model made, with the arguments it passed and the source
+      each result named. It is the answer's actual basis, and replaying it reproduces
+      what the model was holding when it wrote the sentence.
+
+    `result` is stored whole rather than summarised. It is the only copy: the marts are
+    rebuilt on every load, so a row read in July is not necessarily still there in
+    September, and "we cannot reconstruct what we told them" is not an acceptable answer
+    to a billing complaint.
+    """
+
+    __tablename__ = "agent_tool_call"
+    __table_args__ = (
+        Index("ix_agent_tool_call_turn", "turn_id", "seq"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    turn_id: Mapped[int] = mapped_column(ForeignKey("app.turn.id"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Call order within the turn. The sequence is itself evidence — it shows whether
+    the model oriented before it answered or went straight for a figure."""
+
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    arguments: Mapped[dict | None] = mapped_column(JSONB)
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    source: Mapped[str | None] = mapped_column(Text)
+    """The `source` line the tool returned — the table or computation behind it. Copied
+    out of `result` so a provenance query does not have to reach into JSON."""
+
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    """False when the tool errored or reported the data unavailable. Counting these is
+    how "the assistant declined because the data was not there" stays distinguishable
+    from "the assistant declined because it was not trying"."""
+
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+
+    turn: Mapped[Turn] = relationship(back_populates="tool_calls")
+
+
 class FactBundleRow(Base):
     """Exactly what layer 2 was given. Stored so any answer can be reconstructed and
-    audited afterwards — if a figure is ever disputed, this is the receipt."""
+    audited afterwards — if a figure is ever disputed, this is the receipt.
+
+    **Superseded by `agent_tool_call` (ADR-0011).** Nothing writes this table any more;
+    the model no longer receives a pre-computed bundle. Kept, with its rows, because the
+    Sprint 2 evidence was collected into it and deleting the table would delete the
+    audit trail for every answer given before the agent landed.
+    """
 
     __tablename__ = "fact_bundle"
     __table_args__ = (_APP_SCHEMA,)

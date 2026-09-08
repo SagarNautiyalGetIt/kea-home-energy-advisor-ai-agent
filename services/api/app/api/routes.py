@@ -1,24 +1,27 @@
-"""HTTP surface. Shape is frozen today so the React team can generate types and work
-in parallel — implementations behind it can change all week.
+"""HTTP surface. Shape is frozen so the React and mobile teams can generate types and
+work in parallel — implementations behind it can change all week.
 
-/chat is Server-Sent Events. Voice reuses this exact pipeline (ADR-03); it is a
-different transport, never a second brain. The reuse is literal: both call
-`app.pipeline`, and neither has its own copy of the layer 0-3 sequence.
+/chat/stream is Server-Sent Events. Voice and the Vapi telephony adapter reuse this exact
+path (ADR-0003); they are different transports, never a second brain. The reuse is
+literal: all three call `app.pipeline`, and none has its own copy of the agent loop.
 
-This module is transport only — routing, analytics, narration, verification and the
-evidence write all live in `app.pipeline`. Anything here that starts computing a
-figure is in the wrong file.
+This module is transport only — data access, tool dispatch, the model and the evidence
+write all live behind `app.pipeline`. Anything here that starts computing a figure is in
+the wrong file.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel as _VapiBaseModel
 
 from app import auth, hardware, offline, voice
+from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock
 from app.analytics.engine import UsageWindow
@@ -35,7 +38,13 @@ from app.config import (
     settings,
 )
 from app.narration.prompts import SYSTEM
-from app.pipeline import DAYS_IN_JULY, UnknownCustomerError, answer, narrate, plan
+from app.pipeline import (
+    DAYS_IN_JULY,
+    UnknownCustomerError,
+    answer,
+    answer_stream,
+    build_context,
+)
 from app.schemas import (
     AlertSummary,
     BillShockWarning,
@@ -47,6 +56,7 @@ from app.schemas import (
     HouseholdSummary,
     LoginRequest,
     LoginResponse,
+    SourceRef,
 )
 from app.voice.session import VoiceSession, parse_control
 from app.voice.vad import TurnDetector
@@ -508,59 +518,251 @@ async def offline_pack(customer_id: str) -> offline.OfflinePack:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
-    """Non-streaming path. Simpler to test; /chat/stream is what the UI uses."""
+    """Non-streaming path. Simpler to test; /chat/stream is what the apps use."""
     try:
-        result = await answer(req.customer_id, req.message, conversation_id=req.conversation_id)
+        result = await answer(
+            req.customer_id,
+            req.message,
+            conversation_id=req.conversation_id,
+        )
     except UnknownCustomerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AgentUnavailable as exc:
+        # 503, not 500. The service is fine; the model is not reachable, and that is a
+        # "come back shortly" rather than a bug in the request. A client can retry a 503
+        # and should not retry a 500.
+        log.error("agent unavailable customer=%s: %s", req.customer_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Sparky can't reach your account data right now, so there's nothing "
+                "reliable to tell you. Please try again shortly."
+            ),
+        ) from exc
 
     return ChatResponse(
         customer_id=result.customer_id,
-        intent=result.intent,
         text=result.text,
-        facts=result.bundle.facts,
-        verification=result.report,
+        sources=[SourceRef(**s) for s in result.sources],
         escalate_to_human=result.escalate,
+        escalation_reason=result.escalation_reason,
         conversation_id=result.conversation_id,
+        latency_ms=result.latency_ms,
     )
 
 
 @router.post("/chat/stream")
 async def chat_stream(req: ChatRequest) -> StreamingResponse:
-    """SSE. Streams the verified answer.
+    """SSE. Streams the answer as the assistant works.
 
-    Note the ordering constraint: verification is a whole-text check, so we cannot
-    stream raw model output and verify afterwards — that would put an unverified
-    number on screen. We verify first, then stream the approved text. On this
-    hardware the wait is short; when we move to a hosted model, revisit whether
-    sentence-level verification lets us start streaming earlier.
+    The event sequence is documented on `pipeline.answer_stream`, which produces it.
+    Five names, and `reset` is the one worth reading about before writing a client.
+
+    **What changed here, and why the old comment above this function no longer applies.**
+    It used to say verification is a whole-text check, so the answer had to be generated
+    in full and checked before a single token could be streamed. That constraint came
+    from the number-checker, which compared the finished prose against a pre-computed
+    fact bundle. There is no bundle now — the model reads the data itself and its
+    figures are traceable to the tool results recorded alongside the answer — so nothing
+    has to be withheld until the last sentence lands. The stream is live again, which is
+    most of the perceived speed.
     """
-    # Plan before the response starts. Raising inside the generator would already have
-    # committed a 200 and an SSE content-type, so an unknown customer surfaced as a 500
-    # with a half-open stream while /chat returned a clean 404 for the same input.
-    # Layers 0-1 get `meta` onto the wire before the model is asked for anything.
+    # Resolve the customer before the response starts. Raising inside the generator would
+    # already have committed a 200 and an SSE content-type, so an unknown customer
+    # surfaced as a 500 with a half-open stream while /chat returned a clean 404 for the
+    # same input.
     try:
-        p = await plan(req.customer_id, req.message)
+        await build_context(req.customer_id)
     except UnknownCustomerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     async def event_stream():
-        meta = json.dumps({"intent": p.intent, "escalate": p.escalate})
-        yield f"event: meta\ndata: {meta}\n\n"
+        # `answer_stream` records the evidence before it emits `done`, so a client that
+        # disconnects on `done` has not raced the write. The recorder swallows its own
+        # failures, so this cannot break the stream.
+        async for name, payload in answer_stream(
+            req.customer_id,
+            req.message,
+            conversation_id=req.conversation_id,
+        ):
+            yield f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
-        # `narrate` records the evidence before it returns, so a client that disconnects
-        # on `done` has not raced the write. The recorder swallows its own failures, so
-        # this cannot break the stream.
-        result = await narrate(p, req.message, conversation_id=req.conversation_id)
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        # Nginx buffers proxied responses by default, which holds an SSE stream until it
+        # has enough bytes to be worth forwarding — the answer then arrives all at once
+        # and the streaming looks broken in exactly the deployment where it matters.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
-        for chunk in result.sentences:
-            yield f"event: token\ndata: {json.dumps({'text': chunk + ' '})}\n\n"
 
-        done = result.report.model_dump(mode="json")
-        done["conversation_id"] = result.conversation_id
-        yield f"event: done\ndata: {json.dumps(done)}\n\n"
+# ---------- Vapi Custom LLM adapter (Tier 3 voice calls) ----------
+#
+# Vapi handles telephony, STT and TTS. It connects to us via its "Custom LLM"
+# integration, which sends an OpenAI-shaped /chat/completions request and expects
+# an OpenAI-compatible SSE chunked response. This endpoint is the translation
+# layer — the same `answer()` path `/chat` and the voice WebSocket use, reformatted
+# for a different wire.
+#
+# Nothing here computes a figure. If it does, it is in the wrong file.
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+class _VapiMessage(_VapiBaseModel):
+    role: str
+    content: str
+
+
+class _VapiCompletionRequest(_VapiBaseModel):
+    """Vapi's OpenAI-compatible request shape.
+
+    Vapi sends this as its "Custom LLM" integration. We accept the full shape
+    and ignore everything except `messages` — the model choice is ours (layer 2),
+    and streaming is always on because Vapi expects chunked SSE.
+    """
+
+    messages: list[_VapiMessage]
+    model: str | None = None
+    stream: bool = True
+    temperature: float | None = None
+    max_tokens: int | None = None
+    # Vapi passes call metadata here; we don't branch on it today.
+    call: dict | None = None
+
+
+_CUSTOMER_ID_RE = re.compile(r"customer_id:\s*(\S+)", re.IGNORECASE)
+
+
+def _extract_customer_id(
+    messages: list[_VapiMessage], header: str | None
+) -> str | None:
+    """Find the customer this call is about.
+
+    Two paths, because Vapi operators configure outbound calls differently:
+
+    1. An explicit header (`X-Vapi-Customer-Id`) set on the Vapi assistant's
+       server URL configuration. Cheapest to parse, hardest to misconfigure.
+    2. A `customer_id: <value>` line inside the system message that Vapi sends.
+       This is where the outbound call template injects per-call metadata.
+
+    Header wins when both are present — it is the more explicit signal, and a
+    system message that disagrees with the header is a misconfiguration that
+    should lose rather than win silently.
+    """
+    if header:
+        return header.strip()
+    for msg in messages:
+        if msg.role == "system":
+            m = _CUSTOMER_ID_RE.search(msg.content)
+            if m:
+                return m.group(1)
+    return None
+
+
+def _vapi_chunk(content: str) -> str:
+    """One OpenAI-compatible SSE chunk. Vapi reads this format verbatim."""
+    payload = {
+        "id": "chatcmpl-kea",
+        "object": "chat.completion.chunk",
+        "choices": [{"index": 0, "delta": {"content": content}}],
+    }
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+_VAPI_DONE = "data: [DONE]\n\n"
+
+# Spoken apologies. These are figure-free by construction — layer 3 has nothing to
+# check — and they are the only thing a customer on a phone call can hear when
+# something goes wrong. An HTTP 404 is silence; these are not.
+_VAPI_UNKNOWN_CUSTOMER = (
+    "I'm sorry, I'm having trouble pulling up your account details right now. "
+    "Let me transfer you to someone who can help."
+)
+_VAPI_NO_CUSTOMER_ID = (
+    "I wasn't able to identify your account. "
+    "Let me put you through to a team member who can assist."
+)
+_VAPI_INTERNAL_ERROR = (
+    "I'm sorry, I'm experiencing a technical issue right now. "
+    "Let me connect you with someone who can help."
+)
+
+
+@router.post("/vapi/chat/completions")
+async def vapi_chat_completions(
+    req: _VapiCompletionRequest,
+    x_vapi_customer_id: str | None = Header(None),
+) -> StreamingResponse:
+    """Vapi Custom LLM endpoint. Same agent, OpenAI wire format.
+
+    Vapi places an outbound call (Tier 3 bill-shock alert), handles STT/TTS, and
+    sends us an OpenAI-shaped request with the customer's transcribed speech. We
+    run it through the same `answer()` path every other channel uses and return the
+    result as OpenAI-compatible SSE chunks.
+
+    Errors are spoken apologies, not HTTP status codes. A 404 on a phone call is
+    silence — the customer hears nothing. The apology is the error handling.
+
+    **Escalation no longer short-circuits the answer.** The old version returned a
+    transfer line and hung up on the explanation, because layer 0 decided a call was a
+    hardship call from keywords before anything had been read. The agent decides while
+    holding the account, and an escalation is a thing it does *alongside* answering —
+    somebody in payment difficulty who asked why the bill went up should be told why,
+    warmly, and then put through. `result.escalate` is logged so the Vapi assistant's
+    own transfer rule can act on it.
+    """
+    # --- extract inputs ---
+    customer_id = _extract_customer_id(req.messages, x_vapi_customer_id)
+    if not customer_id:
+        log.warning("vapi: no customer_id in request")
+        return _vapi_apology_response(_VAPI_NO_CUSTOMER_ID)
+
+    # Last user message is the transcribed speech.
+    user_messages = [m for m in req.messages if m.role == "user"]
+    message = user_messages[-1].content.strip() if user_messages else ""
+    if not message:
+        return _vapi_apology_response(
+            "I didn't quite catch that. Could you say that again?"
+        )
+
+    try:
+        await build_context(customer_id)
+    except UnknownCustomerError:
+        log.warning("vapi: unknown customer %s", customer_id)
+        return _vapi_apology_response(_VAPI_UNKNOWN_CUSTOMER)
+
+    async def vapi_stream():
+        try:
+            result = await answer(customer_id, message, channel="vapi")
+            if result.escalate:
+                log.info(
+                    "vapi: escalation customer=%s reason=%s",
+                    customer_id,
+                    result.escalation_reason,
+                )
+            # `sentences`, not `text`: the property strips markdown before splitting, and
+            # a synthesiser reading "asterisk asterisk your bill asterisk asterisk" down
+            # a phone line is the failure this exists to prevent.
+            for sentence in result.sentences:
+                yield _vapi_chunk(sentence + " ")
+        except Exception:
+            log.exception("vapi: answer failed customer=%s", customer_id)
+            yield _vapi_chunk(_VAPI_INTERNAL_ERROR)
+        yield _VAPI_DONE
+
+    return StreamingResponse(vapi_stream(), media_type="text/event-stream")
+
+
+def _vapi_apology_response(text: str) -> StreamingResponse:
+    """A single-chunk apology stream. The customer hears the sentence; Vapi never
+    sees an HTTP error that would drop the call."""
+
+    async def stream():
+        yield _vapi_chunk(text)
+        yield _VAPI_DONE
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
 
 
 class _WebSocketTransport:

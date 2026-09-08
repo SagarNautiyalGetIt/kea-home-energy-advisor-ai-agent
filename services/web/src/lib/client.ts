@@ -14,42 +14,98 @@
 export interface ChatRequest {
   customer_id: string;
   message: string;
+  /** Send back whatever the previous `done` returned, to keep the thread together. */
+  conversation_id?: number | null;
 }
 
-/** `event: meta` — arrives first, before any text. */
-export interface MetaEvent {
-  intent: string;
-  escalate: boolean;
-}
-
-/** `event: token` — one per sentence, not one per word. */
+/**
+ * `event: token` — prose as the assistant writes it.
+ *
+ * Genuinely per-chunk now, not per-sentence. The old endpoint could not stream at
+ * all: verification was a whole-text check against a pre-computed fact bundle, so
+ * the entire answer had to be generated and checked before the first word could be
+ * sent. There is no bundle any more, so there is nothing to withhold.
+ */
 export interface TokenEvent {
   text: string;
 }
 
 /**
- * `event: done` — the VerificationReport.
+ * `event: reset` — discard the text streamed since the last reset.
  *
- * READ THIS BEFORE USING `passed`. It answers one narrow question: did the
- * *model's draft* survive the number-checker? It is NOT "is this answer safe to
- * show". When the model is unavailable the server returns a template built
- * directly from verified facts — text that cannot contain an uncomputed number —
- * and `passed` is still false.
+ * The assistant works in rounds: it may write a line ("Let me pull up your July
+ * bill") and then decide it needs a lookup first. That line is a preamble, not the
+ * answer. `reset` says the round it belonged to turned out to be a lookup — drop
+ * what you rendered and show the tool activity instead.
  *
- * Use `isSafeToDisplay()` below, never `passed` on its own. Rendering "verification
- * failed" on a correct answer undermines the claim the product is built on.
+ * A client that ignores this shows "Let me check that." glued to the front of every
+ * reply, which is the one visible symptom of getting this wrong.
  */
-export interface DoneEvent {
-  passed: boolean;
-  fell_back_to_template: boolean;
-  checked?: string[];
-  unverified?: string[];
-  regenerated?: boolean;
+
+/** `event: tool` — a lookup started. Show it; this is the product working. */
+export interface ToolEvent {
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
-/** The only correct test for "may I show this answer to a customer?". */
-export const isSafeToDisplay = (r: DoneEvent): boolean =>
-  r.passed || r.fell_back_to_template;
+/** `event: result` — and what it found. */
+export interface ToolResultEvent {
+  name: string;
+  /**
+   * False means the lookup failed or this account has no such data. Worth showing
+   * rather than hiding: "I couldn't check that" is a different answer from "I didn't
+   * look", and only one of them is honest about a gap.
+   */
+  ok: boolean;
+  source: string | null;
+}
+
+/** `event: done` — the answer is complete and the evidence has been written. */
+export interface DoneEvent {
+  /** Every lookup behind this answer, in the order it was made. */
+  sources: SourceRef[];
+  escalate_to_human: boolean;
+  escalation_reason: string | null;
+  conversation_id: number | null;
+  latency_ms: number;
+  tokens: number;
+}
+
+/** `event: error` — no answer, and no invented one either. */
+export interface ErrorEvent {
+  message: string;
+  retryable: boolean;
+}
+
+/**
+ * One lookup the assistant made.
+ *
+ * This replaced the `facts` array and the verification verdict. Both described what
+ * the backend had decided to compute *before* the model saw the question — the same
+ * list for every customer who tripped the same keyword — so neither could say what a
+ * particular answer was based on. This can.
+ */
+export interface SourceRef {
+  tool: string;
+  arguments: Record<string, unknown> | null;
+  source: string | null;
+  ok: boolean;
+}
+
+/** Human-readable labels for the tool names, for the activity line and the panel. */
+export const TOOL_LABELS: Record<string, string> = {
+  get_account_summary: 'Looking up your account',
+  get_daily_usage: 'Reading your daily meter data',
+  get_bill_comparison: 'Comparing this bill with your last one',
+  get_hourly_profile: 'Checking your usage through the day',
+  compare_to_similar_homes: 'Comparing with similar homes',
+  get_plan_options: 'Checking your plan against the alternatives',
+  project_this_bill: 'Projecting the rest of your cycle',
+  handoff_to_human: 'Bringing in a person',
+};
+
+export const toolLabel = (name: string): string =>
+  TOOL_LABELS[name] ?? name.replace(/_/g, ' ');
 
 export interface Health {
   status: string;
@@ -236,9 +292,13 @@ export const getBillShock = (customerId: string, asAtDay?: number) =>
   );
 
 export interface StreamHandlers {
-  onMeta?: (e: MetaEvent) => void;
   onToken?: (e: TokenEvent) => void;
+  /** Drop the text streamed since the last reset — see the `reset` docs above. */
+  onReset?: () => void;
+  onTool?: (e: ToolEvent) => void;
+  onToolResult?: (e: ToolResultEvent) => void;
   onDone?: (e: DoneEvent) => void;
+  onError?: (e: ErrorEvent) => void;
 }
 
 /**
@@ -286,9 +346,26 @@ export async function streamChat(
       if (!data) continue;
 
       const payload: unknown = JSON.parse(data);
-      if (event === "meta") handlers.onMeta?.(payload as MetaEvent);
-      else if (event === "token") handlers.onToken?.(payload as TokenEvent);
-      else if (event === "done") handlers.onDone?.(payload as DoneEvent);
+      switch (event) {
+        case "token":
+          handlers.onToken?.(payload as TokenEvent);
+          break;
+        case "reset":
+          handlers.onReset?.();
+          break;
+        case "tool":
+          handlers.onTool?.(payload as ToolEvent);
+          break;
+        case "result":
+          handlers.onToolResult?.(payload as ToolResultEvent);
+          break;
+        case "done":
+          handlers.onDone?.(payload as DoneEvent);
+          break;
+        case "error":
+          handlers.onError?.(payload as ErrorEvent);
+          break;
+      }
     }
   }
 }

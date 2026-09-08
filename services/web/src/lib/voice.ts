@@ -10,6 +10,8 @@
  * change together or not at all.
  */
 
+import type { SourceRef } from "./client";
+
 /** 16 kHz mono is what whisper.cpp wants; resampling server-side costs latency. */
 const CAPTURE_SAMPLE_RATE = 16_000;
 
@@ -34,11 +36,18 @@ export interface VoiceHandlers {
   onReady?: (r: VoiceReadiness) => void;
   onSpeechStart?: () => void;
   onTranscript?: (text: string) => void;
-  onMeta?: (intent: string, escalate: boolean) => void;
+  /**
+   * `meta` no longer carries an intent — there is no router deciding one before the
+   * assistant has read anything, so there is nothing to report at this point in the
+   * turn beyond whether a handoff is coming.
+   */
+  onMeta?: (escalate: boolean) => void;
   onAnswer?: (a: {
     text: string;
-    facts: Array<{ key: string; display: string; label: string }>;
-    verification: { passed: boolean; fell_back_to_template: boolean };
+    /** Every lookup behind the answer. The type is imported rather than restated:
+     *  voice runs the identical agent (ADR-0003), so it cites the identical sources,
+     *  and two hand-written copies of one wire shape drift within a sprint. */
+    sources: SourceRef[];
     escalate_to_human: boolean;
   }) => void;
   onDone?: (t: VoiceTimings) => void;
@@ -196,7 +205,7 @@ export class VoiceClient {
         this.handlers.onTranscript?.(msg.text);
         break;
       case "meta":
-        this.handlers.onMeta?.(msg.intent, msg.escalate);
+        this.handlers.onMeta?.(msg.escalate);
         break;
       case "audio":
         // The binary frame for this header is the next message, always.

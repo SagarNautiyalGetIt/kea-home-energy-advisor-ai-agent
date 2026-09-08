@@ -128,21 +128,56 @@ def _next_step_hypothesis(context: HouseholdContext) -> Hypothesis | None:
     return None
 
 
+def _is_settled(hypothesis: Hypothesis, context: HouseholdContext) -> bool:
+    """Has this household already told us about this one?"""
+    return {
+        Hypothesis.NEW_APPLIANCE: context.no_new_appliance
+        or context.new_appliance_since is not None,
+        Hypothesis.MORE_OCCUPANTS: context.extra_occupants is not None,
+        Hypothesis.HOT_WATER_CHANGE: context.hot_water_changed_since is not None,
+        Hypothesis.WORKING_FROM_HOME: context.works_from_home is not None,
+        Hypothesis.ELECTRIC_HEATING: context.has_electric_heating is not None,
+    }[hypothesis]
+
+
 def select(
     gaps: list[DetectedGap],
     context: HouseholdContext,
     *,
     period: str,
     hardship_detected: bool = False,
+    evidenced: Hypothesis | None = None,
 ) -> ClarifyingQuestion | None:
     """The one question worth asking, or None.
 
     None is the common case and the correct default. A household whose bill is fully
     explained has nothing to be asked, and an assistant that always finds something to ask
     is one people stop reading.
+
+    `evidenced` names a hypothesis the *data* points at, and it jumps the ladder. The
+    ladder is ordered by prior likelihood — what is usually true of a household we know
+    nothing specific about — and that ordering should lose to a measurement. Today the
+    only caller is the controlled-load signal: hot water sits last in `_STEP_LADDER`
+    because people rarely know the answer, but when the separately-metered controlled
+    circuit has visibly moved, it is the question the meter is pointing at. Still skipped
+    if already settled, because evidence does not license asking twice.
     """
     if hardship_detected:
         return None
+
+    if evidenced is not None and not _is_settled(evidenced, context):
+        for gap in gaps:
+            question = _question(
+                hypothesis=evidenced,
+                gap=gap,
+                when=(
+                    f"day {gap.step.day_index} of {period}"
+                    if gap.step
+                    else f"this {period.split()[0].lower()}"
+                ),
+            )
+            if not context.has_answered(question.id):
+                return question.with_period(period)
 
     for gap in gaps:
         hypothesis: Hypothesis | None = None

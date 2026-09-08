@@ -59,16 +59,17 @@ def _env(key: str, default: str) -> str:
 class Settings:
     #: One name, or a `+`-separated fallback chain. See `app.providers.resolver`.
     #:
-    #:   bedrock          the default — Claude on Bedrock
+    #:   gcp              the default — Gemini 3.6 Flash on GCP
+    #:   bedrock          Claude on Bedrock
     #:   ollama           local development, chosen deliberately
-    #:   bedrock+ollama   Bedrock, dropping to the local model only if it is unreachable
+    #:   gcp+ollama       GCP, dropping to the local model only if it is unreachable
     #:
-    #: The default changed from `ollama` in Sprint 3. A local model sized to whatever
+    #: The default changed to `gcp` for speed. A local model sized to whatever
     #: hardware happened to be present was right for a laptop demo and wrong as an
     #: architecture — the answer a customer gets should not depend on which machine served
     #: it. Nothing falls back automatically: a chain has to be written out, because a
     #: silent model downgrade looks like an answer and reads as the product getting worse.
-    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "bedrock"))
+    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "gcp"))
 
     #: Sized to the machine — see `app.hardware`. On the 48 GB M4 this is `gemma3:27b`,
     #: on the 16 GB M5 `gemma3:12b`, and `gemma3:4b` everywhere else including CI.
@@ -85,6 +86,9 @@ class Settings:
 
     bedrock_model: str = field(
         default_factory=lambda: _env("KEA_BEDROCK_MODEL", "anthropic.claude-sonnet-5")
+    )
+    gcp_model: str = field(
+        default_factory=lambda: _env("KEA_GCP_MODEL", "gemini-3.6-flash")
     )
     aws_region: str = field(default_factory=lambda: _env("AWS_REGION", "ap-southeast-2"))
 
@@ -222,6 +226,7 @@ def get_provider():
         aws_region=settings.aws_region,
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
+        gcp_model=settings.gcp_model,
     )
 
 

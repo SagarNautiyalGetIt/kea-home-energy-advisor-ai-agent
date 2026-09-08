@@ -7,6 +7,7 @@ model's prose against it. If a number is not in here, it must not reach the user
 
 from __future__ import annotations
 
+import datetime as dt
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -18,12 +19,40 @@ from app.clarify.schemas import ClarifyingQuestion
 
 
 class Intent(StrEnum):
-    """The questions we handle. Layer 0 maps free text onto exactly one of these.
+    """A closed set of pre-computable questions. **Offline and bill-shock only now.**
 
-    Adding an intent means adding: a router rule, an analytics path, a narration
-    prompt, and golden-set cases. Don't add one without all four.
+    This was the spine of the request path: a keyword router mapped free text onto one
+    of these, and the intent chose the analytics, the prompt and the caveats. It no
+    longer does — the agent reads the question and the data, and nothing classifies a
+    customer's message into a bucket before it is understood. See `app/pipeline.py`.
+
+    Two things still use it, both legitimately:
+
+    * `app/offline.py` pre-computes a pack of answers for a device with no connection.
+      It has to guess what will be asked, so a fixed list is the only option available.
+    * `app/analytics/billshock.py` labels a proactive warning, which nobody asked a
+      question to receive.
+
+    Neither is a classifier over customer text.
+
+    ## Two families, and why the second one exists
+
+    The **usage** intents below the divider are the original ten: they all answer a
+    question about consumption, and every one of them needs analytics to run first.
+
+    The **account** intents are facts about the customer's own account — balance, plan,
+    rates, connection, payment method. They were unroutable before, which meant "what
+    plan am I on?" and "when is my bill due?" returned `OUT_OF_SCOPE`. That is a bad
+    answer to a question the service can answer perfectly from one mart row, and it is
+    a large share of what a real energy assistant is asked.
+
+    They are a separate family rather than more of the same because the layer-3
+    contract differs: an account fact is a *lookup*, so its bundle is a copy of stored
+    values rather than the output of a computation. Nothing is derived, so nothing can
+    be derived wrongly.
     """
 
+    # ── usage: needs analytics ──
     WHY_HIGH = "why_bill_high"
     WHAT_WILL_I_PAY = "what_will_i_pay"
     USING_MORE_THAN_USUAL = "using_more_than_usual"
@@ -34,6 +63,60 @@ class Intent(StrEnum):
     TARIFF_CHECK = "tariff_check"
     HARDSHIP = "hardship"
     OUT_OF_SCOPE = "out_of_scope"
+
+    # ── usage: added with the driver decomposition ──
+    USAGE_TOTAL = "usage_total"
+    """'How much did I use in July?' — a total, not an explanation."""
+
+    COMPARE_TO_SIMILAR = "compare_to_similar"
+    """'Am I using more than other people?' — against the peer cohort, explicitly."""
+
+    BILL_BREAKDOWN = "bill_breakdown"
+    """'What are all these charges?' — the bill's own lines, itemised."""
+
+    HOW_TO_REDUCE = "how_to_reduce"
+    """'What can I do about it?' — advice grounded in this household's own drivers."""
+
+    SOLAR_EXPORT = "solar_export"
+    SUPPLY_QUALITY = "supply_quality"
+    """'Is this an estimate?' — read quality, gaps and freshness, said out loud."""
+
+    # ── account: a lookup, not a computation ──
+    ACCOUNT_BALANCE = "account_balance"
+    BILL_DUE = "bill_due"
+    PLAN_DETAILS = "plan_details"
+    RATE_DETAILS = "rate_details"
+    PAYMENT_METHOD = "payment_method"
+    ACCOUNT_IDENTITY = "account_identity"
+    BILLING_CYCLE = "billing_cycle"
+
+    # ── neither: the answer is a person ──
+    DISPUTE = "dispute"
+    """'This bill is wrong.' Routes to a human like HARDSHIP does. An AI must not
+    adjudicate a billing dispute, and a customer who says the meter is wrong is
+    making a claim about the world that no amount of our own data can settle."""
+
+    @property
+    def is_account_lookup(self) -> bool:
+        return self in _ACCOUNT_LOOKUPS
+
+    @property
+    def needs_human(self) -> bool:
+        """Escalates regardless of how well we could answer it."""
+        return self in (Intent.HARDSHIP, Intent.DISPUTE)
+
+
+_ACCOUNT_LOOKUPS = frozenset(
+    {
+        Intent.ACCOUNT_BALANCE,
+        Intent.BILL_DUE,
+        Intent.PLAN_DETAILS,
+        Intent.RATE_DETAILS,
+        Intent.PAYMENT_METHOD,
+        Intent.ACCOUNT_IDENTITY,
+        Intent.BILLING_CYCLE,
+    }
+)
 
 
 class Fact(BaseModel):
@@ -81,6 +164,49 @@ class Fact(BaseModel):
         return cls(key=key, value=round(value, 1), unit="%", label=label, display=f"{value:.0f}%")
 
     @classmethod
+    def reference(cls, key: str, text: str, label: str) -> Fact:
+        """A stored value that is not a quantity — a plan name, an ICP, an address.
+
+        The account-lookup intents are the reason this exists. "Your ICP is
+        0160647002LCFCF" and "your bill is due on 15 October 2026" are correct answers
+        containing digits that are not *measurements*, and layer 3 rejects them: the
+        token pass pulls `0160647002` out of the ICP, finds no fact with that value, and
+        marks a verbatim copy of the customer's own connection number as a fabrication.
+
+        `unit="text"` is what tells the verifier to check this fact by **string
+        containment against `display` instead of by numeric tolerance**. That is a
+        narrower licence than it sounds, and deliberately so: it permits only characters
+        the model was handed, so it can copy the ICP and cannot assemble a different one.
+        `value` stays 0.0 and never enters `allowed_values()`, so a reference fact can
+        never license an unrelated *number* elsewhere in the sentence.
+        """
+        return cls(key=key, value=0.0, unit="text", label=label, display=text)
+
+    @classmethod
+    def on_date(cls, key: str, value: dt.date, label: str) -> Fact:
+        """A date, rendered the way a New Zealand bill prints it."""
+        return cls.reference(key, f"{value:%-d %B %Y}", label)
+
+    @classmethod
+    def duration(cls, key: str, value: int, label: str) -> Fact:
+        """A count of days — "21 days", not "day 21".
+
+        Distinct from `day_of_period` because the two read as the same integer and mean
+        opposite things: "day 21" points at a date in a period, "21 days" measures a
+        span until one. Rendering a countdown with `day_of_period` produced "your bill is
+        due in day 21", which is the kind of wrongness that survives review because every
+        figure in it is correct.
+        """
+        n = int(value)
+        return cls(
+            key=key,
+            value=n,
+            unit="days",
+            label=label,
+            display=f"{n} day" if n == 1 else f"{n} days",
+        )
+
+    @classmethod
     def day_of_period(cls, key: str, value: int, label: str) -> Fact:
         """A 1-based day number within the period — "day 18 of July 2026".
 
@@ -116,15 +242,58 @@ class FactBundle(BaseModel):
         return {f.key: f.value for f in self.facts}
 
     def allowed_values(self) -> list[float]:
-        return [f.value for f in self.facts]
+        """Numeric claims the narration may make.
+
+        Reference facts are excluded: their `value` is a placeholder 0.0, and letting it
+        into this list would license a bare "0" anywhere in the answer for every bundle
+        that happens to carry a plan name.
+        """
+        return [f.value for f in self.facts if f.unit != "text"]
+
+    def allowed_literals(self) -> list[str]:
+        """Verbatim strings the narration was given and may copy — ICPs, plan names,
+        dates. Checked by containment rather than by value; see `Fact.reference`."""
+        return [f.display for f in self.facts if f.unit == "text"]
 
     def allowed_displays(self) -> list[str]:
         return [f.display for f in self.facts]
 
+    narration_limit: int | None = Field(
+        default=None,
+        description=(
+            "How many facts the *model* is shown, when that should be fewer than the API "
+            "returns. Null means all of them, which is the right default for every bundle "
+            "small enough to narrate whole."
+        ),
+    )
+    """Why a bundle would hand the model less than it carries.
+
+    Layer 3 rejects a **whole draft** if any single figure in it is wrong, so the chance
+    of a rejection grows with the number of figures on offer, not with their usefulness.
+    The driver decomposition made that concrete: it produces up to ten facts where the
+    old bill explanation produced five, against a system prompt that asks for two to four
+    sentences. A small model handed ten figures and room for four sentences has twice the
+    surface area to garble one and lose the entire answer to the template fallback.
+
+    The facts are already ordered by size, so the cheap fix is to show the model the ones
+    that carry the answer and keep the rest for the response body — the dashboard wants
+    every driver to draw a chart, the sentence does not.
+
+    Note this only ever *narrows* what the model sees. `allowed_values()` stays complete,
+    so a figure omitted from the prompt is still accepted if the model somehow produces
+    it. That asymmetry is deliberate and safe: withholding an operand cannot cause a
+    fabrication, and layer 3's job is to catch invented numbers rather than to police
+    which real ones got used.
+    """
+
+    def narration_facts(self) -> list[Fact]:
+        """The facts the model is shown — the leading `narration_limit`, or all of them."""
+        return self.facts if self.narration_limit is None else self.facts[: self.narration_limit]
+
     def render_for_prompt(self) -> str:
         """The only representation of data the model ever sees."""
         lines = [f"Period: {self.period}"]
-        lines += [f"- {f.label}: {f.display}" for f in self.facts]
+        lines += [f"- {f.label}: {f.display}" for f in self.narration_facts()]
         if self.caveats:
             lines.append("You must NOT claim any of the following:")
             lines += [f"- {c}" for c in self.caveats]
@@ -148,7 +317,21 @@ class ChatRequest(BaseModel):
 
 
 class VerificationReport(BaseModel):
-    """Layer 3's output. This is the evidence behind the pitch — log every one."""
+    """The number-checker's verdict. **Offline only** — see `app/analytics/bundles.py`.
+
+    On-device narration still works the old way: a pre-computed bundle, a small local
+    model, and a token-by-token check that every figure in the prose came from the
+    bundle. That check is meaningful there because the model was handed a fixed list and
+    nothing else, so a figure outside it can only have been invented.
+
+    It is not meaningful for the agent, and this is not a relaxation of standards. The
+    agent reads the data itself and is expected to work things out — a bill up 14%, a
+    daily load annualised to $263 — so a checker that rejected every figure absent from
+    a bundle would reject the arithmetic that makes an explanation an explanation. What
+    replaces it is stronger, not weaker: `app.agent_tool_call` records the rows the model
+    actually read, so a disputed figure is traced to its source rather than matched
+    against a list of permitted values.
+    """
 
     passed: bool
     checked: list[str] = Field(default_factory=list, description="numeric tokens in the draft")
@@ -157,34 +340,63 @@ class VerificationReport(BaseModel):
         default_factory=list,
         description=(
             "Computed *relationships* stated without a number — 'twice as much', 'half "
-            "your bill', 'a third of the increase'. These contain no numeric token, so a "
-            "token-by-token check passes them, but each one is a division the model "
-            "performed. Reported separately from `unverified` because they are a "
-            "different failure: not a wrong figure, an unauthorised calculation."
+            "your bill'. These contain no numeric token, so a token-by-token check "
+            "passes them, but each one is a division the model performed."
         ),
     )
     regenerated: bool = False
     fell_back_to_template: bool = False
     provider_error: bool = Field(
         default=False,
+        description="True when the template was served because the model was unreachable.",
+    )
+
+
+class SourceRef(BaseModel):
+    """One lookup the assistant made, for the transparency panel.
+
+    This replaced `facts` on the chat response. The two answer different questions and
+    the new one is the question customers were actually asking: `facts` listed the
+    figures Python computed *before* the model saw the message, which was the same list
+    for everyone who tripped the same keyword. This says what was consulted for *this*
+    answer and where each result came from — which is checkable, and is what makes
+    "every number traces to a source" a claim rather than a slogan.
+    """
+
+    tool: str = Field(description="Which lookup — e.g. 'get_bill_comparison'.")
+    arguments: dict | None = Field(
+        default=None, description="What it was asked for, when that narrows the result."
+    )
+    source: str | None = Field(
+        default=None,
+        description="The table or computation behind it, in words a customer can read.",
+    )
+    ok: bool = Field(
+        default=True,
         description=(
-            "True when the template was served because the model was unreachable, as "
-            "distinct from the number-checker rejecting its drafts. Without this the "
-            "two fallback paths are indistinguishable, and this report is what "
-            "'N answers, 0 fabricated figures' is counted from — a day Ollama was down "
-            "would otherwise read as a day the checker caught six fabrications, which "
-            "is the opposite claim and a flattering one."
+            "False when the lookup failed or the data was not available for this "
+            "account. Shown rather than hidden: 'I could not check that' is a different "
+            "answer from 'I did not look', and only one of them is honest about a gap."
         ),
     )
 
 
 class ChatResponse(BaseModel):
     customer_id: str
-    intent: Intent
     text: str
-    facts: list[Fact]
-    verification: VerificationReport
+    sources: list[SourceRef] = Field(
+        default_factory=list,
+        description="Every lookup behind this answer, in the order it was made.",
+    )
     escalate_to_human: bool = False
+    escalation_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why, in the assistant's own words. Null unless `escalate_to_human`. The "
+            "UI should show the handoff, not this string — it is for the transcript and "
+            "the escalation row."
+        ),
+    )
     conversation_id: int | None = Field(
         default=None,
         description=(
@@ -192,6 +404,7 @@ class ChatResponse(BaseModel):
             "persistence is off — there is no conversation to continue."
         ),
     )
+    latency_ms: int = 0
 
 
 class LoginRequest(BaseModel):

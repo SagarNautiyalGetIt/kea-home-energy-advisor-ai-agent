@@ -137,6 +137,11 @@ def test_the_agent_writes_app_and_only_reads_kea():
     assert by_schema["app"] == {
         "conversation",
         "turn",
+        # What the agent looked up to produce one answer — the provenance record, and
+        # ours to write by definition since the loader has no idea what was asked.
+        # `fact_bundle` and `verification` are the pre-ADR-0011 receipt and are no longer
+        # written; they keep their rows because they hold the Sprint 2 evidence.
+        "agent_tool_call",
         "fact_bundle",
         "verification",
         "token_usage",

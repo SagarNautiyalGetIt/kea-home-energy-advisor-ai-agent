@@ -224,6 +224,13 @@ def verify(text: str, bundle: FactBundle) -> VerificationReport:
     # A year that already appears in the period phrase is context, not a claim.
     period_numbers = {float(n) for n in re.findall(r"\d{4}", bundle.period)}
 
+    # Digits inside a stored string the model was handed — an ICP, an address, a date.
+    # Verified by containment rather than by value, because they are not quantities and
+    # there is nothing for a tolerance to mean. See `Fact.reference` for why the licence
+    # is this narrow: only substrings of what was supplied can pass, so the model can
+    # copy the connection number and cannot invent a different one.
+    literals = bundle.allowed_literals()
+
     checked: list[str] = []
     unverified: list[str] = []
 
@@ -234,6 +241,8 @@ def verify(text: str, bundle: FactBundle) -> VerificationReport:
         if _matches_any(token.value, allowed):
             continue
         if token.is_structural:
+            continue
+        if not token.is_claim and any(token.raw.strip() in lit for lit in literals):
             continue
         unverified.append(token.raw)
 
@@ -252,17 +261,56 @@ def verify(text: str, bundle: FactBundle) -> VerificationReport:
 
 
 def template_fallback(bundle: FactBundle) -> str:
-    """Deterministic prose for when the model cannot produce a verifiable draft.
+    """Deterministic prose for when the on-device model cannot produce a verifiable draft.
 
     Boring on purpose. A plain, correct sentence beats a fluent, unverified one — and it
     means a verification failure degrades the answer instead of breaking it.
+
+    **Offline only.** This used to run on the server too, whenever the model was
+    unreachable, and its closing line was *"if you'd like this explained in more detail,
+    I can connect you with our team"* — which is a strange thing for an energy advisor to
+    say about a bill it is holding the figures for. The server has no template path now
+    (ADR-0011): a model that cannot be reached produces no answer and says so.
+
+    What is left is a phone with no connection, and the copy is written for that. It does
+    not offer to put anyone through, because there is nothing to put them through *with* —
+    the device cannot reach us either. It says what it has and that a real answer is
+    available once there is signal, which is both true and actionable.
     """
     if not bundle.facts:
+        # An empty bundle is not always "no usage data". Since the account-lookup intents
+        # landed it is more often "this account has no plan on file" or "there is no
+        # earlier bill to compare against" — and the bundle's caveat already says which,
+        # in words written for the customer. Discarding it to print a fixed sentence
+        # about usage answers a question nobody asked.
+        for caveat in bundle.caveats:
+            if "do NOT have" in caveat or "NO figures" in caveat:
+                return (
+                    f"{_first_sentence(caveat)} "
+                    "Ask me again when you're back online and I can look into it properly."
+                )
         return (
-            "I don't have enough information about your usage to answer that yet. "
-            "I can put you through to someone who can help."
+            "I don't have enough saved on this phone to answer that. "
+            "Ask me again when you're back online and I can look into it properly."
         )
     lines = [f"Here is what your {bundle.period} usage shows:"]
     lines += [f"- {f.label}: {f.display}" for f in bundle.facts]
-    lines.append("If you'd like this explained in more detail, I can connect you with our team.")
+    lines.append(
+        "That is the summary saved to this phone. Ask me again when you're back online "
+        "and I can go through what is behind it."
+    )
     return "\n".join(lines)
+
+
+def _first_sentence(caveat: str) -> str:
+    """The customer-facing half of a caveat, rewritten from instruction to statement.
+
+    Caveats are written at the narrator ("You do NOT have a due date for this account"),
+    so quoting one verbatim would tell the customer what *we* lack in the second person.
+    Only the leading clause is used, with the addressee flipped.
+    """
+    head = caveat.split(". ")[0].strip().rstrip(".")
+    head = head.replace("You do NOT have", "I cannot see")
+    head = head.replace("You have NO", "I have no")
+    head = head.replace(" for this account", " for your account")
+    return head + "."

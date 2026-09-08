@@ -1,34 +1,36 @@
-import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Modal from '../components/Modal'
 import {
   getHealth,
   getHouseholds,
-  isSafeToDisplay,
   streamChat,
-  type DoneEvent,
+  toolLabel,
   type HouseholdSummary,
+  type SourceRef,
 } from '../lib/client'
-import { fromDoneEvent } from '../lib/verificationLog'
+import { fromDoneEvent } from '../lib/answerLog'
 import { loadSession } from '../lib/session'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
 import { SparkySparks } from '../components/sparky'
 
 /**
- * The assistant, answering from the real pipeline.
+ * The assistant.
  *
- * Every figure on this page is computed by the backend and checked by the number-checker
- * before it is streamed. Nothing here writes a number of its own — the previous version
- * of this file answered from three hardcoded paragraphs, which is the exact thing the
- * product claims not to do.
+ * Every figure on this page comes from the customer's own meter data, read by the
+ * assistant through the backend's tools and cited on the answer. Nothing here writes a
+ * number of its own — an early version of this file answered from three hardcoded
+ * paragraphs, which is the exact thing the product claims not to do.
  *
- * Two rules worth not breaking:
+ * Three rules worth not breaking:
  *
- * 1. **Never test `done.passed` on its own.** A template fallback is built directly from
- *    verified facts and cannot contain an uncomputed number, yet reports `passed: false`.
- *    `isSafeToDisplay()` is the only correct test; showing "verification failed" over a
- *    correct answer undermines the claim the product is built on.
- * 2. **Always abort.** An in-flight stream outlives the component, and a second question
+ * 1. **Honour `reset`.** The assistant works in rounds and may write a line before
+ *    deciding it needs a lookup first. `reset` says to drop that line. A client that
+ *    ignores it shows "Let me check that." glued to the front of every answer.
+ * 2. **Render paragraphs.** Answers are no longer capped at two to four sentences, and a
+ *    bill explanation now arrives as several. Collapsing them into one block is how a
+ *    good answer gets made to look like a wall of text.
+ * 3. **Always abort.** An in-flight stream outlives the component, and a second question
  *    asked over the top of the first would interleave two answers in the same bubble.
  */
 
@@ -36,33 +38,31 @@ type Message = {
   id: number
   role: 'user' | 'assistant'
   text: string
-  report?: DoneEvent
-  failed?: boolean
+  /** What the assistant looked up. Rendered as the transparency panel under the answer. */
+  sources?: SourceRef[]
+  /** Live tool activity while the answer is being written. */
+  activity?: { name: string; done: boolean }[]
+  /** The service could not answer — never a fabricated stand-in. See `onError`. */
+  error?: string
 }
 
-// From #69. The three hardcoded `responses` that sat beside it there are deliberately
-// not carried across: they asserted "$326.40, around 29% higher than your usual range"
-// as assistant output, which is both an invented figure and a comparison against billing
-// history this product does not hold. The prompts below ask the same questions of the
-// real pipeline instead.
 const SHOW_ASSISTANT_DESCRIPTION = false
 
 /**
- * Every one of these is verified to route to a real analytics path against the current
- * backend — a starter chip that lands on `out_of_scope` is worse than no chip. Each one
- * lands on a DIFFERENT intent, so clicking through them shows four genuinely different
- * answers rather than four rewordings of the same bundle.
+ * Starter chips.
  *
- * "Was that just the cold snap?" is back: it routes to weather attribution now that the
- * golden set's router fix has landed. "Which day was my highest usage?" is here because
- * it was the question that exposed the routing bug — it used to be answered with the
- * bill explainer.
+ * These used to be picked to land on four *different* intents, because four questions
+ * that routed to the same bundle produced four rewordings of one answer. There are no
+ * intents now, so they are chosen for what they show off instead: an attribution, a
+ * projection, a comparison, and one the data genuinely cannot fully answer — the last is
+ * deliberate, because "I can show which day but not which hour, and here is why" is the
+ * behaviour worth demonstrating.
  */
 const PROMPTS = [
   'Why is my power bill so high?',
-  'Which day was my highest usage?',
-  'Was that just the cold snap?',
-  'Could another plan save me money?',
+  'What will my bill be this month?',
+  'Am I using more than similar homes?',
+  'What time of day do I use the most?',
 ]
 
 const GREETING = 'Hello! I’m Sparky. Ask me about your bill, usage, or energy plan.'
@@ -104,6 +104,10 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const sparkState = listening ? 'listening' : speaking ? 'speaking' : busy ? 'thinking' : 'idle'
 
   const nextId = useRef(2)
+  // Threads the conversation server-side so a follow-up ("what about last month?") has
+  // the turn before it to resolve against. Null until the first answer comes back, and
+  // null forever when persistence is off — the backend treats it as optional either way.
+  const conversationId = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const fileInput = useRef<HTMLInputElement | null>(null)
   const photoInput = useRef<HTMLInputElement | null>(null)
@@ -200,18 +204,40 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       const patch = (fn: (m: Message) => Message) =>
         setMessages((current) => current.map((m) => (m.id === answerId ? fn(m) : m)))
 
-      let intent = 'unknown'
       try {
         await streamChat(
-          { customer_id: customerId, message: question },
+          { customer_id: customerId, message: question, conversation_id: conversationId.current },
           {
-            onMeta: (meta) => { intent = meta.intent; setEscalating(meta.escalate) },
             onToken: (token) => patch((m) => ({ ...m, text: m.text + token.text })),
-            onDone: (report) => {
-              patch((m) => ({ ...m, report, failed: !isSafeToDisplay(report) }))
-              // Demo line 6. Recorded for every answer, including rejected ones — a log
+            // The round that produced this text turned out to be a lookup, so the text
+            // was a preamble rather than the answer. Dropping it is the whole reason the
+            // stream can start before the assistant has decided what to fetch.
+            onReset: () => patch((m) => ({ ...m, text: '' })),
+            onTool: (tool) =>
+              patch((m) => ({
+                ...m,
+                activity: [...(m.activity ?? []), { name: tool.name, done: false }],
+              })),
+            onToolResult: (result) =>
+              patch((m) => ({
+                ...m,
+                activity: (m.activity ?? []).map((a) =>
+                  a.name === result.name && !a.done ? { ...a, done: true } : a,
+                ),
+              })),
+            onDone: (done) => {
+              conversationId.current = done.conversation_id
+              setEscalating(done.escalate_to_human)
+              patch((m) => ({ ...m, sources: done.sources, activity: undefined }))
+              // Demo line 6. Recorded for every answer, including unsourced ones — a log
               // that only records successes is not evidence.
-              fromDoneEvent(report, { customerId, question, intent })
+              fromDoneEvent(done, { customerId, question })
+            },
+            // The service could not answer. It says so; it does not substitute a
+            // plausible paragraph, and neither does this.
+            onError: (failure) => {
+              patch((m) => ({ ...m, text: '', activity: undefined, error: failure.message }))
+              onToast(failure.message, 'warning')
             },
           },
           controller.signal,
@@ -219,7 +245,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       } catch (error) {
         if (controller.signal.aborted) return
         setBackendDown(true)
-        patch((m) => ({ ...m, text: '', failed: true }))
+        patch((m) => ({
+          ...m,
+          text: '',
+          activity: undefined,
+          error: 'Sparky can’t reach your usage data right now.',
+        }))
         onToast(error instanceof Error ? error.message : 'Could not reach Sparky', 'warning')
       } finally {
         if (!controller.signal.aborted) setBusy(false)
@@ -266,7 +297,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             setStarted(true)
             setMessages((current) => [...current, { id: nextId.current++, role: 'user', text }])
           },
-          onMeta: (_intent, escalate) => setEscalating(escalate),
+          onMeta: (escalate) => setEscalating(escalate),
           onAnswer: (answer) => {
             setSpeaking(true)
             setMessages((current) => [
@@ -275,10 +306,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                 id: nextId.current++,
                 role: 'assistant',
                 text: answer.text,
-                // The socket sends the verification verdict in the same shape /chat's
-                // `done` event uses, so the badge logic is shared rather than copied.
-                report: answer.verification as DoneEvent,
-                failed: !isSafeToDisplay(answer.verification as DoneEvent),
+                // The socket sends `sources` in the same shape /chat's `done` event
+                // uses, so the transparency panel is shared rather than copied. Voice
+                // runs the identical agent (ADR-0003), so a spoken answer cites exactly
+                // what a typed one would.
+                sources: answer.sources,
               },
             ])
             if (answer.escalate_to_human) setEscalating(true)
@@ -391,27 +423,56 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                       <button onClick={() => saveEdit(item.id)}>Save</button>
                     </span>
                   </div>
-                ) : item.failed ? (
-                  <p className="answer-withheld">
-                    I couldn’t produce an answer I can stand behind for that one, so I’d rather
-                    not guess. Let me put you through to someone who can help.
-                  </p>
+                ) : item.error ? (
+                  /* Not a handoff, and deliberately not phrased as one. The old copy
+                     here said "let me put you through to someone who can help", which
+                     turned every backend hiccup into a fake escalation — and it was the
+                     same sentence customers saw whenever the keyword router failed to
+                     recognise a question, so a service outage and an unrecognised
+                     question were indistinguishable. This says what happened. */
+                  <p className="answer-withheld">{item.error}</p>
                 ) : (
                   <>
-                    {item.text.split('\n').filter(Boolean).map((line, i) => <p key={i}>{line}</p>)}
-                    {/* Only when the answer actually contains figures.
-                        A hardship reply carries none by design, and stamping "every
-                        figure checked" on a message to someone who cannot pay their bill
-                        is both meaningless and the wrong tone.
-                        Testing `report.checked.length` would be wrong: the template
-                        fallback is built straight from verified facts without running the
-                        checker, so `checked` is empty even when the answer is full of
-                        figures. The claim is about figures, so look for figures. */}
-                    {item.report && !item.failed && /\d/.test(item.text) && (
-                      <small className="verified-badge">
-                        <ShieldCheck aria-hidden="true"/>
-                        Every figure checked against your meter data
-                      </small>
+                    {/* Split on blank lines, not every newline. Answers arrive as
+                        paragraphs now that they are not capped at two to four sentences,
+                        and a bill explanation reads as a wall of text without this. */}
+                    {item.text.split(/\n{2,}/).map((para) => para.trim()).filter(Boolean).map((para, i) => (
+                      <p key={i}>{para}</p>
+                    ))}
+
+                    {/* Live lookup activity, replaced by the source list when done. This
+                        is the product working, so it is shown rather than hidden behind a
+                        spinner — "reading your daily meter data" is a more honest and more
+                        reassuring wait than three bouncing dots. */}
+                    {item.activity && item.activity.length > 0 && (
+                      <ul className="tool-activity">
+                        {item.activity.map((a, i) => (
+                          <li key={i} className={a.done ? 'done' : 'running'}>
+                            <Search aria-hidden="true"/>{toolLabel(a.name)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Only when the answer actually contains figures. A handoff to a
+                        person carries none by design, and stamping a provenance badge on
+                        a message to someone who cannot pay their bill is both meaningless
+                        and the wrong tone. */}
+                    {item.sources && item.sources.some((s) => s.ok) && /\d/.test(item.text) && (
+                      <details className="verified-badge answer-sources">
+                        <summary>
+                          <ShieldCheck aria-hidden="true"/>
+                          Answered from your own meter data
+                        </summary>
+                        <ul>
+                          {item.sources.filter((s) => s.ok).map((s, i) => (
+                            <li key={i}>
+                              <strong>{toolLabel(s.tool)}</strong>
+                              {s.source && <span>{s.source}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
                     )}
                   </>
                 )}
@@ -421,8 +482,14 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
               )}
             </div>
           ))}
-          {busy && messages[messages.length - 1]?.text === '' && (
-            <div className="bubble assistant-bubble thinking"><SparkySparks state="thinking" size={32}/>Sparky is checking your usage…</div>
+          {/* Only until the first lookup or the first word arrives. After that the
+              message bubble shows what is actually happening — which tool is running —
+              and a generic "checking your usage" line underneath it would be both
+              redundant and less informative than the thing it sits below. */}
+          {busy
+            && messages[messages.length - 1]?.text === ''
+            && !messages[messages.length - 1]?.activity?.length && (
+            <div className="bubble assistant-bubble thinking"><SparkySparks state="thinking" size={32}/>Sparky is reading your account…</div>
           )}
         </div>
       ) : (
@@ -500,7 +567,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
     {termsOpen && (
       <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)}>
-        <p>Sparky explains your account using figures calculated from your own meter data. Every number in an answer is checked against those calculations before you see it.</p>
+        {/* Reworded when the assistant started reading the data itself. The old text
+            said every number was "checked against those calculations before you see
+            it", which described the number-checker — a real control at the time, and a
+            claim that would now be false. What replaced it is narrower and true: the
+            answer names what it read, and you can see it. */}
+        <p>Sparky answers from your own meter readings and account records. Each answer lists what it looked up, so you can see where every figure came from.</p>
         <p>Sparky does not identify individual appliances from half-hourly meter data, and estimated costs use an illustrative rate.</p>
       </Modal>
     )}

@@ -38,18 +38,20 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.db.models import (
+    AgentToolCallRow,
     Conversation,
     Customer,
     Escalation,
-    FactBundleRow,
     TokenUsageRow,
     Turn,
-    VerificationRow,
 )
 from app.db.session import get_sessionmaker
-from app.schemas import FactBundle, Intent, VerificationReport
 
 log = logging.getLogger(__name__)
+
+#: `escalation.reason` is a 48-character column, and the agent's reason is free text it
+#: wrote itself. Truncated rather than rejected — a long reason must not cost the row.
+_REASON_MAX = 48
 
 
 class TurnRecord:
@@ -57,6 +59,11 @@ class TurnRecord:
 
     A plain object rather than kwargs so that adding a field is a compile-time-ish
     change in one place instead of six call sites drifting apart.
+
+    `tools` replaced `bundle` and `report` when the agent replaced the pipeline
+    (ADR-0011). The reason is not tidiness: a `VerificationRow` written now would assert
+    a number-check that no longer happens, and the whole point of that table was that its
+    counts could be trusted. What is recorded instead is what the model actually read.
     """
 
     __slots__ = (
@@ -64,10 +71,9 @@ class TurnRecord:
         "conversation_id",
         "question",
         "answer",
-        "intent",
-        "bundle",
-        "report",
+        "tools",
         "escalate",
+        "escalation_reason",
         "channel",
         "provider",
         "model",
@@ -83,10 +89,9 @@ class TurnRecord:
         conversation_id: int | None,
         question: str,
         answer: str,
-        intent: Intent,
-        bundle: FactBundle,
-        report: VerificationReport,
+        tools: list,
         escalate: bool,
+        escalation_reason: str | None = None,
         channel: str = "chat",
         provider: str | None = None,
         model: str | None = None,
@@ -98,10 +103,9 @@ class TurnRecord:
         self.conversation_id = conversation_id
         self.question = question
         self.answer = answer
-        self.intent = intent
-        self.bundle = bundle
-        self.report = report
+        self.tools = tools
         self.escalate = escalate
+        self.escalation_reason = escalation_reason
         self.channel = channel
         self.provider = provider
         self.model = model
@@ -173,7 +177,7 @@ class DatabaseRecorder:
                 seq = await self._next_seq(session, conversation.id)
 
                 # The customer's question and the agent's answer are two turns. Storing
-                # only the answer would make the transcript unreadable and the intent
+                # only the answer would make the transcript unreadable and the answer
                 # unattributable to what was actually asked.
                 session.add(
                     Turn(
@@ -181,7 +185,6 @@ class DatabaseRecorder:
                         seq=seq,
                         role="customer",
                         body=record.question,
-                        intent=record.intent.value,
                     )
                 )
 
@@ -190,35 +193,27 @@ class DatabaseRecorder:
                     seq=seq + 1,
                     role="agent",
                     body=record.answer,
-                    intent=record.intent.value,
-                    cited_sources=self._citation(record.bundle),
+                    cited_sources=self._citation(record),
                     model_version=record.model,
                     latency_ms=record.latency_ms,
                 )
                 session.add(agent_turn)
                 await session.flush()  # need agent_turn.id for the child rows
 
-                session.add(
-                    FactBundleRow(
-                        turn_id=agent_turn.id,
-                        intent=record.bundle.intent.value,
-                        period=record.bundle.period,
-                        facts=[f.model_dump(mode="json") for f in record.bundle.facts],
+                for index, call in enumerate(record.tools, start=1):
+                    session.add(
+                        AgentToolCallRow(
+                            turn_id=agent_turn.id,
+                            seq=index,
+                            tool_name=call.name,
+                            arguments=call.arguments or None,
+                            result=call.result,
+                            source=call.result.get("source"),
+                            ok=not call.failed and not call.unavailable,
+                            duration_ms=call.duration_ms,
+                        )
                     )
-                )
-                session.add(
-                    VerificationRow(
-                        turn_id=agent_turn.id,
-                        passed=record.report.passed,
-                        checked=list(record.report.checked),
-                        unverified=list(record.report.unverified),
-                        regenerated=getattr(record.report, "regenerated", False),
-                        fell_back_to_template=getattr(
-                            record.report, "fell_back_to_template", False
-                        ),
-                        provider_error=getattr(record.report, "provider_error", False),
-                    )
-                )
+
                 if record.provider:
                     session.add(
                         TokenUsageRow(
@@ -233,15 +228,21 @@ class DatabaseRecorder:
                 if record.escalate:
                     conversation.was_escalated = True
                     conversation.outcome = "escalated"
-                    if record.intent is Intent.HARDSHIP:
+                    reason = (record.escalation_reason or "handoff").strip()
+                    # Consumer Care Obligations Part 6 puts duties on a retailer that is
+                    # on notice of payment difficulty, so the hardship flag has to be set
+                    # from what was actually said rather than from a keyword match on the
+                    # question. The agent names its own reason; this reads it.
+                    if any(
+                        word in reason.lower()
+                        for word in ("afford", "hardship", "payment difficult", "struggl")
+                    ):
                         conversation.hardship_detected = True
                     session.add(
                         Escalation(
                             conversation_id=conversation.id,
                             turn_id=agent_turn.id,
-                            reason=record.intent.value
-                            if record.intent is Intent.HARDSHIP
-                            else "out_of_scope",
+                            reason=reason[:_REASON_MAX] or "handoff",
                         )
                     )
 
@@ -251,33 +252,34 @@ class DatabaseRecorder:
 
         except Exception:  # noqa: BLE001 - an answer must not fail because evidence did
             log.exception(
-                "failed to record turn for customer=%s intent=%s — the answer was still "
-                "delivered, but this conversation is missing from the evidence tables",
+                "failed to record turn for customer=%s — the answer was still delivered, "
+                "but this conversation is missing from the evidence tables",
                 record.customer_ref,
-                record.intent.value,
             )
             return record.conversation_id
 
     @staticmethod
-    def _citation(bundle: FactBundle) -> dict | None:
+    def _citation(record: TurnRecord) -> dict | None:
         """The short citation for `turn.cited_sources` (KEA-50, data-transparency panel).
 
-        Adjacent to `fact_bundle`, not a duplicate of it. The bundle is the full receipt
-        — every fact with its value, unit and label, kept so a disputed figure can be
-        reconstructed. This is what the *customer* is shown: which figures backed the
-        answer, over what period, for which household. Keys and provenance, no values.
+        Adjacent to `agent_tool_call`, not a duplicate of it. That table is the full
+        receipt — every call with the whole result, kept so a disputed figure can be
+        reconstructed. This is what the *customer* is shown: which lookups backed the
+        answer and what each one read from. Names and provenance, no values.
 
-        Returns None for a bundle with no facts — a hardship reply carries none by
-        design, and an empty citation panel is better than one asserting we cited
-        nothing. `{}` would render as a panel; None renders as no panel.
+        Returns None when nothing was looked up. `{}` would render as an empty panel;
+        None renders as no panel, which is the right output for an answer that consulted
+        nothing — a greeting, or a handoff.
         """
-        if not bundle.facts:
+        used = [t for t in record.tools if not t.failed]
+        if not used:
             return None
         return {
-            "household": bundle.customer_id,
-            "period": bundle.period,
-            "intent": bundle.intent.value,
-            "fact_keys": [f.key for f in bundle.facts],
+            "household": record.customer_ref,
+            "tools": [t.name for t in used],
+            "sources": sorted(
+                {t.result["source"] for t in used if t.result.get("source")}
+            ),
             # Named rather than implied. Every figure in this project comes from the
             # customer's own half-hourly meter data plus a benchmark that is
             # deliberately not derived from them, and the panel should say so.

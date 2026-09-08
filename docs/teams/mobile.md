@@ -41,8 +41,10 @@ notifications are a **Tier-1 alert channel** alongside email:
 
 - Handled via `expo-notifications`.
 - Devices register their push token on launch with backend persistence.
-- When Layer 1 analytics identifies anomalous usage or an impending threshold breach, a
-  push notification alerts the customer immediately.
+- When the bill-shock assessment identifies anomalous usage or an impending threshold
+  breach, a push notification alerts the customer immediately. That path is proactive and
+  deliberately not the assistant: nobody asks a question to receive a warning, so it is a
+  polled endpoint (`/households/{id}/bill-shock`) rather than a chat turn.
 - Tapping a notification routes directly to the relevant household alert or conversational
   advisor context.
 - **Graceful degradation:** If a user denies notification permissions, the app must not
@@ -103,13 +105,24 @@ and keep a working `.env.example` committed.
 React Native's native fetch does not behave identically to a web browser:
 - Standard `EventSource` cannot send a `POST` request with a JSON payload.
 - SSE chunks can be split mid-frame over cellular or Wi-Fi networks.
-- Adapt the SSE parser from `services/web/src/lib/client.ts` to accumulate chunks into a
-  buffer and split on `\n\n`.
+- `src/lib/api.ts` accumulates into a buffer and splits on `\n\n`. It uses
+  **XMLHttpRequest, not fetch** — React Native has no `ReadableStream` response body, so
+  `res.body` is null on Hermes and a fetch-based reader silently gets nothing. That is not
+  a preference; it is the only thing that streams here.
 
-### 3. Sentence-Level Streaming (Not Word-by-Word)
-`token` events arrive **one per sentence**, not one per word. The backend verifies the
-entire answer in Layer 3 before streaming tokens out. Do not build an animated typewriter
-effect expecting word-by-word tokens; render sentences cleanly as they arrive.
+### 3. Five event types, and `reset` is the one to read about
+`token` arrives per chunk as the assistant writes. But it works in *rounds*: it may write
+a line ("Let me pull up your July bill") and then decide it needs a lookup first. `reset`
+says that round turned out to be a lookup — drop what you rendered. A client that ignores
+it shows "Let me check that." glued to the front of every answer.
+
+`tool` and `result` are lookup activity, and worth showing rather than hiding behind a
+spinner: naming the table being read is a more honest wait than three bouncing dots.
+`error` means no answer was produced — show the message, never substitute one.
+
+### 4. Answers are paragraphs now
+They are no longer capped at two to four sentences. Split on blank lines, not every
+newline. On a phone especially, a five-sentence explanation in one block is unreadable.
 
 ---
 

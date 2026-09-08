@@ -13,11 +13,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.analytics import fixtures
+from app.analytics.bundles import bundle_for as _bundle_for
 from app.analytics.engine import UsageWindow
 from app.config import Settings, get_provider
 from app.main import app
-from app.pipeline import _bundle_for, _sentences
-from app.routing.intents import route
+from app.pipeline import _sentences
 from app.schemas import Intent
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -74,18 +74,19 @@ def test_sentence_splitting(text, expected):
 
 
 def test_unbacked_intent_still_carries_caveats():
-    """`compare_to_last_year` routes but has no layer 1 path yet (KEA-69).
+    """`compare_to_last_year` has no analytics path yet (KEA-69).
 
-    It therefore hands the model an empty FactBundle. Layer 3 cannot protect that case:
-    "your usage was higher than last winter" carries no numeric token, so the
-    number-checker passes it and a fabricated comparison reaches the customer. The
-    caveats are the only guard. When KEA-69 lands, replace them with facts — do not
-    just delete them.
+    It therefore hands the on-device model an empty FactBundle, and the number-checker
+    cannot protect that case: "your usage was higher than last winter" carries no numeric
+    token, so the check passes it and a fabricated comparison reaches the customer. The
+    caveats are the only guard. When KEA-69 lands, replace them with facts — do not just
+    delete them.
+
+    Offline only. On the server this question now reaches a model holding the daily
+    series, which can say what it does and does not have rather than being handed a
+    bundle that says nothing.
     """
-    routing = route("how does this compare to last year")
-    assert routing.intent is Intent.COMPARE_TO_LAST_YEAR
-
-    bundle = _bundle_for(routing.intent, "H-JUL")
+    bundle = _bundle_for(Intent.COMPARE_TO_LAST_YEAR, "H-JUL")
     assert bundle.facts == []
     assert bundle.caveats, "an empty bundle with no caveats is unguarded"
     assert "NO figures" in bundle.render_for_prompt()
@@ -128,10 +129,12 @@ def test_settings_reads_env_at_construction_not_import(monkeypatch):
 
 def test_settings_default_survives_a_missing_env(monkeypatch):
     monkeypatch.delenv("KEA_PROVIDER", raising=False)
-    # Changed from "ollama" in Sprint 3. A local model sized to whatever hardware happened
-    # to be present was right for a laptop demo and wrong as an architecture — see
-    # app/providers/resolver.py. Local is still reachable, but only by asking for it.
-    assert Settings().provider == "bedrock"
+    # Changed from "ollama" in Sprint 3, then from "bedrock" to "gcp" when the Gemini
+    # provider landed. A local model sized to whatever hardware happened to be present was
+    # right for a laptop demo and wrong as an architecture — see app/providers/resolver.py.
+    # Local is still reachable, but only by asking for it, and now only with a
+    # tool-capable model: see OllamaProvider.supports_tools.
+    assert Settings().provider == "gcp"
     assert os.environ.get("KEA_PROVIDER") is None
 
 
@@ -166,7 +169,11 @@ def test_real_july_window_median_unchanged():
 def test_retry_prompt_names_the_rejected_tokens():
     """Attempt 2 used to be a byte-identical prompt at temperature 0.2, which mostly
     reproduces the identical failure. Whether naming the tokens lifts the pass rate is
-    a golden-set question (KEA-46) — this only asserts the signal reaches the model."""
+    a golden-set question (KEA-46) — this only asserts the signal reaches the model.
+
+    Offline path. The server's retry loop went with the number-checker; the device still
+    has one, and it is the device that has no second chance to get an answer right.
+    """
     from app.narration.prompts import build_user_prompt
 
     bundle = _bundle_for(Intent.WHY_HIGH, "H-JUL")

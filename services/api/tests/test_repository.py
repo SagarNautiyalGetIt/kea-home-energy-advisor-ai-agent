@@ -22,6 +22,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.analytics import fixtures
+from app.analytics.bundles import bundle_for as _bundle_for
+from app.analytics.bundles import bundle_from_context
 from app.analytics.repository import (
     CompositeRepository,
     DatabaseRepository,
@@ -32,7 +34,6 @@ from app.analytics.repository import (
 )
 from app.config import get_repository
 from app.main import app
-from app.pipeline import _bundle_for, bundle_from_context
 from app.schemas import Intent
 
 

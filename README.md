@@ -3,12 +3,18 @@
 Bill-shock prevention agent · Scenario 10 · Team HAKAS · CS778-S2-2026-AWS-Challenge
 Sprint 2: **17–28 August 2026**
 
-> **Every number in every answer is computed by Python and verified before it reaches
-> the customer. The model writes the sentence; it never does the maths.**
+> **Every number in every answer traces to a row of this customer's own data, and the
+> lookup that produced it is recorded. The assistant reads the meter data itself and
+> shows you where each figure came from.**
 >
 > That is not a technical footnote — 61.9% of surveyed customers named "it might give
 > me wrong or made-up information" as their top concern, the largest single answer.
-> Preventing it *demonstrably* is the pitch.
+> Answering it *demonstrably* is the pitch.
+>
+> Sprint 2 answered it a different way: the model was never shown any data and could
+> only restate figures Python had computed. That made fabrication impossible and made
+> explanation impossible with it. See [ADR-0011](docs/adr/0011-agentic-tool-use.md) for
+> what changed and what was traded.
 
 ## Start here
 
@@ -33,7 +39,7 @@ make check            # everything CI runs — do this before you push
 ## Layout
 
 ```
-services/api/     Backend team    FastAPI, the four-layer pipeline, Postgres
+services/api/     Backend team    FastAPI, the agent and its tools, Postgres
 services/web/     Frontend team   React 19 + TypeScript + Tailwind + Vite
 services/mobile/  Mobile team     React Native + Expo + TypeScript (iOS & Android)
 ml/               AI team         Prompts, golden set, evals, model benchmarks
@@ -43,8 +49,8 @@ contracts/        —               openapi.json: the frozen interface between a
 docs/             —               ADRs, PRD, ERD, sprint boards, team onboarding
 ```
 
-Two teams own code that sits inside `services/api/`: the AI team writes
-`app/narration/`, the Data team writes `app/analytics/`. That code lives in the backend
+Two teams own code that sits inside `services/api/`: the AI team writes `app/agent/`,
+the Data team writes `app/analytics/`. That code lives in the backend
 service because the API imports it at request time — **ownership is a convention, not a
 directory.** Who owns what is written down in [`docs/teams/`](docs/teams/); nothing stops
 you editing another team's files, but tell them.
@@ -55,28 +61,38 @@ write access to the repo.
 
 ## Architecture
 
-Four layers. The model owns exactly one of them.
+The model reads the question, decides what it needs, fetches it, and answers.
 
-| Layer | Owner | Module | Responsibility |
+| Step | Owner | Module | Responsibility |
 |---|---|---|---|
-| 0 | Python | `app/routing/intents.py` | Map free text to one of ~8 intents |
-| 1 | Python | `app/analytics/engine.py` | Compute typed facts from meter data |
-| 2 | **Model** | `app/narration/` | Turn those facts into 2–4 sentences |
-| 3 | Python | `app/verification/number_checker.py` | Reject any figure not traceable to layer 1 |
+| Context | Python | `app/pipeline.py` | Fetch this household's data once, scoped to the signed-in customer |
+| Tools | Python | `app/agent/tools.py` | Eight typed lookups over that data, each naming its source |
+| Loop | **Model** | `app/agent/loop.py` | Read, call tools, reason, write the answer |
+| Evidence | Python | `app/db/recorder.py` | Record every call and result to `app.agent_tool_call` |
 
-The model never chooses what to compute and never sees a raw meter reading — it receives
-a `FactBundle` and writes prose. Tool *selection* is the hardest task for a small local
-model, so we removed it ([ADR-0002](docs/adr/0002-narrate-only-architecture.md)).
+`customer_id` is bound from the request and is **never** a tool parameter — there is no
+argument the model can pass that reaches another household's data. Everything else —
+what matters, what to compare, how much to say — is the model's.
 
-Voice is the same pipeline with a different transport
-([ADR-0003](docs/adr/0003-voice-transport-skin.md)) — never a second brain.
+Python still owns retrieval and the weather-normalised forecast, because neither is a
+judgement call. `app/agent/tools.py` explains why that is not the middleman we removed.
+
+Voice, telephony and chat all call `app.pipeline`
+([ADR-0003](docs/adr/0003-voice-transport-skin.md)) — different transports, never a
+second brain.
+
+**The offline pack is the exception, and deliberately so.** A device with no connection
+cannot call a tool, so it still ships pre-computed fact bundles and narrates them under a
+prompt that forbids inventing a figure — the Sprint 2 architecture, preserved in
+`app/analytics/bundles.py` where it is still the right one
+([ADR-0008](docs/adr/0008-offline-first-narration.md)).
 
 ## Decisions
 
 | ADR | Decision |
 |---|---|
 | [0001](docs/adr/0001-backend-fastapi.md) | FastAPI, not Django or Flask |
-| [0002](docs/adr/0002-narrate-only-architecture.md) | The model narrates; Python decides |
+| [0002](docs/adr/0002-narrate-only-architecture.md) | ~~The model narrates; Python decides~~ — superseded by 0011, and still live for offline |
 | [0003](docs/adr/0003-voice-transport-skin.md) | Voice is a transport skin |
 | [0004](docs/adr/0004-llm-provider-interface.md) | One provider interface — Ollama now, Bedrock later |
 | [0005](docs/adr/0005-two-speed-models.md) | A second "fast" model is the wrong tool here |
@@ -85,6 +101,7 @@ Voice is the same pipeline with a different transport
 | [0008](docs/adr/0008-offline-first-narration.md) | Bedrock by default; local models are for customers with no connection |
 | [0009](docs/adr/0009-smart-home-integration.md) | Smart-home devices lift the appliance caveat, per device |
 | [0010](docs/adr/0010-aws-deployment.md) | Cost-optimised AWS — Lambda, RDS t4g.micro, no NAT Gateway |
+| [0011](docs/adr/0011-agentic-tool-use.md) | The model reads the data and answers; Python serves it |
 
 Disagree with one? Open an ADR, not a PR.
 
@@ -98,7 +115,7 @@ Endpoint shapes are frozen; implementations change behind them.
 | `GET /api/households` | The five demo households |
 | `GET /api/households/{id}` | Daily kWh + cost for one household |
 | `POST /api/chat` | Non-streaming — integrate against this first |
-| `POST /api/chat/stream` | SSE: `meta` → `token`* → `done` |
+| `POST /api/chat/stream` | SSE: `token`* / `reset` / `tool` / `result` → `done`, or `error` |
 
 `contracts/openapi.json` is committed, so the frontend generates types on a fresh clone
 without running the backend. **Change an endpoint → `make api-spec` → commit it in the

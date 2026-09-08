@@ -39,11 +39,28 @@ log = logging.getLogger(__name__)
 SYNTH_TIMEOUT_S = 20.0
 DEFAULT_SAMPLE_RATE = 22_050
 
-# Spoken while the model works. Deliberately contains no figure, no comparison and no
-# characterisation of the customer's usage — these are said *before* layer 1 has been
-# consulted, so anything specific here would be a claim nothing computed. They are also
-# the only strings in the system that reach a customer without passing layer 3, which is
-# exactly why they are constants in a reviewed file and not model output.
+# Spoken while the agent works, before it has read anything. Deliberately contains no
+# figure, no comparison and no characterisation of the customer's usage — anything
+# specific here would be a claim nothing had looked up yet. These are the only strings in
+# the system that reach a customer without the model having seen their data, which is
+# exactly why they are constants in a reviewed file.
+ACKNOWLEDGEMENT = "Let me pull that up for you."
+"""What voice says the instant a question arrives (ADR-0005).
+
+It used to be picked from the table below, keyed by the intent layer 0 had just decided.
+There is no such decision now — the agent reads the question and the account rather than
+classifying the message first — so there is nothing to key on at the moment this has to
+be spoken, which is before any work has been done.
+
+That is a small loss and worth naming: "Let me compare your plans" was a nicer noise than
+this one. It was also occasionally wrong, because it was a keyword match asserting what
+the customer had asked about, out loud, before anything had been checked. One honest line
+beats twenty-six confident ones that are right most of the time.
+"""
+
+#: **Unused by the request path.** Kept for the offline pack, whose device-side narration
+#: still works intent-by-intent (see `app/analytics/bundles.py`), and as the source for
+#: `prewarm`.
 ACKNOWLEDGEMENTS: dict[Intent, str] = {
     Intent.WHY_HIGH: "Let me look at your usage for that period.",
     Intent.WHAT_WILL_I_PAY: "Let me work out where your bill is heading.",
@@ -55,6 +72,27 @@ ACKNOWLEDGEMENTS: dict[Intent, str] = {
     Intent.TARIFF_CHECK: "Let me compare your plans.",
     Intent.HARDSHIP: "I hear you. Let me get you to the right person.",
     Intent.OUT_OF_SCOPE: "Let me check whether I can answer that.",
+    # ── added with the driver decomposition ──
+    Intent.USAGE_TOTAL: "Let me add up your usage for that period.",
+    Intent.COMPARE_TO_SIMILAR: "Let me compare you against similar homes.",
+    Intent.BILL_BREAKDOWN: "Let me go through the charges on that bill.",
+    Intent.HOW_TO_REDUCE: "Let me see where your money is actually going.",
+    Intent.SOLAR_EXPORT: "Let me check what your panels sent back.",
+    Intent.SUPPLY_QUALITY: "Let me check how your meter was read.",
+    # ── account lookups. Shorter, because they are a lookup rather than a
+    # computation and the pause before the answer is correspondingly brief; a
+    # three-second acknowledgement in front of a half-second answer sounds broken.
+    Intent.ACCOUNT_BALANCE: "Let me check your balance.",
+    Intent.BILL_DUE: "Let me check that date.",
+    Intent.PLAN_DETAILS: "Let me look up your plan.",
+    Intent.RATE_DETAILS: "Let me look up your rates.",
+    Intent.PAYMENT_METHOD: "Let me check how your bill is paid.",
+    Intent.ACCOUNT_IDENTITY: "Let me pull up your account details.",
+    Intent.BILLING_CYCLE: "Let me check your billing dates.",
+    # Like HARDSHIP: acknowledges without conceding the point or defending the bill.
+    # Neither "you're right" nor "our figures are correct" is ours to say before a
+    # person has looked at it.
+    Intent.DISPUTE: "I understand. Let me get you to someone who can look into that.",
 }
 
 
@@ -157,11 +195,17 @@ class TextToSpeech:
             yield current
         yield await pending
 
-    async def acknowledgement(self, intent: Intent) -> Utterance | None:
-        """The instant reply. Cached after first use, so it is ~0 ms on every later turn."""
+    async def acknowledgement(self, intent: Intent | None = None) -> Utterance | None:
+        """The instant reply, spoken while the agent works. Cached after first use, so it
+        is ~0 ms on every later turn.
+
+        `intent` is optional and the request path does not pass it — see
+        `ACKNOWLEDGEMENT`. The offline pack still has an intent to key on, so the
+        parameter stays rather than forcing that caller through a second method.
+        """
         if intent in self._ack_cache:
             return self._ack_cache[intent]
-        text = ACKNOWLEDGEMENTS.get(intent)
+        text = ACKNOWLEDGEMENTS.get(intent) if intent is not None else ACKNOWLEDGEMENT
         if not text or not self.available:
             return None
         try:
@@ -173,10 +217,14 @@ class TextToSpeech:
         return utt
 
     async def prewarm(self) -> int:
-        """Synthesise every acknowledgement up front so the first turn is not the slow one."""
+        """Synthesise the acknowledgements up front so the first turn is not the slow one.
+
+        The generic one first, because it is the only one the request path uses and the
+        one whose latency a caller would actually hear.
+        """
         if not self.available:
             return 0
-        made = 0
+        made = 1 if await self.acknowledgement() is not None else 0
         for intent in ACKNOWLEDGEMENTS:
             if await self.acknowledgement(intent) is not None:
                 made += 1

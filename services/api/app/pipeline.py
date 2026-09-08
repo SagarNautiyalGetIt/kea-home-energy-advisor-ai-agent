@@ -1,32 +1,54 @@
-"""The one path from a customer question to a verified answer.
+"""The one path from a customer question to an answer.
 
-`/chat`, `/chat/stream` and the voice WebSocket all call `answer()`. That is not
-tidiness — it is ADR-0003's acceptance criterion made structural. "Voice cannot
-produce an answer chat wouldn't" is easy to assert in a document and easy to break
-in code six days later, when someone adds a voice-only shortcut because the model
-was slow in a rehearsal. There is one function that turns a question into prose, so
-the two channels cannot drift without deleting this module.
+`/chat`, `/chat/stream`, the Vapi adapter and the voice WebSocket all come through here.
+That is not tidiness — it is ADR-0003's acceptance criterion made structural. "Voice
+cannot produce an answer chat wouldn't" is easy to assert in a document and easy to break
+in code six days later, when somebody adds a voice-only shortcut because the model was
+slow in a rehearsal. There is one function that turns a question into prose, so the
+channels cannot drift without deleting this module.
 
-Layers 0 -> 1 -> 2 -> 3, in that order, every time:
+## What this used to be
 
-    route()               layer 0     free text -> intent          (pure Python)
-    bundle_from_context() layer 1     intent    -> FactBundle      (pure Python)
-    narrate_verified()    layers 2+3  bundle    -> verified prose  (model, then Python)
+Four layers, in order, every time:
 
-## Two seams that had to survive being merged
+    route()                 free text -> one of 26 intents      (keyword matching)
+    bundle_from_context()   intent    -> a fixed list of facts  (pure Python)
+    narrate_verified()      facts     -> 2-4 sentences          (model)
+    verify()                prose     -> accept or template     (Python)
 
-**The repository seam (KEA-33).** I/O is async and layer 1 is not, so `plan()` awaits
-a `UsageContext` and then hands it to a *pure* bundle builder. The voice branch wrote
-its own `_bundle_for()` that read `fixtures` directly; keeping that would have given
-voice a second data source, so the demo could answer one way over the microphone and
-another way in the chat box. There is one builder, and it takes its data as an
-argument.
+The model owned layer 2 and nothing else. It never chose what to compute, never saw a
+meter reading, and was forbidden from doing arithmetic — which was coherent, because it
+was a sentence-formatter over figures Python had already worked out.
 
-**Evidence recording.** Recording used to live in the `/chat` handlers, which meant a
-voice conversation produced no `verification` row — and "N answers, 0 fabricated
-figures" is counted from that table. A demo driven over the microphone would have
-reported zero answers. `narrate()` records, so every channel is counted, and
-`channel` on the row says which one it was.
+It is gone, and the two symptoms that killed it were both structural rather than
+prompt-level:
+
+**Every answer read the same.** Layer 0 was keyword matching over a closed set. Anything
+it did not recognise landed on an empty bundle whose caveat told the model to say it
+could not help and offer the team — so questions the data could answer perfectly well
+came back as a handoff, and the ones that did route produced near-identical restatements
+of a fixed fact list.
+
+**Nothing could be explained in depth.** The system prompt capped answers at two to four
+sentences and banned comparison, inference and arithmetic. A customer asking why their
+bill jumped eighty dollars got a headline. Asking for more got the handoff sentence,
+because there was no mechanism for more.
+
+## What it is now
+
+    build_context()   fetch this household's data once      (I/O, scoped server-side)
+    run_agent()       model reads, calls tools, answers      (app/agent/)
+
+The model decides what it needs and goes and gets it. Python still owns scoping,
+retrieval and the fitted forecast — see `app/agent/tools.py` for why those three are not
+the middleman that was removed.
+
+## The seam that had to survive the rewrite
+
+**Evidence recording.** It lives in `answer()` rather than in the transports, because it
+used to live in the `/chat` handlers and a voice conversation therefore produced no
+evidence row at all — a demo driven over the microphone reported zero answers. Every
+channel records, and `channel` on the row says which one it was.
 """
 
 from __future__ import annotations
@@ -34,288 +56,183 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import dataclass
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from typing import Any
 
-from app.analytics import fixtures
-from app.analytics.engine import (
-    NO_APPLIANCE,
-    TariffOption,
-    build_hardship,
-    build_peak_usage,
-    build_tariff_check,
-    build_weather_check,
-    build_what_costs_most,
-    build_what_will_i_pay,
-    build_why_high,
+from app.agent.loop import (
+    AgentResult,
+    AgentUnavailable,
+    Finished,
+    ToolInvocation,
+    run_agent,
 )
+from app.agent.tools import ToolContext
+from app.analytics.account import AccountContext
 from app.analytics.repository import UsageContext
 from app.config import get_provider, get_recorder, get_repository
 from app.db.recorder import TurnRecord
-from app.narration.narrator import narrate_verified
-from app.routing.intents import route
-from app.schemas import FactBundle, Intent, VerificationReport
 
 log = logging.getLogger(__name__)
 
 DAYS_IN_JULY = 31
+"""The demo cohort's cycle length. **A fallback, not a fact about any real account.**
 
-# Illustrative plans — Kea's real tariffs are not public, and every surface showing a
-# dollar figure has to say so. Standard trades a higher daily charge for a lower unit
-# rate; Low Fixed Charge is the reverse, which is why it suits low users.
-#
-# Break-even is (1.50 - 0.30) / (0.36 - 0.30) = **20 kWh/day**. Below that LFC wins,
-# above it Standard does. That threshold is the whole point of the comparison, so it is
-# calibrated deliberately: NZ's Low Fixed Charge regulation targeted households under
-# ~8,000 kWh/year (~22 kWh/day). An earlier draft used 0.34 for the LFC unit rate, which
-# pushed break-even to 30 kWh/day and made LFC look cheaper for almost everybody — the
-# advice would have been wrong for most of the demo households.
-STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
-LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
+Retailers stagger billing cycle days across the month precisely so that mid-cycle
+alerting does not all fire on the same day — `billing.account.billing_cycle_day` exists
+for that, and `mart_account_context` carries the resulting period dates. A real cohort
+therefore has cycles of 28 to 33 days that start on different dates, and assuming 31 for
+all of them puts a straight-line month-end projection out by up to 10% in the direction
+that matters: it *understates* the bill for a household on a longer cycle, which is the
+one group a bill-shock warning exists to reach.
+
+Still used by the bill-shock endpoint and the clarifying-question path, which are
+proactive and run without a question to answer. The agent's own projection reads the
+account's real period dates; see `agent/tools.py:project_this_bill`.
+"""
 
 
-def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> FactBundle:
-    """Layer 0's decision selects the layer 1 path. The model has no say in this.
+def days_in_cycle(ctx: UsageContext) -> int:
+    """How many days this account's current billing period actually covers.
 
-    Pure: everything it needs was fetched by the repository first. Keeping the I/O out
-    means this same function serves the database, the fixtures, and the golden set — one
-    builder, so the demo and the tests cannot drift apart.
+    Read from the account's own period dates when the marts have them, so an account
+    billed 15th-to-14th is projected over its real 30 or 31 days rather than a calendar
+    month it does not use.
     """
-    window = ctx.window
-    baseline = ctx.baseline
-
-    if intent is Intent.WHAT_WILL_I_PAY:
-        return build_what_will_i_pay(window, DAYS_IN_JULY)
-
-    if intent is Intent.WHY_HIGH:
-        return build_why_high(window, baseline)
-
-    if intent is Intent.USING_MORE_THAN_USUAL:
-        # "Was it just the cold snap?" — give the weather its due before anything else.
-        return build_weather_check(window, ctx.hdd, ctx.normal_hdd)
-
-    if intent is Intent.WHAT_COSTS_MOST:
-        # The honest refusal: we cannot name an appliance, but we can say where the money is.
-        return build_what_costs_most(window, baseline)
-
-    if intent is Intent.PEAK_USAGE:
-        # "Which day was my highest usage?" — answerable straight off the daily series.
-        # This used to fall through to WHY_HIGH and return a confident answer to a
-        # different question; see the routing rule for why that was the worst failure
-        # mode this system has.
-        return build_peak_usage(window)
-
-    if intent is Intent.TIME_OF_DAY:
-        # Deliberately has no figures. The half-hourly data behind the demo households
-        # is one fixed 48-interval shape scaled by each day's total (see db/seed.py), so
-        # every household's "hourly curve" is the same synthetic curve. Naming a peak
-        # hour off that would be presenting a constant as an observation — the exact
-        # fabrication this product exists to prevent, and it would pass layer 3, because
-        # layer 3 checks that figures are real and not that they mean anything.
-        #
-        # So the answer is an honest partial: we can say which *day*, not which *hour*,
-        # and it offers that instead of a handoff. `peak_day` is included as a fact so
-        # the model can make the offer concrete rather than vague.
-        peak = build_peak_usage(window)
-        return FactBundle(
-            customer_id=customer_id,
-            intent=intent,
-            period=window.period,
-            facts=[f for f in peak.facts if f.key in {"peak_day", "peak_day_kwh"}],
-            caveats=[
-                "You have NO hour-by-hour or time-of-day figures. Do not name a peak "
-                "hour, a time window, or a part of the day — not 'evenings', not "
-                "'overnight'. Say plainly that Sparky can show which DAY was highest but "
-                "not yet which hour, then offer the highest day you were given.",
-                NO_APPLIANCE,
-            ],
-        )
-
-    if intent is Intent.TARIFF_CHECK:
-        return build_tariff_check(window, STANDARD_PLAN, LOW_FIXED_PLAN)
-
-    if intent is Intent.HARDSHIP:
-        # No figures at all — nothing to get wrong, and a number has no place here.
-        bundle = build_hardship()
-        return bundle.model_copy(update={"customer_id": customer_id})
-
-    # No analytics path for this intent yet — COMPARE_TO_LAST_YEAR is routable but
-    # unimplemented (KEA-69), and OUT_OF_SCOPE never had one. Either way the model gets
-    # an empty bundle, and an empty bundle with no caveats is the one case layer 3
-    # cannot protect: "your usage was higher than last winter" contains no numeric token,
-    # so the number-checker passes it and a fabricated comparison reaches the customer.
-    # The caveats are the only guard here. Do not remove them when KEA-69 lands — replace
-    # them with real facts.
-    return FactBundle(
-        customer_id=customer_id,
-        intent=intent,
-        period=window.period,
-        caveats=[
-            "You have NO figures for this question. Do not compare, estimate, characterise "
-            "or describe their usage in any way — not even in words like 'higher', 'lower' "
-            "or 'about the same'. Say plainly that you cannot answer this one yet and offer "
-            "to connect them with the team.",
-            NO_APPLIANCE,
-        ],
-    )
-
-
-def _bundle_for(intent: Intent, customer_id: str) -> FactBundle:
-    """Fixture-backed convenience wrapper — synchronous, no I/O, no event loop.
-
-    The golden set and the contract tests use this. It deliberately routes through the
-    same `bundle_from_context` the request path uses, so there is exactly one bundle
-    builder and no second implementation to drift.
-    """
-    hdd, normal = fixtures.heating_degree_days(customer_id)  # validates the id
-    ctx = UsageContext(
-        window=fixtures.get_window(customer_id),
-        baseline=fixtures.comparison_baseline(customer_id),
-        label=fixtures.label(customer_id),
-        hdd=hdd,
-        normal_hdd=normal,
-    )
-    return bundle_from_context(intent, customer_id, ctx)
-
-
-# A sentence ends at . ? or ! followed by whitespace and a capital or a quote. Splitting
-# on the bare string ". " broke "2.4 kWh" -> no, but it did break "e.g. roughly $24" into
-# a chunk ending "e.g." — and the old code then appended a second full stop. It matters
-# beyond cosmetics: ADR-0003 has voice speaking sentence one while sentence two generates,
-# so a bad boundary becomes an audible one.
-_SENTENCE_END = re.compile(r'(?<=[.!?])\s+(?=[A-Z"“])')
-
-
-def _sentences(text: str) -> list[str]:
-    return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+    account = getattr(ctx, "account", None)
+    billing = getattr(account, "billing", None) if account else None
+    start = getattr(billing, "current_period_start", None)
+    end = getattr(billing, "current_period_end", None)
+    if start and end and end >= start:
+        # Inclusive of both endpoints, matching `bill.period_days` on the platform side —
+        # a period from the 1st to the 31st is 31 days, not 30.
+        return (end - start).days + 1
+    return DAYS_IN_JULY
 
 
 class UnknownCustomerError(KeyError):
     """Raised before any transport has committed a response body."""
 
 
-@dataclass(frozen=True)
-class Plan:
-    """Layers 0 and 1: what we are going to answer, decided before the model is touched.
+# A sentence ends at . ? or ! followed by whitespace and a capital or a quote. Splitting
+# on the bare string ". " broke "e.g. roughly $24" into a chunk ending "e.g." — and the
+# old code then appended a second full stop. It matters beyond cosmetics: ADR-0003 has
+# voice speaking sentence one while sentence two generates, so a bad boundary becomes an
+# audible one.
+_SENTENCE_END = re.compile(r'(?<=[.!?])\s+(?=[A-Z"“])')
 
-    Split out from the narration because both transports need it *early* and the
-    model is the slow part. SSE emits `meta` off this so the UI can render the intent
-    while generation runs, and voice speaks a pre-synthesised acknowledgement off it —
-    ADR-0005's conclusion exactly: layer 0 knows the intent in ~0 ms, so an
-    acknowledgement built from the intent is faster than any model could be and
-    cannot fabricate, which is why we did not buy a second "fast" model.
+#: Markdown the model may reach for. Voice reads the answer aloud, and "asterisk asterisk
+#: your bill asterisk asterisk" is not a thing to say to a customer on the phone.
+_MARKDOWN = re.compile(r"(\*\*|__|`|^#{1,6}\s*|^[-*]\s+)", re.MULTILINE)
+
+
+def _sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+
+
+def _spoken(text: str) -> list[str]:
+    """The answer as sentences a synthesiser should say.
+
+    Markdown is stripped rather than forbidden in the prompt. Telling a model not to bold
+    anything works most of the time, and "most of the time" is not good enough for
+    something read aloud down a phone line — this cannot fail.
     """
-
-    customer_id: str
-    intent: Intent
-    bundle: FactBundle
-    escalate: bool
+    return _sentences(_MARKDOWN.sub("", text))
 
 
 @dataclass(frozen=True)
 class Answer:
-    """One verified reply, plus everything a transport needs to render it.
-
-    `sentences` is computed here rather than by each caller because voice speaks
-    sentence one while sentence two is still being generated (ADR-0003's load-bearing
-    latency optimisation) and SSE streams the same chunks. Two transports splitting
-    prose two different ways is how the channels start to diverge.
-    """
+    """One reply, plus everything a transport needs to render it."""
 
     customer_id: str
-    intent: Intent
     text: str
-    bundle: FactBundle
-    report: VerificationReport
-    escalate: bool
+    tools_used: list[ToolInvocation] = field(default_factory=list)
+    escalate: bool = False
+    escalation_reason: str | None = None
     conversation_id: int | None = None
     latency_ms: int = 0
 
     @property
     def sentences(self) -> list[str]:
-        return _sentences(self.text)
+        """Computed here rather than by each caller because voice speaks sentence one
+        while sentence two is still generating (ADR-0003's load-bearing latency
+        optimisation) and SSE streams the same chunks. Two transports splitting prose two
+        different ways is how the channels start to diverge."""
+        return _spoken(self.text)
+
+    @property
+    def sources(self) -> list[dict[str, Any]]:
+        """What backed this answer, for the transparency panel."""
+        return [t.summary() for t in self.tools_used]
 
 
-async def plan(customer_id: str, message: str) -> Plan:
-    """Layers 0 + 1. Raises before anything commits.
+async def build_context(customer_id: str) -> ToolContext:
+    """Fetch this household's data once, before the model is touched.
 
-    Async only because the repository read is — the analytics themselves stay pure and
-    synchronous, which is what lets the golden set run layer 1 without an event loop.
+    Raises `UnknownCustomerError` here rather than inside a tool so an unknown id is a
+    clean 404 before any transport has committed a response body. A tool reporting "I
+    cannot find that household" would arrive as a 200 with an apologetic paragraph, which
+    is a worse answer to a client bug.
     """
     try:
-        ctx = await get_repository().context(customer_id)
+        usage = await get_repository().context(customer_id)
     except KeyError as exc:
         raise UnknownCustomerError(str(exc)) from exc
 
-    routing = route(message)
-    return Plan(
-        customer_id=customer_id,
-        intent=routing.intent,
-        bundle=bundle_from_context(routing.intent, customer_id, ctx),
-        escalate=routing.is_escalation,
-    )
+    account = getattr(usage, "account", None)
+    if account is None:
+        # The fixture and seeded paths have no plan, bill or account row, so the thin
+        # context is built instead and the account lookups answer honestly that they
+        # cannot see the detail. See analytics/account.py on why a placeholder is not
+        # offered here.
+        account = AccountContext.from_window(
+            customer_id,
+            usage.window,
+            label=usage.label,
+            hdd=usage.hdd,
+            peer_baseline=usage.baseline,
+        )
+
+    return ToolContext(customer_id=customer_id, usage=usage, account=account)
 
 
-async def narrate(
-    p: Plan,
-    message: str,
+async def _record(
+    ctx: ToolContext,
+    result: AgentResult,
+    question: str,
     *,
-    channel: str = "chat",
-    conversation_id: int | None = None,
-) -> Answer:
-    """Layers 2 + 3, then the evidence write. The slow half: the model writes, then
-    Python checks every figure.
-
-    `channel` reaches the `conversation` row. Chat and voice are counted separately
-    because call deflection is the business case, and "how many of these were voice"
-    cannot be reconstructed from the transcript afterwards.
-    """
+    channel: str,
+    conversation_id: int | None,
+    latency_ms: int,
+) -> int | None:
+    """Write the evidence. Never raises — see recorder.py on why an evidence failure must
+    not cost the customer their answer."""
     provider = get_provider()
-
-    started = time.perf_counter()
-    text, report = await narrate_verified(provider, p.bundle, message)
-    latency_ms = int((time.perf_counter() - started) * 1000)
-
-    usage = getattr(provider, "last_usage", None)
     log.info(
-        "answer channel=%s customer=%s intent=%s verified=%s tokens=%s latency_ms=%s",
+        "answer channel=%s customer=%s tools=%s rounds=%d tokens=%d latency_ms=%d",
         channel,
-        p.customer_id,
-        p.intent,
-        report.passed,
-        usage.total if usage else "n/a",
+        ctx.customer_id,
+        [t.name for t in result.tools_used],
+        result.rounds,
+        result.usage.total,
         latency_ms,
     )
-
-    # Never raises — see recorder.py on why an evidence failure must not cost the
-    # customer their answer.
-    recorded_id = await get_recorder().record(
+    return await get_recorder().record(
         TurnRecord(
-            customer_ref=p.customer_id,
+            customer_ref=ctx.customer_id,
             conversation_id=conversation_id,
-            question=message,
-            answer=text,
-            intent=p.intent,
-            bundle=p.bundle,
-            report=report,
-            escalate=p.escalate,
+            question=question,
+            answer=result.text,
+            tools=result.tools_used,
+            escalate=result.escalate,
+            escalation_reason=result.escalation_reason,
             channel=channel,
             provider=getattr(provider, "name", None),
             model=getattr(provider, "model", None),
-            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
-            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            prompt_tokens=result.usage.prompt_tokens,
+            completion_tokens=result.usage.completion_tokens,
             latency_ms=latency_ms,
         )
-    )
-
-    return Answer(
-        customer_id=p.customer_id,
-        intent=p.intent,
-        text=text,
-        bundle=p.bundle,
-        report=report,
-        escalate=p.escalate,
-        conversation_id=recorded_id,
-        latency_ms=latency_ms,
     )
 
 
@@ -325,11 +242,122 @@ async def answer(
     *,
     channel: str = "chat",
     conversation_id: int | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> Answer:
-    """Question in, verified prose out. The only function that produces an answer."""
-    return await narrate(
-        await plan(customer_id, message),
+    """Question in, answer out. The non-streaming path."""
+    ctx = await build_context(customer_id)
+    started = time.perf_counter()
+
+    result: AgentResult | None = None
+    async for event in run_agent(get_provider(), ctx, message, history):
+        if isinstance(event, Finished):
+            result = event.result
+    if result is None:  # pragma: no cover - run_agent raises rather than finishing empty
+        raise AgentUnavailable("agent produced no result")
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    recorded_id = await _record(
+        ctx,
+        result,
         message,
         channel=channel,
         conversation_id=conversation_id,
+        latency_ms=latency_ms,
     )
+
+    return Answer(
+        customer_id=customer_id,
+        text=result.text,
+        tools_used=result.tools_used,
+        escalate=result.escalate,
+        escalation_reason=result.escalation_reason,
+        conversation_id=recorded_id,
+        latency_ms=latency_ms,
+    )
+
+
+async def answer_stream(
+    customer_id: str,
+    message: str,
+    *,
+    channel: str = "chat",
+    conversation_id: int | None = None,
+    history: list[dict[str, Any]] | None = None,
+) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+    """The streaming path, as `(event_name, payload)` pairs the transports format.
+
+    Yields, in order:
+
+        tool    {"name", "arguments"}          a lookup started
+        result  {"name", "ok", "source"}       and what it found
+        reset   {}                             discard the text streamed this round
+        token   {"text"}                       prose, as it is written
+        done    {"sources", "escalate", ...}
+
+    `reset` is the one that needs explaining. Models routinely write a line before
+    reaching for a tool ("Let me pull up your July bill"), and holding that back until
+    the round resolves means the customer watches a spinner for the two seconds that
+    read worst. So text streams as it arrives, and `reset` says the round it belonged to
+    turned out to be a lookup — drop it and show the tool activity instead.
+
+    The caller must have called `build_context` already, so an unknown customer is a 404
+    before the SSE content-type is committed rather than a 500 with a half-open stream.
+    """
+    ctx = await build_context(customer_id)
+    started = time.perf_counter()
+
+    # Imported here rather than at module scope: the loop's event types are an internal
+    # protocol between it and this function, and nothing else in the app matches on them.
+    from app.agent.loop import Thinking, ToolFinished, ToolStarted, TurnDiscarded
+
+    result: AgentResult | None = None
+    try:
+        async for event in run_agent(get_provider(), ctx, message, history):
+            match event:
+                case Thinking(text=text):
+                    yield "token", {"text": text}
+                case TurnDiscarded():
+                    yield "reset", {}
+                case ToolStarted(name=name, arguments=arguments):
+                    yield "tool", {"name": name, "arguments": arguments or {}}
+                case ToolFinished(name=name, ok=ok, source=source):
+                    yield "result", {"name": name, "ok": ok, "source": source}
+                case Finished(result=finished):
+                    result = finished
+    except AgentUnavailable as exc:
+        # The model is unreachable and there is nothing to route around. Say so — do not
+        # serve a canned paragraph. The old architecture's template fallback worked
+        # because the model was formatting figures Python had already computed, so a
+        # template could stand in for it. Nothing stands in for reasoning, and a fluent
+        # guess with no data behind it is what this product exists not to do.
+        log.error("agent unavailable customer=%s: %s", customer_id, exc)
+        yield "error", {
+            "message": (
+                "Sparky can't reach your account data right now, so there's nothing "
+                "reliable to tell you. Please try again shortly."
+            ),
+            "retryable": True,
+        }
+        return
+
+    if result is None:  # pragma: no cover - run_agent raises rather than finishing empty
+        return
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    recorded_id = await _record(
+        ctx,
+        result,
+        message,
+        channel=channel,
+        conversation_id=conversation_id,
+        latency_ms=latency_ms,
+    )
+
+    yield "done", {
+        "sources": result.sources,
+        "escalate_to_human": result.escalate,
+        "escalation_reason": result.escalation_reason,
+        "conversation_id": recorded_id,
+        "latency_ms": latency_ms,
+        "tokens": result.usage.total,
+    }

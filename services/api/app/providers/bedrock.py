@@ -34,15 +34,22 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from typing import Any
 
-from app.providers.base import TokenUsage
+from app.providers.base import (
+    TextDelta,
+    TokenUsage,
+    ToolCall,
+    TurnComplete,
+    TurnEvent,
+)
 
 log = logging.getLogger(__name__)
 
-#: Cheap, and the point of the narrate-only architecture. Layer 1 has already done the
-#: work; layer 2 writes three sentences from a list of numbers. Paying for a large
-#: model's reasoning here buys nothing measurable on the golden set and costs per token
-#: on every turn — which is the whole cost argument in the pitch.
+#: Only `narrate()` uses this now — the offline pack builder and the warm-up path, both
+#: of which really do want three sentences. The agent sets its own ceiling; see
+#: `app/agent/loop.py`, where the old 300-token cap is discussed as one of the reasons
+#: every answer read like a headline with no reasoning under it.
 DEFAULT_MAX_TOKENS = 300
 
 
@@ -124,6 +131,137 @@ class BedrockProvider:
                     ),
                     completion_tokens=getattr(usage, "output_tokens", 0),
                 )
+
+    # ---- tool-using conversation ------------------------------------------------
+
+    @staticmethod
+    def _wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Neutral history -> Anthropic content blocks.
+
+        The shape that surprises people: a tool *result* is a `user` message, not a
+        `tool` one. Anthropic models the exchange as the assistant asking and the caller
+        answering, so results ride in a user turn carrying `tool_result` blocks. Sending
+        them with `role: "tool"` is a 400 that does not obviously say why.
+
+        Consecutive tool results are merged into a single user turn. The API rejects two
+        adjacent messages with the same role, and the agent loop appends one message per
+        call, so a round where the model asked for two tools at once would otherwise fail
+        on the next request rather than at the point the mistake was made.
+        """
+        from app.agent.loop import tool_result_to_text
+
+        out: list[dict[str, Any]] = []
+        for message in messages:
+            role = message["role"]
+
+            if role == "tool":
+                block = {
+                    "type": "tool_result",
+                    "tool_use_id": message["tool_call_id"],
+                    "content": tool_result_to_text(message["content"]),
+                }
+                if out and out[-1]["role"] == "user" and isinstance(out[-1]["content"], list):
+                    out[-1]["content"].append(block)
+                else:
+                    out.append({"role": "user", "content": [block]})
+                continue
+
+            if role == "assistant" and message.get("tool_calls"):
+                blocks: list[dict[str, Any]] = []
+                if message.get("content"):
+                    blocks.append({"type": "text", "text": message["content"]})
+                blocks += [
+                    {
+                        "type": "tool_use",
+                        "id": call.id,
+                        "name": call.name,
+                        "input": call.arguments,
+                    }
+                    for call in message["tool_calls"]
+                ]
+                out.append({"role": "assistant", "content": blocks})
+                continue
+
+            out.append({"role": role, "content": message["content"]})
+        return out
+
+    async def converse(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.3,
+    ) -> AsyncIterator[TurnEvent]:
+        """One turn, streamed, with tools.
+
+        The cache breakpoint stays on the system block and nowhere else — see `narrate`.
+        The tool catalogue is stable across every customer too, so it sits inside the
+        cached prefix; the messages, which are not, sit outside it.
+        """
+        client = self._anthropic()
+        self.last_usage = TokenUsage()
+
+        request: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": self._wire(messages),
+        }
+        if tools:
+            request["tools"] = [
+                {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "input_schema": t["input_schema"],
+                }
+                for t in tools
+            ]
+
+        async with client.messages.stream(**request) as stream:
+            async for chunk in stream.text_stream:
+                yield TextDelta(chunk)
+
+            final = await stream.get_final_message()
+
+        text_parts: list[str] = []
+        calls: list[ToolCall] = []
+        for block in final.content:
+            kind = getattr(block, "type", None)
+            if kind == "text":
+                text_parts.append(block.text)
+            elif kind == "tool_use":
+                calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=dict(block.input or {}),
+                    )
+                )
+
+        usage = getattr(final, "usage", None)
+        if usage is not None:
+            # Cache reads are billed at a fraction of input tokens but they are still
+            # input tokens, and the cost projection in the pitch is measured from this
+            # counter. Dropping them understates what a real deployment costs.
+            self.last_usage = TokenUsage(
+                prompt_tokens=(
+                    getattr(usage, "input_tokens", 0)
+                    + getattr(usage, "cache_read_input_tokens", 0)
+                    + getattr(usage, "cache_creation_input_tokens", 0)
+                ),
+                completion_tokens=getattr(usage, "output_tokens", 0),
+            )
+
+        yield TurnComplete(
+            text="".join(text_parts),
+            tool_calls=tuple(calls),
+            usage=self.last_usage,
+        )
 
     async def health(self) -> bool:
         """One-token round trip. Used for the UI ready-state and by the resolver.

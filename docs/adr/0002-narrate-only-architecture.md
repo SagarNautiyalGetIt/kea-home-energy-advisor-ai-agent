@@ -1,6 +1,18 @@
 # ADR-0002 — The model narrates; Python decides
 
-**Date:** 2026-08-17 · **Status:** Accepted · **Owner:** Akash
+**Date:** 2026-08-17 · **Status:** Superseded by
+[ADR-0011](0011-agentic-tool-use.md) · **Owner:** Akash
+
+> **Superseded on 2026-09-08, and still worth reading.** The cost this ADR named under
+> *Consequences* — "the agent cannot answer a question we did not anticipate" — is
+> exactly what came due, and ADR-0011 is the decision to pay differently. The reasoning
+> below was sound for a 4B local model on laptop hardware; it stopped applying when the
+> default provider became a frontier model on a cloud account.
+>
+> Narrate-only is **not** dead. It is still the architecture of the offline pack
+> ([ADR-0008](0008-offline-first-narration.md)), because a device with no connection has
+> no tools to call — see `app/analytics/bundles.py`, which is this design, preserved
+> where it is still the right one.
 
 ## Context
 
