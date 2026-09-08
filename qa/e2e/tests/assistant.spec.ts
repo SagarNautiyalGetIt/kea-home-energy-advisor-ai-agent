@@ -291,17 +291,24 @@ for (const account of ACCOUNTS) {
       const peak = Math.max(...household.daily_kwh)
       expect(peak, 'this account has no usage to peak on').toBeGreaterThan(0)
 
-      // Two decimals, because that is what `get_daily_usage` rounds `import_kwh` to and
-      // therefore the only form the answer can state. One decimal was wrong in the
-      // direction that matters: the API serves 11.394, the tool serves 11.39, and a test
-      // demanding "11.4" fails on a correct answer. `toFixed` is avoided because it keeps
-      // a trailing zero — 17.60 never appears on screen where the tool wrote 17.6.
-      const stated = String(Math.round(peak * 100) / 100)
+      // Compared by VALUE with a tolerance, not by rebuilding the string.
+      //
+      // Two earlier versions reimplemented the rounding and were wrong twice. One
+      // decimal demanded "11.4" where the tool writes "11.39". Two decimals then
+      // demanded "15.22" where the tool writes "15.21" — Python's round() is
+      // half-to-even and JavaScript's Math.round is half-up, so they disagree on exactly
+      // the .xx5 cases, and the API serves three decimals while the tool serves two.
+      //
+      // None of that is what the test is about. The question is whether the answer names
+      // THIS household's peak rather than another household's, and any household's peak
+      // is further away than a rounding step. So: is there a figure on screen within
+      // 0.02 kWh of it.
+      const onScreen = numericTokens(turn.text).map(Number)
       expect(
-        turn.text,
-        `the answer does not contain this account's own peak of ${stated} kWh. ` +
-          `Its series peaks at ${peak}; another household's answer would not.`,
-      ).toContain(stated)
+        onScreen.some((value) => Math.abs(value - peak) <= 0.02),
+        `no figure on screen matches this account's peak of ${peak} kWh. ` +
+          `Figures shown: ${onScreen.join(', ')}. Another household's answer would not match.`,
+      ).toBe(true)
     })
   })
 }
@@ -426,9 +433,19 @@ test.describe('Sparky · the page itself', () => {
     await assistant.goto()
     const mere = await assistant.askByChip('Which day was my highest usage?')
 
+    // By value with a tolerance, for the same reason as the per-account version above:
+    // the API serves three decimals, the tool serves two, and Python and JavaScript
+    // round the .xx5 cases in opposite directions. What matters is that the answer is
+    // about the account now signed in, and any other household's peak is far further
+    // away than a rounding step.
     const household = await getHousehold(request, 'DEMO-ACCT-224001')
     const peak = Math.max(...household.daily_kwh)
-    expect(mere.text).toContain(peak.toFixed(1))
+    const onScreen = numericTokens(mere.text).map(Number)
+    expect(
+      onScreen.some((value) => Math.abs(value - peak) <= 0.02),
+      `after switching accounts, no figure on screen matches the new account's peak of ` +
+        `${peak} kWh. Figures shown: ${onScreen.join(', ')}`,
+    ).toBe(true)
   })
 
   test('the fourth prompt still routes somewhere real', async ({ assistant }) => {
