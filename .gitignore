@@ -94,3 +94,12 @@ data/pipeline/scripts/gen_source/coverage.json
 
 # Rootless local Postgres cluster (infra/pg-local.sh) — never commit a data directory.
 .pg-local/
+
+# --- Local runtime output — never commit -------------------------------------
+# Caught by scripts/hooks/pre-push, which is how these were noticed: `git add -A`
+# swept them into a branch. Both carry things that must not be in the record — the
+# Ollama log embeds absolute paths from the developer's machine (this repo lives inside
+# an Obsidian vault tree), and the alert outbox is generated .eml files addressed to
+# real people.
+.ollama.log
+services/api/var/

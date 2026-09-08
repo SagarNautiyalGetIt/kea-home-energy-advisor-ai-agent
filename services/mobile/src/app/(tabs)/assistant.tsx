@@ -7,12 +7,26 @@ import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleS
 import { Screen } from '@/components/screen';
 import { SparkyOrbit } from '@/components/sparky-orbit';
 import { IconButton, PageHeader } from '@/components/ui';
-import { isAssistantAnswerSafe, sendAssistantFeedback, streamAssistantReply } from '@/lib/assistant-api';
+import { sendAssistantFeedback, streamAssistantReply, toolLabel } from '@/lib/assistant-api';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
 
-type Message = { id: number; role: 'assistant' | 'user'; text: string; escalate?: boolean; streaming?: boolean; failed?: boolean; feedback?: 'like' | 'dislike' };
+type Message = {
+  id: number;
+  role: 'assistant' | 'user';
+  text: string;
+  escalate?: boolean;
+  streaming?: boolean;
+  failed?: boolean;
+  feedback?: 'like' | 'dislike';
+  /** Live lookup labels while the answer is being written; cleared when it lands. */
+  activity?: string[];
+  /** Tool names behind the finished answer, for the transparency line. */
+  sources?: string[];
+  /** Tier 3 — this text is a handover written by Python, not an answer from the model. */
+  handover?: boolean;
+};
 
 const prompts = ['Why is my power bill so high?', 'Which day was my highest usage?', 'Was that just the cold snap?', 'Could another plan save me money?'];
 const initialMessage: Message = { id: 1, role: 'assistant', text: 'Kia ora! I’m Sparky. What would you like to understand about your energy account?' };
@@ -25,7 +39,10 @@ export default function AssistantScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const nextId = useRef(2);
   const chatVersion = useRef(0);
-  const requestRef = useRef<AbortController | null>(null);
+  const requestRef = useRef<{ abort: () => void } | null>(null);
+  // Threads the conversation server-side so a follow-up ("what about last month?") has
+  // the turn before it to resolve against. Null until the first answer comes back.
+  const conversationId = useRef<number | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
@@ -55,25 +72,43 @@ export default function AssistantScreen() {
     let completed = false;
     let shouldEscalate = false;
 
+    const patch = (fn: (m: Message) => Message) =>
+      setMessages((current) => current.some((m) => m.id === replyId)
+        ? current.map((m) => (m.id === replyId ? fn(m) : m))
+        : [...current, fn({ id: replyId, role: 'assistant', text: '', streaming: true })]);
+
     try {
-      await streamAssistantReply(session?.customerId ?? '', clean, {
-        onMeta: (meta) => { shouldEscalate = meta.escalate; },
-        onText: (chunk) => {
-          setMessages((current) => {
-            const reply = current.find((message) => message.id === replyId);
-            if (!reply) return [...current, { id: replyId, role: 'assistant', text: chunk, streaming: true }];
-            return current.map((message) => message.id === replyId ? { ...message, text: message.text + chunk } : message);
-          });
-        },
-        onDone: (result) => {
-          completed = true;
-          const safe = isAssistantAnswerSafe(result);
-          setMessages((current) => current.map((message) => message.id === replyId
-            ? { ...message, text: safe ? message.text : 'Sparky could not verify that answer. Please try again.', streaming: false, failed: !safe, escalate: safe && shouldEscalate }
-            : message));
-          if (safe && shouldEscalate) showToast('Customer Care hand-off available', 'info');
-        },
-      }, controller.signal);
+      await new Promise<void>((resolve) => {
+        const stream = streamAssistantReply(session?.customerId ?? '', clean, {
+          onText: (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })),
+          // That round turned out to be a lookup, so its text was a preamble.
+          onReset: () => patch((m) => ({ ...m, text: '' })),
+          onTool: (name) => patch((m) => ({ ...m, activity: [...(m.activity ?? []), toolLabel(name)] })),
+          onDone: (result) => {
+            completed = true;
+            conversationId.current = result.conversation_id;
+            shouldEscalate = result.escalate_to_human;
+            patch((m) => ({
+              ...m,
+              streaming: false,
+              activity: undefined,
+              sources: result.sources?.filter((source) => source.ok).map((source) => source.tool),
+              escalate: shouldEscalate,
+              // Tier 3 means the text above is a handover written by Python, not an
+              // answer — the UI labels it so nobody reads it as advice.
+              handover: result.tier === 3,
+            }));
+            if (shouldEscalate) showToast('Customer Care hand-off ready', 'info');
+            resolve();
+          },
+          onError: (failure) => {
+            completed = true;
+            patch((m) => ({ ...m, text: failure, streaming: false, failed: true, activity: undefined }));
+            resolve();
+          },
+        }, conversationId.current);
+        requestRef.current = { abort: () => { stream.cancel(); resolve(); } };
+      });
       if (!completed) throw new Error('Sparky did not complete the response. Please try again.');
     } catch (error: unknown) {
       if (controller.signal.aborted || version !== chatVersion.current) return;
@@ -92,6 +127,7 @@ export default function AssistantScreen() {
   const newChat = () => {
     requestRef.current?.abort();
     requestRef.current = null;
+    conversationId.current = null;
     chatVersion.current += 1;
     nextId.current = 2;
     setMessages([initialMessage]);

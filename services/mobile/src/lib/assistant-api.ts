@@ -1,79 +1,182 @@
-import { apiFetch, apiJson, apiPath, jsonRequest } from '@/lib/backend-client';
+import { apiBase, apiJson, apiPath, jsonRequest } from '@/lib/backend-client';
 
-export type AssistantMeta = {
-  intent: string;
-  escalate: boolean;
+/**
+ * The assistant's wire protocol, mirrored from `services/api/app/pipeline.py`.
+ * Both ends change together or not at all.
+ *
+ * ## Why this uses XMLHttpRequest and not fetch
+ *
+ * The previous version read `response.body.getReader()`. That is correct in a browser
+ * and does nothing here: **React Native's fetch has no `ReadableStream` body**, so
+ * `response.body` is null on Hermes. The old code threw "Sparky returned an empty
+ * response" on every single turn — the streaming path had never worked on a device.
+ *
+ * XHR does deliver incrementally in React Native: `onprogress` fires with `responseText`
+ * holding everything received so far. It is more code than the web client needs and it
+ * is the only thing that streams on this platform.
+ */
+
+/** One lookup the assistant made, for the transparency panel under an answer. */
+export type SourceRef = {
+  tool: string;
+  arguments: Record<string, unknown> | null;
+  /** The table or computation behind it, in words a customer can read. */
+  source: string | null;
+  /**
+   * False when the lookup failed or this account has no such data. Shown rather than
+   * hidden: "I couldn't check that" is a different answer from "I didn't look".
+   */
+  ok: boolean;
 };
 
 export type AssistantDone = {
-  passed: boolean;
-  fell_back_to_template: boolean;
-  checked?: string[];
-  unverified?: string[];
-  regenerated?: boolean;
+  sources: SourceRef[];
+  escalate_to_human: boolean;
+  escalation_reason: string | null;
+  conversation_id: number | null;
+  latency_ms: number;
+  tokens: number;
+  /**
+   * Who handled this turn: 1 the assistant alone, 2 the assistant with a Kea agent
+   * watching, 3 a person only. Decided in Python on every channel — see
+   * `services/api/app/hardship/`. Tier 3 means the text above is a handover, not an
+   * answer, and the UI should present it that way.
+   */
+  tier?: number;
+  tier_reason?: string | null;
 };
 
-type AssistantHandlers = {
-  onMeta?: (event: AssistantMeta) => void;
+export type AssistantHandlers = {
+  /** Prose, as the assistant writes it. */
   onText: (text: string) => void;
+  /**
+   * Discard everything streamed since the last reset.
+   *
+   * The assistant works in rounds and may write a line ("Let me pull up your July
+   * bill") before deciding it needs a lookup first. A client that ignores this shows
+   * that preamble glued to the front of every answer.
+   */
+  onReset?: () => void;
+  onTool?: (name: string) => void;
+  onToolResult?: (name: string, ok: boolean) => void;
   onDone?: (event: AssistantDone) => void;
+  /** No answer was produced. Show the message; never substitute one. */
+  onError?: (message: string) => void;
 };
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
+/** Human-readable labels for the tool names. Kept in step with the web client's copy. */
+const TOOL_LABELS: Record<string, string> = {
+  get_account_summary: 'Looking up your account',
+  get_daily_usage: 'Reading your daily meter data',
+  get_bill_comparison: 'Comparing this bill with your last one',
+  get_hourly_profile: 'Checking your usage through the day',
+  compare_to_similar_homes: 'Comparing with similar homes',
+  get_plan_options: 'Checking your plan against the alternatives',
+  project_this_bill: 'Projecting the rest of your cycle',
+  handoff_to_human: 'Bringing in a person',
+};
 
-function dispatchFrame(frame: string, handlers: AssistantHandlers) {
-  let eventName = 'message';
-  let data = '';
+export const toolLabel = (name: string): string =>
+  TOOL_LABELS[name] ?? name.replace(/_/g, ' ');
 
-  for (const line of frame.split(/\r?\n/)) {
-    if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) data += line.slice(5).trim();
-  }
+/** Returned by `streamAssistantReply` so a caller can cancel — the RN AbortController. */
+export type AssistantStream = { cancel: () => void };
 
-  if (!data) return;
-  const payload: unknown = JSON.parse(data);
-  if (eventName === 'meta') handlers.onMeta?.(payload as AssistantMeta);
-  else if (eventName === 'token') handlers.onText((payload as { text: string }).text);
-  else if (eventName === 'done') handlers.onDone?.(payload as AssistantDone);
-}
-
-export function isAssistantAnswerSafe(result: AssistantDone) {
-  return result.passed || result.fell_back_to_template;
-}
-
-export async function streamAssistantReply(
+export function streamAssistantReply(
   customerId: string,
   message: string,
   handlers: AssistantHandlers,
-  signal?: AbortSignal,
-) {
-  if (!apiBaseUrl) throw new Error('Sparky is currently unavailable. Please try again later.');
-  if (!customerId) throw new Error('Your customer account could not be identified. Please sign in again.');
-
-  const response = await apiFetch('/api/chat/stream', {
-    method: 'POST',
-    headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customer_id: customerId, message }),
-    signal,
-  });
-
-  if (!response.ok) throw new Error('Sparky could not answer right now. Please try again.');
-  if (!response.body) throw new Error('Sparky returned an empty response. Please try again.');
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() ?? '';
-    frames.forEach((frame) => dispatchFrame(frame, handlers));
-    if (done) break;
+  conversationId?: number | null,
+): AssistantStream {
+  if (!customerId) {
+    handlers.onError?.('Your account could not be identified. Please sign in again.');
+    return { cancel: () => undefined };
   }
 
-  if (buffer.trim()) dispatchFrame(buffer, handlers);
+  const xhr = new XMLHttpRequest();
+  let consumed = 0;
+  let cancelled = false;
+
+  const drain = (buffer: string) => {
+    // SSE frames are separated by a blank line. A progress event can split a frame in
+    // the middle, so only whole frames are consumed and the tail waits for next time.
+    const boundary = buffer.lastIndexOf('\n\n');
+    if (boundary < 0 || boundary + 2 <= consumed) return;
+
+    const complete = buffer.slice(consumed, boundary);
+    consumed = boundary + 2;
+
+    for (const frame of complete.split('\n\n')) {
+      let event = '';
+      let data = '';
+      for (const line of frame.split(/\r?\n/)) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (!event || !data) continue;
+
+      let payload: any;
+      try {
+        payload = JSON.parse(data);
+      } catch {
+        continue; // A malformed frame is one lost update, never a dead stream.
+      }
+
+      switch (event) {
+        case 'token': handlers.onText(payload.text); break;
+        case 'reset': handlers.onReset?.(); break;
+        case 'tool': handlers.onTool?.(payload.name); break;
+        case 'result': handlers.onToolResult?.(payload.name, payload.ok); break;
+        case 'done': handlers.onDone?.(payload as AssistantDone); break;
+        case 'error': handlers.onError?.(payload.message); break;
+      }
+    }
+  };
+
+  xhr.open('POST', `${apiBase()}/api/chat/stream`);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.setRequestHeader('Accept', 'text/event-stream');
+  xhr.onprogress = () => {
+    if (!cancelled) drain(xhr.responseText);
+  };
+  xhr.onload = () => {
+    if (cancelled) return;
+    if (xhr.status === 404) {
+      handlers.onError?.('That account could not be found. Please sign in again.');
+      return;
+    }
+    if (xhr.status >= 400) {
+      handlers.onError?.('Sparky is unavailable right now. Please try again shortly.');
+      return;
+    }
+    // The last frame usually arrives with `onload` rather than a final `onprogress`.
+    // Appending a boundary makes it whole so `done` is not silently dropped — which
+    // presents as an answer that renders but never stops the spinner or gets its
+    // sources, and is the easiest thing to get wrong in this file.
+    drain(`${xhr.responseText}\n\n`);
+  };
+  xhr.onerror = () => {
+    if (!cancelled) {
+      handlers.onError?.(
+        `Sparky can't be reached at ${apiBase()}. Check the API is running and that ` +
+          'EXPO_PUBLIC_API_URL points at it.',
+      );
+    }
+  };
+  xhr.send(
+    JSON.stringify({
+      customer_id: customerId,
+      message,
+      conversation_id: conversationId ?? null,
+    }),
+  );
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      xhr.abort();
+    },
+  };
 }
 
 export function sendAssistantFeedback(customerId: string, messageId: number, feedback: 'like' | 'dislike') {
