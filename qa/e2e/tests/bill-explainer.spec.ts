@@ -624,22 +624,39 @@ test.describe('Bill explainer · "was that just the cold snap?"', () => {
     // above small even before the denominator is corrected.
     //
     // `mart_daily_usage.heating_degree_days` is `GREATEST(16 - temp, 0)` (§8.4).
-    // `analytics/engine.py#heating_degree_days` defaults to `base_c = 18.0`, and
-    // `NORMAL_HDD_PER_DAY = 8.1` is commented "A typical July day in Auckland" — a base-18
-    // figure. `MartRepository` feeds base-16 degree days into a comparison calibrated at
-    // base 18, which discards about two degree days from every single day before
-    // `max(0, hdd − 8.1)` has run.
+    // `analytics/climate.py` normals are NIWA figures at base 18. `MartRepository` used
+    // to feed the base-16 column into that comparison, which discards about two degree
+    // days from every single day before `max(0, hdd − normal)` has run — so every winter
+    // month read as warmer than typical and the weather driver clamped to $0.00.
     //
-    // Tama's June averages 7.21 HDD/day at base 16 and 9.21 at base 18. Against a
-    // threshold of 8.1 that is the difference between 12 qualifying days and all 30.
-    const explanation = await db.billExplanation('DEMO-ACCT-223001')
-    const dailyMeanHdd = (explanation!.hddThis ?? 0) / explanation!.periodDays
+    // **This originally asserted `hddThis / periodDays > 8.1`, and that was checking the
+    // wrong layer.** `hdd_this_period` is the warehouse's own column, and base 16 is the
+    // warehouse's documented standard (`hdd_base_c`, dbt_project.yml). Demanding it clear
+    // a base-18 threshold demands the warehouse change convention for every consumer it
+    // has — which is a cross-team decision, not a bug in the mart. The API was the side
+    // that mixed the two, and KEA-147 fixed it there by deriving the degree day from
+    // `temp_mean_c`, which carries no base at all.
+    //
+    // So the assertion below is the invariant that survives: the warehouse is base 16, on
+    // purpose, and the same days read differently enough at base 18 that no one may quietly
+    // substitute one for the other. If `hdd_base_c` ever moves, `stored` stops matching
+    // `atBase16` and this fails — which is the regression actually worth catching here.
+    // That the API honours the split is pinned separately, in
+    // services/api/tests/test_repository.py.
+    const heat = await db.heatingDemandByBase('DEMO-ACCT-223001')
+    expect(heat, 'Tama has a billed period with weather joined to it').not.toBeNull()
 
     expect(
-      dailyMeanHdd,
-      'June 2024 at base 16 averages below the base-18 "normal" the API compares it ' +
-        'against, so the coldest month in the fixture set reads as warmer than typical',
-    ).toBeGreaterThan(8.1)
+      heat!.stored,
+      'the warehouse writes heating_degree_days at base 16 (hdd_base_c); if this drifts, ' +
+        'every consumer that assumed a base is now wrong and none of them will crash',
+    ).toBeCloseTo(heat!.atBase16, 1)
+
+    expect(
+      heat!.atBase18 - heat!.atBase16,
+      'the two bases must disagree by roughly the 2 °C between them on a cold month — ' +
+        'if they agree, the month is too warm to detect a base swap and this test is blind',
+    ).toBeGreaterThan(1.5)
   })
 })
 
