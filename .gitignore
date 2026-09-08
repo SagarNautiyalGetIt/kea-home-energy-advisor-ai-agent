@@ -95,6 +95,12 @@ data/pipeline/scripts/gen_source/coverage.json
 # Rootless local Postgres cluster (infra/pg-local.sh) — never commit a data directory.
 .pg-local/
 
+# A virtualenv, however it is spelled. `.venv/` above matches a DIRECTORY only, so it
+# did not cover `services/api/.venv` when that was committed as a SYMLINK to a build
+# cache outside the repo — the ignore looked present and did nothing, and a `git add -A`
+# happily re-added the entry after it was removed. No trailing slash here on purpose.
+.venv
+
 # --- Local runtime output — never commit -------------------------------------
 # Caught by scripts/hooks/pre-push, which is how these were noticed: `git add -A`
 # swept them into a branch. Both carry things that must not be in the record — the
