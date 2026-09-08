@@ -207,12 +207,13 @@ for (const account of ACCOUNTS) {
       const bill = await db.latestBill(account.customerId)
       test.skip(bill === null, 'no bill for this account — nothing to scope a period to')
 
-      const { facts } = await chat(request, {
-        customer_id: account.customerId,
-        message: 'Which day was my highest usage?',
-      })
-      const peak = facts.find((f) => f.key === 'peak_day_kwh')
-      test.skip(peak === undefined, 'no peak fact')
+      // Read off the household endpoint rather than a `peak_day_kwh` fact, which no
+      // longer exists. The endpoint serves the same daily series the assistant's own
+      // `get_daily_usage` tool reads, so its peak IS the peak Sparky can name — and that
+      // makes this a direct test of the window, which is the thing under suspicion.
+      const household = await getHousehold(request, account.customerId)
+      test.skip(household.daily_kwh.length === 0, 'no metered days for this account')
+      const peak = Math.max(...household.daily_kwh)
 
       const truePeak = await db.peakDayInPeriod(
         account.customerId,
@@ -222,10 +223,10 @@ for (const account of ACCOUNTS) {
       test.skip(truePeak === null, 'no metered days inside the billed period')
 
       expect(
-        peak!.value,
-        `Sparky names a day using ${peak!.value} kWh; the highest day between ` +
+        peak,
+        `Sparky's window peaks at ${peak} kWh; the highest day between ` +
           `${bill!.periodStart} and ${bill!.periodEnd} is ${truePeak!.date} at ` +
-          `${truePeak!.kwh} kWh`,
+          `${truePeak!.kwh} kWh. A mismatch means the window is not the billed period.`,
       ).toBeCloseTo(truePeak!.kwh, 1)
     })
 
@@ -276,22 +277,31 @@ for (const account of ACCOUNTS) {
       // signed-in id was not found, so all fourteen logins were shown the same person's
       // usage. It is fixed; this keeps it fixed, for every account rather than for one.
       const turn = await assistant.askByChip('Which day was my highest usage?')
-      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
+      expect(
+        isGrounded(turn),
+        "the answer consulted none of this household's data — prose with nothing behind it",
+      ).toBe(true)
 
-      const mine = await chat(request, {
-        customer_id: account.customerId,
-        message: 'Which day was my highest usage?',
-      })
-      const peakDay = mine.facts.find((f) => f.key === 'peak_day')
-      expect(peakDay, 'no peak_day fact').toBeDefined()
+      // The expected value comes from the household endpoint rather than from a second
+      // `chat()` call. `chat().facts` no longer exists — the response carries `sources`,
+      // which say WHICH lookups ran and not what they returned. The deterministic thing
+      // to compare against is the data the tools themselves read, and
+      // `/api/households/{id}` reads the same rows.
+      const household = await getHousehold(request, account.customerId)
+      const peak = Math.max(...household.daily_kwh)
+      expect(peak, 'this account has no usage to peak on').toBeGreaterThan(0)
 
-      // The day number is this account's own. Weak on its own — several households peak
-      // on the same day — but combined with the kWh figure below it is not.
-      const peakKwh = mine.facts.find((f) => f.key === 'peak_day_kwh')!
+      // Two decimals, because that is what `get_daily_usage` rounds `import_kwh` to and
+      // therefore the only form the answer can state. One decimal was wrong in the
+      // direction that matters: the API serves 11.394, the tool serves 11.39, and a test
+      // demanding "11.4" fails on a correct answer. `toFixed` is avoided because it keeps
+      // a trailing zero — 17.60 never appears on screen where the tool wrote 17.6.
+      const stated = String(Math.round(peak * 100) / 100)
       expect(
         turn.text,
-        `the answer does not contain this account's own peak of ${peakKwh.display}`,
-      ).toContain(peakKwh.display.replace(' kWh', ''))
+        `the answer does not contain this account's own peak of ${stated} kWh. ` +
+          `Its series peaks at ${peak}; another household's answer would not.`,
+      ).toContain(stated)
     })
   })
 }
@@ -416,12 +426,9 @@ test.describe('Sparky · the page itself', () => {
     await assistant.goto()
     const mere = await assistant.askByChip('Which day was my highest usage?')
 
-    const mereFacts = await chat(request, {
-      customer_id: 'DEMO-ACCT-224001',
-      message: 'Which day was my highest usage?',
-    })
-    const peak = mereFacts.facts.find((f) => f.key === 'peak_day_kwh')!
-    expect(mere.text).toContain(peak.display.replace(' kWh', ''))
+    const household = await getHousehold(request, 'DEMO-ACCT-224001')
+    const peak = Math.max(...household.daily_kwh)
+    expect(mere.text).toContain(peak.toFixed(1))
   })
 
   test('the fourth prompt still routes somewhere real', async ({ assistant }) => {

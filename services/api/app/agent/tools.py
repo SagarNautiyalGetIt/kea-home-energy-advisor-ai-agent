@@ -532,6 +532,21 @@ def get_daily_usage(
     if not days:
         return _unavailable("no daily usage rows for this account")
 
+    # Default to the period the rest of the app is answering about.
+    #
+    # `account.days` is the WHOLE history the mart holds — 397 days for Rangi — while
+    # `/api/households/{id}` serves the billed period. Reading the raw list made the
+    # assistant say "over the 397 days on this bill" and name a peak the dashboard
+    # disagreed with: the same defect as KEA-141 §3, on the path that fix missed.
+    #
+    # An explicit `start_date`/`end_date` still reaches the full history, which is the
+    # point of them — "how does this compare with last winter" is a real question, and it
+    # is one the model has to ask for rather than get by accident.
+    window_start = getattr(ctx.usage, "period_start", None)
+    window_end = getattr(ctx.usage, "period_end", None)
+    if window_start and window_end and not (start_date or end_date or last_n_days):
+        days = [d for d in days if window_start <= d.date <= window_end] or days
+
     def _parse(value: str | None) -> dt.date | None:
         if not value:
             return None
@@ -592,6 +607,15 @@ def get_daily_usage(
             {
                 "day_count": len(selected),
                 "total_import_kwh": _round(sum(totals)),
+                # The cost, computed rather than left for the model to derive.
+                #
+                # It had the kWh and not the rate, so stating a dollar figure meant
+                # multiplying by a number it was never given — which is the one kind of
+                # arithmetic that cannot be traced back to anything. `unit_price_nzd` is
+                # this account's own effective rate where a bill exists (KEA-141 §2), so
+                # both figures reconcile with the invoice and with /api/households/{id}.
+                "total_cost_nzd": _round(sum(totals) * ctx.usage.window.unit_price_nzd),
+                "unit_price_nzd": _round(ctx.usage.window.unit_price_nzd, 4),
                 "mean_daily_kwh": _round(sum(totals) / len(totals)),
                 "mean_base_load_kwh_per_day": _round(
                     sum(base_loads) / len(base_loads)

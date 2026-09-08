@@ -155,7 +155,10 @@ export class AssistantPage {
     return this.page.locator('.bubble.thinking')
   }
 
-  /** "Every figure checked against your meter data". Scoped to one bubble by the caller. */
+  /** The provenance panel — "Answered from your own meter data", collapsed by default.
+   *  Now a `<details>` rather than a `<small>`; the class is unchanged, so this locator
+   *  still resolves and its presence still means the same thing: figures on screen, and
+   *  a list of the lookups behind them. Scoped to one bubble by the caller. */
   verifiedBadge(bubble: Locator): Locator {
     return bubble.locator('.verified-badge')
   }

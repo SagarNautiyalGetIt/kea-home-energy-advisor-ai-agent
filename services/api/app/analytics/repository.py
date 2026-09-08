@@ -157,6 +157,22 @@ class UsageContext:
     kWh series allows, no matter how the prompt was written.
     """
 
+    period_start: object | None = None
+    period_end: object | None = None
+    """The window `window.daily_kwh` covers, as dates.
+
+    Carried because the daily series is a list of floats with no calendar on it, and
+    `AccountContext.days` is the WHOLE history — 397 days for Rangi. Without these two,
+    `get_daily_usage` had no way to answer about the same period `/api/households` serves,
+    so the assistant said "over the 397 days on this bill" and named a peak the dashboard
+    disagreed with. That is KEA-141 §3 again, on the path the fix missed: trimming the
+    window did not trim the collection the tool reads.
+
+    A suffix of `days` would not do instead. The billed period does not always end at the
+    last metered row — Mereana's invoice covers April while her data runs to June — so
+    "the last N days" is the wrong window for exactly the account the ticket named.
+    """
+
     icp_id: int | None = None
     """The mart key for this connection, carried rather than dropped.
 
@@ -499,6 +515,8 @@ class MartRepository:
             normal_hdd=normal,
             account=account_ctx,
             icp_id=account.icp_id,
+            period_start=in_month[0][0],
+            period_end=in_month[-1][0],
         )
 
     async def _account_context(self, customer_id: str, account: object) -> AccountContext:
