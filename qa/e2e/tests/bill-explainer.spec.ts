@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures/test'
 import { ACCOUNTS, authFile } from '../fixtures/accounts'
 import { dominantDriver, driversOf } from '../fixtures/db'
-import { chat, getHousehold, isGrounded } from '../api/client'
+import { chat, getHousehold, isGrounded, numericTokens } from '../api/client'
 
 /**
  * "Why is my power bill so high?" — the specification, written as tests.
@@ -79,12 +79,15 @@ for (const account of MART_ACCOUNTS) {
       const bill = await db.latestBill(account.customerId)
       test.skip(bill === null, 'no bill for this account')
 
-      const { facts, text } = await chat(request, {
+      const { text } = await chat(request, {
         customer_id: account.customerId,
         message: WHY,
       })
-      const period = facts.find((f) => f.key === 'period_cost')
-      test.skip(period === undefined, 'no period fact to compare')
+      // `period_cost` was a fact on the response; there are no facts now. The same
+      // figure is on `/api/households/{id}`, which reads the rows the assistant's own
+      // tools read — and since KEA-141 §2 both use the account's effective rate rather
+      // than a flat illustrative one, so this is now a real reconciliation.
+      const period = { value: (await getHousehold(request, account.customerId)).estimated_cost_nzd }
 
       // `MartRepository.context` takes the last calendar month present in
       // `mart_daily_usage` (`repository.py:291`), which is not the same thing as the
@@ -134,9 +137,7 @@ for (const account of MART_ACCOUNTS) {
       const bill = await db.latestBill(account.customerId)
       test.skip(bill === null, 'no bill for this account')
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const period = facts.find((f) => f.key === 'period_cost')
-      test.skip(period === undefined, 'no period fact to compare')
+      const period = { value: (await getHousehold(request, account.customerId)).estimated_cost_nzd }
 
       // The fact is labelled "Total cost for June 2024" and reads, in the answer, exactly
       // like the invoice total. It is not one: layer 1 prices every household at a flat
@@ -249,8 +250,11 @@ for (const account of MART_ACCOUNTS) {
       const turn = await assistant.askByChip(WHY)
       expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const keys = facts.map((f) => f.key)
+      // Fact keys became tool names. The claim is the same shape — the answer was built
+      // from the right material — but it is now about what was READ rather than what was
+      // pre-computed, which is the thing a customer could actually check.
+      const { sources } = await chat(request, { customer_id: account.customerId, message: WHY })
+      const keys = sources.filter((s) => s.ok).map((s) => s.tool)
 
       // The question is "why is MY bill high", and the only comparison a customer can
       // check is against the bill they already have. The current bundle offers
@@ -284,14 +288,22 @@ for (const account of MART_ACCOUNTS) {
       const turn = await assistant.askByChip(WHY)
       expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const ranked = driversOf(explanation!)
 
+      // There is no `delta_from_*` fact key to look for. The equivalent — and the thing
+      // the ticket was actually about — is that the answer names the driver carrying the
+      // movement, so it is asserted on the ANSWER against the mart's own ranking.
+      //
+      // Matched on the dollar amount rather than on the driver's name: §8.5 names are
+      // ours, the customer sees a figure, and asserting the wording would be asserting
+      // prose. Rounded, because the answer states dollars and the mart stores cents.
+      const top = ranked[0]!
+      const onScreen = numericTokens(turn.text).map((t) => Math.abs(Math.round(Number(t))))
       expect(
-        facts.map((f) => f.key),
+        onScreen,
         `${ranked.map((d) => `${d.driver}=${d.nzd}`).join('  ')} — ` +
-          `${dominant} carries this bill and the answer never mentions it`,
-      ).toContain(`delta_from_${dominant}`)
+          `${dominant} carries this bill and the answer never quotes it: "${turn.text.slice(0, 160)}"`,
+      ).toContain(Math.abs(Math.round(top.nzd)))
     })
 
     test('does not blame a driver the data does not support', { annotation: tdd }, async ({
@@ -379,18 +391,19 @@ for (const account of MART_ACCOUNTS) {
       const turn = await assistant.askByChip(WHY)
       expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const zeroed = facts.filter((f) => f.value === 0)
-      test.skip(zeroed.length === 0, 'every fact carries a value')
-
-      // The bundle hands the model five facts and no indication that two of them are
-      // vacuous, so the model narrates all five. The fix is upstream of the prose: a fact
-      // with nothing to say should not be in the bundle.
+      // Asserted on the ANSWER now, because the cause is gone rather than fixed.
+      //
+      // The bundle used to hand the model five facts with no indication that two were
+      // vacuous — SPIKE_THRESHOLD needs a day at 1.8x the median and these accounts peak
+      // at 1.00-1.27x — so it narrated "the one-off spike explains 0% of the extra usage
+      // and costs $0.00". There is no fixed fact list to carry a vacuous entry any more:
+      // the model reads real rows and chooses what is worth saying.
+      //
+      // What remains checkable, and what the customer actually sees, is the symptom.
       expect(
-        zeroed.map((f) => f.key),
-        `${zeroed.length} of ${facts.length} facts are zero and the answer still ` +
-          `narrates them: "${turn.text.split('\n')[0]}"`,
-      ).toEqual([])
+        turn.text,
+        `the answer still narrates a structurally empty figure: "${turn.text.split('\n')[0]}"`,
+      ).not.toMatch(/\$0\.00|\b0%|\b0\.0 kWh/)
     })
 
     test('says something other than zero about where the money went', {
@@ -400,8 +413,13 @@ for (const account of MART_ACCOUNTS) {
       const turn = await assistant.askByChip(WHY)
       expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const substantive = facts.filter((f) => f.key !== 'period_cost' && f.value !== 0)
+      // Julia's floor case, asserted on the answer rather than on a bundle that no
+      // longer exists: the reply to "why is my bill high" has to say more than her total,
+      // which she can already read off the invoice.
+      const household = await getHousehold(request, account.customerId)
+      const total = String(Math.round(household.estimated_cost_nzd))
+      const figures = numericTokens(turn.text).filter((t) => Math.round(Number(t)) !== Number(total))
+      const substantive = figures
 
       // Julia's floor case: four of five facts are zero, leaving `period_cost` — the
       // total she can already read off her bill. The answer to "why is my bill high" is
@@ -562,24 +580,39 @@ test.describe('Bill explainer · "was that just the cold snap?"', () => {
         const turn = await assistant.askByChip(COLD)
         expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-        const { facts } = await chat(request, { customer_id: account.customerId, message: COLD })
-        const share = facts.find((f) => f.key === 'weather_share')
-        expect(share, 'no weather_share fact').toBeDefined()
-
-        // The customer asked whether the EXTRA was the cold snap. `build_weather_check`
-        // divides by `window.total_kwh`, so it answers what share of ALL their power the
-        // weather explains — a number that is small for every household in every month
-        // and cannot answer the question. Harvey's mart divides by the movement.
+        // `weather_share` was a fact computed by `build_weather_check`, which divided by
+        // `window.total_kwh` — the share of ALL their power, not of the increase. There is
+        // no such fact now: the weather driver comes from the mart's own decomposition,
+        // which divides by the movement, and the model reads it directly.
+        // `weather_share` was a fact from `build_weather_check`, which divided by
+        // `window.total_kwh` — the share of ALL their power. The customer asked about the
+        // EXTRA. Tama: the mart attributes $61.92 of a $65.41 increase to weather, 94.7%;
+        // the page said 2%. Both arithmetically correct, only one responsive.
         //
-        // Tama: the mart attributes $61.92 of a $65.41 increase to weather — 94.7%. The
-        // page says 2%. Both are arithmetically correct; only one is responsive.
-        const expected = Math.abs((explanation!.weather ?? 0) / (explanation!.amountDelta || 1)) * 100
+        // There is no share fact now. The weather driver comes from the mart's own
+        // decomposition, which divides by the movement, so the assertion is that the
+        // answer opened that decomposition and quotes ITS weather figure.
+        //
+        // On the dollars, not on a percentage: the mart stores the amount, the share is
+        // something either side may round differently, and a customer checking this
+        // against their bill is checking an amount.
+        const { sources } = await chat(request, { customer_id: account.customerId, message: COLD })
         expect(
-          share!.value,
+          sources.filter((s) => s.ok).map((s) => s.tool),
+          'the cold-snap question was answered without opening the bill decomposition',
+        ).toContain('get_bill_comparison')
+
+        const weather = Math.abs(Math.round(explanation!.weather ?? 0))
+        test.skip(weather === 0, 'weather explains nothing on this bill')
+
+        const onScreen = numericTokens(turn.text).map((t) => Math.abs(Math.round(Number(t))))
+        const share = Math.abs((explanation!.weather ?? 0) / (explanation!.amountDelta || 1)) * 100
+        expect(
+          onScreen,
           `weather=$${explanation!.weather} of a $${explanation!.amountDelta} movement ` +
-            `= ${expected.toFixed(1)}% of the increase; the page reports ` +
-            `${share!.value}% of total usage`,
-        ).toBeCloseTo(expected, 0)
+            `= ${share.toFixed(1)}% of the increase, and the answer never quotes it: ` +
+            `"${turn.text.slice(0, 160)}"`,
+        ).toContain(weather)
       })
     })
   }

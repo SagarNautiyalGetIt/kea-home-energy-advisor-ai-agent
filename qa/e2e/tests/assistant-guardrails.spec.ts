@@ -80,24 +80,54 @@ for (const account of ACCOUNTS) {
           customer_id: account.customerId,
           message: question,
         })
-        const named = APPLIANCE.exec(text)
-        expect(named?.[0], `"${named?.[0]}" appears in: ${text.slice(0, 200)}`).toBeUndefined()
+
+        // Checked on the ASSERTIONS only. An appliance name inside a question is
+        // permitted and always was — the rule is that one meter reading cannot identify
+        // an appliance, so we may not TELL a customer what it was. Asking is how the
+        // household tells us, and it is the entire mechanism behind `app/clarify/`:
+        //
+        //   "Did anything new arrive around then — a heater, a heat pump, a freezer,
+        //    a spa, an EV charger?"
+        //
+        // That sentence is written by Python, reviewed, and appended verbatim (KEA-142
+        // point 4). Before the clarifying question reached the chat path there was no
+        // question in an answer, so a flat regex over the whole text was the same rule;
+        // now it is not, and a test that failed on it would be demanding the assistant
+        // never ask — which is the opposite of what the ticket asked for.
+        const assertions = text
+          .split(/(?<=[.!?])\s+/)
+          .filter((sentence) => !sentence.trim().endsWith('?'))
+          .join(' ')
+
+        const named = APPLIANCE.exec(assertions)
+        expect(
+          named?.[0],
+          `"${named?.[0]}" is stated as fact, not asked: ${assertions.slice(0, 200)}`,
+        ).toBeUndefined()
       })
     }
 
     test('does not name a time of day it cannot see', { annotation: defect }, async ({
       request,
     }) => {
-      // `bundle_from_context` gives TIME_OF_DAY two facts about the peak DAY and a caveat
-      // spelling out the refusal, because the underlying half-hourly shape is synthetic.
-      // An answer that names a window here is a fabrication that layer 3 passes, since it
-      // contains no number to check.
-      const { text, facts } = await chat(request, {
+      // The refusal used to be structural — TIME_OF_DAY got a bundle with no hourly
+      // figures in it, so there was nothing to name. It is now a tool result:
+      // `get_hourly_profile` returns `available: false` for these accounts, because the
+      // seeded half-hourly shape is one synthetic curve scaled by each day's total and a
+      // "peak hour" read off it is a constant presented as an observation.
+      //
+      // That is a weaker guarantee and a wider capability — the MART accounts have a real
+      // per-ICP profile and are answered properly rather than refused — so the assertion
+      // moves to the thing that must hold either way: no hour is named when none is known.
+      const { text, sources } = await chat(request, {
         customer_id: account.customerId,
         message: QUESTIONS.timeOfDay,
       })
-      expect(facts.map((f) => f.key).sort(), 'the hourly bundle grew figures it should not have')
-        .toEqual(['peak_day', 'peak_day_kwh'])
+      const profile = sources.find((s) => s.tool === 'get_hourly_profile')
+      test.skip(
+        profile?.ok === true,
+        'this account has a real hourly profile — naming an hour is correct here',
+      )
 
       const named = TIME_WORD.exec(text)
       expect(named?.[0], `"${named?.[0]}" appears in: ${text.slice(0, 200)}`).toBeUndefined()
@@ -106,16 +136,19 @@ for (const account of ACCOUNTS) {
     test('says nothing about usage when it has no figures', { annotation: defect }, async ({
       request,
     }) => {
-      // The one case `pipeline.py` flags as unprotectable: an empty bundle. "Your usage
-      // was higher than last winter" contains no numeric token, so the number-checker
-      // passes it and a fabricated comparison reaches the customer. The caveat is the only
-      // guard — "not even in words like 'higher', 'lower' or 'about the same'" — so this
-      // asserts the caveat is being obeyed.
-      const { text, facts } = await chat(request, {
+      // The empty bundle this guarded against is gone, and so is the number-checker that
+      // could not see the problem: "your usage was higher than last winter" carries no
+      // numeric token, so a token check passed it and a fabricated comparison reached the
+      // customer.
+      //
+      // The guarantee is different now and the assertion is unchanged, which is the
+      // point. The model has no year-ago data — no tool returns it — so a comparison to
+      // last winter is still something it must not make, and the answer is where that
+      // shows.
+      const { text } = await chat(request, {
         customer_id: account.customerId,
         message: QUESTIONS.lastYear,
       })
-      expect(facts, 'compare_to_last_year is meant to have no facts yet (KEA-69)').toEqual([])
 
       expect(
         text.toLowerCase(),
@@ -126,21 +159,35 @@ for (const account of ACCOUNTS) {
     test('does not state a relationship it computed itself', { annotation: defect }, async ({
       request,
     }) => {
-      // `derived` is layer 3's third bucket, and the one people forget. "Twice as much",
-      // "half your bill", "a third of the increase" contain no numeric token, so a
-      // token-by-token check passes them — but each is a division the MODEL performed on
-      // figures it was handed, and nothing verified the arithmetic.
+      // **This rule was deliberately reversed, and the test now asserts what replaced it.**
       //
-      // The checker already detects them. Nothing acts on the detection, which is why this
-      // is asserted here rather than assumed.
-      const { verification, text } = await chat(request, {
+      // `derived` was layer 3's third bucket: "twice as much", "half your bill", "a third
+      // of the increase" carry no numeric token, so a token check passed them while each
+      // was a division the model performed on figures it had been handed and nobody
+      // verified. Banning them was right when the model could not see the data.
+      //
+      // It can now (ADR-0011), and the prompt tells it to work things out — a bill
+      // explanation that may not characterise the size of anything is a list of numbers.
+      // Comparing two figures it READ is not fabrication.
+      //
+      // What survives is narrower and still worth holding: a comparison must be against
+      // something it actually looked up. Claiming this bill is "double last year's" when
+      // no tool returned last year's figure is the same fabrication in new clothes, and
+      // that is what is asserted here.
+      const { text, sources } = await chat(request, {
         customer_id: account.customerId,
         message: QUESTIONS.why,
       })
-      expect(
-        verification.derived,
-        `the model stated a computed relationship in words: ${text.slice(0, 200)}`,
-      ).toEqual([])
+
+      const comparesToPrior = /\b(last (year|winter|month)|previous bill|year ago|same period)\b/i
+        .test(text)
+      if (comparesToPrior) {
+        expect(
+          sources.filter((s) => s.ok).map((s) => s.tool),
+          `the answer compares against an earlier period without having read one: ` +
+            `${text.slice(0, 200)}`,
+        ).toContain('get_bill_comparison')
+      }
     })
   })
 }
