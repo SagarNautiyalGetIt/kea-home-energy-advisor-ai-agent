@@ -2,6 +2,7 @@ import { test as base } from '@playwright/test'
 import { createDb, type KeaDb } from './db'
 import { DashboardPage } from '../pages/DashboardPage'
 import { BillingPage } from '../pages/BillingPage'
+import { AssistantPage } from '../pages/AssistantPage'
 
 /**
  * The `test` every spec imports, instead of `@playwright/test` directly.
@@ -17,7 +18,7 @@ import { BillingPage } from '../pages/BillingPage'
  *   are.
  */
 export const test = base.extend<
-  { dashboard: DashboardPage; billing: BillingPage },
+  { dashboard: DashboardPage; billing: BillingPage; assistant: AssistantPage },
   { db: KeaDb }
 >({
   db: [
@@ -35,6 +36,10 @@ export const test = base.extend<
 
   billing: async ({ page }, use) => {
     await use(new BillingPage(page))
+  },
+
+  assistant: async ({ page }, use) => {
+    await use(new AssistantPage(page))
   },
 })
 

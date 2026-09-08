@@ -156,6 +156,53 @@ same locators, not before.
 
 ---
 
+## 10. A failing test says whether it is a defect or a requirement
+
+`bill-explainer.spec.ts` is mostly red on purpose. The tests were written before the
+behaviour, from §8.5 of `kea-data-platform-design.md`, so that the specification is
+something a developer can run rather than something they have to read.
+
+That is only useful if a reader can tell the two kinds of red apart. Annotate every test
+that is expected to fail:
+
+```ts
+const tdd = { type: 'tdd', description: 'Behaviour not built yet — this red is the requirement' }
+const defect = { type: 'defect', description: 'Behaviour exists and returns the wrong answer' }
+
+test('names the driver that carries the movement', { annotation: tdd }, async ({ … }) => { … })
+```
+
+The annotation renders in the HTML report beside the failure, so a triage does not depend
+on the reader knowing which features exist.
+
+**Do not use `test.fail()` for this.** It inverts the result — the test reports *passed*
+while the behaviour is missing, and goes red on the day someone implements it. That hides
+exactly what §8 exists to surface, and a report showing green for unbuilt features is
+worse than no report.
+
+## 11. Never assert that two model generations match
+
+Layer 2 is `gemma3:4b` with no seed pinned. The same question against the same account
+produces different prose every time, so anything comparing one answer to another is
+asserting the model is deterministic and will fail on a correct application.
+
+The split that makes this workable:
+
+| | deterministic? | may a test compare against it? |
+|---|---|---|
+| `intent` (layer 0) | yes — pure Python | yes |
+| `facts[]` (layer 1) | yes — pure Python | yes, from a separate call |
+| `text` (layer 2) | **no** | only its *numeric tokens*, and only against facts |
+| `verification` (layer 3) | yes for a given text | yes, for the text it verified |
+
+So expected values come from a second `POST /api/chat` — the facts are identical — while
+the prose is only ever checked for structure: which figures appear in it, whether it ends
+in a question, whether a forbidden word is present. `AssistantPage.ask()` returns the
+`done` event from the page's *own* stream for the same reason: the report a test reasons
+about must belong to the words it is looking at.
+
+---
+
 ## What does not belong in this suite
 
 If a test can pass without the browser running, it belongs somewhere else:
