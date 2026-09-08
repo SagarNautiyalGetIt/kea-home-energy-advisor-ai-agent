@@ -88,7 +88,24 @@ class Settings:
         default_factory=lambda: _env("KEA_BEDROCK_MODEL", "anthropic.claude-sonnet-5")
     )
     gcp_model: str = field(
-        default_factory=lambda: _env("KEA_GCP_MODEL", "gemini-3.6-flash")
+        #: Not the newest flash model, on purpose.
+        #:
+        #: `gemini-3.6-flash` has a **20-request-per-day** free-tier cap. One agent turn
+        #: is three or four requests, so that is roughly five customer questions a day
+        #: before every subsequent call 429s — which surfaces as `AgentUnavailable` and
+        #: reads to a user as "it sometimes doesn't respond". Voice makes it worse
+        #: because transcription spends a request too.
+        #:
+        #: `gemini-3.5-flash` is capped the same way but has a larger per-minute
+        #: allowance, so it degrades to "wait twenty seconds" rather than "wait a day".
+        #:
+        #: **Neither is enough to demo on.** Measured 2026-09-08: 20 requests/day and
+        #: 5/minute per model. After pre-loading the account summary a turn costs two or
+        #: three requests, so the free tier is roughly seven to ten questions per DAY,
+        #: and voice spends one more on transcription. Plan the rehearsal around a billed
+        #: key or the AWS account; `KEA_GCP_MODEL` switches model to spread the load in
+        #: the meantime, since the cap is per model.
+        default_factory=lambda: _env("KEA_GCP_MODEL", "gemini-3.5-flash")
     )
     aws_region: str = field(default_factory=lambda: _env("AWS_REGION", "ap-southeast-2"))
 
@@ -123,6 +140,14 @@ class Settings:
     voice_enabled: bool = field(
         default_factory=lambda: _env("KEA_VOICE_ENABLED", "0").lower() in {"1", "true", "yes"}
     )
+
+    #: Which transcriber runs: `gemini` (default) | `whisper` | `auto`.
+    #:
+    #: Defaults to Gemini because the local path is what made voice slow and
+    #: intermittently silent — see `app/voice/__init__.py`. `whisper` forces the local
+    #: binary; `auto` prefers it when it is actually installed, which is right on a
+    #: machine with a Metal build and wrong on everything else.
+    stt_engine: str = field(default_factory=lambda: _env("KEA_STT_ENGINE", "gemini"))
 
     # Paths, not auto-discovery. `ml/voice/setup.sh` writes these into .env, so a
     # broken voice stack fails with "no such file" naming the exact path we looked

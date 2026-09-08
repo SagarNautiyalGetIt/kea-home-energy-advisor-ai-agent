@@ -33,8 +33,10 @@ served something invented.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -64,6 +66,69 @@ MAX_ANSWER_TOKENS = 2000
 #: where any creativity was a verification failure waiting to happen. The model is now
 #: writing an explanation from data it read itself, and 0.2 makes it stilted.
 TEMPERATURE = 0.3
+
+
+#: How many times a *transient* provider failure is retried before the turn is lost.
+#:
+#: Hosted models return 503 ("this model is currently experiencing high demand") and 429
+#: routinely, and both are usually over in a second or two. Without this a momentary
+#: spike ends the turn — which is what "it sometimes doesn't respond" looks like from the
+#: customer's side, and is indistinguishable from the assistant being broken.
+#:
+#: Two, not more: a real outage should surface quickly rather than after a minute of
+#: silent retrying, and the transports already say something honest when it does.
+TRANSIENT_RETRIES = 2
+
+#: Status codes worth retrying. 429 is rate limiting, 503/500/502/504 are the provider's
+#: own capacity. Anything else — a bad request, a missing credential, a rejected tool
+#: schema — is a bug that will fail identically on the second attempt, and retrying it
+#: just delays the error.
+_TRANSIENT_MARKERS = (
+    "429", "RESOURCE_EXHAUSTED",
+    "500", "502", "503", "504",
+    "UNAVAILABLE", "INTERNAL",
+    "overloaded_error", "ServiceUnavailable",
+)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Whether this failure is worth trying again.
+
+    Matched on the message rather than on exception type, because the three providers
+    raise three unrelated hierarchies (`google.genai.errors.ServerError`,
+    `anthropic.APIStatusError`, `httpx.HTTPStatusError`) and importing all of them here
+    would drag every SDK into a module that deliberately depends on none of them.
+    Crude, but it fails in the safe direction: a mis-classified permanent error costs
+    two extra calls, while a mis-classified transient one costs the customer their answer.
+    """
+    text = f"{type(exc).__name__}: {exc}"
+    return any(marker in text for marker in _TRANSIENT_MARKERS)
+
+
+#: Longest we will sit on a retry the provider explicitly asked for.
+#:
+#: Deliberately larger than the guessed-backoff cap. Sleeping *less* than the stated
+#: `retryDelay` guarantees a second 429 — which is what happened with a 10s cap against
+#: Gemini's 20s ask: both retries fired early, both failed, and the turn was lost anyway.
+#: A 25-second wait is a bad experience; three failures in 12 seconds is a worse one.
+RETRY_AFTER_CAP_S = 25.0
+
+#: Cap for our own exponential guess, when the provider says nothing. Lower, because a
+#: guess that long is more likely to be a stall than a recovery.
+BACKOFF_CAP_S = 8.0
+
+
+def _backoff(exc: BaseException, attempt: int) -> float:
+    """Seconds to wait. Honours the provider's own `retryDelay` when it gives one.
+
+    Gemini's 429 carries `'retryDelay': '20s'` and means it: the free tier is
+    **5 requests per minute per model**, so the window genuinely has not reopened before
+    then. Guessing shorter is not optimism, it is a wasted call.
+    """
+    match = re.search(r"retryDelay'?:\s*'?(\d+(?:\.\d+)?)s", str(exc))
+    if match:
+        return min(float(match.group(1)) + 0.5, RETRY_AFTER_CAP_S)
+    return min(2.0**attempt, BACKOFF_CAP_S)
 
 
 class AgentUnavailable(RuntimeError):
@@ -162,6 +227,7 @@ async def run_agent(
     ctx: ToolContext,
     question: str,
     history: list[dict[str, Any]] | None = None,
+    handling: str | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Drive one turn to completion, yielding progress as it happens.
 
@@ -175,13 +241,57 @@ async def run_agent(
         {"role": "user",      "content": "why is my bill so high?"}
         {"role": "assistant", "content": "...", "tool_calls": [ToolCall, ...]}
         {"role": "tool",      "tool_call_id": "...", "name": "...", "content": {...}}
+
+    `handling` is the hardship tier's guidance — see `app/hardship/tiers.py`. It is
+    appended to the system prompt rather than the user turn, because it is an
+    instruction about how to behave and not something the customer said. Python decides
+    it; the model is told the outcome and cannot argue with it.
     """
     messages: list[dict[str, Any]] = list(history or [])
-    messages.append({"role": "user", "content": build_user_turn(question)})
-
     invocations: list[ToolInvocation] = []
     usage = TokenUsage()
     answer = ""
+
+    # The account summary is pre-loaded rather than fetched.
+    #
+    # The prompt used to open with "start by calling get_account_summary for almost any
+    # question", and the model duly spent a whole round doing it — every turn, for every
+    # question, fetching the same row. That is a third of the model calls in a typical
+    # turn buying orientation we can simply hand over.
+    #
+    # It matters more than it looks on the current key. Gemini's free tier is FIVE
+    # requests per minute per model, and a four-round turn is four of them; dropping to
+    # three is the difference between roughly one question a minute and not quite one. It
+    # also removes a round trip of pure latency from every answer, including voice.
+    #
+    # It rides on the *user* turn rather than as a synthetic assistant tool-call pair.
+    # That was the first attempt and Gemini 3.x rejects it: every functionCall part in
+    # history must carry a `thought_signature`, and a call the model never made has none
+    # to carry. Context in the user turn is something all three providers handle
+    # identically and no provider can object to.
+    #
+    # Still recorded as a real invocation, so the provenance panel and
+    # `app.agent_tool_call` cannot tell the difference — the customer sees "looked up
+    # your account", because that is exactly what happened.
+    preamble = ""
+    if not history:
+        started = time.perf_counter()
+        summary = await dispatch(ctx, "get_account_summary", {})
+        invocations.append(
+            ToolInvocation(
+                name="get_account_summary",
+                arguments={},
+                result=summary,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+        )
+        preamble = (
+            "Here is this customer's account summary, already looked up for you:\n"
+            f"{tool_result_to_text(summary)}\n\n"
+            "The customer asks:\n"
+        )
+
+    messages.append({"role": "user", "content": preamble + build_user_turn(question)})
 
     for round_number in range(1, MAX_ROUNDS + 1):
         # The last round is answered without tools. A model that has spent five rounds
@@ -190,22 +300,38 @@ async def run_agent(
         final_round = round_number == MAX_ROUNDS
         turn: TurnComplete | None = None
 
-        try:
-            async for event in provider.converse(
-                system=SYSTEM,
-                messages=messages,
-                tools=None if final_round else TOOL_SCHEMAS,
-                max_tokens=MAX_ANSWER_TOKENS,
-                temperature=TEMPERATURE,
-            ):
-                if isinstance(event, TextDelta):
-                    if event.text:
-                        yield Thinking(event.text)
-                elif isinstance(event, TurnComplete):
-                    turn = event
-        except Exception as exc:  # noqa: BLE001 - one class of failure, one message
-            log.error("provider %s failed on round %d: %s", provider.name, round_number, exc)
-            raise AgentUnavailable(str(exc)) from exc
+        for attempt in range(1, TRANSIENT_RETRIES + 2):
+            turn = None
+            streamed = False
+            try:
+                async for event in provider.converse(
+                    system=SYSTEM if not handling else f"{SYSTEM}\n\n{handling}",
+                    messages=messages,
+                    tools=None if final_round else TOOL_SCHEMAS,
+                    max_tokens=MAX_ANSWER_TOKENS,
+                    temperature=TEMPERATURE,
+                ):
+                    if isinstance(event, TextDelta):
+                        if event.text:
+                            streamed = True
+                            yield Thinking(event.text)
+                    elif isinstance(event, TurnComplete):
+                        turn = event
+                break
+            except Exception as exc:  # noqa: BLE001 - classified below, never swallowed
+                retryable = _is_transient(exc) and attempt <= TRANSIENT_RETRIES
+                log.warning(
+                    "provider %s failed on round %d attempt %d: %s",
+                    provider.name, round_number, attempt, exc,
+                )
+                if not retryable:
+                    raise AgentUnavailable(str(exc)) from exc
+                if streamed:
+                    # Bytes for this round are already on the wire. Retrying would
+                    # append a second draft to the first, so tell the client to drop
+                    # what it rendered before the replacement arrives.
+                    yield TurnDiscarded()
+                await asyncio.sleep(_backoff(exc, attempt))
 
         if turn is None:
             raise AgentUnavailable(f"{provider.name} produced no turn")

@@ -406,6 +406,21 @@ class ChatResponse(BaseModel):
     )
     latency_ms: int = 0
 
+    tier: int = Field(
+        default=1,
+        description=(
+            "Who handled this turn. 1 the assistant alone, 2 the assistant with a Kea "
+            "agent watching and able to step in, 3 a person only — the assistant "
+            "acknowledges and stops. Decided in Python from the message and the account "
+            "on every channel, never by the model; see app/hardship/. The model can "
+            "raise it by calling handoff_to_human and can never lower it."
+        ),
+    )
+    tier_reason: str | None = Field(
+        default=None,
+        description="Why this tier, in words a support lead would use.",
+    )
+
 
 class LoginRequest(BaseModel):
     email: str

@@ -155,10 +155,20 @@ class GCPProvider:
                 parts = []
                 if message.get("content"):
                     parts.append(types.Part.from_text(text=message["content"]))
-                parts += [
-                    types.Part.from_function_call(name=call.name, args=call.arguments)
-                    for call in message.get("tool_calls") or []
-                ]
+                for call in message.get("tool_calls") or []:
+                    # The original part, not a rebuilt one. Gemini 3.x attaches a
+                    # `thought_signature` to each functionCall part and rejects the next
+                    # request without it — 400 INVALID_ARGUMENT, "Function call is
+                    # missing a thought_signature in functionCall parts". Reconstructing
+                    # from name and args drops it, which failed every tool-using turn on
+                    # round two. See `ToolCall.raw`.
+                    parts.append(
+                        call.raw
+                        if call.raw is not None
+                        else types.Part.from_function_call(
+                            name=call.name, args=call.arguments
+                        )
+                    )
                 if parts:
                     out.append(types.Content(role="model", parts=parts))
                 continue
@@ -226,6 +236,9 @@ class GCPProvider:
                                 id=f"{call.name}-{len(calls)}",
                                 name=call.name,
                                 arguments=dict(call.args or {}),
+                                # Kept whole so `_wire` can send it back with its
+                                # thought_signature intact. See `ToolCall.raw`.
+                                raw=part,
                             )
                         )
             if chunk.usage_metadata:

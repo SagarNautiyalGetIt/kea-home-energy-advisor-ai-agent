@@ -545,6 +545,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         text=result.text,
         sources=[SourceRef(**s) for s in result.sources],
         escalate_to_human=result.escalate,
+        tier=result.tier,
+        tier_reason=result.tier_reason,
         escalation_reason=result.escalation_reason,
         conversation_id=result.conversation_id,
         latency_ms=result.latency_ms,

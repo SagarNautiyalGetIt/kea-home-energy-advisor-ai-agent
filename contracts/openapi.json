@@ -1073,6 +1073,24 @@
             "type": "integer",
             "title": "Latency Ms",
             "default": 0
+          },
+          "tier": {
+            "type": "integer",
+            "title": "Tier",
+            "description": "Who handled this turn. 1 the assistant alone, 2 the assistant with a Kea agent watching and able to step in, 3 a person only \u2014 the assistant acknowledges and stops. Decided in Python from the message and the account on every channel, never by the model; see app/hardship/. The model can raise it by calling handoff_to_human and can never lower it.",
+            "default": 1
+          },
+          "tier_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Reason",
+            "description": "Why this tier, in words a support lead would use."
           }
         },
         "type": "object",

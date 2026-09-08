@@ -157,9 +157,17 @@ async def test_the_turn_completes_when_a_tool_is_unavailable() -> None:
     result = await answer_once(provider, ctx, "why is my bill higher than last month?")
 
     assert result.text
-    assert [t.name for t in result.tools_used] == ["get_bill_comparison", "get_daily_usage"]
-    assert result.tools_used[0].unavailable
-    assert not result.tools_used[0].failed, "unavailable data is not a broken tool"
+    # `get_account_summary` is pre-loaded on the first turn, so it leads the trace
+    # without the model having asked for it — the customer sees the same lookup either
+    # way, because it genuinely happened.
+    assert [t.name for t in result.tools_used] == [
+        "get_account_summary",
+        "get_bill_comparison",
+        "get_daily_usage",
+    ]
+    unavailable = next(t for t in result.tools_used if t.name == "get_bill_comparison")
+    assert unavailable.unavailable
+    assert not unavailable.failed, "unavailable data is not a broken tool"
 
 
 # ---------- the tool result actually reaches the model ----------

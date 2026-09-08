@@ -200,7 +200,15 @@ async def test_the_model_is_given_the_catalogue_and_the_system_prompt(ctx) -> No
     call = provider.calls[0]
     assert call["system"] == SYSTEM
     assert {t["name"] for t in call["tools"]} == TOOL_NAMES
-    assert call["messages"] == [{"role": "user", "content": "hello"}]
+
+    # One user turn, carrying the question and the pre-loaded account summary. The
+    # summary rides on the user turn rather than as a synthetic assistant tool-call pair
+    # because Gemini 3.x requires a `thought_signature` on every functionCall part in
+    # history and a call the model never made has none — see `run_agent`.
+    (turn,) = call["messages"]
+    assert turn["role"] == "user"
+    assert turn["content"].endswith("hello")
+    assert "account summary" in turn["content"]
 
 
 async def test_tool_results_are_appended_in_the_neutral_shape(ctx) -> None:

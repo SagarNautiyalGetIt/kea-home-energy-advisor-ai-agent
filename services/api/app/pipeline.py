@@ -60,6 +60,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from app import hardship
 from app.agent.loop import (
     AgentResult,
     AgentUnavailable,
@@ -140,6 +141,20 @@ def _spoken(text: str) -> list[str]:
     return _sentences(_MARKDOWN.sub("", text))
 
 
+#: What the assistant says when a person is taking the conversation.
+#:
+#: Written down rather than generated, because tier 3 exists for the cases where the
+#: model must not improvise: somebody in acute distress, or somebody who has just told
+#: us they cannot pay. A model asked to be warm here will offer payment options it
+#: cannot honour or reassurance it cannot support, and both are worse than one plain
+#: sentence. See `app/hardship/tiers.py`.
+HANDOVER_TEXT = (
+    "Thank you for telling me — that sounds really hard, and you should be talking to a "
+    "person rather than to me. I've passed this to our customer care team and someone "
+    "will pick it up shortly. You won't have to explain it again."
+)
+
+
 @dataclass(frozen=True)
 class Answer:
     """One reply, plus everything a transport needs to render it."""
@@ -151,6 +166,18 @@ class Answer:
     escalation_reason: str | None = None
     conversation_id: int | None = None
     latency_ms: int = 0
+
+    tier: int = 1
+    """Who handled this turn: 1 autonomous, 2 monitored, 3 human only.
+
+    On the response rather than behind its own endpoint because the UI has to show the
+    handover next to the message that caused it, and a second request could assess a
+    different turn."""
+
+    tier_reason: str | None = None
+    hardship_evidence: list[str] = field(default_factory=list)
+    """Why, in the assessor's words. Shown to the agent picking the conversation up —
+    "flagged: 0.8" is not a handover."""
 
     @property
     def sentences(self) -> list[str]:
@@ -204,14 +231,16 @@ async def _record(
     channel: str,
     conversation_id: int | None,
     latency_ms: int,
+    tiering: hardship.TierDecision | None = None,
 ) -> int | None:
     """Write the evidence. Never raises — see recorder.py on why an evidence failure must
     not cost the customer their answer."""
     provider = get_provider()
     log.info(
-        "answer channel=%s customer=%s tools=%s rounds=%d tokens=%d latency_ms=%d",
+        "answer channel=%s customer=%s tier=%s tools=%s rounds=%d tokens=%d latency_ms=%d",
         channel,
         ctx.customer_id,
+        tiering.tier.label if tiering else "n/a",
         [t.name for t in result.tools_used],
         result.rounds,
         result.usage.total,
@@ -224,8 +253,14 @@ async def _record(
             question=question,
             answer=result.text,
             tools=result.tools_used,
-            escalate=result.escalate,
-            escalation_reason=result.escalation_reason,
+            escalate=(
+                tiering.tier is not hardship.Tier.AUTONOMOUS
+                if tiering is not None
+                else result.escalate
+            ),
+            escalation_reason=(
+                tiering.reason if tiering is not None else result.escalation_reason
+            ),
             channel=channel,
             provider=getattr(provider, "name", None),
             model=getattr(provider, "model", None),
@@ -248,12 +283,31 @@ async def answer(
     ctx = await build_context(customer_id)
     started = time.perf_counter()
 
+    # Assessed before the model runs, on every channel. Two reasons it is here rather
+    # than inside the agent: a tier-3 turn must not spend a model call at all, and the
+    # tier has to be decidable when the provider is down — a customer disclosing hardship
+    # during an outage still needs a person.
+    assessment = hardship.assess(message, ctx.account)
+    tiering = hardship.decide(assessment)
+
+    if tiering.tier is hardship.Tier.HUMAN_ONLY:
+        return await _handover(
+            ctx, message, tiering, channel=channel, conversation_id=conversation_id,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+
     result: AgentResult | None = None
-    async for event in run_agent(get_provider(), ctx, message, history):
+    async for event in run_agent(
+        get_provider(), ctx, message, history, handling=tiering.guidance
+    ):
         if isinstance(event, Finished):
             result = event.result
     if result is None:  # pragma: no cover - run_agent raises rather than finishing empty
         raise AgentUnavailable("agent produced no result")
+
+    # The model can still escalate from inside a tier-1 or tier-2 turn — it sees things
+    # the phrase bank does not. It can only raise the tier, never lower it.
+    tiering = hardship.decide(assessment, model_requested_handoff=result.escalate)
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     recorded_id = await _record(
@@ -263,16 +317,60 @@ async def answer(
         channel=channel,
         conversation_id=conversation_id,
         latency_ms=latency_ms,
+        tiering=tiering,
     )
 
     return Answer(
         customer_id=customer_id,
         text=result.text,
         tools_used=result.tools_used,
-        escalate=result.escalate,
-        escalation_reason=result.escalation_reason,
+        escalate=tiering.tier is not hardship.Tier.AUTONOMOUS,
+        escalation_reason=result.escalation_reason or (
+            tiering.reason if tiering.notify_agent else None
+        ),
         conversation_id=recorded_id,
         latency_ms=latency_ms,
+        tier=int(tiering.tier),
+        tier_reason=tiering.reason,
+        hardship_evidence=tiering.evidence,
+    )
+
+
+async def _handover(
+    ctx: ToolContext,
+    message: str,
+    tiering: hardship.TierDecision,
+    *,
+    channel: str,
+    conversation_id: int | None,
+    latency_ms: int,
+) -> Answer:
+    """Tier 3: a person takes it, and the model is not asked to write anything.
+
+    Recorded like any other turn so the conversation is in the evidence tables with its
+    reason attached — a handover that leaves no row is one nobody can audit, and this is
+    the class of turn most likely to be audited.
+    """
+    log.info(
+        "hardship handover channel=%s customer=%s score=%.2f reason=%s",
+        channel, ctx.customer_id, tiering.score, tiering.reason,
+    )
+    result = AgentResult(text=HANDOVER_TEXT, escalate=True, escalation_reason=tiering.reason)
+    recorded_id = await _record(
+        ctx, result, message,
+        channel=channel, conversation_id=conversation_id,
+        latency_ms=latency_ms, tiering=tiering,
+    )
+    return Answer(
+        customer_id=ctx.customer_id,
+        text=HANDOVER_TEXT,
+        escalate=True,
+        escalation_reason=tiering.reason,
+        conversation_id=recorded_id,
+        latency_ms=latency_ms,
+        tier=int(tiering.tier),
+        tier_reason=tiering.reason,
+        hardship_evidence=tiering.evidence,
     )
 
 
@@ -310,9 +408,34 @@ async def answer_stream(
     # protocol between it and this function, and nothing else in the app matches on them.
     from app.agent.loop import Thinking, ToolFinished, ToolStarted, TurnDiscarded
 
+    # Same assessment the non-streaming path runs, before the model is touched. A tier-3
+    # turn streams the handover as one frame and spends no model call at all.
+    assessment = hardship.assess(message, ctx.account)
+    tiering = hardship.decide(assessment)
+
+    if tiering.tier is hardship.Tier.HUMAN_ONLY:
+        handover = await _handover(
+            ctx, message, tiering, channel=channel, conversation_id=conversation_id,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        yield "token", {"text": handover.text}
+        yield "done", {
+            "sources": [],
+            "escalate_to_human": True,
+            "escalation_reason": handover.escalation_reason,
+            "conversation_id": handover.conversation_id,
+            "latency_ms": handover.latency_ms,
+            "tokens": 0,
+            "tier": handover.tier,
+            "tier_reason": handover.tier_reason,
+        }
+        return
+
     result: AgentResult | None = None
     try:
-        async for event in run_agent(get_provider(), ctx, message, history):
+        async for event in run_agent(
+            get_provider(), ctx, message, history, handling=tiering.guidance
+        ):
             match event:
                 case Thinking(text=text):
                     yield "token", {"text": text}
@@ -343,6 +466,10 @@ async def answer_stream(
     if result is None:  # pragma: no cover - run_agent raises rather than finishing empty
         return
 
+    # The model may have escalated from inside the turn; re-decide so it can raise the
+    # tier. `decide` never lowers one.
+    tiering = hardship.decide(assessment, model_requested_handoff=result.escalate)
+
     latency_ms = int((time.perf_counter() - started) * 1000)
     recorded_id = await _record(
         ctx,
@@ -351,13 +478,18 @@ async def answer_stream(
         channel=channel,
         conversation_id=conversation_id,
         latency_ms=latency_ms,
+        tiering=tiering,
     )
 
     yield "done", {
         "sources": result.sources,
-        "escalate_to_human": result.escalate,
-        "escalation_reason": result.escalation_reason,
+        "escalate_to_human": tiering.tier is not hardship.Tier.AUTONOMOUS,
+        "escalation_reason": result.escalation_reason or (
+            tiering.reason if tiering.notify_agent else None
+        ),
         "conversation_id": recorded_id,
         "latency_ms": latency_ms,
         "tokens": result.usage.total,
+        "tier": int(tiering.tier),
+        "tier_reason": tiering.reason,
     }

@@ -54,6 +54,26 @@ class ToolCall:
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
 
+    raw: Any = field(default=None, compare=False, repr=False)
+    """The provider's own object for this call, carried back to it untouched.
+
+    Provider-private: the agent loop never reads it, and no other provider may either.
+    It exists because a neutral `(name, arguments)` pair is **lossy** for Gemini 3.x,
+    which attaches a `thought_signature` to each `functionCall` part and rejects the
+    next request if it is missing:
+
+        400 INVALID_ARGUMENT — Function call is missing a thought_signature in
+        functionCall parts. This is required for tools to work correctly.
+
+    Rebuilding the part from name and args drops it, so every tool-using turn failed on
+    round two. Round-tripping the original part is the documented fix, and an opaque
+    field is the smallest way to allow it without leaking one provider's wire format
+    into the shared shape.
+
+    `compare=False` so two calls with the same name and arguments still compare equal —
+    tests assert on the call, not on the transport's bookkeeping.
+    """
+
 
 @dataclass(frozen=True)
 class TurnComplete:
