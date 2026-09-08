@@ -40,9 +40,24 @@ from app.analytics.account import (
     PlanFacts,
 )
 from app.analytics.drivers import BillPeriod
-from app.analytics.engine import UsageWindow
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD, UsageWindow
 
 log = logging.getLogger(__name__)
+
+
+def _period_label(start, end) -> str:
+    """How a New Zealand bill prints its period.
+
+    One month when the period sits inside it ("June 2024"), both ends when it straddles
+    two ("1 May to 12 June 2024"). The straddling case is the one that matters: Daniel's
+    43-day move-in bill reads as a 39% consumption rise if you call it "June", and the
+    period length is the first thing the explainer has to attribute the change to.
+    """
+    if start.year == end.year and start.month == end.month:
+        return f"{start:%B %Y}"
+    if start.year == end.year:
+        return f"{start:%-d %B} to {end:%-d %B %Y}"
+    return f"{start:%-d %B %Y} to {end:%-d %B %Y}"
 
 
 def _maybe_float(value: object) -> float | None:
@@ -380,30 +395,64 @@ class MartRepository:
                     f"outside the household, so there is nothing safe to substitute here"
                 )
 
-        # Trim to the most recent COMPLETE calendar month.
+        # Trim to the window the customer is actually billed for.
         #
-        # These accounts carry anything from 24 days to 13 months, and every intent in
-        # layer 1 is month-shaped: "a typical day", "the highest day", the month-end
-        # projection. Handing them 397 days produced two visible failures — a peak
-        # reported as "day 351", which means nothing to a customer, and a period label
-        # of "1 Aug 2023 to 31 Aug 2024" whose stray "31" the number-checker correctly
-        # flagged as an unverified figure, because it is not a fact and never was.
+        # These accounts carry anything from 24 days to 13 months, and every answer is
+        # period-shaped: "a typical day", "the highest day", the month-end projection.
+        # Handing them 397 days produced a peak reported as "day 351", which means
+        # nothing to anybody.
         #
-        # A month is also the unit the customer is billed in, so it is the honest window
-        # to answer about rather than merely the convenient one.
-        last_day = rows[-1][0]
-        month_start = last_day.replace(day=1)
-        in_month = [r for r in rows if r[0] >= month_start]
-        # A final partial month with almost nothing in it is worse than the month before
-        # it: "your highest day" over three days is not a finding.
-        if len(in_month) < 7 and len(rows) > len(in_month):
-            earlier = [r for r in rows if r[0] < month_start]
-            prior_start = earlier[-1][0].replace(day=1)
-            in_month = [r for r in earlier if r[0] >= prior_start]
+        # **The billed period, not the last calendar month** (KEA-141 §3). Taking the
+        # calendar month was wrong for every account whose cycle does not start on the
+        # 1st, and the failure was invisible because the answer still looked plausible:
+        #
+        #   Daniel   invoiced 1 May - 12 Jun (43 days); we answered about June's 12
+        #   Mereana  invoiced April;          we answered about June's 10
+        #
+        # It also broke the figures downstream. Mereana's "highest usage day" came back
+        # as 20.14 kWh when the highest day her bill charges for is 11.80 — 71% out,
+        # against a bill she is holding.
+        period_start = getattr(account, "current_period_start", None)
+        period_end = getattr(account, "current_period_end", None)
+        in_period = (
+            [r for r in rows if period_start <= r[0] <= period_end]
+            if period_start and period_end
+            else []
+        )
+
+        if in_period:
+            in_month = in_period
+            period = _period_label(period_start, period_end)
+        else:
+            # No billing period on the account — the seeded households and anything the
+            # loader has not reached. Fall back to the calendar month, which is at least
+            # a unit the customer recognises.
+            last_day = rows[-1][0]
+            month_start = last_day.replace(day=1)
+            in_month = [r for r in rows if r[0] >= month_start]
+            # A final partial month with almost nothing in it is worse than the month
+            # before it: "your highest day" over three days is not a finding.
+            if len(in_month) < 7 and len(rows) > len(in_month):
+                earlier = [r for r in rows if r[0] < month_start]
+                prior_start = earlier[-1][0].replace(day=1)
+                in_month = [r for r in earlier if r[0] >= prior_start]
+            period = f"{in_month[0][0]:%B %Y}"
 
         daily = [round(float(kwh), 3) for _, kwh, _ in in_month]
-        hdd = [float(h) for _, _, h in in_month if h is not None]
-        period = f"{in_month[0][0]:%B %Y}"
+
+        # **Zero-fill, never drop** (KEA-141 §1). This used to be
+        # `[float(h) for ... if h is not None]`, which silently produced an `hdd` list
+        # shorter than `daily`. Julia Fox's 24 metered days all carry a NULL
+        # heating_degree_days, so the two arrays came out 24 and 0 long and the weather
+        # regression raised ValueError straight out of the endpoint — an HTTP 500 on a
+        # starter question.
+        #
+        # A missing weather join is "we cannot tell you how much of this was the
+        # weather", not a crash. Zero is the honest filler: it means no heating demand
+        # was recorded for that day, so the fit sees a day that cannot explain a rise
+        # rather than a day that does not exist. `analytics/forecast.py` already reports
+        # an unusable fit rather than inventing one, which is the behaviour we want here.
+        hdd = [float(h) if h is not None else 0.0 for _, _, h in in_month]
 
         # The region's own normal for the month actually being answered about — not the
         # Auckland-July constant the fixtures use. "Colder than normal" is what the whole
@@ -414,13 +463,41 @@ class MartRepository:
             getattr(account, "climate_region", None), in_month[0][0].month
         )
 
+        # The account's OWN effective rate, when the bill gives us one (KEA-141 §2).
+        #
+        # Everything used to be priced at a flat illustrative 30c/kWh while
+        # `billing.bill` held real charges, so the assistant quoted a "total cost" the
+        # customer could not find on their invoice:
+        #
+        #   Tama    assistant $134.19   invoice $163.19
+        #   Daniel  assistant  $42.75   invoice $189.60   (out by $146.85)
+        #
+        # The Terms modal disclosed the illustrative rate, which is not a defence when
+        # the label says "total cost" and the number is wrong against the bill in their
+        # hand. Derived from the bill total rather than a posted tariff so it absorbs
+        # every line the invoice actually charges — fixed charges, levies, discounts —
+        # and reconciles by construction.
+        #
+        # Falls back to the illustrative rate only when there is no bill, where it stays
+        # illustrative and the tools keep saying so.
+        unit_price = DEFAULT_UNIT_PRICE_NZD
+        account_ctx = await self._account_context(customer_id, account)
+        current = account_ctx.current_bill
+        if current is not None and current.total_kwh:
+            unit_price = round(current.total_nzd / current.total_kwh, 4)
+
         return UsageContext(
-            window=UsageWindow(customer_id=customer_id, period=period, daily_kwh=daily),
+            window=UsageWindow(
+                customer_id=customer_id,
+                period=period,
+                daily_kwh=daily,
+                unit_price_nzd=unit_price,
+            ),
             baseline=float(cohort),
             label=account.customer_name,
             hdd=hdd,
             normal_hdd=normal,
-            account=await self._account_context(customer_id, account),
+            account=account_ctx,
             icp_id=account.icp_id,
         )
 

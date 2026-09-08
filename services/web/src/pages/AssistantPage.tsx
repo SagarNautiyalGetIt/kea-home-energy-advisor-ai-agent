@@ -97,6 +97,9 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // piper binaries, the flag is off, or the browser will not hand over a microphone
   // on an insecure origin. Each has a different fix, so the button names which one.
   const [voiceHint, setVoiceHint] = useState('Checking whether voice is available…')
+  // Set once the customer asks why the mic is unavailable, so the reason is
+  // announced to a screen reader rather than living only in a tooltip.
+  const [voiceReasonShown, setVoiceReasonShown] = useState(false)
 
   // Derived rather than stored. A second `useState` for the orb would need updating at
   // every one of the six places that change busy/listening/speaking, and would be wrong
@@ -394,7 +397,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             </select>
           </label>
         )}
-        <button className="new-chat-action" onClick={newChat}><MessageSquarePlus/>New chat</button>
+        {/* KEA-141 §7. Was rendered unconditionally, so it sat on the start screen
+            offering to leave a chat that had not begun — a control that does nothing is
+            worse than one that is absent, because people click it and learn the UI lies. */}
+        {started && (
+          <button className="new-chat-action" onClick={newChat}><MessageSquarePlus/>New chat</button>
+        )}
       </div>
     </div>
 
@@ -546,20 +554,33 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             refused the mic, or an insecure origin are three different problems with
             three different fixes. `title` and aria-disabled rather than `disabled`, so
             the button still takes a click and can deliver that reason. */}
+        {/* KEA-141 §8. This used `aria-disabled` so the button would still take a click
+            and could explain itself — but `aria-disabled="true"` IS the disabled state
+            for the ARIA contract, so screen readers and Playwright both refuse to
+            operate it, and the explanation was only ever reachable via a `title`
+            tooltip that touch and screen-reader users never see.
+
+            The button is genuinely enabled instead. The reason lives in the accessible
+            name and in a live region, so it is announced rather than hovered. */}
         <button
-          aria-label={listening ? 'Stop listening' : 'Voice input'}
-          aria-pressed={listening}
-          aria-disabled={!voiceReady || busy || backendDown}
+          aria-label={
+            voiceReady
+              ? (listening ? 'Stop listening' : 'Ask by voice')
+              : `Voice input unavailable. ${voiceHint}`
+          }
+          aria-pressed={voiceReady ? listening : undefined}
           className={`mic-button${listening ? ' listening' : ''}${voiceReady ? '' : ' unavailable'}`}
           title={voiceReady ? (listening ? 'Stop listening' : 'Ask by voice') : voiceHint}
           onClick={() => {
             if (busy || backendDown) return
-            if (!voiceReady) { onToast(voiceHint, 'info'); return }
+            if (!voiceReady) { setVoiceReasonShown(true); onToast(voiceHint, 'info'); return }
             void toggleVoice()
           }}
         ><Mic/></button>
         <button className="send-button" aria-label="Send message" disabled={busy || backendDown || !message.trim()} onClick={submit}><ArrowUp/></button>
       </div>
+      {/* Announced, not hovered — see the mic button above. */}
+      <p className="sr-only" role="status">{voiceReasonShown ? voiceHint : ''}</p>
       <div className="chat-footer">
         Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Check Terms &amp; Conditions</button> · <button onClick={onEscalate}>Talk to a human</button>
       </div>

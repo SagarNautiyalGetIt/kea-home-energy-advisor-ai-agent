@@ -71,11 +71,31 @@ log = logging.getLogger(__name__)
 STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
 LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
 
-TARIFF_DISCLOSURE = (
-    "Kea's real tariffs are not public, so dollar figures use an illustrative "
-    f"{DEFAULT_UNIT_PRICE_NZD * 100:.0f}c/kWh unless the account carries its own rate. "
-    "Say so whenever you quote one."
+ILLUSTRATIVE_DISCLOSURE = (
+    "Kea's real tariffs are not public, so dollar figures here use an ILLUSTRATIVE "
+    f"{DEFAULT_UNIT_PRICE_NZD * 100:.0f}c/kWh. Say so the first time you quote one."
 )
+
+BILLED_DISCLOSURE = (
+    "Dollar figures here use this account's OWN effective rate, derived from its bill "
+    "total divided by its metered kWh — so they reconcile with the invoice rather than "
+    "with a posted tariff. You may quote them as real amounts. Do NOT call them "
+    "illustrative."
+)
+
+
+def tariff_note(ctx: ToolContext) -> str:
+    """Which disclosure is true for THIS account.
+
+    A single constant was wrong in both directions once the repository started deriving a
+    real rate from the bill (KEA-141 §2). Saying "illustrative" over a figure that
+    reconciles with the invoice undersells it; saying "real" over the 30c fallback is a
+    fabrication. The account decides.
+    """
+    current = getattr(ctx.account, "current_bill", None)
+    if current is not None and current.total_kwh:
+        return BILLED_DISCLOSURE
+    return ILLUSTRATIVE_DISCLOSURE
 
 METER_BASIS = (
     "the customer's own half-hourly meter data, aggregated to daily totals by the "
@@ -431,7 +451,7 @@ def get_account_summary(ctx: ToolContext) -> dict[str, Any]:
         )
         summary["consumer_care"] = care
 
-    summary["tariff_note"] = TARIFF_DISCLOSURE
+    summary["tariff_note"] = tariff_note(ctx)
     return summary
 
 
@@ -532,7 +552,7 @@ def get_daily_usage(
             ),
         },
         "source": METER_BASIS,
-        "tariff_note": TARIFF_DISCLOSURE,
+        "tariff_note": tariff_note(ctx),
     }
 
 
@@ -642,7 +662,7 @@ def get_bill_comparison(ctx: ToolContext) -> dict[str, Any]:
             "price rather than usage, be explicit that using less power will not undo it."
         ),
         "source": "kea.mart_bill_explanation, decomposed by app/analytics/drivers.py",
-        "tariff_note": TARIFF_DISCLOSURE,
+        "tariff_note": tariff_note(ctx),
     }
 
 
@@ -763,7 +783,7 @@ def compare_to_similar_homes(ctx: ToolContext) -> dict[str, Any]:
             "not a verdict on how they live."
         ),
         "source": "peer cohort computed across kea.mart_daily_usage, excluding this ICP",
-        "tariff_note": TARIFF_DISCLOSURE,
+        "tariff_note": tariff_note(ctx),
     }
 
 
@@ -881,7 +901,7 @@ def project_this_bill(ctx: ToolContext, as_at_day: int | None = None) -> dict[st
             "projection over the customer's own daily totals, "
             "app/analytics/forecast.py"
         ),
-        "tariff_note": TARIFF_DISCLOSURE,
+        "tariff_note": tariff_note(ctx),
     }
 
 
