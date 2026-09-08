@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Kea Energy",
+    "slug": "kea-energy-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/kea/kea-profile.png",
+    "scheme": "keaenergy",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/kea/kea-profile.png",
+      "supportsTablet": true,
+      "bundleIdentifier": "nz.co.keaenergy.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F4F7FF",
+        "foregroundImage": "./assets/kea/kea-profile.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "package": "nz.co.keaenergy.mobile"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/kea/kea-profile.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F4F7FF",
+          "image": "./assets/kea/kea-profile.png",
+          "imageWidth": 160
+        }
+      ],
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
