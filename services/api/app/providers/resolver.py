@@ -245,6 +245,9 @@ def build_provider(
     ollama_model: str,
     ollama_url: str,
     gcp_model: str,
+    gemini_api_key: str = "",
+    gemini_api_keys: str = "",
+    gemini_numbered_keys: dict[str, str] | None = None,
 ) -> LLMProvider:
     """Construct from a `+`-separated chain, e.g. `bedrock+ollama`.
 
@@ -272,8 +275,24 @@ def build_provider(
             providers.append(OllamaProvider(model=ollama_model, base_url=ollama_url))
         elif name == "gcp":
             from app.providers.gcp import GCPProvider
+            from app.providers.keypool import build_pool
 
-            providers.append(GCPProvider(model=gcp_model))
+            # The key pool is one provider's quota model, not a chain — a rotation is
+            # invisible to the caller and changes nothing about the answer, while a
+            # fallback serves a different model and is reported as degraded. Building it
+            # here keeps that distinction visible: the pool goes INSIDE one provider.
+            pool = build_pool(
+                primary=gemini_api_key,
+                extras=gemini_api_keys,
+                numbered=gemini_numbered_keys,
+            )
+            if pool.configured > 1:
+                log.info(
+                    "gemini key pool: %d keys configured (%s)",
+                    pool.configured,
+                    ", ".join(k.label for k in pool.keys),
+                )
+            providers.append(GCPProvider(model=gcp_model, keys=pool))
         else:
             raise ValueError(
                 f"unknown provider {name!r} in KEA_PROVIDER={spec!r}. "
