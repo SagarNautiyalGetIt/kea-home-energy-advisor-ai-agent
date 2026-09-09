@@ -329,7 +329,6 @@ COLD_MIN_DAYS = 14
 #: of a household that has stopped heating, and that household usually says nothing.
 FLAT_HEATING_KWH_PER_HDD = 0.15
 
-
 #: Phrases that look like a disclosure and are not.
 #:
 #: "I can't pay online" is a website problem. "I couldn't pay last year but I'm fine now"
