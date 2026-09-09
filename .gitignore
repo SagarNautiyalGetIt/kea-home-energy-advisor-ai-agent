@@ -65,3 +65,4 @@ data/raw/*
 !data/raw/.gitkeep
 # Derived from raw/lcl by cohort.py; ~1 MB, rebuilt in a minute.
 data/pipeline/scripts/gen_source/coverage.json
+.pg-local/
