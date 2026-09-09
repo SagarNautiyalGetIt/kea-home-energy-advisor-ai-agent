@@ -10,11 +10,11 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
+import sqlalchemy as sa
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import sqlalchemy as sa
 from alembic import context
 from app.config import settings
 from app.db.models import Base
