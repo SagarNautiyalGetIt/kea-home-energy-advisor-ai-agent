@@ -676,3 +676,49 @@ class HouseholdContextRow(Base):
     asked — re-asking it next cycle is how an assistant becomes something people mute."""
 
     updated_at: Mapped[dt.datetime] = _now()
+
+
+class PlanChangeRequestRow(Base):
+    """A plan switch the customer asked for and confirmed, waiting for a person.
+
+    Append-only, and a row per request rather than a column on the account, because the
+    interesting question is not "what plan are they on" — the marts answer that — but
+    "what did they ask for, when, and what were they told it would save". A single
+    mutable field cannot answer any of those, and this is the one thing the assistant can
+    start that costs money if it is wrong.
+
+    Nothing here writes to the account's plan. That comes from `kea.mart_account_context`,
+    which the data platform owns and this service reads; a plan change is a commercial
+    event with a billing effective date, and a retailer applies it from the next period
+    rather than mid-cycle. See `app/account/changes.py`.
+
+    `quoted_saving_nzd_per_year` is the figure the customer was shown when they said yes.
+    Stored because the only defensible record of consent is one that says what was
+    consented to — a row carrying a plan code alone cannot answer "what were they told"
+    six weeks later, which is exactly when it gets asked.
+    """
+
+    __tablename__ = "plan_change_request"
+    __table_args__ = (
+        Index("ix_plan_change_request_account", "account_ref", "requested_at"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    account_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    from_plan: Mapped[str | None] = mapped_column(String(120))
+    """Null when the account had no plan on file. Recorded as null rather than guessed —
+    this row is a document somebody will act on."""
+
+    to_plan_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    to_plan_name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    quoted_saving_nzd_per_year: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    quoted_from_period: Mapped[str | None] = mapped_column(String(64))
+
+    status: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="pending_review"
+    )
+    channel: Mapped[str] = mapped_column(String(24), nullable=False, server_default="chat")
+    requested_at: Mapped[dt.datetime] = _now()

@@ -107,6 +107,25 @@ class Settings:
         #: the meantime, since the cap is per model.
         default_factory=lambda: _env("KEA_GCP_MODEL", "gemini-3.5-flash")
     )
+
+    #: Gemini API keys, as a pool. See `app/providers/keypool.py`.
+    #:
+    #: The cap above is per model **per project**, so a second key from a second project
+    #: is a second allowance. The provider uses one key until it is exhausted and then
+    #: moves to the next, which is what makes the free tier usable for a rehearsal.
+    #:
+    #: Three ways to supply them, all read, in this order:
+    #:
+    #:   GEMINI_API_KEY        the existing single key — first, so nothing changes for an
+    #:                         .env that already has one
+    #:   GEMINI_API_KEYS       comma-separated: GEMINI_API_KEYS=AIza...one,AIza...two
+    #:   GEMINI_API_KEY_2..N   numbered, for adding them one at a time
+    #:
+    #: All empty means Application Default Credentials, which is how a deployment with a
+    #: service account works and how this provider behaved before the pool existed.
+    gemini_api_key: str = field(default_factory=lambda: _env("GEMINI_API_KEY", ""))
+    gemini_api_keys: str = field(default_factory=lambda: _env("GEMINI_API_KEYS", ""))
+
     aws_region: str = field(default_factory=lambda: _env("AWS_REGION", "ap-southeast-2"))
 
     cors_origins: str = field(
@@ -230,6 +249,21 @@ class Settings:
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @property
+    def numbered_gemini_keys(self) -> dict[str, str]:
+        """`GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`, … — however many are set.
+
+        Scanned out of the environment rather than declared as fields, because the whole
+        point is that somebody can add a fifth key by adding one line to `.env` without
+        touching Python. `GEMINI_API_KEY` itself is excluded: it is read as the primary
+        above and would otherwise be added twice.
+        """
+        return {
+            name: value
+            for name, value in os.environ.items()
+            if name.startswith("GEMINI_API_KEY_") and value.strip()
+        }
+
 
 settings = Settings()
 
@@ -252,6 +286,9 @@ def get_provider():
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
         gcp_model=settings.gcp_model,
+        gemini_api_key=settings.gemini_api_key,
+        gemini_api_keys=settings.gemini_api_keys,
+        gemini_numbered_keys=settings.numbered_gemini_keys,
     )
 
 
@@ -323,6 +360,33 @@ def get_preferences_store():
     from app.alerts.store import build_preferences_store
 
     return build_preferences_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_change_store():
+    """Plan changes the customer asked for, waiting for a person to action them.
+
+    Same `persist` flag as everything else, so there is no state where a change request is
+    written to PostgreSQL and read from memory. `/health` reports which one is live, for
+    the reason the recorder disclosure exists: "your plan change was logged" and "your
+    plan change was logged until this process restarts" must not look the same from
+    outside.
+    """
+    from app.account.changes import build_change_store
+
+    return build_change_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_pending_changes():
+    """Staged, unconfirmed plan changes. In-process by design — see `account/changes.py`.
+
+    Cached like the stores because it holds state for the life of the process, and a fresh
+    instance per request would mean nothing was ever staged long enough to confirm.
+    """
+    from app.account.changes import PendingChanges
+
+    return PendingChanges()
 
 
 @lru_cache(maxsize=1)

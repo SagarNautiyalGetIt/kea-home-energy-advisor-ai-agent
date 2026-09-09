@@ -155,6 +155,12 @@ def test_the_agent_writes_app_and_only_reads_kea():
         # What the customer told us about their home, in answer to a question we asked.
         # Ours to write by definition — the loader has no way to know it.
         "household_context",
+        # A plan switch the customer asked for and confirmed in conversation. In `app`
+        # rather than `kea` for exactly the reason this test exists: the account's plan
+        # lives in `kea.mart_account_context`, which the loader owns, and this service must
+        # never write there. A request is a different fact from a plan, and it belongs to
+        # the side that recorded it.
+        "plan_change_request",
     }
     assert by_schema["kea"] == {
         "mart_account_context",
