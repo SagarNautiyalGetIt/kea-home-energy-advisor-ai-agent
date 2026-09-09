@@ -3,9 +3,17 @@
 Connecting a customer's Apple Home, Google Home, Matter controller or SmartThings account
 so answers can say *which* appliance rather than "something in your house".
 
+    discovery   the local network ->  a list of names    mDNS, no account   (I/O)
     connectors  vendor payload   ->  DeviceObservation   normalisation      (I/O)
     insights    observations     ->  Fact + caveats      pure arithmetic    (layer 1)
     narration   facts            ->  a sentence          the model          (layer 2)
+
+`discovery` is the step before a connector: devices announce themselves over mDNS to
+anybody on the same network, so listening needs no account, no credential and no vendor
+relationship. It answers the question a customer asks first — *do you even know what I've
+got?* — and it produces **names only**. There is no energy in an mDNS announcement and no
+way to derive any, so nothing in that module produces a `DeviceObservation` and nothing
+downstream may attach a figure to what it returns.
 
 The architecture is unchanged and that is the point. Device data is more raw data, so it
 enters at layer 1 like meter readings do, and the model still only writes the sentence.
@@ -26,6 +34,7 @@ stream — the most intrusive data anywhere near this product — never leaves t
 See `docs/adr/0009-smart-home-integration.md` for the sequencing and the open questions.
 """
 
+from app.homelink.discovery import DiscoveredDevice, DiscoveryResult, discover
 from app.homelink.insights import (
     actionable_findings,
     appliance_caveats,
@@ -47,9 +56,12 @@ __all__ = [
     "DeviceClass",
     "DeviceObservation",
     "DeviceSummary",
+    "DiscoveredDevice",
+    "DiscoveryResult",
     "Provider",
     "actionable_findings",
     "appliance_caveats",
     "device_facts",
+    "discover",
     "summarise",
 ]
