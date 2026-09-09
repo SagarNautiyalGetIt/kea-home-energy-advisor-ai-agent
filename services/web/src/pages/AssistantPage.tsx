@@ -51,18 +51,23 @@ const SHOW_ASSISTANT_DESCRIPTION = false
 /**
  * Starter chips.
  *
- * These used to be picked to land on four *different* intents, because four questions
- * that routed to the same bundle produced four rewordings of one answer. There are no
- * intents now, so they are chosen for what they show off instead: an attribution, a
- * projection, a comparison, and one the data genuinely cannot fully answer — the last is
- * deliberate, because "I can show which day but not which hour, and here is why" is the
- * behaviour worth demonstrating.
+ * These were briefly rewritten during the agent work to show off different capabilities —
+ * a projection, a peer comparison, an honest refusal. That was churn nobody asked for,
+ * and it broke `qa/e2e/tests/assistant.spec.ts`, which covers these four by their exact
+ * text. The chips are a product decision and the suite encodes the current one, so they
+ * are back as they were.
+ *
+ * Each still lands somewhere real, which is the rule that matters: a starter chip the
+ * assistant cannot answer is worse than no chip. The capabilities the rewrite wanted to
+ * show — the month-end projection, the peer cohort, the hour-of-day refusal — are all
+ * reachable by typing, and `get_hourly_profile` now returns real data for the mart
+ * accounts rather than refusing for everyone.
  */
 const PROMPTS = [
   'Why is my power bill so high?',
-  'What will my bill be this month?',
-  'Am I using more than similar homes?',
-  'What time of day do I use the most?',
+  'Which day was my highest usage?',
+  'Was that just the cold snap?',
+  'Could another plan save me money?',
 ]
 
 const GREETING = 'Hello! I’m Sparky. Ask me about your bill, usage, or energy plan.'

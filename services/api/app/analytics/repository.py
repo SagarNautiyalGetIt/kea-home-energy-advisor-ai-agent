@@ -157,6 +157,22 @@ class UsageContext:
     kWh series allows, no matter how the prompt was written.
     """
 
+    period_start: object | None = None
+    period_end: object | None = None
+    """The window `window.daily_kwh` covers, as dates.
+
+    Carried because the daily series is a list of floats with no calendar on it, and
+    `AccountContext.days` is the WHOLE history — 397 days for Rangi. Without these two,
+    `get_daily_usage` had no way to answer about the same period `/api/households` serves,
+    so the assistant said "over the 397 days on this bill" and named a peak the dashboard
+    disagreed with. That is KEA-141 §3 again, on the path the fix missed: trimming the
+    window did not trim the collection the tool reads.
+
+    A suffix of `days` would not do instead. The billed period does not always end at the
+    last metered row — Mereana's invoice covers April while her data runs to June — so
+    "the last N days" is the wrong window for exactly the account the ticket named.
+    """
+
     icp_id: int | None = None
     """The mart key for this connection, carried rather than dropped.
 
@@ -369,7 +385,9 @@ class MartRepository:
                     select(
                         MartDailyUsage.usage_date,
                         MartDailyUsage.import_kwh,
-                        MartDailyUsage.heating_degree_days,
+                        # The temperature, not the warehouse's degree-day column. See
+                        # the zero-fill note below for why.
+                        MartDailyUsage.temp_mean_c,
                     )
                     .where(MartDailyUsage.icp_id == account.icp_id)
                     .order_by(MartDailyUsage.usage_date)
@@ -452,7 +470,27 @@ class MartRepository:
         # was recorded for that day, so the fit sees a day that cannot explain a rise
         # rather than a day that does not exist. `analytics/forecast.py` already reports
         # an unusable fit rather than inventing one, which is the behaviour we want here.
-        hdd = [float(h) if h is not None else 0.0 for _, _, h in in_month]
+        #
+        # **Derived here from the temperature, at our own base** (KEA-147). This read
+        # `MartDailyUsage.heating_degree_days`, which `fct_weather_daily.sql` computes at
+        # base 16 — the warehouse standard, set by `hdd_base_c` in dbt_project.yml. The
+        # normals in `climate.py` are NIWA-derived at the New Zealand base 18. So every
+        # account's observed heating demand was scored against a normal measured on a
+        # different scale, and base 16 is always the smaller number:
+        #
+        #   June 2024, the coldest month in the set:  observed 5.50  normal 7.7
+        #
+        # which reads as 2.2 degree-days a day WARMER than typical. `excess_hdd` goes
+        # negative, `max(0.0, ...)` in forecast.py clamps it, and the weather driver came
+        # out $0.00 for every account in winter — not as a gap, but as a finding: "it
+        # wasn't the weather", stated confidently about the coldest month of the year.
+        #
+        # `temp_mean_c` is a physical observation and carries no base, so deriving the
+        # degree day here puts both sides of the comparison on one scale by construction
+        # and leaves the warehouse free to change `hdd_base_c` without silently moving
+        # our answers. Recomputed at base 18 the same June reads 7.50 against 7.7 — a
+        # slightly milder than average winter month, which is what it was.
+        hdd = [climate.heating_degree_day(t) for _, _, t in in_month]
 
         # The region's own normal for the month actually being answered about — not the
         # Auckland-July constant the fixtures use. "Colder than normal" is what the whole
@@ -499,6 +537,8 @@ class MartRepository:
             normal_hdd=normal,
             account=account_ctx,
             icp_id=account.icp_id,
+            period_start=in_month[0][0],
+            period_end=in_month[-1][0],
         )
 
     async def _account_context(self, customer_id: str, account: object) -> AccountContext:

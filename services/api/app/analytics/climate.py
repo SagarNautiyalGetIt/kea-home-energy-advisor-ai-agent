@@ -82,6 +82,37 @@ _ALIASES: dict[str, str] = {
 _FALLBACK = (2.2, 2.2, 3.3, 5.4, 7.7, 9.5, 10.0, 9.3, 7.7, 6.0, 4.2, 2.8)
 
 
+#: The base these normals are measured at, and therefore the base every observation
+#: compared against them must be measured at.
+#:
+#: The warehouse uses 16 (`hdd_base_c` in dbt_project.yml, applied in
+#: `fct_weather_daily.sql`). That is not a disagreement to resolve — both are legitimate
+#: conventions, and the warehouse is entitled to its own. It is only a disagreement if a
+#: number crosses between them, which is exactly what `mart_daily_usage.heating_degree_days`
+#: did until KEA-147: base-16 observations scored against these base-18 normals, so every
+#: winter month read as warmer than typical and the weather driver clamped to zero.
+#:
+#: Anything compared against `normal_hdd_per_day()` must come from
+#: `heating_degree_day()` below, never from the warehouse column.
+HDD_BASE_C = 18.0
+
+
+def heating_degree_day(temp_mean_c: float | None) -> float:
+    """One day's heating demand, from its mean temperature, at `HDD_BASE_C`.
+
+    Takes a temperature rather than a degree day on purpose: a temperature carries no
+    base, so a caller cannot accidentally hand this function a number measured against a
+    different threshold. That mistake is silent — it produces a plausible figure that is
+    wrong in one direction — and it is the one KEA-147 fixed.
+
+    `None` is zero, matching the zero-fill in `MartRepository`: a day with no weather
+    join is a day that cannot explain a rise, not a day that does not exist.
+    """
+    if temp_mean_c is None:
+        return 0.0
+    return round(max(HDD_BASE_C - float(temp_mean_c), 0.0), 2)
+
+
 def normal_hdd_per_day(region: str | None, month: int) -> float:
     """Typical heating degree days for one day in `region` during `month` (1-12).
 

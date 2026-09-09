@@ -154,6 +154,32 @@ _COMPILED = tuple(
     for key, patterns, weight, detail in _LINGUISTIC
 )
 
+# ---------------------------------------------------------------------------
+# Account thresholds
+# ---------------------------------------------------------------------------
+#
+# Named rather than inline, because these are the numbers a support lead would want to
+# argue with and they should not have to read a comprehension to find them. Each is a
+# judgement about when a pattern stops being normal, not a fact about the data.
+
+#: A balance this far past one bill is money unpaid across more than one cycle. One bill
+#: outstanding mid-cycle is ordinary and says nothing.
+BALANCE_BEHIND_MULTIPLE = 1.5
+
+#: A bill this much larger than the last one is the shock the product exists to catch.
+#: Deliberately generous — 1.6x is a genuine jump, not a cold week.
+BILL_SHOCK_MULTIPLE = 1.6
+
+#: Days needed before the usage-collapse comparison means anything. Two full weeks, so
+#: the two halves are like-for-like on weekends.
+COLLAPSE_MIN_DAYS = 14
+COLLAPSE_WINDOW_DAYS = 7
+
+#: A drop this large in a week is the shape of a household self-disconnecting rather than
+#: one that went away — a holiday usually shows as a fall to near zero, not to half.
+COLLAPSE_DROP_SHARE = 0.45
+
+
 #: Phrases that look like a disclosure and are not.
 #:
 #: "I can't pay online" is a website problem. "I couldn't pay last year but I'm fine now"
@@ -273,7 +299,7 @@ def _account_signals(account: object) -> list[Signal]:
 
     # A balance well past one bill is money that has not been paid across more than one
     # cycle. One bill outstanding is normal mid-cycle and says nothing.
-    if balance and last_bill and last_bill > 0 and balance > last_bill * 1.5:
+    if balance and last_bill and last_bill > 0 and balance > last_bill * BALANCE_BEHIND_MULTIPLE:
         found.append(
             Signal(
                 key="balance_exceeds_a_cycle",
@@ -301,7 +327,7 @@ def _account_signals(account: object) -> list[Signal]:
     if current is not None and prior is not None:
         now = getattr(current, "total_nzd", 0.0) or 0.0
         before = getattr(prior, "total_nzd", 0.0) or 0.0
-        if before > 0 and now >= before * 1.6:
+        if before > 0 and now >= before * BILL_SHOCK_MULTIPLE:
             found.append(
                 Signal(
                     key="bill_shock",
@@ -315,12 +341,12 @@ def _account_signals(account: object) -> list[Signal]:
     # Prepay-style behaviour: a household on a low-user plan whose usage collapsed is
     # often one that has started self-disconnecting rather than one that went on holiday.
     days = getattr(account, "days", None) or []
-    if len(days) >= 14:
-        recent = [d.import_kwh for d in days[-7:]]
-        earlier = [d.import_kwh for d in days[-14:-7]]
+    if len(days) >= COLLAPSE_MIN_DAYS:
+        recent = [d.import_kwh for d in days[-COLLAPSE_WINDOW_DAYS:]]
+        earlier = [d.import_kwh for d in days[-COLLAPSE_MIN_DAYS:-COLLAPSE_WINDOW_DAYS]]
         if earlier and recent and sum(earlier) > 0:
             drop = 1.0 - (sum(recent) / sum(earlier))
-            if drop >= 0.45:
+            if drop >= COLLAPSE_DROP_SHARE:
                 found.append(
                     Signal(
                         key="usage_collapse",

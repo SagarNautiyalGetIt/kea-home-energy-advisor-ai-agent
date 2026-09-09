@@ -64,24 +64,33 @@ account test A registered".
 
 ## 5. Assert on Sparky's *structure*, never its wording
 
-The pipeline is four layers (ADR-0002): routing and analytics are deterministic Python,
-**layer 2 is a language model**, and layer 3 is the number checker. Only layer 2 is
-non-deterministic, and it is the only one that produces the sentence you can see.
+The model reads the customer's data and writes the answer (ADR-0011). The **data** is
+deterministic — the tools are pure reads over the same rows every time — and the prose is
+not, because the model is not seeded.
 
-Worse, the sentence differs by environment. When no provider is reachable the API returns
-`template_fallback()` — deterministic text built from verified facts
-(`services/api/app/narration/narrator.py`). So with Ollama running you get prose, and on
-a runner without it you get the template. **Any assertion on exact wording passes locally
-and fails in CI.**
+When no provider is reachable there is now **no answer at all**: the stream carries
+`event: error` and the page shows the message. There is no template fallback to be
+confused with prose, which removes one environment difference and adds another —
+**a suite run without a working provider will see the error path everywhere.** Assertions
+must be written so that is a clear failure, not a silent skip.
 
 Assert what is stable:
 
 - the figures in the answer, against the same numbers the API returned
-- `intent` on the `meta` event
-- the verification badge — via `isSafeToDisplay()`, never `passed` on its own
-  (`services/web/src/lib/client.ts` explains why)
+- that the answer is GROUNDED — `isGrounded()` in `api/client.ts`. An answer with no
+  successful lookup is prose written from the system prompt with nothing behind it
+- which lookups ran, via `turn.tools` — the equivalent of the old `intent` assertion, and
+  a stronger one: it checks the assistant read the right thing rather than that a keyword
+  matcher fired
+- the hardship tier, via `turn.tier` — 1 autonomous, 2 monitored, 3 a person only
 - that the SSE stream renders progressively rather than in one jump
 - escalation: `drop@kea.example` must reach a human
+
+**Do not assert that a figure matches a permitted list.** That check went with the
+number-checker and it was never what it looked like: #141 §4 is the proof — Julia got "a
+steady 0.0 kWh a day ... costs $0.00" under a badge reading "every figure checked". Every
+figure in it was checked. The answer was worthless. Provenance is the claim now, not
+permission.
 
 Scoring the *model* against the golden set is a different job and already has a home in
 `ml/evals/`. It is not an end-to-end test and does not belong here.

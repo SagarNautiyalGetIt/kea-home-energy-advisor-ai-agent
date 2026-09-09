@@ -52,9 +52,11 @@ export interface DemoAccountCard {
 }
 
 /**
- * One figure layer 1 computed. `display` is the string layer 3 checks the prose against,
- * so it is the only field a UI assertion should compare text to — `value` is a float and
- * `2.72` never appears on screen.
+ * One figure computed by the analytics. Still on `/bill-shock`, which is proactive and
+ * therefore still fact-shaped — nobody asks a question to receive a warning.
+ *
+ * `display` is the string to compare screen text against; `value` is a float and `2.72`
+ * never appears on screen.
  */
 export interface Fact {
   key: string
@@ -64,25 +66,33 @@ export interface Fact {
   display: string
 }
 
-/** Layer 3's verdict. See `isSafeToDisplay` for why `passed` alone is the wrong test. */
-export interface VerificationReport {
-  passed: boolean
-  checked: string[]
-  unverified: string[]
-  derived: string[]
-  regenerated: boolean
-  fell_back_to_template: boolean
-  provider_error: boolean
+/**
+ * One lookup the assistant made.
+ *
+ * This replaced `facts` and the verification verdict on the chat response (ADR-0011).
+ * Both described what the backend had decided to compute *before* the model saw the
+ * question — the same list for everyone who tripped the same keyword — so neither could
+ * say what a particular answer rested on. This can.
+ */
+export interface SourceRef {
+  tool: string
+  arguments: Record<string, unknown> | null
+  source: string | null
+  /** False when the lookup failed or this account has no such data. A declared gap. */
+  ok: boolean
 }
 
 export interface ChatResponse {
   customer_id: string
-  intent: string
   text: string
-  facts: Fact[]
-  verification: VerificationReport
+  sources: SourceRef[]
   escalate_to_human: boolean
+  escalation_reason: string | null
   conversation_id: number | null
+  latency_ms: number
+  /** 1 autonomous · 2 monitored · 3 human only. See `services/api/app/hardship/`. */
+  tier: number
+  tier_reason: string | null
 }
 
 async function json<T>(request: APIRequestContext, path: string): Promise<T> {
@@ -138,27 +148,30 @@ export function lastSevenDays(household: HouseholdSummary, shock: BillShockWarni
 //
 // ## The one rule that makes every assertion below sound
 //
-// **`facts` are deterministic; `text` is not.** Layers 0 and 1 are pure Python — the same
-// question against the same account produces byte-identical facts every time. Layer 2 is
-// a 4B model with no seed pinned, so the prose differs on every call.
+// **The DATA is deterministic; the answer is not.** The tools are pure reads over the
+// same rows every time, and the model that turns them into prose is not seeded.
 //
-// So a test may compare the screen against the `facts` of a SEPARATE api call, and must
-// never compare the screen against the `text` of one. Asserting that two generations
-// match is asserting the model is deterministic, which it is not, and the test would fail
-// on a correct application roughly whenever it felt like it.
+// This used to be phrased as "`facts` are deterministic" and compared the screen against
+// the `facts` of a separate call. There are no `facts` on the chat response now, so the
+// deterministic thing to compare against is the data the tools serve —
+// `/api/households/{id}` and `/api/households/{id}/bill-shock` read the same rows the
+// assistant does.
 //
-// When a test needs the exact report behind the answer ON SCREEN — not an equivalent one —
-// it reads the page's own `done` event off the network instead. `AssistantPage.ask()`
-// does that.
+// The rule itself is unchanged and still the important one: a test may compare the screen
+// against DATA, and must never compare it against the `text` of a second generation.
+// Asserting two generations match is asserting the model is deterministic, and the test
+// would fail on a correct application roughly whenever it felt like it.
+//
+// When a test needs what backed the answer ON SCREEN — not an equivalent one — it reads
+// the page's own `done` event off the network. `AssistantPage.ask()` does that.
 
 /**
  * Ask the assistant, through the same endpoint the page uses for its non-streaming path.
  *
- * `conversation_id` exists in the request schema and is accepted here so a test can prove
- * whether continuing a conversation actually changes anything. As of writing it does not:
- * `pipeline.narrate()` passes it to the recorder and nowhere else, so it groups rows in
- * the evidence log and never reaches routing or narration. That is a finding these tests
- * are meant to hold in place, not an implementation detail to work around.
+ * `conversation_id` threads the conversation. The finding this comment used to record —
+ * that it reached the recorder and nowhere else — is fixed: history now reaches the model,
+ * so a follow-up resolves against the turn before it. Send back what the previous response
+ * returned.
  */
 export async function chat(
   request: APIRequestContext,
@@ -214,13 +227,27 @@ export function displayDigits(display: string): string[] {
 }
 
 /**
- * The test layer 3 actually applies, copied from `lib/client.ts#isSafeToDisplay`.
+ * The test that replaced `isSafeToDisplay`.
  *
- * `passed` on its own is the wrong question and the app's own comment says so: a template
- * fallback is assembled directly from verified facts, so it cannot contain an invented
- * figure, yet it reports `passed: false` because no check was run over it. A test that
- * asserted `passed` would fail on the safest answer the system can produce.
+ * There is no verification verdict any more, and the reason is worth keeping in the
+ * suite: the number-checker matched figures against a permitted list, which was a strong
+ * guarantee about *fabrication* and said nothing about whether a figure meant anything.
+ * Stephen's own #141 §4 is the sharpest statement of that — Julia got "a steady 0.0 kWh a
+ * day ... costs $0.00" with a badge reading "every figure checked", and every figure in it
+ * WAS checked.
+ *
+ * What is assertable now is provenance: an answer is trustworthy when it consulted this
+ * household's data and says which lookups it used. An answer with **no** successful
+ * lookup is the one state that is not safe — that is prose written from the system prompt
+ * with nothing behind it, and it is the shape a confident, fluent, entirely unfounded
+ * answer takes.
  */
-export function isSafeToDisplay(report: VerificationReport): boolean {
-  return report.passed || report.fell_back_to_template
+export function isGrounded(response: Pick<ChatResponse, 'sources'>): boolean {
+  return response.sources.some((source) => source.ok)
+}
+
+/** Lookups that found nothing. A declared gap, not a failure — the assistant is required
+ *  to say so rather than fill it, so a test may assert on the saying. */
+export function declaredGaps(response: Pick<ChatResponse, 'sources'>): string[] {
+  return response.sources.filter((source) => !source.ok).map((source) => source.tool)
 }

@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures/test'
 import { ACCOUNTS, authFile } from '../fixtures/accounts'
 import { dominantDriver, driversOf } from '../fixtures/db'
-import { chat, getHousehold, isSafeToDisplay } from '../api/client'
+import { chat, getHousehold, isGrounded, numericTokens } from '../api/client'
 
 /**
  * "Why is my power bill so high?" — the specification, written as tests.
@@ -79,12 +79,15 @@ for (const account of MART_ACCOUNTS) {
       const bill = await db.latestBill(account.customerId)
       test.skip(bill === null, 'no bill for this account')
 
-      const { facts, text } = await chat(request, {
+      const { text } = await chat(request, {
         customer_id: account.customerId,
         message: WHY,
       })
-      const period = facts.find((f) => f.key === 'period_cost')
-      test.skip(period === undefined, 'no period fact to compare')
+      // `period_cost` was a fact on the response; there are no facts now. The same
+      // figure is on `/api/households/{id}`, which reads the rows the assistant's own
+      // tools read — and since KEA-141 §2 both use the account's effective rate rather
+      // than a flat illustrative one, so this is now a real reconciliation.
+      const period = { value: (await getHousehold(request, account.customerId)).estimated_cost_nzd }
 
       // `MartRepository.context` takes the last calendar month present in
       // `mart_daily_usage` (`repository.py:291`), which is not the same thing as the
@@ -134,9 +137,7 @@ for (const account of MART_ACCOUNTS) {
       const bill = await db.latestBill(account.customerId)
       test.skip(bill === null, 'no bill for this account')
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const period = facts.find((f) => f.key === 'period_cost')
-      test.skip(period === undefined, 'no period fact to compare')
+      const period = { value: (await getHousehold(request, account.customerId)).estimated_cost_nzd }
 
       // The fact is labelled "Total cost for June 2024" and reads, in the answer, exactly
       // like the invoice total. It is not one: layer 1 prices every household at a flat
@@ -164,7 +165,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       // Rangi's latest bill is $151.04 → $144.65. He asks why it is so high and is told
       // "Most of your bill is from using 0.3 kWh more each day than similar homes" —
@@ -247,10 +248,13 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const keys = facts.map((f) => f.key)
+      // Fact keys became tool names. The claim is the same shape — the answer was built
+      // from the right material — but it is now about what was READ rather than what was
+      // pre-computed, which is the thing a customer could actually check.
+      const { sources } = await chat(request, { customer_id: account.customerId, message: WHY })
+      const keys = sources.filter((s) => s.ok).map((s) => s.tool)
 
       // The question is "why is MY bill high", and the only comparison a customer can
       // check is against the bill they already have. The current bundle offers
@@ -282,16 +286,24 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
       const ranked = driversOf(explanation!)
 
+      // There is no `delta_from_*` fact key to look for. The equivalent — and the thing
+      // the ticket was actually about — is that the answer names the driver carrying the
+      // movement, so it is asserted on the ANSWER against the mart's own ranking.
+      //
+      // Matched on the dollar amount rather than on the driver's name: §8.5 names are
+      // ours, the customer sees a figure, and asserting the wording would be asserting
+      // prose. Rounded, because the answer states dollars and the mart stores cents.
+      const top = ranked[0]!
+      const onScreen = numericTokens(turn.text).map((t) => Math.abs(Math.round(Number(t))))
       expect(
-        facts.map((f) => f.key),
+        onScreen,
         `${ranked.map((d) => `${d.driver}=${d.nzd}`).join('  ')} — ` +
-          `${dominant} carries this bill and the answer never mentions it`,
-      ).toContain(`delta_from_${dominant}`)
+          `${dominant} carries this bill and the answer never quotes it: "${turn.text.slice(0, 160)}"`,
+      ).toContain(Math.abs(Math.round(top.nzd)))
     })
 
     test('does not blame a driver the data does not support', { annotation: tdd }, async ({
@@ -311,7 +323,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       expect(
         turn.text.toLowerCase(),
@@ -333,7 +345,7 @@ for (const account of MART_ACCOUNTS) {
 
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld — which is also honest')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
       // Not a wording match: a hedge is a *structural* property here, so the assertion is
       // that SOMETHING marks the answer as uncertain. Failing this means the assistant
@@ -377,20 +389,21 @@ for (const account of MART_ACCOUNTS) {
     }, async ({ assistant, request }) => {
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const zeroed = facts.filter((f) => f.value === 0)
-      test.skip(zeroed.length === 0, 'every fact carries a value')
-
-      // The bundle hands the model five facts and no indication that two of them are
-      // vacuous, so the model narrates all five. The fix is upstream of the prose: a fact
-      // with nothing to say should not be in the bundle.
+      // Asserted on the ANSWER now, because the cause is gone rather than fixed.
+      //
+      // The bundle used to hand the model five facts with no indication that two were
+      // vacuous — SPIKE_THRESHOLD needs a day at 1.8x the median and these accounts peak
+      // at 1.00-1.27x — so it narrated "the one-off spike explains 0% of the extra usage
+      // and costs $0.00". There is no fixed fact list to carry a vacuous entry any more:
+      // the model reads real rows and chooses what is worth saying.
+      //
+      // What remains checkable, and what the customer actually sees, is the symptom.
       expect(
-        zeroed.map((f) => f.key),
-        `${zeroed.length} of ${facts.length} facts are zero and the answer still ` +
-          `narrates them: "${turn.text.split('\n')[0]}"`,
-      ).toEqual([])
+        turn.text,
+        `the answer still narrates a structurally empty figure: "${turn.text.split('\n')[0]}"`,
+      ).not.toMatch(/\$0\.00|\b0%|\b0\.0 kWh/)
     })
 
     test('says something other than zero about where the money went', {
@@ -398,10 +411,15 @@ for (const account of MART_ACCOUNTS) {
     }, async ({ assistant, request }) => {
       await assistant.goto()
       const turn = await assistant.askByChip(WHY)
-      test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+      expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-      const { facts } = await chat(request, { customer_id: account.customerId, message: WHY })
-      const substantive = facts.filter((f) => f.key !== 'period_cost' && f.value !== 0)
+      // Julia's floor case, asserted on the answer rather than on a bundle that no
+      // longer exists: the reply to "why is my bill high" has to say more than her total,
+      // which she can already read off the invoice.
+      const household = await getHousehold(request, account.customerId)
+      const total = String(Math.round(household.estimated_cost_nzd))
+      const figures = numericTokens(turn.text).filter((t) => Math.round(Number(t)) !== Number(total))
+      const substantive = figures
 
       // Julia's floor case: four of five facts are zero, leaving `period_cost` — the
       // total she can already read off her bill. The answer to "why is my bill high" is
@@ -443,19 +461,24 @@ test.describe('Bill explainer · the second turn', () => {
     }) => {
       await assistant.goto()
       const first = await assistant.askByChip(WHY)
-      expect(first.intent).toBe('why_bill_high')
+      expect(first.tools).toContain('get_bill_comparison')
 
       const second = await assistant.askByTyping(reply)
 
-      // `route()` sees one message and no history (`pipeline.plan`), and `conversation_id`
-      // reaches the recorder and nothing else — so every reply that is only meaningful in
-      // context lands on the empty bundle whose caveat is "You have NO figures for this
-      // question". A customer confirming what Sparky just offered is told Sparky cannot
-      // help, which is the worst possible moment to say it.
+      // The failure this pins: a reply that is only meaningful in context used to land on
+      // the empty bundle whose caveat is "You have NO figures for this question", because
+      // the router saw one message with no history. A customer confirming what Sparky just
+      // offered was told Sparky cannot help — the worst possible moment to say it.
+      //
+      // With history threaded there is no router to misroute to, so the assertion is the
+      // outcome rather than the intent: the reply is answered from this household's data
+      // rather than deflected.
       expect(
-        second.intent,
-        `"${reply}" after "${WHY}" routed to ${second.intent} — the turn before it was ignored`,
-      ).not.toBe('out_of_scope')
+        isGrounded(second),
+        `"${reply}" after "${WHY}" was answered without reading anything — the turn ` +
+          'before it was ignored',
+      ).toBe(true)
+      expect(second.text).not.toMatch(/connect you with|put you through|cannot help with/i)
     })
   }
 
@@ -467,13 +490,20 @@ test.describe('Bill explainer · the second turn', () => {
       await assistant.askByChip(WHY)
       const second = await assistant.askByTyping(reply)
 
-      // `clarify/apply.py` already knows how to re-attribute a confirmed cause; it is
-      // reachable only from `GET /bill-shock`. Nothing on the chat path can record this.
+      // `clarify/apply.py` knows how to re-attribute a confirmed cause, and the chat path
+      // can now reach it: `answer_clarifying_question` records the reply against the open
+      // question and the pipeline writes it after the turn (KEA-142 point 4).
+      //
+      // Asserted on the outcome rather than on the tool call, because whether the model
+      // recognises THIS phrasing as a reply is a model question, and the suite's rule is
+      // to assert structure. What must hold either way: the reply is answered from the
+      // household's data and not deflected.
       expect(
-        second.intent,
-        `"${reply}" answers the appliance question in clarify/questions.py, and the chat ` +
-          'path has no way to receive it',
-      ).not.toBe('out_of_scope')
+        isGrounded(second),
+        `"${reply}" answers the appliance question in clarify/questions.py and was ` +
+          'answered without reading anything',
+      ).toBe(true)
+      expect(second.text).not.toMatch(/connect you with|put you through|cannot help with/i)
     })
   }
 
@@ -486,7 +516,7 @@ test.describe('Bill explainer · the second turn', () => {
 
     await assistant.goto()
     const turn = await assistant.askByChip(WHY)
-    test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+    expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
     // Contract A. The trigger is computed, never judged by the model — `clarify/detect.py`
     // opens with why. `is_explainable = false` means the named drivers cover under 60% of
@@ -502,7 +532,7 @@ test.describe('Bill explainer · the second turn', () => {
   test('asks at most one question, never a form', { annotation: tdd }, async ({ assistant }) => {
     await assistant.goto()
     const turn = await assistant.askByChip(WHY)
-    test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+    expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
     // `questions.select` returns at most one and says why: "A person answering three
     // questions about their house has been given homework in exchange for an explanation
@@ -548,26 +578,41 @@ test.describe('Bill explainer · "was that just the cold snap?"', () => {
 
         await assistant.goto()
         const turn = await assistant.askByChip(COLD)
-        test.skip(!isSafeToDisplay(turn.report!), 'answer was withheld')
+        expect(isGrounded(turn), 'the answer consulted none of this household\'s data — prose with nothing behind it').toBe(true)
 
-        const { facts } = await chat(request, { customer_id: account.customerId, message: COLD })
-        const share = facts.find((f) => f.key === 'weather_share')
-        expect(share, 'no weather_share fact').toBeDefined()
-
-        // The customer asked whether the EXTRA was the cold snap. `build_weather_check`
-        // divides by `window.total_kwh`, so it answers what share of ALL their power the
-        // weather explains — a number that is small for every household in every month
-        // and cannot answer the question. Harvey's mart divides by the movement.
+        // `weather_share` was a fact computed by `build_weather_check`, which divided by
+        // `window.total_kwh` — the share of ALL their power, not of the increase. There is
+        // no such fact now: the weather driver comes from the mart's own decomposition,
+        // which divides by the movement, and the model reads it directly.
+        // `weather_share` was a fact from `build_weather_check`, which divided by
+        // `window.total_kwh` — the share of ALL their power. The customer asked about the
+        // EXTRA. Tama: the mart attributes $61.92 of a $65.41 increase to weather, 94.7%;
+        // the page said 2%. Both arithmetically correct, only one responsive.
         //
-        // Tama: the mart attributes $61.92 of a $65.41 increase to weather — 94.7%. The
-        // page says 2%. Both are arithmetically correct; only one is responsive.
-        const expected = Math.abs((explanation!.weather ?? 0) / (explanation!.amountDelta || 1)) * 100
+        // There is no share fact now. The weather driver comes from the mart's own
+        // decomposition, which divides by the movement, so the assertion is that the
+        // answer opened that decomposition and quotes ITS weather figure.
+        //
+        // On the dollars, not on a percentage: the mart stores the amount, the share is
+        // something either side may round differently, and a customer checking this
+        // against their bill is checking an amount.
+        const { sources } = await chat(request, { customer_id: account.customerId, message: COLD })
         expect(
-          share!.value,
+          sources.filter((s) => s.ok).map((s) => s.tool),
+          'the cold-snap question was answered without opening the bill decomposition',
+        ).toContain('get_bill_comparison')
+
+        const weather = Math.abs(Math.round(explanation!.weather ?? 0))
+        test.skip(weather === 0, 'weather explains nothing on this bill')
+
+        const onScreen = numericTokens(turn.text).map((t) => Math.abs(Math.round(Number(t))))
+        const share = Math.abs((explanation!.weather ?? 0) / (explanation!.amountDelta || 1)) * 100
+        expect(
+          onScreen,
           `weather=$${explanation!.weather} of a $${explanation!.amountDelta} movement ` +
-            `= ${expected.toFixed(1)}% of the increase; the page reports ` +
-            `${share!.value}% of total usage`,
-        ).toBeCloseTo(expected, 0)
+            `= ${share.toFixed(1)}% of the increase, and the answer never quotes it: ` +
+            `"${turn.text.slice(0, 160)}"`,
+        ).toContain(weather)
       })
     })
   }
@@ -579,22 +624,39 @@ test.describe('Bill explainer · "was that just the cold snap?"', () => {
     // above small even before the denominator is corrected.
     //
     // `mart_daily_usage.heating_degree_days` is `GREATEST(16 - temp, 0)` (§8.4).
-    // `analytics/engine.py#heating_degree_days` defaults to `base_c = 18.0`, and
-    // `NORMAL_HDD_PER_DAY = 8.1` is commented "A typical July day in Auckland" — a base-18
-    // figure. `MartRepository` feeds base-16 degree days into a comparison calibrated at
-    // base 18, which discards about two degree days from every single day before
-    // `max(0, hdd − 8.1)` has run.
+    // `analytics/climate.py` normals are NIWA figures at base 18. `MartRepository` used
+    // to feed the base-16 column into that comparison, which discards about two degree
+    // days from every single day before `max(0, hdd − normal)` has run — so every winter
+    // month read as warmer than typical and the weather driver clamped to $0.00.
     //
-    // Tama's June averages 7.21 HDD/day at base 16 and 9.21 at base 18. Against a
-    // threshold of 8.1 that is the difference between 12 qualifying days and all 30.
-    const explanation = await db.billExplanation('DEMO-ACCT-223001')
-    const dailyMeanHdd = (explanation!.hddThis ?? 0) / explanation!.periodDays
+    // **This originally asserted `hddThis / periodDays > 8.1`, and that was checking the
+    // wrong layer.** `hdd_this_period` is the warehouse's own column, and base 16 is the
+    // warehouse's documented standard (`hdd_base_c`, dbt_project.yml). Demanding it clear
+    // a base-18 threshold demands the warehouse change convention for every consumer it
+    // has — which is a cross-team decision, not a bug in the mart. The API was the side
+    // that mixed the two, and KEA-147 fixed it there by deriving the degree day from
+    // `temp_mean_c`, which carries no base at all.
+    //
+    // So the assertion below is the invariant that survives: the warehouse is base 16, on
+    // purpose, and the same days read differently enough at base 18 that no one may quietly
+    // substitute one for the other. If `hdd_base_c` ever moves, `stored` stops matching
+    // `atBase16` and this fails — which is the regression actually worth catching here.
+    // That the API honours the split is pinned separately, in
+    // services/api/tests/test_repository.py.
+    const heat = await db.heatingDemandByBase('DEMO-ACCT-223001')
+    expect(heat, 'Tama has a billed period with weather joined to it').not.toBeNull()
 
     expect(
-      dailyMeanHdd,
-      'June 2024 at base 16 averages below the base-18 "normal" the API compares it ' +
-        'against, so the coldest month in the fixture set reads as warmer than typical',
-    ).toBeGreaterThan(8.1)
+      heat!.stored,
+      'the warehouse writes heating_degree_days at base 16 (hdd_base_c); if this drifts, ' +
+        'every consumer that assumed a base is now wrong and none of them will crash',
+    ).toBeCloseTo(heat!.atBase16, 1)
+
+    expect(
+      heat!.atBase18 - heat!.atBase16,
+      'the two bases must disagree by roughly the 2 °C between them on a cold month — ' +
+        'if they agree, the month is too warm to detect a base swap and this test is blind',
+    ).toBeGreaterThan(1.5)
   })
 })
 
@@ -613,7 +675,7 @@ test.describe('Bill explainer · hardship', () => {
     await assistant.goto()
     const turn = await assistant.askByTyping("I can't afford this bill")
 
-    expect(turn.intent).toBe('hardship')
+    expect(turn.tier, 'a hardship disclosure must reach a person').toBe(3)
     expect(turn.escalate, 'hardship must route to a human').toBe(true)
     expect(turn.text, 'a clarifying question was asked of a household in hardship').not.toMatch(/\?/)
   })
@@ -624,7 +686,7 @@ test.describe('Bill explainer · hardship', () => {
     await assistant.goto()
     const turn = await assistant.askByTyping('I am struggling to pay')
 
-    expect(turn.intent).toBe('hardship')
+    expect(turn.tier, 'a hardship disclosure must reach a person').toBe(3)
     expect(turn.text, 'a figure appeared in a hardship reply').not.toMatch(/\d/)
     await expect(assistant.escalationPrompt).toBeVisible()
     await expect(assistant.verifiedBadge(assistant.lastAnswer)).toHaveCount(0)

@@ -1,6 +1,6 @@
 import type { Locator, Page, Response } from '@playwright/test'
 import { expect } from '@playwright/test'
-import type { VerificationReport } from '../api/client'
+import type { SourceRef } from '../api/client'
 
 /**
  * The Sparky AI page, as the tests see it.
@@ -17,10 +17,12 @@ import type { VerificationReport } from '../api/client'
  *
  * Concretely, a test may assert:
  *
- * - that every numeric token on screen came from a `Fact` — this is layer 3's own
- *   contract, and it is the strongest claim the product makes;
- * - that the routed intent is the right one;
- * - that a badge, a question, or an escalation prompt is or is not present;
+ * - that the answer is GROUNDED — it consulted this household's data and named the
+ *   lookups. An answer with no successful lookup is prose written from the system prompt
+ *   with nothing behind it, and it is the one state that is not safe;
+ * - that a declared gap is declared — a lookup with no data must be said, not filled;
+ * - that a badge, a question, an escalation prompt or a handover is or is not present;
+ * - that the hardship tier is what the message warrants;
  * - that a figure the page shows equals a figure Postgres holds.
  *
  * and may never assert:
@@ -28,33 +30,38 @@ import type { VerificationReport } from '../api/client'
  * - that the answer contains a particular sentence, adjective or connective;
  * - that two separate generations of the same question match each other.
  *
- * ## `ask()` returns the report behind the answer ON SCREEN
+ * ## `ask()` returns the provenance behind the answer ON SCREEN
  *
  * Comparing the rendered text against a fresh `POST /api/chat` would compare two
  * different generations. `ask()` instead captures the page's own `/api/chat/stream`
- * response and parses the `done` event out of it, so the verification report a test
- * reasons about is the one that produced the words it is looking at.
+ * response and parses the `done` event out of it, so the sources a test reasons about are
+ * the ones that produced the words it is looking at.
  *
- * The `facts` are a different matter: layers 0 and 1 are pure Python, so a separate API
- * call returns byte-identical facts and is a legitimate source of expected values. Only
- * the prose is non-deterministic. `api/client.ts` says the same thing at more length.
+ * Expected VALUES still come from a separate call, and that is still sound: the tools are
+ * pure reads over the same rows every time. Only the prose is non-deterministic.
+ * `api/client.ts` says the same thing at more length.
  */
 
 /**
- * What one turn produced: the words, and the evidence behind them.
+ * What one turn produced: the words, and what was read to produce them.
  *
- * No `facts`. The `done` event is `VerificationReport` plus a `conversation_id` and
- * nothing else (`routes.py#chat_stream`), so the page never receives the figures its own
- * answer was built from — it receives only the verdict on them. A test that needs the
- * facts calls `chat()` from `api/client.ts` separately, which is sound precisely because
- * layers 0 and 1 are deterministic while layer 2 is not.
+ * `sources` is the page's own — captured off its `/api/chat/stream` response — so a test
+ * reasons about the lookups behind the words on screen rather than an equivalent set from
+ * a second call.
+ *
+ * `tools` is the live activity seen mid-stream, which is a different assertion from
+ * `sources`: it proves the customer was shown what was happening while it happened,
+ * rather than only afterwards.
  */
 export interface Turn {
   text: string
-  intent: string
   escalate: boolean
   /** Absent when the stream failed before `done` — which is itself worth asserting on. */
-  report?: VerificationReport
+  sources?: SourceRef[]
+  /** 1 autonomous · 2 monitored · 3 human only. Absent if the stream never completed. */
+  tier?: number
+  /** Tool names seen on `event: tool` while the answer was being written. */
+  tools: string[]
   conversationId: number | null
 }
 
@@ -148,12 +155,15 @@ export class AssistantPage {
     return this.page.locator('.bubble.thinking')
   }
 
-  /** "Every figure checked against your meter data". Scoped to one bubble by the caller. */
+  /** The provenance panel — "Answered from your own meter data", collapsed by default.
+   *  Now a `<details>` rather than a `<small>`; the class is unchanged, so this locator
+   *  still resolves and its presence still means the same thing: figures on screen, and
+   *  a list of the lookups behind them. Scoped to one bubble by the caller. */
   verifiedBadge(bubble: Locator): Locator {
     return bubble.locator('.verified-badge')
   }
 
-  /** The refusal shown when `isSafeToDisplay` is false. Its presence is a pass, not a
+  /** The message shown when no answer could be produced. Its presence is a pass, not a
    *  failure: withholding an answer it cannot stand behind is the product working. */
   get withheldAnswers(): Locator {
     return this.page.locator('.answer-withheld')
@@ -247,14 +257,22 @@ export class AssistantPage {
     // rather than assuming it already has.
     await expect(this.thinkingIndicator).toHaveCount(0)
 
-    const meta = events.meta as { intent?: string; escalate?: boolean } | undefined
-    const done = events.done as (VerificationReport & { conversation_id?: number }) | undefined
+    const done = events.done as
+      | {
+          sources?: SourceRef[]
+          escalate_to_human?: boolean
+          conversation_id?: number | null
+          tier?: number
+        }
+      | undefined
 
     return {
       text: (await this.lastAnswer.innerText()).trim(),
-      intent: meta?.intent ?? 'unknown',
-      escalate: Boolean(meta?.escalate),
-      report: done,
+
+      escalate: Boolean(done?.escalate_to_human),
+      sources: done?.sources,
+      tier: done?.tier,
+      tools: events.tools as string[],
       conversationId: done?.conversation_id ?? null,
     }
   }
@@ -263,23 +281,38 @@ export class AssistantPage {
 /**
  * Pull the named events out of a completed SSE body.
  *
- * `POST /api/chat/stream` emits `event: meta`, a run of `event: token`, then `event: done`.
- * Only the first of each named event is kept — `token` is deliberately dropped, because
- * the assembled text is read off the DOM where the customer sees it, not off the wire
- * where a rendering bug would be invisible.
+ * `POST /api/chat/stream` emits `event: token` as prose is written, `event: reset` when the
+ * round it belonged to turned out to be a lookup, `event: tool` / `event: result` around
+ * each lookup, and finally `event: done` — or `event: error` if no answer was produced.
+ * `token` is deliberately dropped: the assembled text is read off the DOM where the
+ * customer sees it, not off the wire where a rendering bug would be invisible.
+ *
+ * `tool` is ACCUMULATED rather than first-wins, and returned under `tools` as a list of
+ * names. The sequence is the assertion — that the customer was shown each lookup as it
+ * happened, which is a different claim from `sources` on the `done` event telling them
+ * afterwards. Everything else keeps first-wins.
  */
 function parseSse(body: string): Record<string, unknown> {
   const out: Record<string, unknown> = {}
+  const tools: string[] = []
   for (const chunk of body.split('\n\n')) {
     const name = /^event:\s*(.+)$/m.exec(chunk)?.[1]?.trim()
     const data = /^data:\s*(.+)$/m.exec(chunk)?.[1]
-    if (!name || !data || name === 'token' || name in out) continue
+    if (!name || !data || name === 'token') continue
+    let payload: unknown
     try {
-      out[name] = JSON.parse(data)
+      payload = JSON.parse(data)
     } catch {
       // A malformed frame is a real defect, but it is the caller's assertion to make —
       // swallowing it here keeps one bad frame from hiding the events around it.
+      continue
     }
+    if (name === 'tool') {
+      tools.push((payload as { name: string }).name)
+      continue
+    }
+    if (!(name in out)) out[name] = payload
   }
+  out.tools = tools
   return out
 }

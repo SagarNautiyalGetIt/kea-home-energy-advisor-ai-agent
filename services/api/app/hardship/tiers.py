@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from app.hardship.signals import HardshipAssessment
+from app.hardship.signals import HardshipAssessment, Source
 
 #: Score at or above which a person watches. Set low on purpose — see the module note on
 #: why the middle band is wide.
@@ -170,12 +170,28 @@ def decide(
         )
 
     if score >= MONITORED_THRESHOLD:
+        # Paged only when the customer SAID something. An account-derived signal on its
+        # own puts the conversation on a watchlist; it does not put a person on standby.
+        #
+        # This matters more here than it looks, because the product is bill-shock
+        # prevention: a bill up 66% is the event it exists to catch, and Tama's account
+        # trips `bill_shock` on a plain "why is my bill so high?" with no distress in it
+        # at all. Paging on that would page on a large share of the cohort, every cycle,
+        # and a queue that full is one nobody reads — which is how the real disclosure
+        # underneath gets missed.
+        #
+        # Same distinction the care register already gets below, for the same reason.
+        said_something = any(s.source is Source.LANGUAGE for s in assessment.signals)
         return TierDecision(
             tier=Tier.MONITORED,
-            reason="there are signs of financial pressure on this account",
+            reason=(
+                "the customer mentioned something that suggests financial pressure"
+                if said_something
+                else "this account shows signs of financial pressure"
+            ),
             evidence=evidence,
             score=score,
-            notify_agent=True,
+            notify_agent=said_something,
         )
 
     # 5. The care register never leaves a conversation fully unwatched, even with no
