@@ -55,21 +55,16 @@ from typing import Any
 
 from app.analytics import forecast as forecast_mod
 from app.analytics.account import AccountContext
-from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD, TariffOption, UsageWindow
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD, UsageWindow
 from app.analytics.repository import UsageContext
 
 log = logging.getLogger(__name__)
 
-#: Illustrative plans — Kea's real tariffs are not public, and every surface quoting a
-#: dollar figure has to say so. Standard trades a higher daily charge for a lower unit
-#: rate; Low Fixed Charge is the reverse, which is why it suits low users.
-#:
-#: Break-even is (1.50 - 0.30) / (0.36 - 0.30) = **20 kWh/day**, calibrated against NZ's
-#: Low Fixed Charge regulation (households under ~8,000 kWh/year, about 22 kWh/day). An
-#: earlier draft used 0.34 for the LFC unit rate, which pushed break-even to 30 kWh/day
-#: and made LFC look cheaper for almost everybody.
-STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
-LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
+#: The illustrative plan catalogue moved to `app/analytics/plans.py`, which prices all
+#: four shapes against the household's own daily rows and computes the reasoning with
+#: them. The two rates that used to live here — Standard at 30c/1.50, Low Fixed Charge at
+#: 36c/0.30, breaking even at 20 kWh/day — are unchanged there, so a household quoted a
+#: break-even before this change is quoted the same one now.
 
 ILLUSTRATIVE_DISCLOSURE = (
     "Kea's real tariffs are not public, so dollar figures here use an ILLUSTRATIVE "
@@ -241,11 +236,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "get_plan_options",
         "description": (
-            "The illustrative plans available, with unit rates, daily fixed charges and "
-            "the break-even daily usage between them, plus what this household would "
-            "pay on each over the period. Use it when asked whether a different plan "
-            "would be cheaper. The rates are illustrative because Kea's real tariffs "
-            "are not public; say so when you quote them."
+            "Every plan priced against THIS household's own metered usage, with the "
+            "reasoning attached: what each would cost over the period and per year, how "
+            "much of that is daily charges versus units, which plan is cheapest for them, "
+            "how far their daily average sits from the point where the answer flips, and "
+            "whether the cheapest plan stays cheapest on cold days as well as mild ones. "
+            "Use it for anything about plans, rates, switching, whether they are on the "
+            "right plan, or how to pay less. Read `worth_switching` before recommending "
+            "anything — a plan that wins by two dollars a month has not been shown to win "
+            "at all, and saying so is a real answer. The rates are illustrative because "
+            "Kea's real tariffs are not public; the usage and the arithmetic are real."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -271,6 +271,77 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 }
             },
             "required": [],
+        },
+    },
+    {
+        "name": "discover_smart_devices",
+        "description": (
+            "Scan the customer's own home network for smart devices that announce "
+            "themselves — Google Cast and Nest, Apple HomeKit accessories, Matter "
+            "devices, Philips Hue, Shelly and Tasmota plugs, Home Assistant, SmartThings. "
+            "Use it when they ask what smart devices you can see, whether you can connect "
+            "to their home, or how to get a per-appliance breakdown. IT FINDS NAMES, NOT "
+            "ENERGY: an announcement carries no power figure and there is no way to derive "
+            "one, so never attach a kWh or dollar amount to anything it returns. What it "
+            "is for is the next step — 'you have a Home Assistant and two Shelly plugs, "
+            "connecting those would let me tell you what they actually used'. Takes a few "
+            "seconds and only works when the customer's device is on the same network as "
+            "this service, so an empty result usually means it is not."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_energy_breakdown",
+        "description": (
+            "Where this household's power actually goes, split into categories that are "
+            "each separately measurable: the always-on background load, the separately "
+            "metered circuit (usually hot water), the part of usage that moves with "
+            "outdoor temperature, and everything else. This is the answer to 'what's "
+            "using all my power' and 'which appliance is costing me the most' — give them "
+            "this rather than only refusing. It does NOT identify appliances and you must "
+            "not turn a category into a device: 'heating' is a fitted response to "
+            "temperature, not a heat pump. Each slice carries a confidence that decides "
+            "how you word it. Also use it for 'how do I use less', because it says which "
+            "part of their bill is actually movable."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "search_help_topics",
+        "description": (
+            "Reference material for questions about the SERVICE rather than about this "
+            "household's meter: how billing periods work, what the daily charge is for, "
+            "estimated readings, disputing a bill, ways to pay, what help exists when a "
+            "bill cannot be paid, medically dependent registration, the two regulated plan "
+            "categories, switching, moving house, solar buy-back, how alerts work, what "
+            "you are allowed to change on their account, privacy, power cuts, and how you "
+            "produce an answer. Call it whenever the question is not answerable from the "
+            "meter data, and call it ALONGSIDE the data tools when a question is both — "
+            "'why am I charged when I was away' needs the daily charge explained and their "
+            "own daily charge quoted. Returns facts to reason from, not an answer to "
+            "repeat: write the reply to what they actually asked."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "The customer's question, in their own words where possible. "
+                        "Phrasing matters — the index is built on how people actually ask, "
+                        "so passing their sentence beats passing a keyword."
+                    ),
+                },
+                "topic": {
+                    "type": "string",
+                    "description": (
+                        "Optional filter: billing, payments, hardship, plans, meters, "
+                        "moving, solar, alerts, privacy, assistant, account. Omit unless "
+                        "a first search returned the wrong area."
+                    ),
+                },
+            },
+            "required": ["question"],
         },
     },
     {
@@ -312,6 +383,115 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["answer"],
+        },
+    },
+    {
+        "name": "update_alert_settings",
+        "description": (
+            "Change this household's bill-shock warning settings, immediately. Use it when "
+            "the customer asks for something you can honour here — 'text me at 20% "
+            "instead', 'stop emailing me', 'don't call after 8pm', 'turn the warnings "
+            "off', 'only warn me if it's more than $50 over'. Do it rather than telling "
+            "them where the Settings screen is; doing it is the answer. The thresholds are "
+            "a ladder — email fires first, then a text, then a call — and it must stay in "
+            "that order, so setting the text lower than the email is refused and you "
+            "should offer to move both. It returns exactly what changed and the whole "
+            "ladder as it now stands: say both back, because 'done' gives the customer no "
+            "way to catch you having changed the wrong one. It CANNOT take a payment, "
+            "change bank or card details, change a due date, or change a plan."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "channel": {
+                    "type": "string",
+                    "description": (
+                        "email | sms | voice. Required with `threshold_pct`, and names "
+                        "which channel that percentage is for."
+                    ),
+                },
+                "threshold_pct": {
+                    "type": "number",
+                    "description": (
+                        "How far over their normal spend that channel fires at, as a "
+                        "percentage. 5 to 200."
+                    ),
+                },
+                "minimum_nzd": {
+                    "type": "number",
+                    "description": (
+                        "Dollar floor under every warning, whatever the percentage says. "
+                        "Stops small bills triggering constantly."
+                    ),
+                },
+                # `items` is required, not decorative. Gemini rejects the whole tool
+                # catalogue with 400 INVALID_ARGUMENT — "function_declarations[11].
+                # parameters.properties[turn_on].items: missing field" — and the failure
+                # takes down every tool in the request, not just this one. Anthropic and
+                # Ollama accept the array without it, so this is invisible until the
+                # provider that does not is the one in front of a customer.
+                "turn_on": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Channels to switch on: email, sms, voice.",
+                },
+                "turn_off": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Channels to switch off.",
+                },
+                "quiet_from_hour": {
+                    "type": "integer",
+                    "description": "Local hour (0-23) after which texts and calls stop.",
+                },
+                "quiet_until_hour": {
+                    "type": "integer",
+                    "description": "Local hour (0-23) at which they may resume.",
+                },
+                "warnings_enabled": {
+                    "type": "boolean",
+                    "description": (
+                        "Master switch for bill-shock warnings. False stops every channel "
+                        "but keeps the assessment visible in the app — turning off the "
+                        "interruption is not turning off the product."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "request_plan_change",
+        "description": (
+            "Move this household onto a different Kea plan. TWO STEPS, and both are "
+            "required: call it first without `confirm` to stage the change and get back "
+            "what it would mean, tell the customer that in your reply and ask them to "
+            "confirm, then call it again with confirm=true once they have said yes. Do "
+            "NOT pass confirm=true on the strength of the message that asked for the "
+            "switch — 'put me on the cheaper one' is a request, not a confirmation. This "
+            "records the request for the team, who action it from the next billing period; "
+            "it does not change the plan on the spot, and you must not tell them it has. "
+            "Call get_plan_options first so the figure you quote is a real one."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "plan_code": {
+                    "type": "string",
+                    "description": (
+                        "The plan to move to, as `code` from get_plan_options — e.g. "
+                        "standard, low_fixed, time_of_use, solar."
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "True ONLY when the customer has said yes to the staged change in "
+                        "a later message. Omit or false to stage."
+                    ),
+                },
+            },
+            "required": ["plan_code"],
         },
     },
     {
@@ -522,6 +702,27 @@ def get_account_summary(ctx: ToolContext) -> dict[str, Any]:
     return summary
 
 
+def billed_days(ctx: ToolContext) -> list:
+    """The account's days, narrowed to the period the rest of the app is answering about.
+
+    `account.days` is the WHOLE history the mart holds — 397 days for Rangi — while
+    `/api/households/{id}` serves the billed period. Reading the raw list made the
+    assistant say "over the 397 days on this bill" and name a peak the dashboard
+    disagreed with: the same defect as KEA-141 §3, on the path that fix missed.
+
+    Shared by `get_daily_usage` and `compare_plans` rather than repeated, because the two
+    quoting different periods for the same household is the same class of bug one step
+    along: a plan comparison priced over 397 days beside a bill explanation about 31 is
+    two answers that cannot both be right, and nothing would flag it.
+    """
+    days = ctx.account.days
+    start = getattr(ctx.usage, "period_start", None)
+    end = getattr(ctx.usage, "period_end", None)
+    if start and end:
+        return [d for d in days if start <= d.date <= end] or days
+    return days
+
+
 def get_daily_usage(
     ctx: ToolContext,
     start_date: str | None = None,
@@ -532,20 +733,11 @@ def get_daily_usage(
     if not days:
         return _unavailable("no daily usage rows for this account")
 
-    # Default to the period the rest of the app is answering about.
-    #
-    # `account.days` is the WHOLE history the mart holds — 397 days for Rangi — while
-    # `/api/households/{id}` serves the billed period. Reading the raw list made the
-    # assistant say "over the 397 days on this bill" and name a peak the dashboard
-    # disagreed with: the same defect as KEA-141 §3, on the path that fix missed.
-    #
-    # An explicit `start_date`/`end_date` still reaches the full history, which is the
-    # point of them — "how does this compare with last winter" is a real question, and it
-    # is one the model has to ask for rather than get by accident.
-    window_start = getattr(ctx.usage, "period_start", None)
-    window_end = getattr(ctx.usage, "period_end", None)
-    if window_start and window_end and not (start_date or end_date or last_n_days):
-        days = [d for d in days if window_start <= d.date <= window_end] or days
+    # An explicit `start_date`/`end_date` reaches the full history, which is the point of
+    # them — "how does this compare with last winter" is a real question, and it is one
+    # the model has to ask for rather than get by accident.
+    if not (start_date or end_date or last_n_days):
+        days = billed_days(ctx)
 
     def _parse(value: str | None) -> dt.date | None:
         if not value:
@@ -879,45 +1071,105 @@ def compare_to_similar_homes(ctx: ToolContext) -> dict[str, Any]:
 
 
 def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
-    window = ctx.usage.window
-    days = len(window.daily_kwh)
-    total_kwh = window.total_kwh
-    plan = ctx.account.plan
+    """Every illustrative plan priced on this household's own metered usage.
 
-    # (1.50 - 0.30) / (0.36 - 0.30) = 20 kWh/day. Computed rather than written down so
-    # editing a rate above cannot leave a stale threshold in the answer.
-    break_even = (STANDARD_PLAN.daily_fixed_nzd - LOW_FIXED_PLAN.daily_fixed_nzd) / (
-        LOW_FIXED_PLAN.unit_price_nzd - STANDARD_PLAN.unit_price_nzd
+    Rewritten around `analytics/plans.py`. The old version returned two flat plans, a
+    break-even and a period cost, which was enough to say *whether* to switch and not
+    enough to say *why* — so the answers read as an assertion with a number in it, from a
+    product whose whole claim is that it never asks to be taken on trust.
+
+    Everything derived is derived in Python. A model handed a break-even, two plan costs
+    and a period will occasionally produce a third figure that contradicts both, and this
+    is the one tool here where a wrong derived figure ends with somebody changing their
+    electricity plan.
+    """
+    from app.analytics import plans as plans_mod
+
+    days = billed_days(ctx)
+    account = ctx.account
+    plan = account.plan
+    connection = account.connection
+
+    comparison = plans_mod.compare(
+        days,
+        period=ctx.usage.window.period,
+        plan_name=plan.name if plan else None,
+        plan_code=plan.code if plan else None,
+        plan_user_type=plan.user_type if plan else None,
+        has_solar=bool(connection and connection.has_solar),
+        has_controlled_load=bool(connection and connection.has_controlled_load),
     )
+
+    if not comparison.available:
+        return _unavailable(comparison.reason or "a plan comparison is not possible here")
+
+    def _option(cost: plans_mod.PlanCost) -> dict[str, Any]:
+        shape = cost.plan
+        return _prune(
+            {
+                "code": shape.code,
+                "name": shape.name,
+                "user_type": shape.user_type,
+                "daily_fixed_nzd": shape.daily_fixed_nzd,
+                "unit_rate_nzd_per_kwh": shape.unit_rate_nzd,
+                "off_peak_rate_nzd_per_kwh": shape.off_peak_rate_nzd,
+                "controlled_rate_nzd_per_kwh": shape.controlled_rate_nzd,
+                "export_rate_nzd_per_kwh": shape.export_rate_nzd
+                if connection and connection.has_solar
+                else None,
+                "cost_over_this_period_nzd": cost.total_nzd,
+                "cost_per_day_nzd": _round(cost.per_day_nzd),
+                # The decomposition IS the explanation. "Your daily charges would drop $37
+                # but your units would cost $52 more" is the sentence a customer can check;
+                # a total cannot be taken apart back into it.
+                "of_which_daily_charges_nzd": cost.fixed_nzd,
+                "of_which_energy_nzd": cost.energy_nzd,
+                "of_which_controlled_circuit_nzd": cost.controlled_nzd or None,
+                "less_solar_export_credit_nzd": cost.export_credit_nzd or None,
+                "priced_from": cost.priced_from,
+                "suits": shape.suits,
+                "is_current_plan": shape.code == comparison.current_plan_code,
+            }
+        )
 
     return {
         "available": True,
-        "period": window.period,
-        "days_in_period": days,
-        "usage_kwh": _round(total_kwh),
-        "mean_daily_kwh": _round(window.mean_kwh),
-        "options": [
-            {
-                "name": option.name,
-                "unit_rate_nzd_per_kwh": option.unit_price_nzd,
-                "daily_fixed_nzd": option.daily_fixed_nzd,
-                "cost_over_this_period_nzd": _round(option.cost_for(total_kwh, days)),
-            }
-            for option in (STANDARD_PLAN, LOW_FIXED_PLAN)
-        ],
-        "break_even_kwh_per_day": _round(break_even, 1),
-        "current_plan": plan.name if plan else None,
-        "guidance": (
-            "Below the break-even daily usage the Low Fixed Charge plan wins; above it "
-            "the Standard plan does. Compare against THIS household's mean daily usage "
-            "and say which side of the line they sit, and by how much. If the gap is "
-            "small, say it is small — switching for two dollars a month is not advice."
+        "period": comparison.period,
+        "days_in_period": comparison.days,
+        "usage_kwh": comparison.total_kwh,
+        "mean_daily_kwh": comparison.mean_daily_kwh,
+        "daily_usage_varies_by_kwh": plans_mod.variability_kwh_per_day(days),
+        # Cheapest first. The order carries meaning, so it is fixed here rather than left
+        # to whatever order the catalogue happens to be declared in.
+        "options": [_option(c) for c in comparison.ranked()],
+        "current_plan_on_file": plan.name if plan else None,
+        "current_plan_matched_to": comparison.current_plan_code,
+        "cheapest_for_this_household": comparison.best_code,
+        "saving_nzd_over_this_period": comparison.saving_nzd_per_period or None,
+        "saving_nzd_per_year": comparison.saving_nzd_per_year or None,
+        # null, not false, when the current plan could not be matched — see
+        # `PlanComparison.material`. The difference is "we don't know" against "no".
+        "worth_switching": comparison.material,
+        "break_even_kwh_per_day": comparison.break_even_kwh_per_day,
+        "break_even_between": list(comparison.break_even_between)
+        if comparison.break_even_between
+        else None,
+        "headroom_kwh_per_day": comparison.headroom_kwh_per_day,
+        "sensitivity": plans_mod.sensitivity(comparison),
+        "cost_per_day_on_cold_days": comparison.winter_cost or None,
+        "cost_per_day_on_mild_days": comparison.summer_cost or None,
+        "caveats": comparison.caveats,
+        "guidance": plans_mod.explain(comparison),
+        "source": (
+            "illustrative plan catalogue in app/analytics/plans.py, priced against this "
+            f"household's own daily meter readings for {comparison.period}"
         ),
-        "source": "illustrative plan catalogue in app/agent/tools.py",
         "tariff_note": (
             "These plans are illustrative. Kea's real tariffs are not public, so the "
             "comparison shows the SHAPE of the trade-off — high fixed charge and low "
-            "unit rate against the reverse — rather than Kea's actual prices. Say so."
+            "unit rate against the reverse, flat against time-of-use — rather than Kea's "
+            "actual prices. The USAGE is this household's own, and so is the arithmetic. "
+            "Say so once."
         ),
     }
 
@@ -996,6 +1248,233 @@ def project_this_bill(ctx: ToolContext, as_at_day: int | None = None) -> dict[st
     }
 
 
+async def discover_smart_devices(ctx: ToolContext) -> dict[str, Any]:
+    """What is on the customer's network, by listening to what it already broadcasts.
+
+    The one tool here that reads something other than the customer's account, and the
+    guardrail is in the shape of the result rather than in the prompt: there is no energy
+    field anywhere in it, because an mDNS announcement carries no power figure. A list of
+    device names is exactly the raw material from which a plausible "your heat pump used
+    about 40 kWh" could be assembled, so the result says in three separate places that it
+    contains none.
+
+    See `app/homelink/discovery.py` for what is scanned and why nothing is stored.
+    """
+    from app.homelink import discovery
+
+    result = await discovery.discover()
+    payload = discovery.summarise(result)
+
+    if payload["error"]:
+        return _unavailable(
+            f"the network scan could not run: {payload['error']}. This is normal when the "
+            "service is running somewhere other than the customer's own network — say so "
+            "plainly rather than telling them they have no smart devices.",
+            method=payload["method"],
+        )
+
+    if not payload["devices_found"]:
+        return _unavailable(
+            "no smart devices answered on this network. That does NOT mean they have "
+            "none: this only sees the network this service is running on, so if they are "
+            "using the app from somewhere else, or their devices are on a guest network, "
+            "nothing will answer. Say what was scanned and why it may have found nothing, "
+            "and offer to connect a platform account instead — that route works from "
+            "anywhere.",
+            scan_was_shallow=payload["scan_was_shallow"],
+        )
+
+    return {
+        "available": True,
+        **payload,
+        "important": (
+            "These are device NAMES ONLY. Nothing here carries energy, power or cost, and "
+            "there is no way to work one out from a name — do not attach a kWh or a dollar "
+            "figure to any of them, and do not use this list to answer 'what is using my "
+            "power'. Use get_energy_breakdown for that."
+        ),
+        "guidance": (
+            "Tell them what you found, grouped by platform rather than as a flat list — "
+            "'three Google devices and a Home Assistant' is more useful than nine "
+            "hostnames. Then say what connecting one would buy them: a connected device "
+            "that reports its own energy is the only thing that lets you name an "
+            "appliance at all. `platforms_worth_connecting` is the shortlist. If "
+            "`scan_was_shallow` is true, say the scan was quick and may have missed "
+            "devices that were asleep."
+        ),
+        "source": "mDNS announcements on the local network, app/homelink/discovery.py",
+    }
+
+
+def get_energy_breakdown(ctx: ToolContext) -> dict[str, Any]:
+    """The honest half of "what's using all my power".
+
+    This is the tool that turns the product's central limitation into an answer. The rule
+    that a whole-house meter cannot identify an appliance is unchanged and unchangeable —
+    but it was being used to refuse a question that *is* answerable at the level of
+    behaviour, which is the level the customer can act on anyway. Nobody switches off
+    "the fridge"; they switch off the standing load.
+
+    See `app/analytics/disaggregation.py` for why each category is a measurement rather
+    than an inference, and for the one category that is deliberately not decomposed.
+    """
+    from app.analytics import disaggregation
+
+    days = billed_days(ctx)
+    if not days:
+        return _unavailable("no daily usage rows for this account")
+
+    connection = ctx.account.connection
+    breakdown = disaggregation.split(
+        days,
+        period=ctx.usage.window.period,
+        unit_price_nzd=ctx.usage.window.unit_price_nzd,
+        has_controlled_load=bool(connection and connection.has_controlled_load),
+        heating_sensitivity_kwh_per_hdd=ctx.account.heating_sensitivity_kwh_per_hdd,
+    )
+
+    if not breakdown.available:
+        return _unavailable(breakdown.reason or "a breakdown is not possible for this account")
+
+    return {
+        "available": True,
+        "period": breakdown.period,
+        "days": breakdown.days,
+        "total_kwh": breakdown.total_kwh,
+        "total_cost_nzd": breakdown.total_cost_nzd,
+        "categories": [
+            _prune(
+                {
+                    "key": s.key,
+                    "label": s.label,
+                    "kwh": s.kwh,
+                    "cost_nzd": s.cost_nzd,
+                    "share_of_bill_pct": s.share_pct,
+                    "confidence": s.confidence.value,
+                    "how_this_was_worked_out": s.basis,
+                    "caveat": s.caveat or None,
+                    "detail": s.detail or None,
+                }
+            )
+            for s in breakdown.slices
+        ],
+        "largest_identified_category": (
+            breakdown.largest.key if breakdown.largest else None
+        ),
+        "heating_fit_r_squared": breakdown.heating_fit_r2,
+        "heating_not_reported_because": breakdown.heating_not_reported_because,
+        "always_on_not_reported_because": breakdown.always_on_not_reported_because,
+        "caveats": breakdown.caveats,
+        "guidance": disaggregation.explain(breakdown),
+        "source": (
+            "this household's own daily meter readings, split by "
+            "app/analytics/disaggregation.py"
+        ),
+        "tariff_note": tariff_note(ctx),
+    }
+
+
+def search_help_topics(
+    ctx: ToolContext, question: str, topic: str | None = None
+) -> dict[str, Any]:
+    """Reference material for the questions the meter cannot answer.
+
+    Returns facts, never prose. The corpus deliberately holds no stored answer — see
+    `app/knowledge/__init__.py` — because an assistant that pastes a paragraph per topic is
+    the twenty-six-intent router rebuilt in a new place, and it produces the same symptom:
+    one canned response regardless of what was actually asked.
+
+    An empty result is a first-class outcome. Below the retrieval floor this returns
+    nothing rather than the least-bad article, so a question the corpus does not cover
+    produces "I don't have anything on that" instead of a confident answer built out of an
+    article about something else — a failure the customer has no way to detect.
+    """
+    from app.knowledge import TOPICS, search
+
+    if topic and topic not in TOPICS:
+        return {
+            "error": f"unknown topic {topic!r}",
+            "valid_topics": list(TOPICS),
+            "hint": "Omit `topic` to search everything.",
+        }
+
+    hits = search(question, topic=topic)
+    if not hits:
+        return _unavailable(
+            "nothing in the help material covers that. Say plainly that you do not have "
+            "information on it rather than answering from general knowledge — you have no "
+            "source for Kea's policies beyond what these articles carry. Answer any part "
+            "of the question the account data CAN answer, and offer the team for the rest.",
+            searched_for=question,
+            topics_available=list(TOPICS),
+        )
+
+    articles = []
+    for hit in hits:
+        article = hit.article
+        articles.append(
+            _prune(
+                {
+                    "id": article.id,
+                    "topic": article.topic,
+                    "title": article.title,
+                    "facts": [
+                        _prune(
+                            {
+                                "fact": f.text,
+                                "basis": f.basis.value,
+                                "how_to_say_it": f.basis.how_to_say_it,
+                                "customer_can_check_with": f.source or None,
+                                "check_before_relying_on_the_detail": True
+                                if f.verify
+                                else None,
+                            }
+                        )
+                        for f in article.facts
+                    ],
+                    "this_does_not_answer": article.not_covered or None,
+                    "what_you_can_do_about_it": article.action or None,
+                    "related_topics": list(article.see_also) or None,
+                    "matched_on": hit.matched,
+                }
+            )
+        )
+
+    verify_count = sum(1 for h in hits for f in h.article.facts if f.verify)
+
+    return {
+        "available": True,
+        "question_searched": question,
+        "articles": articles,
+        "guidance": (
+            "These are facts to reason from, not an answer to repeat. Write the reply to "
+            "what THIS customer asked, in their words, at the length their question "
+            "deserves — most of these articles could answer five different questions and "
+            "you are answering one of them.\n"
+            "Read `basis` on every fact before you use it. A `regulation` fact applies to "
+            "every retailer and you may name the body they can check it with. A "
+            "`product` fact is how this system behaves and you may state it directly. A "
+            "`kea_illustrative` fact is an EXAMPLE of how retailers normally do this and "
+            "is NOT Kea's actual policy — say so, and point them at their own terms or the "
+            "team. Never present an illustrative fact as Kea's.\n"
+            "`this_does_not_answer` is the limit of the article. Respect it: it is usually "
+            "the exact thing the customer is about to assume you said.\n"
+            "If `what_you_can_do_about_it` names a tool, use the tool instead of describing "
+            "where a settings screen is. Doing it is the answer; directions are not.\n"
+            "Where the question ALSO touches this household's own data, look that up too "
+            "and answer with both — the general rule and their actual number."
+            + (
+                "\nSome facts here are marked to check before relying on the detail. Their "
+                "shape is stable but the number or date moves; hedge those specifically "
+                "rather than hedging the whole answer."
+                if verify_count
+                else ""
+            )
+        ),
+        "source": "Kea help knowledge base, app/knowledge/articles.py",
+    }
+
+
 def answer_clarifying_question(
     ctx: ToolContext,
     answer: str,
@@ -1065,6 +1544,304 @@ def answer_clarifying_question(
     }
 
 
+async def update_alert_settings(
+    ctx: ToolContext,
+    channel: str | None = None,
+    threshold_pct: float | None = None,
+    minimum_nzd: float | None = None,
+    turn_on: list[str] | None = None,
+    turn_off: list[str] | None = None,
+    quiet_from_hour: int | None = None,
+    quiet_until_hour: int | None = None,
+    warnings_enabled: bool | None = None,
+) -> dict[str, Any]:
+    """Change this household's alerting. The first tool here that writes anything.
+
+    Scoped the same way every read is: the account comes off `ctx`, never off an argument,
+    so there is no value the model can pass that reaches another household's settings.
+    That property is what makes a write tool safe to offer at all, and it is structural
+    rather than prompted.
+
+    Returns the diff and the whole ladder. The diff so the customer can catch a
+    misunderstanding in the sentence that caused it — "your text alert now fires at 20%,
+    down from 40%" is checkable and "done" is not. The ladder because one threshold means
+    nothing alone: somebody who moves their text alert to 20% needs to see the email alert
+    still sitting at 15%, or they will expect the text to be the first thing they hear.
+    """
+    from app.account import settings as settings_mod
+    from app.config import get_preferences_store
+
+    store = get_preferences_store()
+    current = await store.get(ctx.customer_id)
+
+    try:
+        updated, changes = settings_mod.build(
+            current,
+            channel=channel,
+            threshold_pct=threshold_pct,
+            minimum_nzd=minimum_nzd,
+            turn_on=turn_on,
+            turn_off=turn_off,
+            quiet_from_hour=quiet_from_hour,
+            quiet_until_hour=quiet_until_hour,
+            warnings_enabled=warnings_enabled,
+        )
+    except settings_mod.SettingsError as exc:
+        return {"error": str(exc), "current_settings": settings_mod.ladder_after(current)}
+    except Exception as exc:  # noqa: BLE001 - Pydantic's message is the useful part
+        # The monotonic-ladder rule lands here: a text alert below the email alert is
+        # individually valid and jointly incoherent, and the validator's own wording is
+        # more useful to the model than anything this layer could paraphrase.
+        return {
+            "error": f"those settings are not a coherent ladder: {exc}",
+            "hint": (
+                "Warnings must escalate: email at or below text, text at or below the "
+                "phone call. Offer to move the others too rather than refusing outright."
+            ),
+            "current_settings": settings_mod.ladder_after(current),
+        }
+
+    if not changes:
+        return {
+            "changed": False,
+            "reason": "every setting they asked for is already set that way",
+            "current_settings": settings_mod.ladder_after(current),
+            "guidance": (
+                "Nothing changed because nothing needed to. Tell them it is already set "
+                "that way and show them the value — do not confirm a change that did not "
+                "happen."
+            ),
+        }
+
+    saved = await store.put(updated)
+    log.info(
+        "settings changed customer=%s fields=%s",
+        ctx.customer_id,
+        [c.field for c in changes],
+    )
+
+    ladder = settings_mod.ladder_after(saved)
+    warnings: list[str] = []
+    if saved.sms_enabled and not saved.phone_e164:
+        warnings.append(
+            "Text warnings are on but there is no mobile number on this account, so "
+            "nothing can actually be sent. Tell them, and tell them the team can add one."
+        )
+    if saved.voice_enabled and not saved.phone_e164:
+        warnings.append(
+            "Phone warnings are on but there is no number on file. Tell them."
+        )
+    if saved.email_enabled and not saved.email:
+        warnings.append(
+            "Email warnings are on but there is no address on this account."
+        )
+    if not saved.enabled:
+        warnings.append(
+            "Every warning is now off. Say so plainly — the bill-shock assessment still "
+            "runs and is still visible in the app, but nothing will reach them "
+            "unprompted, which is the whole point of the product."
+        )
+
+    return {
+        "changed": True,
+        "what_changed": [c.describe() for c in changes],
+        "current_settings": ladder,
+        "warnings": warnings or None,
+        "guidance": (
+            "Say back exactly what you changed and what the whole ladder is now — a "
+            "customer who asked for 20% and reads 'your text warning now fires at 20% "
+            "over, and your email one is still at 15%' can catch you having changed the "
+            "wrong thing. Keep it to a sentence or two; this is a settings change, not an "
+            "explanation. Anything in `warnings` matters more than the change itself and "
+            "goes first."
+        ),
+        "source": "this household's own alert preferences, app/alerts/store.py",
+    }
+
+
+async def request_plan_change(
+    ctx: ToolContext, plan_code: str, confirm: bool = False
+) -> dict[str, Any]:
+    """Stage a plan switch, then record it once the customer has confirmed.
+
+    Two calls, deliberately. The staged half returns what the change would mean and asks
+    the model to put it to the customer; only a second call, after they have said yes,
+    records anything. "Put me on the cheaper one" is a request and not a confirmation, and
+    the difference is the whole reason this tool is not one call.
+
+    It records a *request*. The account's plan lives in `kea.mart_account_context`, which
+    the data platform owns and this service reads — and a plan switch is a commercial event
+    with a billing effective date, applied from the next period rather than mid-cycle. So
+    this does what a retailer does: writes down what was asked for, with the figure the
+    customer was shown when they agreed to it.
+    """
+    from app.account import changes as changes_mod
+    from app.analytics import plans as plans_mod
+    from app.config import get_change_store, get_pending_changes
+
+    pending = get_pending_changes()
+
+    target = next((p for p in plans_mod.CATALOGUE if p.code == plan_code), None)
+    if target is None:
+        return {
+            "error": f"no plan with code {plan_code!r}",
+            "available_plans": [p.code for p in plans_mod.CATALOGUE],
+            "hint": "Use the `code` field from get_plan_options.",
+        }
+
+    if confirm:
+        staged = pending.take(ctx.customer_id)
+        if staged is None:
+            return _unavailable(
+                "there is no staged plan change to confirm — it was never staged, it has "
+                "already been confirmed, or it expired. Stage it again by calling this "
+                "without confirm, tell the customer what it would mean, and ask them.",
+            )
+        if staged.to_plan_code != plan_code:
+            # The customer confirmed a different plan from the one now being recorded. A
+            # mismatch here means the model has lost track mid-conversation, and recording
+            # either one would be recording a consent nobody gave.
+            pending.clear(ctx.customer_id)
+            return {
+                "error": (
+                    f"the staged change was to {staged.to_plan_code!r} but this "
+                    f"confirmation is for {plan_code!r}"
+                ),
+                "hint": (
+                    "The staged change has been cancelled. Stage the one they actually "
+                    "want and ask them again."
+                ),
+            }
+
+        recorded = await get_change_store().record(
+            changes_mod.PlanChangeRequest(
+                account_ref=ctx.customer_id,
+                from_plan=staged.from_plan,
+                to_plan_code=staged.to_plan_code,
+                to_plan_name=staged.to_plan_name,
+                quoted_saving_nzd_per_year=staged.quoted_saving_nzd_per_year,
+                quoted_from_period=staged.quoted_from_period,
+            )
+        )
+        log.info(
+            "plan change confirmed customer=%s from=%s to=%s",
+            ctx.customer_id, staged.from_plan, staged.to_plan_code,
+        )
+        return {
+            "recorded": True,
+            "to_plan": staged.to_plan_name,
+            "from_plan": staged.from_plan,
+            "status": recorded.status,
+            "takes_effect": "from the start of their next billing period",
+            "guidance": (
+                "Confirm it in one or two sentences: which plan, and that it takes effect "
+                "from their next billing period rather than today. Do NOT say they are on "
+                "the new plan now — they are not, and their next bill will still be on the "
+                "old one for the days already used. Tell them the team will action it and "
+                "that they can change their mind by asking."
+            ),
+            "source": "recorded against this account, app/account/changes.py",
+        }
+
+    # --- staging ---
+    days = billed_days(ctx)
+    account = ctx.account
+    plan = account.plan
+    connection = account.connection
+
+    comparison = plans_mod.compare(
+        days,
+        period=ctx.usage.window.period,
+        plan_name=plan.name if plan else None,
+        plan_code=plan.code if plan else None,
+        plan_user_type=plan.user_type if plan else None,
+        has_solar=bool(connection and connection.has_solar),
+        has_controlled_load=bool(connection and connection.has_controlled_load),
+    )
+
+    if not comparison.available:
+        return _unavailable(
+            f"this account cannot be compared against the plan catalogue, so a switch "
+            f"cannot be quoted: {comparison.reason}"
+        )
+
+    target_cost = next((c for c in comparison.costs if c.plan.code == plan_code), None)
+    if target_cost is None:
+        return _unavailable(
+            f"{target.name} could not be priced for this household, so switching to it "
+            "cannot be quoted. This is usually because the plan needs data this account "
+            "does not have — a time-of-use plan needs a peak / off-peak split. Say which "
+            "plan and why, and do not stage a change you cannot put a figure on.",
+            plans_that_can_be_priced=[c.plan.code for c in comparison.costs],
+        )
+
+    current_cost = next(
+        (c for c in comparison.costs if c.plan.code == comparison.current_plan_code), None
+    )
+    saving_year = None
+    if current_cost is not None:
+        saving_year = round(
+            plans_mod.annualise(
+                current_cost.total_nzd, comparison.days, plans_mod.winter_share(days)
+            )
+            - plans_mod.annualise(
+                target_cost.total_nzd, comparison.days, plans_mod.winter_share(days)
+            ),
+            2,
+        )
+
+    import time
+
+    pending.stage(
+        changes_mod.Staged(
+            account_ref=ctx.customer_id,
+            to_plan_code=target.code,
+            to_plan_name=target.name,
+            from_plan=plan.name if plan else None,
+            quoted_saving_nzd_per_year=saving_year,
+            quoted_from_period=comparison.period,
+            expires_at=time.monotonic() + changes_mod.PENDING_TTL_SECONDS,
+        )
+    )
+
+    return {
+        "staged": True,
+        "confirmed": False,
+        "to_plan": _prune(
+            {
+                "code": target.code,
+                "name": target.name,
+                "daily_fixed_nzd": target.daily_fixed_nzd,
+                "unit_rate_nzd_per_kwh": target.unit_rate_nzd,
+                "off_peak_rate_nzd_per_kwh": target.off_peak_rate_nzd,
+                "cost_over_this_period_nzd": target_cost.total_nzd,
+            }
+        ),
+        "from_plan": plan.name if plan else None,
+        "saving_nzd_per_year": saving_year,
+        "would_be_cheaper": (
+            None
+            if current_cost is None
+            else target_cost.total_nzd < current_cost.total_nzd
+        ),
+        "priced_over": comparison.period,
+        "caveats": comparison.caveats,
+        "expires_in_seconds": changes_mod.PENDING_TTL_SECONDS,
+        "guidance": (
+            "NOTHING HAS CHANGED YET. Tell them what switching would mean — the plan, the "
+            "rates, what it would have cost over the period you priced, and whether that "
+            "is more or less than what they are on — and then ask them plainly to confirm. "
+            "Do not call this again with confirm=true until they answer in a LATER "
+            "message; the message that asked for the switch is not the confirmation. If "
+            "`saving_nzd_per_year` is null, their current plan could not be matched, so "
+            "say you cannot tell them whether it would save money and let them decide. If "
+            "`would_be_cheaper` is false, say so — they may still want it, but they must "
+            "not find out afterwards."
+        ),
+        "source": "app/analytics/plans.py, priced on this household's own usage",
+    }
+
+
 def handoff_to_human(ctx: ToolContext, reason: str) -> dict[str, Any]:
     ctx.escalated = True
     ctx.escalation_reason = reason
@@ -1094,9 +1871,19 @@ _SYNC = {
     "project_this_bill": project_this_bill,
     "handoff_to_human": handoff_to_human,
     "answer_clarifying_question": answer_clarifying_question,
+    "search_help_topics": search_help_topics,
+    "get_energy_breakdown": get_energy_breakdown,
 }
 _ASYNC = {
     "get_hourly_profile": get_hourly_profile,
+    # The write tools. Async because they touch a store, and grouped here rather than
+    # marked out further because `app/account/` is where the read/write boundary is
+    # enforced — see that package's docstring.
+    "update_alert_settings": update_alert_settings,
+    "request_plan_change": request_plan_change,
+    # Not a write, but it does I/O off the machine and takes seconds rather than
+    # milliseconds, so it belongs on the async side of the dispatcher.
+    "discover_smart_devices": discover_smart_devices,
 }
 
 

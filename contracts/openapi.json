@@ -383,6 +383,88 @@
         }
       }
     },
+    "/api/households/{customer_id}/energy-breakdown": {
+      "get": {
+        "summary": "Energy Breakdown",
+        "description": "Where this household's power goes, split by behaviour rather than by appliance.\n\nA GET on the household rather than a chat-only tool, because it is the same figure the\ndashboard draws and the assistant quotes \u2014 and two surfaces computing it separately is\nhow they start to disagree. Everything here comes out of\n`app/analytics/disaggregation.py`; this handler computes nothing.\n\n`available: false` with a reason is a real response and the frontend must render it.\nAn account with no half-hourly data cannot have its standing load separated, and the\nhonest screen says so rather than showing a chart with one slice in it.",
+        "operationId": "energy_breakdown_api_households__customer_id__energy_breakdown_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyBreakdown"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/homelink/providers": {
+      "get": {
+        "summary": "Homelink Providers",
+        "description": "Which platforms can be connected, and which of them are actually credentialled.\n\n`False` means the connector exists but has no client id, so the connect screen greys it\nout rather than offering a button that dead-ends. HomeKit reads True with no\ncredential and that is correct \u2014 there is nothing for this backend to hold, because the\niOS app reads HomeKit on the phone and posts daily totals.",
+        "operationId": "homelink_providers_api_homelink_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Homelink Providers Api Homelink Providers Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/homelink/discover": {
+      "post": {
+        "summary": "Homelink Discover",
+        "description": "Scan the local network for smart devices that announce themselves.\n\nA POST rather than a GET despite reading nothing, because it is not free and not\ncacheable: it puts multicast traffic on the customer's network and takes seconds. A GET\ninvites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that\nruns on every page load is a scan running without anybody asking.\n\nOnly ever runs when somebody asks. Nothing is stored \u2014 the result goes back to the\ncaller and is dropped. See `app/homelink/discovery.py` on why that matters more here\nthan anywhere else in this service.",
+        "operationId": "homelink_discover_api_homelink_discover_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Homelink Discover Api Homelink Discover Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/offline/models": {
       "get": {
         "summary": "Offline Models",
@@ -1091,6 +1173,30 @@
             ],
             "title": "Tier Reason",
             "description": "Why this tier, in words a support lead would use."
+          },
+          "emotion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emotion",
+            "description": "How the customer's message read: frustration, anxiety, confusion, distrust, shame, resignation, urgency or gratitude. Null when nothing was detected, which is the common case. It changed how the reply was WRITTEN and nothing else \u2014 it is not a tier input and carries no score; see app/hardship/emotions.py. Intended for the agent console, not for showing back to the customer: telling somebody 'we detected that you are frustrated' is worse than simply answering them properly."
+          },
+          "emotion_intensity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emotion Intensity",
+            "description": "mild | moderate | strong. Null whenever `emotion` is."
           }
         },
         "type": "object",
@@ -1178,6 +1284,162 @@
         ],
         "title": "DemoAccountCard",
         "description": "A sign-in the credentials panel can offer. Includes the password, which is only\nacceptable because every account behind it is synthetic \u2014 see app/auth.py."
+      },
+      "EnergyBreakdown": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why there is no breakdown. Null when `available`. A real response the UI must render \u2014 an account with no half-hourly data cannot have its standing load separated, and the honest screen says so rather than drawing one slice."
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "default": ""
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "default": 0
+          },
+          "total_kwh": {
+            "type": "number",
+            "title": "Total Kwh",
+            "default": 0.0
+          },
+          "total_cost_nzd": {
+            "type": "number",
+            "title": "Total Cost Nzd",
+            "default": 0.0
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyCategory"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Caveats"
+          },
+          "heating_fit_r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heating Fit R Squared",
+            "description": "How much of daily variation the weather explains for this household. Null when heating was not broken out at all."
+          },
+          "heating_not_reported_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heating Not Reported Because"
+          },
+          "always_on_not_reported_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Always On Not Reported Because"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "available"
+        ],
+        "title": "EnergyBreakdown",
+        "description": "Where a household's power goes. See app/analytics/disaggregation.py.\n\n**This does not identify appliances**, and no surface rendering it may imply otherwise.\nA whole-house meter reads one number for the whole house; the categories here are\nbehaviours that are each separately measurable, which is a different claim and the only\nhonest one available."
+      },
+      "EnergyCategory": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kwh": {
+            "type": "number",
+            "title": "Kwh"
+          },
+          "cost_nzd": {
+            "type": "number",
+            "title": "Cost Nzd"
+          },
+          "share_pct": {
+            "type": "number",
+            "title": "Share Pct"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence",
+            "description": "measured | fitted | residual"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis",
+            "description": "How this figure was arrived at, in one clause."
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "kwh",
+          "cost_nzd",
+          "share_pct",
+          "confidence",
+          "basis"
+        ],
+        "title": "EnergyCategory",
+        "description": "One slice of the bill, split by behaviour rather than by appliance.\n\n`confidence` is the field that decides how this may be presented, and the frontend has\nto honour it as much as the assistant does. `measured` came off a meter. `fitted` came\noff this household's own regression and is an estimate \u2014 a chart that renders it\nidentically to a measured slice is a chart that overstates what is known. `residual` is\nwhat is left after the others, so it carries their error and must be labelled as\neverything else rather than as a finding."
       },
       "Fact": {
         "properties": {

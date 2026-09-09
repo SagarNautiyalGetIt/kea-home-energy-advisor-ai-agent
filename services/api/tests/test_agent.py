@@ -106,6 +106,63 @@ def test_every_schema_is_well_formed_and_dispatchable() -> None:
     assert {t["name"] for t in TOOL_SCHEMAS} == TOOL_NAMES
 
 
+def test_every_array_parameter_declares_its_element_type() -> None:
+    """Gemini rejects an ARRAY parameter with no `items` — and rejects the whole request.
+
+    Found the hard way: `update_alert_settings` shipped `turn_on` as a bare array, and the
+    result was 400 INVALID_ARGUMENT on every turn, naming one field and taking the entire
+    tool catalogue down with it. Anthropic and Ollama both accept the array without
+    `items`, so the failure is invisible on two of the three providers and total on the
+    third.
+
+    Asserted over the schemas rather than by calling a provider, because the schemas are
+    the thing that has to be right and the provider that punishes this is the one no test
+    can reach without a network and a key.
+    """
+    for tool in TOOL_SCHEMAS:
+        for name, spec in (tool["input_schema"].get("properties") or {}).items():
+            if spec.get("type") == "array":
+                assert "items" in spec, (
+                    f"{tool['name']}.{name} is an array with no `items` — Gemini will "
+                    f"reject the whole catalogue"
+                )
+                assert spec["items"].get("type"), f"{tool['name']}.{name}: items has no type"
+
+
+def test_the_gemini_translator_carries_items_through() -> None:
+    """The other half of the same bug.
+
+    A correct JSON Schema was being made invalid on the way out: `_declaration` mapped only
+    `type` and `description`, so `items` was dropped and the error named a field that was
+    present in the source. Fixing the schema alone would have left the next array parameter
+    to rediscover it.
+    """
+    pytest.importorskip("google.genai")
+    from app.providers.gcp import GCPProvider
+
+    declaration = GCPProvider._declaration(
+        {
+            "name": "probe",
+            "description": "x",
+            "input_schema": {
+                "type": "object",
+                "properties": {"names": {"type": "array", "items": {"type": "string"}}},
+                "required": [],
+            },
+        }
+    )
+    array = declaration.parameters.properties["names"]
+    assert str(array.type).upper().endswith("ARRAY")
+    assert array.items is not None, "items was dropped in translation"
+
+
+#: Tools that change something. Excluded from the read sweep below, because "called with
+#: no arguments" is a legitimate error for a write — `update_alert_settings` with nothing to
+#: set must refuse rather than guess at what the customer meant, and a sweep that forbade
+#: error results would be asserting the opposite. They get their own sweep underneath.
+WRITE_TOOLS = frozenset({"update_alert_settings", "request_plan_change"})
+
+
 @pytest.mark.parametrize("customer_id", fixtures.all_ids())
 async def test_every_tool_answers_for_every_demo_household(customer_id: str) -> None:
     """No tool may raise, and none may return an empty result.
@@ -117,6 +174,8 @@ async def test_every_tool_answers_for_every_demo_household(customer_id: str) -> 
     """
     ctx = await build_context(customer_id)
     for tool in TOOL_SCHEMAS:
+        if tool["name"] in WRITE_TOOLS:
+            continue
         result = await dispatch(ctx, tool["name"], _minimal_args(tool))
 
         assert result, f"{tool['name']} returned nothing for {customer_id}"
@@ -128,6 +187,32 @@ async def test_every_tool_answers_for_every_demo_household(customer_id: str) -> 
                 f"{tool['name']} declined without saying why — the model needs the reason "
                 f"to tell the customer what is missing rather than guessing"
             )
+
+
+@pytest.mark.parametrize("customer_id", fixtures.all_ids())
+async def test_a_write_tool_refuses_an_empty_call_rather_than_guessing(
+    customer_id: str,
+) -> None:
+    """The other half of the sweep above, with the assertion inverted.
+
+    A write tool called with nothing to write is the shape of a model that has decided to
+    act before it worked out what the customer wanted. It must come back as a readable
+    error the model can recover from — never a silent no-op, and never an exception, which
+    `dispatch` would flatten into the same shape and hide.
+    """
+    ctx = await build_context(customer_id)
+    for name in sorted(WRITE_TOOLS):
+        result = await dispatch(ctx, name, {})
+
+        assert result, f"{name} returned nothing"
+        json.dumps(result, default=str)
+        assert "error" in result or result.get("available") is False, (
+            f"{name} accepted an empty call — a write with nothing to write must refuse"
+        )
+        # And the refusal has to be actionable. "Invalid" tells the model nothing; the
+        # message is the only thing standing between a bad call and a repeated bad call.
+        message = result.get("error") or result.get("reason") or ""
+        assert len(message) > 20, f"{name} refused without saying why: {result}"
 
 
 @pytest.mark.parametrize("customer_id", fixtures.all_ids())
