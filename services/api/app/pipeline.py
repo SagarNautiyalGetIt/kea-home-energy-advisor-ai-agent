@@ -180,6 +180,12 @@ class Answer:
     """Why, in the assessor's words. Shown to the agent picking the conversation up —
     "flagged: 0.8" is not a handover."""
 
+    emotion: str | None = None
+    """How the customer sounded, if anything was read. Never a tier input — see
+    `app/hardship/emotions.py` on why tone and handling are kept apart."""
+
+    emotion_intensity: str | None = None
+
     @property
     def sentences(self) -> list[str]:
         """Computed here rather than by each caller because voice speaks sentence one
@@ -192,6 +198,26 @@ class Answer:
     def sources(self) -> list[dict[str, Any]]:
         """What backed this answer, for the transparency panel."""
         return [t.summary() for t in self.tools_used]
+
+
+def _handling(
+    tiering: hardship.TierDecision, emotion: hardship.EmotionalRead
+) -> str:
+    """The whole instruction appended to the system prompt for this turn.
+
+    Two independent notes, concatenated in a fixed order rather than merged. HANDLING is a
+    policy outcome the model may not argue with; TONE is a register instruction it applies
+    while doing whatever HANDLING allows. Keeping them as separate labelled blocks means a
+    tier-2 turn reads "answer normally, a person is watching" *and* "they are frightened,
+    give them the number early" without either being softened into the other.
+
+    HANDLING is always first. When the two pull in different directions — an angry
+    customer who has just disclosed hardship, where the tone note says be brisk and the
+    handling note says be warm and hand over — the one nearer the end of the prompt wins
+    in practice, and the one that must win is the policy.
+    """
+    tone = emotion.guidance
+    return f"{tone}\n\n{tiering.guidance}" if tone else tiering.guidance
 
 
 async def build_context(customer_id: str) -> ToolContext:
@@ -346,15 +372,20 @@ async def answer(
     assessment = hardship.assess(message, ctx.account)
     tiering = hardship.decide(assessment)
 
+    # How they sound, read separately and kept separate. It changes the register of the
+    # reply and nothing else — `decide()` above has already run and cannot see this.
+    emotion = hardship.read_emotion(message)
+
     if tiering.tier is hardship.Tier.HUMAN_ONLY:
         return await _handover(
             ctx, message, tiering, channel=channel, conversation_id=conversation_id,
             latency_ms=int((time.perf_counter() - started) * 1000),
+            emotion=emotion,
         )
 
     result: AgentResult | None = None
     async for event in run_agent(
-        get_provider(), ctx, message, history, handling=tiering.guidance
+        get_provider(), ctx, message, history, handling=_handling(tiering, emotion)
     ):
         if isinstance(event, Finished):
             result = event.result
@@ -399,6 +430,8 @@ async def answer(
         tier=int(tiering.tier),
         tier_reason=tiering.reason,
         hardship_evidence=tiering.evidence,
+        emotion=emotion.primary.value if emotion.primary else None,
+        emotion_intensity=emotion.intensity.value if emotion.primary else None,
     )
 
 
@@ -410,6 +443,7 @@ async def _handover(
     channel: str,
     conversation_id: int | None,
     latency_ms: int,
+    emotion: hardship.EmotionalRead | None = None,
 ) -> Answer:
     """Tier 3: a person takes it, and the model is not asked to write anything.
 
@@ -418,8 +452,9 @@ async def _handover(
     the class of turn most likely to be audited.
     """
     log.info(
-        "hardship handover channel=%s customer=%s score=%.2f reason=%s",
+        "hardship handover channel=%s customer=%s score=%.2f reason=%s tone=%s",
         channel, ctx.customer_id, tiering.score, tiering.reason,
+        emotion.primary.value if emotion and emotion.primary else "-",
     )
     result = AgentResult(text=HANDOVER_TEXT, escalate=True, escalation_reason=tiering.reason)
     recorded_id = await _record(
@@ -436,7 +471,14 @@ async def _handover(
         latency_ms=latency_ms,
         tier=int(tiering.tier),
         tier_reason=tiering.reason,
-        hardship_evidence=tiering.evidence,
+        # The emotional read is recorded on a handover even though no model runs. The
+        # agent picking this up is about to speak to somebody, and knowing they wrote it
+        # in capitals is worth more here than anywhere else in the product.
+        hardship_evidence=tiering.evidence + (emotion.reasons() if emotion else []),
+        emotion=emotion.primary.value if emotion and emotion.primary else None,
+        emotion_intensity=(
+            emotion.intensity.value if emotion and emotion.primary else None
+        ),
     )
 
 
@@ -478,11 +520,13 @@ async def answer_stream(
     # turn streams the handover as one frame and spends no model call at all.
     assessment = hardship.assess(message, ctx.account)
     tiering = hardship.decide(assessment)
+    emotion = hardship.read_emotion(message)
 
     if tiering.tier is hardship.Tier.HUMAN_ONLY:
         handover = await _handover(
             ctx, message, tiering, channel=channel, conversation_id=conversation_id,
             latency_ms=int((time.perf_counter() - started) * 1000),
+            emotion=emotion,
         )
         yield "token", {"text": handover.text}
         yield "done", {
@@ -494,13 +538,15 @@ async def answer_stream(
             "tokens": 0,
             "tier": handover.tier,
             "tier_reason": handover.tier_reason,
+            "emotion": handover.emotion,
+            "emotion_intensity": handover.emotion_intensity,
         }
         return
 
     result: AgentResult | None = None
     try:
         async for event in run_agent(
-            get_provider(), ctx, message, history, handling=tiering.guidance
+            get_provider(), ctx, message, history, handling=_handling(tiering, emotion)
         ):
             match event:
                 case Thinking(text=text):
@@ -569,4 +615,6 @@ async def answer_stream(
         "tokens": result.usage.total,
         "tier": int(tiering.tier),
         "tier_reason": tiering.reason,
+        "emotion": emotion.primary.value if emotion.primary else None,
+        "emotion_intensity": emotion.intensity.value if emotion.primary else None,
     }

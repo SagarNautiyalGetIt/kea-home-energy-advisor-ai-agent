@@ -81,6 +81,16 @@ _CANNOT_PAY = (
     r"don'?t have the money", r"haven'?t got the money",
     r"struggling to pay", r"struggle to pay", r"falling behind",
     r"behind on (?:my|the) (?:bill|payment)", r"in arrears",
+    # Future tense, and calm. This is how the disclosure usually actually arrives —
+    # nobody writes "I am in financial hardship", they write "I won't be able to pay this
+    # one". An earlier bank had every present-tense form and none of these, so the
+    # politest phrasing of the most serious message scored zero.
+    r"won'?t be able to (?:pay|cover|manage)",
+    r"not going to be able to (?:pay|cover|manage)",
+    r"no way (?:i|we) can (?:pay|afford)",
+    r"can'?t (?:cover|manage) (?:it|this|the bill)",
+    r"(?:i'?m|we'?re) short (?:this|next) (?:month|week|fortnight)",
+    r"(?:don'?t|won'?t) have (?:it|enough|the funds)",
 )
 
 #: Choosing between essentials. Recognised in the hardship literature as a marker of
@@ -128,6 +138,14 @@ _DEBT_PRESSURE = (
     r"payment plan", r"instal?ment plan", r"payment arrangement",
     r"budget(?:ing)? (?:advice|service)", r"work and income", r"winz\b",
     r"food ?bank", r"loan shark", r"payday loan", r"hardship (?:fund|grant|programme)",
+    # Borrowing to pay for power. The point at which a bill stops being a bill and starts
+    # compounding — and all of these are things people say before they say "hardship".
+    r"citizens advice", r"salvation army", r"work ?and ?income",
+    r"afterpay", r"buy now,? pay later", r"\bbnpl\b",
+    r"(?:on|maxed out) (?:my|the) credit card", r"credit card to pay",
+    r"\boverdraft\b", r"borrow(?:ing|ed)? (?:money|from|off)",
+    r"asked? (?:my|our) (?:family|parents|mum|dad) for money",
+    r"power bill (?:grant|assistance|help)", r"winter energy payment",
 )
 
 #: Acute distress. Weighted highest and handled outside the score — see `assess`.
@@ -140,13 +158,119 @@ _CRISIS = (
     r"can'?t go on", r"no way out", r"give up on life", r"harm myself",
 )
 
+#: Safety. Weighted with `_CANNOT_PAY` because it is not a bill conversation at all.
+#:
+#: A household that has left, or is leaving, a violent home is one of the named
+#: circumstances in the Consumer Care Obligations, and almost everything the assistant
+#: would otherwise do is wrong: the account may be in the other person's name, the address
+#: may need suppressing, and a payment plan is not the conversation. It goes to a person
+#: every time, and the assistant does not ask a follow-up question about it.
+_SAFETY = (
+    r"family violence", r"domestic violence", r"protection order",
+    r"restraining order", r"women'?s refuge", r"\brefuge\b", r"safe house",
+    r"fled (?:the|my|our) (?:house|home|relationship)",
+    r"escaping (?:a|an|my) ", r"(?:he|she|they) won'?t let me",
+    r"abusive (?:partner|relationship|ex)",
+)
+
+#: Medical dependence, disclosed in conversation rather than read off the register.
+#:
+#: The register flag is a property of the account; this is the customer telling us. Under
+#: the Consumer Care Obligations the duty attaches to the retailer being *on notice*, and
+#: a household that has never been registered but says "I'm on an oxygen concentrator" has
+#: just put us on notice. Treated as a disclosure in `assess` — see
+#: `HardshipAssessment.disclosed_medical_dependence` — rather than only as a score
+#: contribution, because the obligation is not a matter of how high the total came out.
+_MEDICAL_DEPENDENCE = (
+    r"medically dependent", r"oxygen (?:concentrator|machine)", r"on oxygen",
+    r"dialysis", r"\bcpap\b", r"ventilator", r"nebuli[sz]er",
+    r"life support", r"feeding pump", r"electric (?:wheelchair|hoist|bed)",
+    r"(?:my|our) (?:medication|insulin) (?:needs|has) to (?:be )?(?:stay|kept|refrigerat)",
+    r"can'?t (?:lose|be without) power (?:for|because)",
+)
+
+#: Housing insecurity. Not about power, and it is why the power bill cannot be paid.
+_HOUSING_INSECURITY = (
+    r"evict(?:ed|ion)?", r"served notice", r"90[- ]day notice",
+    r"landlord (?:is )?(?:selling|kicking|evicting)", r"have to move out",
+    r"emergency housing", r"transitional housing", r"boarding house",
+    r"living in (?:my|the) car", r"sleeping in (?:my|the) car",
+    r"couch ?surf", r"(?:in|at) a motel", r"nowhere to (?:live|go)",
+    r"about to be homeless", r"\bhomeless\b",
+)
+
+#: A cold or damp home. The specifically *energy* form of hardship, and the one this
+#: product is closest to.
+#:
+#: Deliberately not the word "cold" on its own — "was that just the cold snap?" is the
+#: single most common question this assistant answers and it is not a disclosure. These
+#: match the house, not the weather: the Healthy Homes Standards exist because damp,
+#: mould and an unheatable house are the measurable form of energy hardship in New
+#: Zealand, and a household describing one is describing a home they cannot afford to run.
+_COLD_HOME = (
+    r"\bdamp\b", r"\bmould\b", r"\bmold\b", r"condensation",
+    r"mushrooms? (?:growing|on the)", r"black spots? on the (?:wall|ceiling)",
+    r"no insulation", r"not insulated", r"single glaz",
+    r"house is (?:freezing|always cold|so cold|impossible to heat)",
+    r"(?:impossible|can'?t afford) to heat (?:this|the|our|my) (?:house|place|home)",
+    r"windows? (?:run|running|streaming) with water",
+)
+
+#: Prepay and top-up behaviour. Self-rationing with a meter in front of it: a household
+#: that runs out of credit has already self-disconnected, whatever the account says.
+_PREPAY_STRESS = (
+    r"prepay", r"pre[- ]?pay", r"top(?:ping)? up (?:the|my|our) (?:power|meter|account)",
+    r"ran out of (?:credit|power|units)", r"out of credit",
+    r"only (?:put|putting) \$?\d+ on", r"\$?\d+ at a time",
+    r"emergency credit",
+)
+
+#: Bereavement. A specific cause of both an income shock and a usage change, and the one
+#: circumstance where getting the tone wrong is least forgivable.
+_BEREAVEMENT = (
+    r"passed away", r"(?:my|our) (?:husband|wife|partner|mum|mother|dad|father|son|"
+    r"daughter|child) (?:died|passed)", r"recently (?:died|passed)",
+    r"\bfuneral\b", r"\bbereave", r"(?:since|after) (?:the|his|her|their) (?:death|funeral)",
+    r"lost (?:my|our) (?:husband|wife|partner|mum|mother|dad|father|son|daughter)",
+)
+
+#: Health pressure short of medical dependence. Competing for the same money.
+_HEALTH_PRESSURE = (
+    r"medical bills?", r"hospital bills?", r"specialist(?:'s)? fees?",
+    r"(?:in|out of) hospital", r"surgery", r"chemo", r"cancer",
+    r"long covid", r"chronic(?:ally)? (?:ill|pain|fatigue)",
+    r"(?:on a )?disability (?:benefit|allowance|support)", r"\bdisabled\b",
+    r"carer'?s? (?:allowance|benefit|support)",
+)
+
+#: Caregiving load. Not distress on its own, and it never reaches a threshold alone —
+#: 0.3 is below `MONITORED_THRESHOLD` by design. It is here because it *corroborates*:
+#: "there's a newborn in the house and I lost my hours" is a different case from either
+#: half, and the score formula is built to combine exactly that.
+_CAREGIVING = (
+    r"new ?born", r"new baby", r"baby at home", r"premature baby",
+    r"sole parent", r"single (?:mum|mother|dad|father|parent)",
+    r"looking after (?:my|our) (?:mum|mother|dad|father|nan|koro|kuia|parents)",
+    r"caring for (?:my|our|a)", r"full[- ]time carer",
+    r"(?:kids|children) (?:are )?home (?:all day|from school)",
+)
+
 _LINGUISTIC: tuple[tuple[str, tuple[str, ...], float, str], ...] = (
     ("crisis", _CRISIS, 1.0, "acute personal distress"),
     ("cannot_pay", _CANNOT_PAY, 0.85, "explicit difficulty paying"),
+    ("safety", _SAFETY, 0.85, "the household's safety is at stake"),
     ("disconnection", _DISCONNECTION, 0.8, "disconnection is threatened or imminent"),
     ("rationing", _RATIONING, 0.7, "going without an essential service"),
+    ("housing_insecurity", _HOUSING_INSECURITY, 0.6, "insecure or emergency housing"),
+    ("prepay_stress", _PREPAY_STRESS, 0.6, "buying power in small amounts, or running out"),
     ("debt_pressure", _DEBT_PRESSURE, 0.55, "assistance services or a payment arrangement"),
+    ("medical_dependence", _MEDICAL_DEPENDENCE, 0.5,
+     "the household told us it depends on electricity for health reasons"),
     ("income_shock", _INCOME_SHOCK, 0.5, "a change in income"),
+    ("bereavement", _BEREAVEMENT, 0.5, "a recent bereavement"),
+    ("cold_home", _COLD_HOME, 0.45, "a cold or damp home they cannot afford to heat"),
+    ("health_pressure", _HEALTH_PRESSURE, 0.45, "health costs competing for the same money"),
+    ("caregiving", _CAREGIVING, 0.3, "caring for someone at home"),
 )
 
 _COMPILED = tuple(
@@ -179,6 +303,32 @@ COLLAPSE_WINDOW_DAYS = 7
 #: one that went away — a holiday usually shows as a fall to near zero, not to half.
 COLLAPSE_DROP_SHARE = 0.45
 
+#: How far below the peer cohort a household has to sit before under-use is a signal.
+#:
+#: 45% is deliberately far. Homes differ enormously in size and occupancy, so being under
+#: the cohort is ordinary and means nothing on its own — a single person in a flat is not
+#: in hardship for using half what a family of five uses. What makes this informative is
+#: the second condition below: being this far under **while it is cold**.
+UNDER_USE_SHARE = 0.55
+
+#: Mean heating degree days per day above which the period counts as a cold one. 6 HDD/day
+#: is roughly a 12°C mean — a New Zealand winter month rather than a mild shoulder season.
+#: Below this, using less than the cohort says nothing about heating at all.
+COLD_PERIOD_HDD = 6.0
+
+#: Minimum days before either cold-weather comparison is allowed to fire. A fortnight, so
+#: one cold week cannot carry it.
+COLD_MIN_DAYS = 14
+
+#: Heating response below this is a house that barely warms up when the weather turns.
+#:
+#: Read carefully: a low slope is NOT proof of hardship. A well-insulated home, a wood
+#: burner or gas heating all produce one honestly, which is why this signal is weighted
+#: below the threshold and never fires alone. It is here because the *combination* — cold
+#: month, well under the cohort, and almost no heating response — is the measurable shape
+#: of a household that has stopped heating, and that household usually says nothing.
+FLAT_HEATING_KWH_PER_HDD = 0.15
+
 
 #: Phrases that look like a disclosure and are not.
 #:
@@ -186,7 +336,12 @@ COLLAPSE_DROP_SHARE = 0.45
 #: is history. Without these the assistant escalates a broken payment page to a hardship
 #: team, which wastes the customer's time and trains everyone to ignore the flag.
 _NEGATED = re.compile(
-    r"can'?t pay (?:online|by card|on the (?:app|site|website))"
+    # Every way of saying "I am unable to pay", followed by the thing that makes it a
+    # website complaint. Widened alongside `_CANNOT_PAY`: adding "won't be able to pay"
+    # to the disclosure bank without adding it here would have escalated "I won't be able
+    # to pay online until you fix the card form".
+    r"(?:can'?t|cannot|won'?t be able to|unable to|couldn'?t) pay "
+    r"(?:online|by card|with (?:my|the) card|on the (?:app|site|website))"
     r"|couldn'?t pay .{0,30}(?:last year|back then|at the time)"
     r"|used to (?:struggle|be behind)"
     r"|(?:no longer|not) (?:struggling|behind|in arrears)"
@@ -211,6 +366,17 @@ class HardshipAssessment:
     on_care_register: bool = False
     """Medically dependent or registered vulnerable. A standing property of the account,
     not a reading of this conversation."""
+
+    disclosed_medical_dependence: bool = False
+    """The customer said so themselves, on an account with no register flag.
+
+    Separate from `on_care_register` because the two fail in opposite directions and the
+    obligation attaches to both. The register is what we already knew; this is the moment
+    we were told. A household that has never been registered — which is most of them, since
+    registration is a form somebody has to fill in — puts the retailer on notice the
+    instant they mention the oxygen concentrator, and `tiers.decide` treats it the same way
+    from that turn on.
+    """
 
     @property
     def score(self) -> float:
@@ -360,6 +526,96 @@ def _account_signals(account: object) -> list[Signal]:
                     )
                 )
 
+    found += _cold_weather_signals(account, days)
+
+    # Paying for power in small amounts. The account-side twin of `_PREPAY_STRESS`, and
+    # the one that works when the customer says nothing — which is the usual case, because
+    # nobody volunteers that they are buying electricity forty dollars at a time.
+    method = (getattr(billing, "payment_method", None) or "").lower() if billing else ""
+    if any(token in method for token in ("prepay", "pre-pay", "top up", "topup")):
+        found.append(
+            Signal(
+                key="prepay_meter",
+                source=Source.ACCOUNT,
+                weight=0.45,
+                detail=(
+                    "this account buys power in advance, so running out shows up as the "
+                    "power going off rather than as a late bill"
+                ),
+                evidence=method,
+            )
+        )
+
+    return found
+
+
+def _cold_weather_signals(account: object, days: list) -> list[Signal]:
+    """Under-heating, read off the meter rather than out of a sentence.
+
+    The two signals here are the only ones in this module that can find a household nobody
+    has heard from. Everything else needs the customer to say something or the billing
+    record to already show damage; these read a household that has quietly stopped heating,
+    which is the state the Winter Energy Payment and the Healthy Homes Standards exist for
+    and the one people are least likely to mention.
+
+    Both are **conditional on the weather**, and that is what keeps them honest. Using less
+    than comparable homes is unremarkable — half of every cohort does, by construction. It
+    only becomes evidence when the month was cold enough that heating should be visible and
+    it is not.
+
+    Neither is weighted to fire alone. See the constants above for why a flat heating slope
+    has innocent explanations, and `HardshipAssessment.score` for how corroboration is what
+    actually promotes these.
+    """
+    found: list[Signal] = []
+    if len(days) < COLD_MIN_DAYS:
+        return found
+
+    hdds = [d.heating_degree_days for d in days if d.heating_degree_days is not None]
+    if len(hdds) < COLD_MIN_DAYS:
+        return found
+    mean_hdd = sum(hdds) / len(hdds)
+    if mean_hdd < COLD_PERIOD_HDD:
+        # A mild period. Nothing about heating can be concluded either way, and saying so
+        # by returning early is better than a threshold that quietly never fires in summer.
+        return found
+
+    totals = [d.import_kwh for d in days]
+    mine = sum(totals) / len(totals)
+    peers = getattr(account, "peer_baseline_kwh_per_day", None)
+
+    if peers and peers > 0 and mine <= peers * UNDER_USE_SHARE:
+        found.append(
+            Signal(
+                key="cold_weather_under_use",
+                source=Source.ACCOUNT,
+                weight=0.35,
+                detail=(
+                    "the household used far less than comparable homes through a cold "
+                    "period, which can mean heating is being rationed"
+                ),
+                evidence=(
+                    f"{mine:.1f} kWh/day against {peers:.1f} for comparable homes, "
+                    f"averaging {mean_hdd:.1f} heating degree days"
+                ),
+            )
+        )
+
+    slope = getattr(account, "heating_sensitivity_kwh_per_hdd", None)
+    if slope is not None and 0 <= slope < FLAT_HEATING_KWH_PER_HDD:
+        found.append(
+            Signal(
+                key="no_heating_response",
+                source=Source.ACCOUNT,
+                weight=0.3,
+                detail=(
+                    "usage barely rose when the temperature fell, so the house may not be "
+                    "being heated — though good insulation or a wood burner look the same"
+                ),
+                evidence=f"{slope:.2f} kWh per heating degree day",
+            )
+        )
+
     return found
 
 
@@ -376,6 +632,7 @@ def assess(message: str, account: object | None = None) -> HardshipAssessment:
         signals += _account_signals(account)
 
     crisis = any(s.key == "crisis" for s in signals)
+    disclosed_md = any(s.key == "medical_dependence" for s in signals)
     on_register = bool(
         getattr(account, "is_medically_dependent", False)
         or getattr(account, "is_vulnerable", False)
@@ -394,5 +651,8 @@ def assess(message: str, account: object | None = None) -> HardshipAssessment:
         )
 
     return HardshipAssessment(
-        signals=signals, crisis=crisis, on_care_register=on_register
+        signals=signals,
+        crisis=crisis,
+        on_care_register=on_register,
+        disclosed_medical_dependence=disclosed_md,
     )

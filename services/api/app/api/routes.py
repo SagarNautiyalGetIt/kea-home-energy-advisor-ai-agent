@@ -23,12 +23,13 @@ from pydantic import BaseModel as _VapiBaseModel
 from app import auth, hardware, offline, voice
 from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
-from app.analytics import billshock
+from app.analytics import billshock, disaggregation
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
 from app.clarify import apply, detect, questions
 from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
 from app.config import (
+    get_change_store,
     get_context_store,
     get_dispatcher,
     get_preferences_store,
@@ -52,6 +53,8 @@ from app.schemas import (
     ChatRequest,
     ChatResponse,
     DemoAccountCard,
+    EnergyBreakdown,
+    EnergyCategory,
     ForecastSummary,
     HouseholdSummary,
     LoginRequest,
@@ -99,6 +102,18 @@ async def health() -> dict[str, object]:
         # Where a customer's thresholds are stored. "memory" means the Settings screen
         # saves for the life of the process and no longer.
         "preferences": get_preferences_store().name,
+        # Where plan change requests go. Same disclosure rule: "your plan change was
+        # logged" and "logged until this process restarts" must not look the same.
+        "plan_changes": get_change_store().name,
+        # How many Gemini keys are in the pool and how many still have quota. Labels and
+        # counts only, never a key. Surfaced because "the assistant stopped answering" and
+        # "every key is out of quota until tomorrow" are indistinguishable from outside,
+        # and only one of them is fixed by waiting.
+        **(
+            {"gemini_keys": describe()}
+            if (describe := getattr(provider, "describe_keys", None))
+            else {}
+        ),
     }
 
 
@@ -485,6 +500,118 @@ def _rebuild_question(
     return question if question and question.id == question_id else None
 
 
+@router.get(
+    "/households/{customer_id}/energy-breakdown", response_model=EnergyBreakdown
+)
+async def energy_breakdown(customer_id: str) -> EnergyBreakdown:
+    """Where this household's power goes, split by behaviour rather than by appliance.
+
+    A GET on the household rather than a chat-only tool, because it is the same figure the
+    dashboard draws and the assistant quotes — and two surfaces computing it separately is
+    how they start to disagree. Everything here comes out of
+    `app/analytics/disaggregation.py`; this handler computes nothing.
+
+    `available: false` with a reason is a real response and the frontend must render it.
+    An account with no half-hourly data cannot have its standing load separated, and the
+    honest screen says so rather than showing a chart with one slice in it.
+    """
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    account = getattr(ctx, "account", None)
+    if account is None:
+        from app.analytics.account import AccountContext
+
+        account = AccountContext.from_window(
+            customer_id, ctx.window, label=ctx.label, hdd=ctx.hdd,
+            peer_baseline=ctx.baseline,
+        )
+
+    days = account.days
+    start, end = getattr(ctx, "period_start", None), getattr(ctx, "period_end", None)
+    if start and end:
+        days = [d for d in days if start <= d.date <= end] or days
+
+    connection = account.connection
+    result = disaggregation.split(
+        days,
+        period=ctx.window.period,
+        unit_price_nzd=ctx.window.unit_price_nzd,
+        has_controlled_load=bool(connection and connection.has_controlled_load),
+        heating_sensitivity_kwh_per_hdd=account.heating_sensitivity_kwh_per_hdd,
+    )
+
+    return EnergyBreakdown(
+        customer_id=customer_id,
+        available=result.available,
+        reason=result.reason,
+        period=result.period,
+        days=result.days,
+        total_kwh=result.total_kwh,
+        total_cost_nzd=result.total_cost_nzd,
+        categories=[
+            EnergyCategory(
+                key=s.key,
+                label=s.label,
+                kwh=s.kwh,
+                cost_nzd=s.cost_nzd,
+                share_pct=s.share_pct,
+                confidence=s.confidence.value,
+                basis=s.basis,
+                caveat=s.caveat or None,
+            )
+            for s in result.slices
+        ],
+        caveats=result.caveats,
+        heating_fit_r_squared=result.heating_fit_r2,
+        heating_not_reported_because=result.heating_not_reported_because,
+        always_on_not_reported_because=result.always_on_not_reported_because,
+    )
+
+
+@router.get("/homelink/providers")
+async def homelink_providers() -> dict[str, object]:
+    """Which platforms can be connected, and which of them are actually credentialled.
+
+    `False` means the connector exists but has no client id, so the connect screen greys it
+    out rather than offering a button that dead-ends. HomeKit reads True with no
+    credential and that is correct — there is nothing for this backend to hold, because the
+    iOS app reads HomeKit on the phone and posts daily totals.
+    """
+    from app.homelink import connectors
+
+    registry = connectors.build_registry()
+    return {
+        "providers": registry.describe(),
+        "web_connectable": sorted(p.value for p in connectors.WEB_CONNECTABLE),
+        "note": (
+            "Apple HomeKit cannot be connected from a browser: Apple publishes no cloud "
+            "API, so the iOS app reads HomeKit locally and posts daily totals. Say that "
+            "rather than showing a button that cannot work."
+        ),
+    }
+
+
+@router.post("/homelink/discover")
+async def homelink_discover() -> dict[str, object]:
+    """Scan the local network for smart devices that announce themselves.
+
+    A POST rather than a GET despite reading nothing, because it is not free and not
+    cacheable: it puts multicast traffic on the customer's network and takes seconds. A GET
+    invites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that
+    runs on every page load is a scan running without anybody asking.
+
+    Only ever runs when somebody asks. Nothing is stored — the result goes back to the
+    caller and is dropped. See `app/homelink/discovery.py` on why that matters more here
+    than anywhere else in this service.
+    """
+    from app.homelink import discovery
+
+    return discovery.summarise(await discovery.discover())
+
+
 @router.get("/offline/models", response_model=list[offline.OfflineModelOption])
 async def offline_models() -> list[offline.OfflineModelOption]:
     """What can be downloaded to a device, and how big it is.
@@ -550,6 +677,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         escalation_reason=result.escalation_reason,
         conversation_id=result.conversation_id,
         latency_ms=result.latency_ms,
+        emotion=result.emotion,
+        emotion_intensity=result.emotion_intensity,
     )
 
 

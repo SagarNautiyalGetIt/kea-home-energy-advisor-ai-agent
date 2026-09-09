@@ -169,6 +169,37 @@ def decide(
             notify_agent=True,
         )
 
+    # 5. The care duty, arriving the other way round from the register: an account with
+    #    no flag whose customer has just told us they depend on electricity for health
+    #    reasons.
+    #
+    #    Registration is a form somebody has to fill in, so most medically dependent
+    #    households are not on the register and the flag being absent says nothing. The
+    #    obligation attaches to the retailer being *on notice*, and a sentence in a chat
+    #    window is notice.
+    #
+    #    Ahead of the plain threshold below because the reason matters as much as the
+    #    tier. The 0.5 weight clears `MONITORED_THRESHOLD` on its own, so without this
+    #    branch the same customer would be watched — correctly — under the label "mentioned
+    #    something that suggests financial pressure", and the agent picking it up would be
+    #    looking for money trouble instead of an unregistered medical dependency.
+    #
+    #    It pages, unlike the register branch further down: the register is a state we
+    #    already knew and have presumably acted on, this is new information nobody has
+    #    recorded anywhere.
+    if assessment.disclosed_medical_dependence and not assessment.on_care_register:
+        return TierDecision(
+            tier=Tier.MONITORED,
+            reason=(
+                "the customer said they depend on electricity for health reasons and this "
+                "account carries no medical-dependency flag — someone needs to check "
+                "whether they are registered"
+            ),
+            evidence=evidence,
+            score=score,
+            notify_agent=True,
+        )
+
     if score >= MONITORED_THRESHOLD:
         # Paged only when the customer SAID something. An account-derived signal on its
         # own puts the conversation on a watchlist; it does not put a person on standby.
@@ -194,7 +225,7 @@ def decide(
             notify_agent=said_something,
         )
 
-    # 5. The care register never leaves a conversation fully unwatched, even with no
+    # 6. The care register never leaves a conversation fully unwatched, even with no
     #    other signal. Under the Consumer Care Obligations a medically dependent customer
     #    is a category of person, not a state of a conversation — the duty is there before
     #    they say anything, and a quiet tier 2 is how that duty shows up in the product.

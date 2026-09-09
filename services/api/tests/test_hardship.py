@@ -316,3 +316,206 @@ async def test_context_free_assessment_needs_no_account() -> None:
     assert hardship.assess("I can't afford this", None).score > 0
     ctx = await build_context("H-JUL")
     assert hardship.assess("I can't afford this", ctx.account).score > 0
+
+
+# ---------- the wider circumstances ----------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "we've been served notice and have to move out next month",
+        "we're in emergency housing at the moment",
+        "I've been topping up the meter forty dollars at a time",
+        "we ran out of credit on Tuesday night",
+        "my husband passed away in June",
+        "I've got hospital bills on top of this",
+        "the house is damp and there's mould on the bedroom ceiling",
+    ],
+)
+def test_hardship_is_more_than_the_word_money(message: str) -> None:
+    """The circumstances that cause a power bill to go unpaid are rarely about power.
+
+    Every one of these is something a person volunteers readily and none of them contains
+    "can't afford". A detector that only reads the money vocabulary hears nothing until
+    the arrears have already built up, which is a cycle too late for the product to be
+    worth anything.
+    """
+    assert tier_for(message) >= hardship.Tier.MONITORED
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "was that just the cold snap?",
+        "it was really cold last week, is that why?",
+        "I turned the heat pump on more in July",
+    ],
+)
+def test_the_weather_is_not_a_cold_home(message: str) -> None:
+    """`_COLD_HOME` must not match the commonest question this assistant answers.
+
+    "Was that just the cold snap?" is the modal message on this product. A pattern
+    containing a bare `cold` would escalate it, every time, for the whole cohort.
+    """
+    assert tier_for(message) is hardship.Tier.AUTONOMOUS
+
+
+def test_caregiving_alone_is_context_not_a_case() -> None:
+    """0.3 is below `MONITORED_THRESHOLD` on purpose — a newborn is not a disclosure.
+
+    It earns its place by corroborating: the score formula lets a weak signal push a
+    moderate one over the line, and "there's a newborn and I lost my hours" is a
+    different case from either half.
+    """
+    alone = hardship.assess("we've got a newborn at home, why is the bill up?")
+    assert hardship.decide(alone).tier is hardship.Tier.AUTONOMOUS
+
+    combined = hardship.assess("we've got a newborn at home and my hours were cut")
+    assert hardship.decide(combined).tier >= hardship.Tier.MONITORED
+
+
+def test_a_disclosed_medical_dependency_is_notice_even_with_no_flag() -> None:
+    """Registration is a form somebody has to fill in, so the flag being absent is not
+    evidence of anything. The duty attaches to being told."""
+    assessment = hardship.assess("I'm on an oxygen concentrator overnight")
+    assert assessment.disclosed_medical_dependence
+    assert not assessment.on_care_register
+
+    decision = hardship.decide(assessment)
+    assert decision.tier is hardship.Tier.MONITORED
+    # Unlike the register branch, this one pages: it is new information nobody holds.
+    assert decision.notify_agent is True
+    assert "registered" in decision.reason
+
+
+def test_under_heating_needs_the_weather_to_mean_anything() -> None:
+    """Using less than the cohort is unremarkable — half of every cohort does.
+
+    It becomes evidence only when the period was cold enough that heating should be
+    visible in the meter and is not. Asserted by holding the usage fixed and moving only
+    the temperature.
+    """
+    import datetime as dt
+
+    from app.analytics.account import DayUsage
+    from app.hardship.signals import _account_signals
+
+    def account(hdd: float):
+        class A:
+            billing = None
+            current_bill = None
+            prior_bill = None
+            peer_baseline_kwh_per_day = 20.0
+            heating_sensitivity_kwh_per_hdd = 0.9
+            days = [
+                DayUsage(
+                    date=dt.date(2026, 7, 1) + dt.timedelta(days=i),
+                    import_kwh=8.0,
+                    heating_degree_days=hdd,
+                )
+                for i in range(21)
+            ]
+
+        return A()
+
+    cold = {s.key for s in _account_signals(account(hdd=9.0))}
+    mild = {s.key for s in _account_signals(account(hdd=2.0))}
+
+    assert "cold_weather_under_use" in cold
+    assert "cold_weather_under_use" not in mild, "under-use in mild weather says nothing"
+
+
+# ---------- tone, and the wall between it and the ladder ----------
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("this is the THIRD TIME I've asked and nobody has fixed it", "frustration"),
+        ("I'm really worried about what next month is going to look like", "anxiety"),
+        ("I don't understand what any of this means", "confusion"),
+        ("that can't be right, where did that number come from?", "distrust"),
+        ("sorry to ask what's probably a silly question", "shame"),
+        ("there's no point, nothing ever changes", "resignation"),
+        ("I need to know today, it's due tomorrow", "urgency"),
+        ("brilliant, thanks — that makes sense now", "gratitude"),
+    ],
+)
+def test_the_register_is_read_from_the_message(message: str, expected: str) -> None:
+    read = hardship.read_emotion(message)
+    assert read.primary is not None
+    assert read.primary.value == expected
+
+
+def test_tone_never_moves_a_tier() -> None:
+    """The firewall the emotions module exists behind.
+
+    The calmest sentence in the phrase bank is the most serious one, and the angriest
+    thing we read all day is usually a broken payment page. If tone fed the ladder, both
+    would be graded backwards. Asserted structurally as well as behaviourally: `tiers` does
+    not import `emotions`, so there is no path for it to leak through later.
+    """
+    import inspect
+
+    from app.hardship import tiers
+
+    assert "emotions" not in inspect.getsource(tiers)
+
+    # Furious, and not a hardship case.
+    assert tier_for("this website is USELESS!! third time I've tried to pay!!!") is (
+        hardship.Tier.AUTONOMOUS
+    )
+    # Flat, polite, and the most serious message in the suite.
+    assert tier_for("I won't be able to pay this one.") is hardship.Tier.HUMAN_ONLY
+
+
+def test_emphasis_raises_intensity_without_adding_an_emotion() -> None:
+    from app.hardship.emotions import Intensity
+
+    calm = hardship.read_emotion("I'm a bit worried about the bill")
+    loud = hardship.read_emotion("I am WORRIED SICK ABOUT THIS BILL!!!")
+
+    assert calm.primary is loud.primary
+    assert calm.intensity is Intensity.MILD
+    assert loud.intensity is Intensity.STRONG
+    assert "written in capitals" in loud.reasons()
+
+
+def test_no_guidance_is_customer_facing_prose() -> None:
+    """Every tone note must be an instruction about HOW to write, never a sentence to say.
+
+    This is the test that keeps the feature from becoming eight canned openings — which
+    would reproduce, in a new place, the exact defect this rewrite removed: every angry
+    customer getting the same answer.
+    """
+    from app.hardship.emotions import _TONE, Emotion
+
+    for emotion in Emotion:
+        note = _TONE[emotion]
+        assert note.startswith("this customer"), emotion
+        # Second person is how you talk TO a customer. These talk ABOUT one.
+        assert " you are " not in f" {note} ", emotion
+        assert "I " not in note, emotion
+
+
+def test_the_tone_note_reaches_the_model_without_displacing_the_policy(
+    monkeypatch,
+) -> None:
+    """Both blocks arrive, and HANDLING is last so it wins any disagreement."""
+    from app.pipeline import _handling
+
+    tiering = hardship.decide(hardship.assess("I lost my job last month"))
+    emotion = hardship.read_emotion("this is RIDICULOUS, nobody has helped me!!")
+    handling = _handling(tiering, emotion)
+
+    assert handling.startswith("TONE:")
+    assert "HANDLING:" in handling
+    assert handling.index("TONE:") < handling.index("HANDLING:")
+
+
+def test_a_quiet_message_spends_no_prompt_on_tone() -> None:
+    """None, not "answer normally". An empty read is the common case, and priming the
+    model to think about register on a message that never raised it costs tokens and
+    invites a tone the customer did not ask for."""
+    assert hardship.read_emotion("what time of day do I use most power?").guidance is None

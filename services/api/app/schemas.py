@@ -381,6 +381,65 @@ class SourceRef(BaseModel):
     )
 
 
+class EnergyCategory(BaseModel):
+    """One slice of the bill, split by behaviour rather than by appliance.
+
+    `confidence` is the field that decides how this may be presented, and the frontend has
+    to honour it as much as the assistant does. `measured` came off a meter. `fitted` came
+    off this household's own regression and is an estimate — a chart that renders it
+    identically to a measured slice is a chart that overstates what is known. `residual` is
+    what is left after the others, so it carries their error and must be labelled as
+    everything else rather than as a finding.
+    """
+
+    key: str
+    label: str
+    kwh: float
+    cost_nzd: float
+    share_pct: float
+    confidence: str = Field(description="measured | fitted | residual")
+    basis: str = Field(description="How this figure was arrived at, in one clause.")
+    caveat: str | None = None
+
+
+class EnergyBreakdown(BaseModel):
+    """Where a household's power goes. See app/analytics/disaggregation.py.
+
+    **This does not identify appliances**, and no surface rendering it may imply otherwise.
+    A whole-house meter reads one number for the whole house; the categories here are
+    behaviours that are each separately measurable, which is a different claim and the only
+    honest one available.
+    """
+
+    customer_id: str
+    available: bool
+    reason: str | None = Field(
+        default=None,
+        description=(
+            "Why there is no breakdown. Null when `available`. A real response the UI must "
+            "render — an account with no half-hourly data cannot have its standing load "
+            "separated, and the honest screen says so rather than drawing one slice."
+        ),
+    )
+
+    period: str = ""
+    days: int = 0
+    total_kwh: float = 0.0
+    total_cost_nzd: float = 0.0
+    categories: list[EnergyCategory] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+    heating_fit_r_squared: float | None = Field(
+        default=None,
+        description=(
+            "How much of daily variation the weather explains for this household. Null "
+            "when heating was not broken out at all."
+        ),
+    )
+    heating_not_reported_because: str | None = None
+    always_on_not_reported_because: str | None = None
+
+
 class ChatResponse(BaseModel):
     customer_id: str
     text: str
@@ -419,6 +478,23 @@ class ChatResponse(BaseModel):
     tier_reason: str | None = Field(
         default=None,
         description="Why this tier, in words a support lead would use.",
+    )
+
+    emotion: str | None = Field(
+        default=None,
+        description=(
+            "How the customer's message read: frustration, anxiety, confusion, distrust, "
+            "shame, resignation, urgency or gratitude. Null when nothing was detected, "
+            "which is the common case. It changed how the reply was WRITTEN and nothing "
+            "else — it is not a tier input and carries no score; see app/hardship/"
+            "emotions.py. Intended for the agent console, not for showing back to the "
+            "customer: telling somebody 'we detected that you are frustrated' is worse "
+            "than simply answering them properly."
+        ),
+    )
+    emotion_intensity: str | None = Field(
+        default=None,
+        description="mild | moderate | strong. Null whenever `emotion` is.",
     )
 
 
