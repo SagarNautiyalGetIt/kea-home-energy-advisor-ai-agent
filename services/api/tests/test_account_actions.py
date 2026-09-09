@@ -166,7 +166,7 @@ def test_build_validates_rather_than_assigning() -> None:
 
 
 async def test_a_plan_change_is_staged_before_it_is_recorded(ctx) -> None:
-    staged = await dispatch(ctx, "request_plan_change", {"plan_code": "low_fixed"})
+    staged = await dispatch(ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA"})
 
     assert staged["staged"] is True
     assert staged["confirmed"] is False
@@ -175,9 +175,9 @@ async def test_a_plan_change_is_staged_before_it_is_recorded(ctx) -> None:
 
 
 async def test_confirming_records_the_request(ctx) -> None:
-    await dispatch(ctx, "request_plan_change", {"plan_code": "low_fixed"})
+    await dispatch(ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA"})
     done = await dispatch(
-        ctx, "request_plan_change", {"plan_code": "low_fixed", "confirm": True}
+        ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA", "confirm": True}
     )
 
     assert done["recorded"] is True
@@ -191,7 +191,7 @@ async def test_confirming_records_the_request(ctx) -> None:
     )
 
     (request,) = await get_change_store().pending_for("H-JUL")
-    assert request.to_plan_code == "low_fixed"
+    assert request.to_plan_code == "KEA_ANY_VECT_STA"
 
 
 async def test_a_confirmation_with_nothing_staged_is_refused(ctx) -> None:
@@ -199,7 +199,7 @@ async def test_a_confirmation_with_nothing_staged_is_refused(ctx) -> None:
     request, and a tool that accepted confirm=true on the strength of it would be a
     one-call plan switch with a confirmation flag painted on."""
     result = await dispatch(
-        ctx, "request_plan_change", {"plan_code": "low_fixed", "confirm": True}
+        ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA", "confirm": True}
     )
     assert result["available"] is False
     assert "no staged plan change" in result["reason"]
@@ -209,9 +209,9 @@ async def test_a_confirmation_with_nothing_staged_is_refused(ctx) -> None:
 async def test_confirming_a_different_plan_cancels_rather_than_guessing(ctx) -> None:
     """A mismatch means the model lost track mid-conversation. Recording either plan
     would be recording a consent nobody gave, so both are dropped."""
-    await dispatch(ctx, "request_plan_change", {"plan_code": "low_fixed"})
+    await dispatch(ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA"})
     result = await dispatch(
-        ctx, "request_plan_change", {"plan_code": "standard", "confirm": True}
+        ctx, "request_plan_change", {"plan_code": "KEA_TOU_VECT_STA", "confirm": True}
     )
 
     assert "error" in result
@@ -221,10 +221,10 @@ async def test_confirming_a_different_plan_cancels_rather_than_guessing(ctx) -> 
 
 
 async def test_a_confirmation_is_single_use(ctx) -> None:
-    await dispatch(ctx, "request_plan_change", {"plan_code": "low_fixed"})
-    await dispatch(ctx, "request_plan_change", {"plan_code": "low_fixed", "confirm": True})
+    await dispatch(ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA"})
+    await dispatch(ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA", "confirm": True})
     again = await dispatch(
-        ctx, "request_plan_change", {"plan_code": "low_fixed", "confirm": True}
+        ctx, "request_plan_change", {"plan_code": "KEA_ANY_VECT_STA", "confirm": True}
     )
 
     assert again.get("available") is False
@@ -234,7 +234,7 @@ async def test_a_confirmation_is_single_use(ctx) -> None:
 async def test_an_unknown_plan_is_refused_with_the_list(ctx) -> None:
     result = await dispatch(ctx, "request_plan_change", {"plan_code": "cheapest"})
     assert "error" in result
-    assert "low_fixed" in result["available_plans"]
+    assert "KEA_ANY_VECT_STA" in result["available_plans"]
 
 
 def test_a_staged_change_expires() -> None:
@@ -246,7 +246,7 @@ def test_a_staged_change_expires() -> None:
     pending.stage(
         Staged(
             account_ref="H-JUL",
-            to_plan_code="low_fixed",
+            to_plan_code="KEA_ANY_VECT_STA",
             to_plan_name="Low Fixed Charge",
             from_plan=None,
             quoted_saving_nzd_per_year=None,
@@ -268,7 +268,7 @@ async def test_the_request_records_what_the_customer_was_shown() -> None:
     await store.record(
         PlanChangeRequest(
             account_ref="H-JUL",
-            to_plan_code="low_fixed",
+            to_plan_code="KEA_ANY_VECT_STA",
             to_plan_name="Low Fixed Charge",
             quoted_saving_nzd_per_year=94.0,
             quoted_from_period="July 2026",

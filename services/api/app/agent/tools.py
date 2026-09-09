@@ -60,15 +60,21 @@ from app.analytics.repository import UsageContext
 
 log = logging.getLogger(__name__)
 
-#: The illustrative plan catalogue moved to `app/analytics/plans.py`, which prices all
-#: four shapes against the household's own daily rows and computes the reasoning with
-#: them. The two rates that used to live here — Standard at 30c/1.50, Low Fixed Charge at
-#: 36c/0.30, breaking even at 20 kWh/day — are unchanged there, so a household quoted a
-#: break-even before this change is quoted the same one now.
+#: The plan catalogue lives in `app/analytics/plans.py` and holds Kea's three published
+#: Sprint 3 plans, priced against the household's own rows.
+#:
+#: The rate below is NOT one of them, and is not a plan rate at all. It is the round-number
+#: fallback the other tools use to put a dollar figure on a kWh when this account has no
+#: billed rate to derive one from — see `BILLED_DISCLOSURE` for the path that does. It is
+#: deliberately left as a plain estimate rather than quietly swapped for Kea's Anytime rate,
+#: because a household on Time of Use or Free Weekends does not pay the Anytime rate either,
+#: and dressing a fallback in a real plan's number is how an estimate starts reading as a bill.
 
 ILLUSTRATIVE_DISCLOSURE = (
-    "Kea's real tariffs are not public, so dollar figures here use an ILLUSTRATIVE "
-    f"{DEFAULT_UNIT_PRICE_NZD * 100:.0f}c/kWh. Say so the first time you quote one."
+    f"Dollar figures here use a rough {DEFAULT_UNIT_PRICE_NZD * 100:.0f}c/kWh estimate, "
+    "because this account has no billed rate to work from. It is not this household's "
+    "rate and it is not one of Kea's plan rates. Say it is an estimate the first time you "
+    "quote one, and point them at the plan comparison for real per-plan pricing."
 )
 
 BILLED_DISCLOSURE = (
@@ -237,15 +243,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "name": "get_plan_options",
         "description": (
             "Every plan priced against THIS household's own metered usage, with the "
-            "reasoning attached: what each would cost over the period and per year, how "
-            "much of that is daily charges versus units, which plan is cheapest for them, "
-            "how far their daily average sits from the point where the answer flips, and "
-            "whether the cheapest plan stays cheapest on cold days as well as mild ones. "
-            "Use it for anything about plans, rates, switching, whether they are on the "
-            "right plan, or how to pay less. Read `worth_switching` before recommending "
-            "anything — a plan that wins by two dollars a month has not been shown to win "
-            "at all, and saying so is a real answer. The rates are illustrative because "
-            "Kea's real tariffs are not public; the usage and the arithmetic are real."
+            "reasoning attached: what each of Kea's three plans would cost over the period "
+            "and per year, how much of that is daily charges versus units, which is "
+            "cheapest for them, how much of their power already falls in the free weekend "
+            "window against how much it would take, and whether the cheapest plan stays "
+            "cheapest on cold days as well as mild ones. Use it for anything about plans, "
+            "rates, switching, whether they are on the right plan, or how to pay less. "
+            "Read `worth_switching` before recommending anything — a plan that wins by two "
+            "dollars a month has not been shown to win at all, and saying so is a real "
+            "answer. Quote `usage_saving_nzd_per_year` and `term_credit_nzd_per_year` "
+            "separately: the first is unconditional, the second is earned only by "
+            "completing a commitment, and a term credit is never a reason to switch."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -479,8 +487,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "plan_code": {
                     "type": "string",
                     "description": (
-                        "The plan to move to, as `code` from get_plan_options — e.g. "
-                        "standard, low_fixed, time_of_use, solar."
+                        "The plan to move to, as `code` from get_plan_options — one of "
+                        "KEA_ANY_VECT_STA, KEA_TOU_VECT_STA, KEA_WKND_VECT_STA."
                     ),
                 },
                 "confirm": {
@@ -1070,16 +1078,48 @@ def compare_to_similar_homes(ctx: ToolContext) -> dict[str, Any]:
     }
 
 
-def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
-    """Every illustrative plan priced on this household's own metered usage.
+async def _hourly_shape(ctx: ToolContext):
+    """This household's hour-of-day import shape, for pricing the banded plans.
+
+    Read here rather than assembled in `AccountContext` because only the plan comparison
+    needs it and it is a second query. Returns None on every failure path — a missing
+    profile is a normal state for a seeded household, not an error, and `plans.price`
+    already declines to price a banded plan without one.
+    """
+    icp_id = getattr(ctx.usage, "icp_id", None)
+    if icp_id is None:
+        return None
+
+    from sqlalchemy import select
+
+    try:
+        from app.analytics.plans import HourlyShape
+        from app.db.marts import MartHourlyProfile
+        from app.db.session import get_sessionmaker
+
+        async with get_sessionmaker()() as session:
+            rows = (
+                await session.execute(
+                    select(MartHourlyProfile).where(MartHourlyProfile.icp_id == icp_id)
+                )
+            ).scalars().all()
+    except Exception:  # noqa: BLE001 - a missing mart is not an error worth failing on
+        log.warning("hourly profile unreadable for %s", ctx.customer_id, exc_info=True)
+        return None
+
+    return HourlyShape.from_rows(rows)
+
+
+async def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
+    """Every Kea plan priced on this household's own metered usage.
 
     Rewritten around `analytics/plans.py`. The old version returned two flat plans, a
     break-even and a period cost, which was enough to say *whether* to switch and not
     enough to say *why* — so the answers read as an assertion with a number in it, from a
     product whose whole claim is that it never asks to be taken on trust.
 
-    Everything derived is derived in Python. A model handed a break-even, two plan costs
-    and a period will occasionally produce a third figure that contradicts both, and this
+    Everything derived is derived in Python. A model handed a threshold, three plan costs
+    and a period will occasionally produce a fourth figure that contradicts them, and this
     is the one tool here where a wrong derived figure ends with somebody changing their
     electricity plan.
     """
@@ -1098,23 +1138,21 @@ def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
         plan_user_type=plan.user_type if plan else None,
         has_solar=bool(connection and connection.has_solar),
         has_controlled_load=bool(connection and connection.has_controlled_load),
+        shape=await _hourly_shape(ctx),
     )
 
     if not comparison.available:
         return _unavailable(comparison.reason or "a plan comparison is not possible here")
 
     def _option(cost: plans_mod.PlanCost) -> dict[str, Any]:
-        shape = cost.plan
+        plan_shape = cost.plan
         return _prune(
             {
-                "code": shape.code,
-                "name": shape.name,
-                "user_type": shape.user_type,
-                "daily_fixed_nzd": shape.daily_fixed_nzd,
-                "unit_rate_nzd_per_kwh": shape.unit_rate_nzd,
-                "off_peak_rate_nzd_per_kwh": shape.off_peak_rate_nzd,
-                "controlled_rate_nzd_per_kwh": shape.controlled_rate_nzd,
-                "export_rate_nzd_per_kwh": shape.export_rate_nzd
+                "code": plan_shape.code,
+                "name": plan_shape.name,
+                "daily_fixed_nzd": plan_shape.daily_fixed_nzd,
+                "rates_nzd_per_kwh": dict(plan_shape.rates_nzd),
+                "export_rate_nzd_per_kwh": plan_shape.export_rate_nzd
                 if connection and connection.has_solar
                 else None,
                 "cost_over_this_period_nzd": cost.total_nzd,
@@ -1124,11 +1162,11 @@ def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
                 # a total cannot be taken apart back into it.
                 "of_which_daily_charges_nzd": cost.fixed_nzd,
                 "of_which_energy_nzd": cost.energy_nzd,
-                "of_which_controlled_circuit_nzd": cost.controlled_nzd or None,
+                "kwh_in_each_band": cost.band_kwh or None,
                 "less_solar_export_credit_nzd": cost.export_credit_nzd or None,
                 "priced_from": cost.priced_from,
-                "suits": shape.suits,
-                "is_current_plan": shape.code == comparison.current_plan_code,
+                "suits": plan_shape.suits,
+                "is_current_plan": plan_shape.code == comparison.current_plan_code,
             }
         )
 
@@ -1145,31 +1183,47 @@ def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
         "current_plan_on_file": plan.name if plan else None,
         "current_plan_matched_to": comparison.current_plan_code,
         "cheapest_for_this_household": comparison.best_code,
-        "saving_nzd_over_this_period": comparison.saving_nzd_per_period or None,
-        "saving_nzd_per_year": comparison.saving_nzd_per_year or None,
+        # Kept apart on purpose, and named so they cannot be added up by accident. The
+        # usage saving is unconditional; the term credit is earned only by completing a
+        # commitment. See the "Terms are not savings" note in analytics/plans.py.
+        "usage_saving_nzd_over_this_period": comparison.usage_saving_nzd_per_period or None,
+        "usage_saving_nzd_per_year": comparison.usage_saving_nzd_per_year or None,
+        "term_options": [
+            {
+                "code": t.code,
+                "name": t.name,
+                "months": t.months,
+                "credit_nzd_in_first_year": t.term_credit_nzd_per_year,
+                "credit_nzd_over_the_term": t.total_credit_nzd,
+                "early_exit": t.early_exit_wording,
+            }
+            for t in comparison.terms
+        ],
+        "best_term": comparison.best_term_code,
+        "term_credit_nzd_per_year": comparison.term_credit_nzd_per_year or None,
+        "annual_saving_nzd_per_year": comparison.annual_saving_nzd_per_year or None,
         # null, not false, when the current plan could not be matched — see
         # `PlanComparison.material`. The difference is "we don't know" against "no".
         "worth_switching": comparison.material,
-        "break_even_kwh_per_day": comparison.break_even_kwh_per_day,
-        "break_even_between": list(comparison.break_even_between)
-        if comparison.break_even_between
-        else None,
-        "headroom_kwh_per_day": comparison.headroom_kwh_per_day,
+        "free_window_share": comparison.free_window_share,
+        "free_window_share_needed": comparison.free_window_share_needed,
+        "free_window_share_headroom": comparison.free_window_share_headroom,
+        "your_time_of_use_split": comparison.band_shares or None,
         "sensitivity": plans_mod.sensitivity(comparison),
         "cost_per_day_on_cold_days": comparison.winter_cost or None,
         "cost_per_day_on_mild_days": comparison.summer_cost or None,
         "caveats": comparison.caveats,
         "guidance": plans_mod.explain(comparison),
         "source": (
-            "illustrative plan catalogue in app/analytics/plans.py, priced against this "
-            f"household's own daily meter readings for {comparison.period}"
+            "Kea's published plan rates (docs/sprints/sprint-3/plans-and-terms.md), priced "
+            f"against this household's own meter readings for {comparison.period}"
         ),
         "tariff_note": (
-            "These plans are illustrative. Kea's real tariffs are not public, so the "
-            "comparison shows the SHAPE of the trade-off — high fixed charge and low "
-            "unit rate against the reverse, flat against time-of-use — rather than Kea's "
-            "actual prices. The USAGE is this household's own, and so is the arithmetic. "
-            "Say so once."
+            "These are Kea's own plan rates, GST-inclusive, priced on this household's own "
+            "metered usage. No caveat about illustrative pricing is needed or true. The one "
+            "thing to be careful with is the term credit: it is conditional on completing "
+            "the commitment, so quote it separately from the usage saving and never as the "
+            "reason to switch."
         ),
     }
 
@@ -1757,6 +1811,7 @@ async def request_plan_change(
         plan_user_type=plan.user_type if plan else None,
         has_solar=bool(connection and connection.has_solar),
         has_controlled_load=bool(connection and connection.has_controlled_load),
+        shape=await _hourly_shape(ctx),
     )
 
     if not comparison.available:
@@ -1770,8 +1825,9 @@ async def request_plan_change(
         return _unavailable(
             f"{target.name} could not be priced for this household, so switching to it "
             "cannot be quoted. This is usually because the plan needs data this account "
-            "does not have — a time-of-use plan needs a peak / off-peak split. Say which "
-            "plan and why, and do not stage a change you cannot put a figure on.",
+            "does not have — a banded plan needs an hourly profile to know when the power "
+            "was used. Say which plan and why, and do not stage a change you cannot put a "
+            "figure on.",
             plans_that_can_be_priced=[c.plan.code for c in comparison.costs],
         )
 
@@ -1812,8 +1868,7 @@ async def request_plan_change(
                 "code": target.code,
                 "name": target.name,
                 "daily_fixed_nzd": target.daily_fixed_nzd,
-                "unit_rate_nzd_per_kwh": target.unit_rate_nzd,
-                "off_peak_rate_nzd_per_kwh": target.off_peak_rate_nzd,
+                "rates_nzd_per_kwh": dict(target.rates_nzd),
                 "cost_over_this_period_nzd": target_cost.total_nzd,
             }
         ),
@@ -1867,7 +1922,6 @@ _SYNC = {
     "get_daily_usage": get_daily_usage,
     "get_bill_comparison": get_bill_comparison,
     "compare_to_similar_homes": compare_to_similar_homes,
-    "get_plan_options": get_plan_options,
     "project_this_bill": project_this_bill,
     "handoff_to_human": handoff_to_human,
     "answer_clarifying_question": answer_clarifying_question,
@@ -1876,6 +1930,9 @@ _SYNC = {
 }
 _ASYNC = {
     "get_hourly_profile": get_hourly_profile,
+    # Reads the hourly profile mart to price the banded plans, so it is async for the same
+    # reason `get_hourly_profile` is.
+    "get_plan_options": get_plan_options,
     # The write tools. Async because they touch a store, and grouped here rather than
     # marked out further because `app/account/` is where the read/write boundary is
     # enforced — see that package's docstring.

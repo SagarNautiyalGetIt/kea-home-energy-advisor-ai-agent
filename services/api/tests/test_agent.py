@@ -401,5 +401,8 @@ def test_the_prompt_keeps_the_constraints_that_are_true_about_the_data() -> None
     one number for the whole house; that does not become false because the model improved."""
     assert "cannot identify appliances" in SYSTEM
     assert "controlled load" in SYSTEM.lower()
-    assert "illustrative 30c" in SYSTEM
+    # The fallback rate must still be disclosed as an estimate. The wording moved off
+    # "illustrative" when Kea's real plan rates landed, but the duty to flag it did not.
+    assert "30c per kilowatt hour" in SYSTEM
+    assert "estimate" in SYSTEM
     assert "handoff_to_human" in SYSTEM
