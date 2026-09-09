@@ -1180,3 +1180,70 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
   .threshold-money-input input,.threshold-quiet input{border-color:rgb(255 255 255 / 14%);color:#e6e9f5;background:rgb(255 255 255 / 4%)}
   .offline-prompt{color:#c8cfe4}
 }
+
+/* Energy breakdown — where the power goes, split by behaviour rather than by appliance.
+   The estimated/measured distinction is carried in the fill (hatched vs solid) as well as
+   in the chip, because a chart that renders a regression estimate identically to a meter
+   reading overstates what is known. */
+.breakdown-card{padding:var(--space-3);margin-top:var(--space-3);background:var(--card)}
+.breakdown-card h2{display:flex;gap:var(--space-1);align-items:center;margin-bottom:var(--space-1);font-size:18px}
+.breakdown-lede{margin-bottom:var(--space-2);color:var(--muted);font-size:13px}
+.breakdown-empty{max-width:62ch;padding:var(--space-2);border-radius:var(--radius-sm);color:var(--muted);font-size:14px;background:rgb(74 37 255 / 4%)}
+.breakdown-empty svg{display:inline;vertical-align:-3px;width:16px;height:16px;margin-right:6px}
+.breakdown-bar{display:flex;overflow:hidden;height:14px;border-radius:999px;margin-bottom:var(--space-2);background:var(--line)}
+.breakdown-bar span{height:100%;transition:width .4s ease}
+.breakdown-always-on{background:#4a25ff}
+.breakdown-water{background:#00b2a9}
+.breakdown-heating{background:#ff7a45}
+.breakdown-other{background:#c3ccea}
+/* Hatched, not just a different hue: an estimate has to be distinguishable without
+   relying on colour, for the same reason the confidence chip exists in words. */
+.breakdown-estimated{background-image:repeating-linear-gradient(45deg,rgb(255 255 255 / 45%) 0 4px,transparent 4px 8px)}
+.breakdown-list{display:flex;flex-direction:column;gap:2px;list-style:none;margin:0;padding:0}
+.breakdown-row{display:flex;gap:var(--space-1);align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.breakdown-swatch{flex:none;width:12px;height:12px;border-radius:4px}
+.breakdown-label{flex:1;min-width:0;display:flex;flex-direction:column}
+.breakdown-label strong{font-size:14px}
+.breakdown-label small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.breakdown-figures{text-align:right}
+.breakdown-figures strong{display:block;font-size:15px}
+.breakdown-figures small{color:var(--muted);font-size:12px}
+.breakdown-why{flex:none;display:grid;place-items:center;width:32px;min-height:32px;height:32px;padding:0;border:0;border-radius:50%;color:var(--muted);background:transparent;cursor:pointer}
+.breakdown-why:hover{color:var(--purple);background:rgb(74 37 255 / 8%)}
+.breakdown-why svg{width:16px;height:16px}
+.breakdown-basis{max-width:70ch;margin:0 0 10px 22px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--ink);font-size:13px;line-height:1.5;background:rgb(74 37 255 / 5%)}
+.breakdown-footnote{max-width:70ch;margin-top:var(--space-2);color:var(--muted);font-size:12px;line-height:1.6}
+.breakdown-caveats{margin-top:var(--space-1)}
+.breakdown-caveats summary{color:var(--purple);font-size:13px;cursor:pointer}
+.breakdown-caveats ul{margin:var(--space-1) 0 0;padding-left:18px;color:var(--muted);font-size:12px;line-height:1.6}
+.breakdown-caveats li{margin-bottom:6px}
+
+/* Smart device discovery. Names only — there is deliberately nowhere here to render a
+   kWh or a dollar figure against a device, because an mDNS announcement carries neither. */
+.device-scan{padding:0}
+.device-scan h2{display:flex;gap:var(--space-1);align-items:center;margin-bottom:var(--space-1);font-size:16px}
+.device-scan-lede{max-width:70ch;margin-bottom:var(--space-2);color:var(--muted);font-size:13px;line-height:1.6}
+.device-scan button.primary{display:inline-flex;gap:8px;align-items:center;padding:0 18px;border:0;border-radius:999px;color:#fff;font-size:14px;font-weight:600;background:var(--purple);box-shadow:var(--shadow-button);cursor:pointer}
+.device-scan button.primary:disabled{opacity:.65;cursor:progress}
+.device-scan-empty{max-width:70ch;margin-top:var(--space-2);padding:var(--space-2);border-radius:var(--radius-sm);color:var(--muted);font-size:13px;line-height:1.6;background:rgb(74 37 255 / 4%)}
+.device-scan-empty svg{display:inline;vertical-align:-3px;width:16px;height:16px;margin-right:6px}
+.device-list{display:flex;flex-direction:column;gap:2px;list-style:none;margin:var(--space-2) 0 0;padding:0}
+.device-list li{padding:10px 0;border-top:1px solid var(--line)}
+.device-row{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.device-row strong{font-size:14px}
+.device-kind{color:var(--muted);font-size:12px}
+.device-platform{padding:2px 8px;border-radius:999px;color:var(--purple);font-size:11px;background:rgb(74 37 255 / 10%)}
+.device-list small{display:block;max-width:70ch;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.5}
+.device-scan-next{max-width:70ch;margin-top:var(--space-2);color:var(--ink);font-size:13px;line-height:1.6}
+.device-scan-footnote{max-width:70ch;margin-top:var(--space-1);color:var(--muted);font-size:11px;line-height:1.6}
+.spin{animation:kea-spin 1s linear infinite}
+@keyframes kea-spin{to{transform:rotate(360deg)}}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+:root[data-theme=dark]{
+  .breakdown-row,.device-list li{border-top-color:rgb(255 255 255 / 8%)}
+  .breakdown-label strong,.breakdown-figures strong,.device-row strong{color:#e6e9f5}
+  .breakdown-basis,.device-scan-next{color:#c8cfe4;background:rgb(255 255 255 / 5%)}
+  .breakdown-empty,.device-scan-empty{background:rgb(255 255 255 / 4%)}
+  .breakdown-other{background:#4a5680}
+}

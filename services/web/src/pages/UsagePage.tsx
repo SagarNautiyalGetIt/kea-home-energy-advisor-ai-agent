@@ -1,12 +1,14 @@
 import { Activity, Flame, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
+import EnergyBreakdownCard from '../components/EnergyBreakdownCard'
 import FeedbackState from '../components/FeedbackState'
 import TimeRangeSelector, { type TimeRange } from '../components/TimeRangeSelector'
 import ToggleButtons from '../components/ToggleButtons'
 import UsageGraph, { type UsageUnit } from '../components/UsageGraph'
 import UsageSummaryCard from '../components/UsageSummaryCard'
 import { dailyUsage, hourlyUsage, monthlyUsage } from '../data/mockData'
+import { loadSession } from '../lib/session'
 
 type BandKey = 'peak' | 'offPeak' | 'night'
 
@@ -92,6 +94,9 @@ const ranges: Record<TimeRange, RangeData> = {
 const tariff = 0.3
 
 export default function UsagePage() {
+  // Read once rather than per render: `customerId` is the only field used here and it
+  // cannot change without a re-login, which remounts the whole tree.
+  const [session] = useState(loadSession)
   const [range, setRange] = useState<TimeRange>('Daily')
   const [unit, setUnit] = useState<UsageUnit>('kWh')
   const [compare, setCompare] = useState(false)
@@ -153,6 +158,13 @@ export default function UsagePage() {
           ))}
         </div></>}
       </section>
+
+      {/* Sits under the usage chart rather than on its own page: "how much did I use" and
+          "what was it for" are one question a customer asks in one breath, and splitting
+          them across two tabs means the second is never found. Reads the real backend —
+          the chart above is still on mock data, so the two will not always agree until
+          that is wired, and the breakdown names its own period to make that obvious. */}
+      {session && <EnergyBreakdownCard customerId={session.customerId} />}
     </>
   )
 }

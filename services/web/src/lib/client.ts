@@ -291,6 +291,105 @@ export const getBillShock = (customerId: string, asAtDay?: number) =>
       (asAtDay ? `?as_at_day=${asAtDay}` : ""),
   );
 
+/**
+ * One slice of the energy breakdown.
+ *
+ * **`confidence` is not decoration and the UI has to honour it.** A `measured` slice came
+ * off a meter. A `fitted` slice came off this household's own regression and is an
+ * estimate — rendering it identically to a measured one is a chart that overstates what is
+ * known, which is the failure this whole product is organised against. A `residual` slice
+ * is what is left after the others, so it carries their error too and must read as
+ * "everything else" rather than as a finding.
+ */
+export interface EnergyCategory {
+  key: string;
+  label: string;
+  kwh: number;
+  cost_nzd: number;
+  share_pct: number;
+  /** `measured` | `fitted` | `residual` */
+  confidence: string;
+  /** How the figure was arrived at, in one clause. Show it — it is the whole point. */
+  basis: string;
+  caveat: string | null;
+}
+
+/**
+ * Where a household's power goes.
+ *
+ * **This does not identify appliances**, and no copy on this screen may imply it does. A
+ * whole-house meter reads one number for the whole house; these categories are behaviours
+ * that are each separately measurable, which is a different claim and the only honest one.
+ *
+ * `available: false` is a real response and must render as an explanation, not as an empty
+ * chart or a spinner. An account with no half-hourly data genuinely cannot have its
+ * standing load separated, and `reason` says so in words a customer can read.
+ */
+export interface EnergyBreakdown {
+  customer_id: string;
+  available: boolean;
+  reason: string | null;
+  period: string;
+  days: number;
+  total_kwh: number;
+  total_cost_nzd: number;
+  categories: EnergyCategory[];
+  caveats: string[];
+  heating_fit_r_squared: number | null;
+  heating_not_reported_because: string | null;
+  always_on_not_reported_because: string | null;
+}
+
+export const getEnergyBreakdown = (customerId: string) =>
+  getJSON<EnergyBreakdown>(
+    `/api/households/${encodeURIComponent(customerId)}/energy-breakdown`,
+  );
+
+/**
+ * One device found on the local network.
+ *
+ * There is no energy field here and there must not be one. An mDNS announcement carries a
+ * name and a service type and nothing else — attaching a kWh or a dollar figure to any of
+ * this would be a fabrication with a device name stapled to it.
+ */
+export interface DiscoveredDevice {
+  name: string;
+  kind: string;
+  /** Which platform could be connected to actually read it. Null when there is none. */
+  could_connect_via: string | null;
+  note: string;
+  address: string | null;
+}
+
+export interface SmartDeviceScan {
+  scanned: boolean;
+  error: string | null;
+  method: string;
+  /**
+   * True for the stdlib one-shot scan, which finds devices that answer promptly and misses
+   * ones that only announce on a slow cycle. Say so — a household with a quiet device must
+   * be told the scan was quick, not told they have nothing.
+   */
+  scan_was_shallow: boolean;
+  devices_found: number;
+  devices: DiscoveredDevice[];
+  by_platform: Record<string, number>;
+  platforms_worth_connecting: string[];
+}
+
+/**
+ * A POST despite reading nothing, deliberately: it puts multicast traffic on the customer's
+ * network and takes a couple of seconds. A GET invites a proxy or a dashboard poll to
+ * repeat it, and a network scan running on every page load is a scan nobody asked for.
+ *
+ * Only ever call this from an explicit click.
+ */
+export async function discoverSmartDevices(): Promise<SmartDeviceScan> {
+  const res = await fetch("/api/homelink/discover", { method: "POST" });
+  if (!res.ok) throw new Error(`discover → ${res.status} ${res.statusText}`);
+  return (await res.json()) as SmartDeviceScan;
+}
+
 export interface StreamHandlers {
   onToken?: (e: TokenEvent) => void;
   /** Drop the text streamed since the last reset — see the `reset` docs above. */
