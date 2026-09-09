@@ -614,6 +614,13 @@ class AlertPreferenceRow(Base):
 
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # 15 / 40 / 75 is the ladder from before the preference system existed, kept on purpose
+    # — see the "Defaults reproduce the previous behaviour exactly" note in
+    # app/alerts/preferences.py. 15 and 75 do not sit on the four steps the settings screen
+    # offers (`TIER_OPTIONS` in web/src/lib/alerts.ts); the screen shows an off-scale saved
+    # value as its own option rather than snapping it, so this stays put. Moving these to
+    # 20 / 80 would change when the alert fires for every customer who never opened
+    # Settings, which is a migration and not a UI change.
     tier1_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=15)
     tier2_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=40)
     tier3_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=75)

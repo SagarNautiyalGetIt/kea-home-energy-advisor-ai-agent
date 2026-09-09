@@ -519,6 +519,23 @@ html[data-theme=dark] .topbar-cluster{background:#1a2039}
 .prompt-grid button svg{width:19px;flex:0 0 19px;color:#6249e8}
 .chat-thread{max-width:860px;padding:12px 0}.message-row{display:flex;align-items:flex-start;gap:7px}.message-row.assistant{justify-content:flex-start}.message-row.user{justify-content:flex-end}
 .bubble{font-size:16px;line-height:1.65}.bubble.long{font-size:16px}.bubble p{margin:0 0 12px}.bubble p:last-child{margin-bottom:0}.bubble li{margin:7px 0}
+/* Rendered markdown inside an answer. See components/AnswerText — the model writes these
+   whether or not it is asked to, and until they were rendered the customer read the
+   asterisks. Emphasis is weighted rather than coloured: a dollar figure in purple inside
+   a bank-ish interface reads as a link. */
+.bubble strong{color:#1d2947;font-weight:650}
+.bubble em{font-style:italic}
+.bubble code{padding:1px 5px;border-radius:5px;background:#eef1fa;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+/* The markers are set explicitly: a reset earlier in this sheet strips list styling for
+   the nav and card lists, so without this a bulleted answer renders as unindented stacked
+   lines and the list stops reading as a list. */
+ul.answer-list{list-style:disc}
+ol.answer-list{list-style:decimal}
+.answer-list{margin:0 0 12px;padding-left:22px}
+.answer-list:last-child{margin-bottom:0}
+.answer-list li::marker{color:#8490ac}
+.answer-heading{margin:0 0 8px;color:#1d2947;font-weight:650}
+.user-bubble strong{color:inherit}.user-bubble code{background:rgb(255 255 255 / 18%)}
 .assistant-bubble{padding:15px 0;color:#34415f;background:transparent}.user-bubble{padding:12px 17px;background:linear-gradient(135deg,var(--purple2),var(--purple))}
 .edit-chat-button{width:32px;height:32px;min-height:32px;display:grid;place-items:center;border:0;border-radius:9px;color:#7380a0;background:transparent;opacity:0;transition:.15s}.message-row:hover .edit-chat-button,.edit-chat-button:focus{opacity:1}.edit-chat-button svg{width:15px}
 .edit-message{min-width:min(520px,65vw)}.edit-message textarea{width:100%;min-height:78px;padding:10px;border:1px solid #dfe3ee;border-radius:10px;font:inherit;resize:vertical}.edit-message span{display:flex;justify-content:flex-end;gap:7px;margin-top:8px}.edit-message button{min-height:34px;padding:5px 12px;border:0;border-radius:9px}.edit-message button:last-child{color:#4f35db;background:#fff}
@@ -615,6 +632,12 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 html[data-theme=dark] .answer-sources li{color:#c3cdea}
 html[data-theme=dark] .answer-sources li span,html[data-theme=dark] .verification-sources li small{color:#7d88a6}
 html[data-theme=dark] .verification-sources li.bad{background:#1b2237;color:#7d88a6}
+/* Rendered markdown in an answer. Emphasis has to invert: the light theme darkens a
+   <strong> against near-black body text, which on a dark background would make the
+   emphasised words the least readable thing in the sentence. */
+html[data-theme=dark] .bubble strong,html[data-theme=dark] .answer-heading{color:#f2f5ff}
+html[data-theme=dark] .bubble code{background:#232b47;color:#dfe5fa}
+html[data-theme=dark] .answer-list li::marker{color:#7d88a6}
 
 .escalation-prompt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:11px 15px;border:1px solid #d9e3f8;border-radius:12px;background:#f2f6ff;color:#3c4a70;font-size:13px}
 .escalation-prompt button{padding:6px 12px;border:0;border-radius:9px;color:#fff;background:var(--purple);font-size:12px;font-weight:700}
@@ -1114,6 +1137,9 @@ html[data-theme=dark] .plan-rate-table>div:not(:first-child):hover{background:#1
 .settings-link>svg:last-child{transition:transform .3s ease}
 .settings-link:hover>svg:last-child{transform:translateX(4px);color:var(--purple)}
 html[data-theme=dark] .setting-row input{background:#38415c}
+html[data-theme=dark] .threshold-choice{border-color:#38415c;color:#c3cdea;background:#141a30}
+html[data-theme=dark] .threshold-choice:hover{border-color:#4c5878;color:#eef1ff}
+html[data-theme=dark] .threshold-choice.selected{border-color:#8b74ff;color:#d6ccff;background:#241d52;box-shadow:none}
 html[data-theme=dark] .settings-link:hover{background:#141a30}
 /* Account-security rows are children of their section, like the toggles above */
 .settings-link{padding-left:38px}
@@ -1144,9 +1170,20 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
 .threshold-channel{display:inline-flex;align-items:center;gap:10px;color:#2f3e65}
 .threshold-channel svg{width:18px;color:#5c43e7}
 .threshold-head input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple)}
-.threshold-slider{width:100%;margin:12px 0 6px;accent-color:var(--purple)}
-/* 44px hit target on the handle — this is dragged on a phone. */
-.threshold-slider::-webkit-slider-thumb{width:22px;height:22px}
+/* Four labelled steps instead of a 5-200% slider. The native radio is hidden rather than
+   removed — it still owns focus, keyboard arrow-key movement within the group, and the
+   checked state that the label styling reads. */
+.threshold-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px;margin:12px 0 10px}
+.threshold-choice{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 4px;border:1.5px solid #e0e4ef;border-radius:12px;color:#5b6a90;background:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}
+/* The canonical visually-hidden recipe, and note what is NOT in it: `opacity:0`. An
+   earlier version had it, and it took the radios out of the accessibility tree entirely —
+   the label was still announced, but the control it names was not, on the one screen where
+   the setting decides whether somebody hears about a $200 bill. Clip it, never fade it. */
+.threshold-choice input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;white-space:nowrap;clip-path:inset(50%)}
+.threshold-choice:hover{border-color:#c3ccec;color:#2f3e65}
+.threshold-choice.selected{border-color:var(--purple);color:var(--purple);background:#f3f0ff;box-shadow:0 1px 6px rgb(74 37 255 / 14%)}
+.threshold-choice:focus-within{outline:2px solid var(--purple);outline-offset:2px}
+.threshold-ladder:disabled .threshold-choice{cursor:not-allowed}
 .threshold-value{margin:0;color:#2f3e65;font-size:14px}
 .threshold-value span{color:#647191}
 .threshold-note{display:block;margin-top:4px;color:#8490ac;font-size:12px}

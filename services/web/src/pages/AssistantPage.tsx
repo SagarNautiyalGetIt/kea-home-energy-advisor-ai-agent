@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import AnswerText from '../components/AnswerText'
 import Modal from '../components/Modal'
 import {
   getHealth,
@@ -446,12 +447,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                   <p className="answer-withheld">{item.error}</p>
                 ) : (
                   <>
-                    {/* Split on blank lines, not every newline. Answers arrive as
-                        paragraphs now that they are not capped at two to four sentences,
-                        and a bill explanation reads as a wall of text without this. */}
-                    {item.text.split(/\n{2,}/).map((para) => para.trim()).filter(Boolean).map((para, i) => (
-                      <p key={i}>{para}</p>
-                    ))}
+                    {/* Sparky writes in markdown whether or not it was asked to, so the
+                        emphasis and lists it reaches for are rendered rather than shown as
+                        literal asterisks. See components/AnswerText for why this is
+                        hand-written: the string is model output, and no HTML is built
+                        from it. */}
+                    <AnswerText text={item.text}/>
 
                     {/* Live lookup activity, replaced by the source list when done. This
                         is the product working, so it is shown rather than hidden behind a

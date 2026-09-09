@@ -55,6 +55,25 @@ export interface OfflineModelOption {
 export const MIN_THRESHOLD_PCT = 5
 export const MAX_THRESHOLD_PCT = 200
 
+/**
+ * The threshold each channel offers, as a short list rather than a continuous range.
+ *
+ * These replaced a 5-200% slider. A slider implies the exact number matters and invites
+ * the customer to land on 37%, which is a false precision: the thing being compared
+ * against is a forecast with its own interval, so 35 and 40 are not distinguishable
+ * claims. Four labelled steps say what the control actually decides — roughly how early
+ * do you want to hear — and are a far better target on a phone than a 22px handle.
+ *
+ * The bands overlap at their edges on purpose. `ladderError` requires the tiers not to
+ * *decrease*, not to differ, so a customer can put the text and the call both at 70% and
+ * get both at once. Forbidding that would be a rule the product does not actually have.
+ */
+export const TIER_OPTIONS: Record<Tier, readonly number[]> = {
+  1: [10, 20, 30, 40],
+  2: [40, 50, 60, 70],
+  3: [70, 80, 90, 100],
+}
+
 export const CHANNEL_LABEL: Record<Tier, string> = {
   1: 'Email',
   2: 'Text message',

@@ -2,8 +2,7 @@ import { Mail, MessageSquare, Phone, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   CHANNEL_LABEL,
-  MAX_THRESHOLD_PCT,
-  MIN_THRESHOLD_PCT,
+  TIER_OPTIONS,
   formatMb,
   getAlertPreferences,
   getOfflineModels,
@@ -159,19 +158,40 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
                 />
               </div>
 
-              <input
-                className="threshold-slider"
-                type="range"
-                min={MIN_THRESHOLD_PCT}
-                max={MAX_THRESHOLD_PCT}
-                step={5}
-                value={pct}
+              {/* A saved value can sit off this scale — the ladder used to be a 5-200%
+                  slider, and the stored defaults were 15 and 75. It is shown as its own
+                  option rather than snapped to the nearest step, because silently moving
+                  somebody's alert threshold on page load is a change they never made to a
+                  setting whose whole job is to fire when they expect it to. */}
+              <div
+                className="threshold-choices"
+                role="radiogroup"
                 aria-label={`${CHANNEL_LABEL[tier]} threshold, percent above normal`}
-                aria-valuetext={
-                  dollars === null ? `${pct} percent` : `${pct} percent, about $${dollars}`
-                }
-                onChange={(event) => update(withThreshold(prefs, tier, Number(event.target.value)))}
-              />
+              >
+                {(TIER_OPTIONS[tier].includes(pct)
+                  ? TIER_OPTIONS[tier]
+                  : [...TIER_OPTIONS[tier], pct].sort((a, b) => a - b)
+                ).map((option) => (
+                  <label
+                    key={option}
+                    className={`threshold-choice${option === pct ? ' selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name={`threshold-tier-${tier}`}
+                      value={option}
+                      checked={option === pct}
+                      aria-label={
+                        thresholdInDollars(option, expectedCostNzd) === null
+                          ? `${option} percent above normal`
+                          : `${option} percent above normal, about $${thresholdInDollars(option, expectedCostNzd)}`
+                      }
+                      onChange={() => update(withThreshold(prefs, tier, option))}
+                    />
+                    <span>{option}%</span>
+                  </label>
+                ))}
+              </div>
 
               <p className="threshold-value">
                 <strong>{pct}% above normal</strong>
