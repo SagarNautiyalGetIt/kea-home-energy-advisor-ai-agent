@@ -645,6 +645,11 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 .answer-chart-source button:hover{transform:none}
 .answer-chart-source p{margin:5px 0 0;color:#8b94ad;font-size:10px;line-height:1.45}
 
+/* "Not on file" — a real state, styled as absence rather than as an error. The seeded
+   households genuinely hold no address, and the alternative to saying so is inventing
+   one on the screen where it would most be believed. */
+.profile-missing{color:#9aa3bd;font-style:italic;font-weight:500}
+
 /* Not a handoff, and styled so it does not read as one. */
 .answer-withheld{margin:0;color:#5c6788}
 
@@ -1164,6 +1169,10 @@ html[data-theme=dark] .plan-rate-table>div:not(:first-child):hover{background:#1
 .settings-link>svg:last-child{transition:transform .3s ease}
 .settings-link:hover>svg:last-child{transform:translateX(4px);color:var(--purple)}
 html[data-theme=dark] .setting-row input{background:#38415c}
+html[data-theme=dark] .threshold-channels{border-left-color:#2f2a5c;background:linear-gradient(90deg,#151b33,transparent 60%)}
+html[data-theme=dark] .threshold-head input[type=checkbox]{background:#38415c}
+html[data-theme=dark] .channel-switch>span{color:#7d88a6}
+html[data-theme=dark] .threshold-row:not(.channel-off) .channel-switch>span{color:#a693ff}
 html[data-theme=dark] .threshold-choice{border-color:#38415c;color:#c3cdea;background:#141a30}
 html[data-theme=dark] .threshold-choice:hover{border-color:#4c5878;color:#eef1ff}
 html[data-theme=dark] .threshold-choice.selected{border-color:#8b74ff;color:#d6ccff;background:#241d52;box-shadow:none}
@@ -1192,11 +1201,32 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
 .threshold-ladder{margin:8px 0 0;padding:0;border:0}
 .threshold-ladder:disabled{opacity:.45}
 .threshold-ladder legend{padding:0 0 8px;color:#7885a4;font-size:12px;font-weight:600}
-.threshold-row{padding:14px 0;border-top:1px solid #ebedf4}
+/* The three channels, visibly inside the alert they belong to. The left rule and the
+   tint are doing the work a heading alone was not: these are three ways of delivering
+   one alert, not three settings that happen to be adjacent. */
+.threshold-channels{margin:4px 0 6px;padding:2px 0 2px 16px;border-left:3px solid #e4e2fb;border-radius:2px;background:linear-gradient(90deg,#faf9ff,transparent 60%)}
+.threshold-channels .threshold-row:first-child{border-top:0}
+.threshold-row{padding:14px 12px 14px 0;border-top:1px solid #ebedf4;transition:opacity .25s ease}
+/* Off, and saying so. The row stays readable — it is still the control you use to turn
+   it back on — but it stops competing with the channels that are actually live. */
+.threshold-row.channel-off{opacity:.5}
+.threshold-row.channel-off .threshold-choices,
+.threshold-row.channel-off .threshold-value{filter:grayscale(1)}
 .threshold-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .threshold-channel{display:inline-flex;align-items:center;gap:10px;color:#2f3e65}
 .threshold-channel svg{width:18px;color:#5c43e7}
-.threshold-head input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple)}
+.threshold-row.channel-off .threshold-channel svg{color:#98a1bd}
+
+/* Same switch as the master control above, so the three read as the same kind of thing. */
+.channel-switch{display:inline-flex;align-items:center;gap:9px}
+.channel-switch>span{min-width:22px;color:#8b94ad;font-size:11px;font-weight:700;text-align:right}
+.threshold-row:not(.channel-off) .channel-switch>span{color:var(--purple)}
+.threshold-head input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;width:46px;height:26px;min-width:46px;margin:0;border:0;border-radius:999px;background:#dfe3f0;cursor:pointer;transition:background .3s ease}
+.threshold-head input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgb(45 62 123 / 22%);transition:transform .3s ease}
+.threshold-head input[type=checkbox]:checked{background:linear-gradient(135deg,var(--purple2),var(--purple))}
+.threshold-head input[type=checkbox]:checked::after{transform:translateX(20px)}
+.threshold-head input[type=checkbox]:focus-visible{outline:2px solid #4318ff;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.threshold-head input[type=checkbox],.threshold-head input[type=checkbox]::after,.threshold-row{transition:none}}
 /* Four labelled steps instead of a 5-200% slider. The native radio is hidden rather than
    removed — it still owns focus, keyboard arrow-key movement within the group, and the
    checked state that the label styling reads. */

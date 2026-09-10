@@ -149,6 +149,46 @@
         }
       }
     },
+    "/api/households/{customer_id}/profile": {
+      "get": {
+        "summary": "Get Customer Profile",
+        "description": "The signed-in customer's own details.\n\nReads the same `AccountContext` every other answer is built from, so the profile\nscreen and the assistant cannot disagree about who the customer is. Fields the\naccount does not carry come back null and the screen says \"Not on file\" \u2014 the\nseeded households have no address or plan, and inventing one would be showing\nsomebody a fact about themselves that no record holds.",
+        "operationId": "get_customer_profile_api_households__customer_id__profile_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/bill-shock": {
       "get": {
         "summary": "Bill Shock",
@@ -1250,6 +1290,119 @@
         ],
         "title": "ClarifyingQuestion",
         "description": "One question, and the arithmetic that justifies asking it."
+      },
+      "CustomerProfile": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "plan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Name"
+          },
+          "user_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Type"
+          },
+          "icp_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icp Number"
+          },
+          "network_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id"
+        ],
+        "title": "CustomerProfile",
+        "description": "Who the signed-in customer is, for the profile screen.\n\nEvery field below `customer_id` is optional, and the screen shows \"Not on file\"\nrather than a placeholder for the ones that are missing. That is not defensive\ncoding \u2014 the seeded `public.*` households genuinely have no address or plan, and a\nprofile page that invented one would be showing somebody a detail about themselves\nthat nobody holds.\n\nThe page it replaces was hardcoded to \"Adela Parkson\", so every one of the sixteen\nlogins saw the same person's name, address and phone number."
       },
       "DemoAccountCard": {
         "properties": {

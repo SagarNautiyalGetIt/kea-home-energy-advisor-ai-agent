@@ -719,3 +719,29 @@ class HouseholdSummary(BaseModel):
     daily_kwh: list[float]
     total_kwh: float
     estimated_cost_nzd: float
+
+
+class CustomerProfile(BaseModel):
+    """Who the signed-in customer is, for the profile screen.
+
+    Every field below `customer_id` is optional, and the screen shows "Not on file"
+    rather than a placeholder for the ones that are missing. That is not defensive
+    coding — the seeded `public.*` households genuinely have no address or plan, and a
+    profile page that invented one would be showing somebody a detail about themselves
+    that nobody holds.
+
+    The page it replaces was hardcoded to "Adela Parkson", so every one of the sixteen
+    logins saw the same person's name, address and phone number.
+    """
+
+    customer_id: str
+    name: str | None = None
+    account_number: str | None = None
+    address: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    plan_name: str | None = None
+    #: `low_user` | `standard`, when the account carries one.
+    user_type: str | None = None
+    icp_number: str | None = None
+    network_name: str | None = None

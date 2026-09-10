@@ -676,6 +676,8 @@ class MartRepository:
         return AccountContext(
             account_ref=customer_id,
             display_name=getattr(account, "customer_name", "") or "",
+            email=getattr(account, "email", None),
+            phone=getattr(account, "phone", None),
             plan=plan if plan.name else None,
             connection=connection if connection.icp_number else None,
             billing=billing,

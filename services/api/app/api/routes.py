@@ -52,6 +52,7 @@ from app.schemas import (
     CauseBreakdown,
     ChatRequest,
     ChatResponse,
+    CustomerProfile,
     DemoAccountCard,
     EnergyBreakdown,
     EnergyCategory,
@@ -187,6 +188,42 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/profile", response_model=CustomerProfile)
+async def get_customer_profile(customer_id: str) -> CustomerProfile:
+    """The signed-in customer's own details.
+
+    Reads the same `AccountContext` every other answer is built from, so the profile
+    screen and the assistant cannot disagree about who the customer is. Fields the
+    account does not carry come back null and the screen says "Not on file" — the
+    seeded households have no address or plan, and inventing one would be showing
+    somebody a fact about themselves that no record holds.
+    """
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # None for the seeded `public.*` households, which carry readings and nothing else.
+    # A profile of just an id is the honest answer there — the screen fills the name in
+    # from the session and shows "Not on file" for the rest.
+    account = ctx.account
+    if account is None:
+        return CustomerProfile(customer_id=customer_id)
+
+    return CustomerProfile(
+        customer_id=customer_id,
+        name=account.display_name or None,
+        account_number=account.billing.account_number if account.billing else None,
+        address=account.connection.address_display if account.connection else None,
+        email=account.email,
+        phone=account.phone,
+        plan_name=account.plan.name if account.plan else None,
+        user_type=account.plan.user_type if account.plan else None,
+        icp_number=account.connection.icp_number if account.connection else None,
+        network_name=account.connection.network_name if account.connection else None,
+    )
 
 
 @router.get("/households/{customer_id}/bill-shock", response_model=BillShockWarning)

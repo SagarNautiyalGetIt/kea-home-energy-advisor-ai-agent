@@ -18,6 +18,7 @@ import UsagePage from './pages/UsagePage'
 import VerificationPage from './pages/VerificationPage'
 import type { PageId } from './types/navigation'
 import { clearSession, loadSession, saveSession, type Session } from './lib/session'
+import { clearThread } from './lib/thread'
 
 const routeFor: Record<PageId, string> = {
   dashboard: '/dashboard', usage: '/usage', billing: '/billing', assistant: '/assistant',
@@ -65,6 +66,10 @@ function App() {
   }
   const confirmLogout = () => {
     clearSession()
+    // The saved assistant thread is this customer's conversation about their own bill.
+    // It goes when they do, rather than waiting on the next sign-in to notice the id
+    // no longer matches.
+    clearThread()
     setShowLogout(false)
     setSession(null)
     navigate('/login')
