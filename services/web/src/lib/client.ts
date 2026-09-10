@@ -165,11 +165,35 @@ export interface HouseholdSummary {
   estimated_cost_nzd: number;
 }
 
+/**
+ * The signed-in customer's own details.
+ *
+ * Every field but `customer_id` can be null, and the screen must show "Not on file"
+ * rather than filling one in: the seeded households genuinely have no address or plan,
+ * and a profile that invents one is showing somebody a fact about themselves that no
+ * record holds.
+ */
+export interface CustomerProfile {
+  customer_id: string;
+  name: string | null;
+  account_number: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+  plan_name: string | null;
+  user_type: string | null;
+  icp_number: string | null;
+  network_name: string | null;
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path} → ${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
+
+export const getCustomerProfile = (customerId: string) =>
+  getJSON<CustomerProfile>(`/api/households/${encodeURIComponent(customerId)}/profile`);
 
 /**
  * The proactive half of the product.
