@@ -198,6 +198,16 @@ class AccountContext:
     account_ref: str
     display_name: str = ""
 
+    email: str | None = None
+    phone: str | None = None
+    """The contact details on the account, for the profile screen to show back.
+
+    Deliberately **not** given to the model: no tool returns them and no answer needs
+    them, so there is no path by which the assistant can read a customer's address
+    aloud or repeat it into a transcript. They travel from the mart to the profile
+    endpoint and stop there.
+    """
+
     plan: PlanFacts | None = None
     connection: ConnectionFacts | None = None
     billing: BillingFacts | None = None
