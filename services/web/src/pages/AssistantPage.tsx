@@ -1,34 +1,39 @@
-import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import AnswerChart from '../components/AnswerChart'
+import AnswerText from '../components/AnswerText'
 import Modal from '../components/Modal'
 import {
   getHealth,
   getHouseholds,
-  isSafeToDisplay,
   streamChat,
-  type DoneEvent,
+  toolLabel,
   type HouseholdSummary,
+  type ChartEvent,
+  type SourceRef,
 } from '../lib/client'
-import { fromDoneEvent } from '../lib/verificationLog'
+import { fromDoneEvent } from '../lib/answerLog'
 import { loadSession } from '../lib/session'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
 import { SparkySparks } from '../components/sparky'
 
 /**
- * The assistant, answering from the real pipeline.
+ * The assistant.
  *
- * Every figure on this page is computed by the backend and checked by the number-checker
- * before it is streamed. Nothing here writes a number of its own — the previous version
- * of this file answered from three hardcoded paragraphs, which is the exact thing the
- * product claims not to do.
+ * Every figure on this page comes from the customer's own meter data, read by the
+ * assistant through the backend's tools and cited on the answer. Nothing here writes a
+ * number of its own — an early version of this file answered from three hardcoded
+ * paragraphs, which is the exact thing the product claims not to do.
  *
- * Two rules worth not breaking:
+ * Three rules worth not breaking:
  *
- * 1. **Never test `done.passed` on its own.** A template fallback is built directly from
- *    verified facts and cannot contain an uncomputed number, yet reports `passed: false`.
- *    `isSafeToDisplay()` is the only correct test; showing "verification failed" over a
- *    correct answer undermines the claim the product is built on.
- * 2. **Always abort.** An in-flight stream outlives the component, and a second question
+ * 1. **Honour `reset`.** The assistant works in rounds and may write a line before
+ *    deciding it needs a lookup first. `reset` says to drop that line. A client that
+ *    ignores it shows "Let me check that." glued to the front of every answer.
+ * 2. **Render paragraphs.** Answers are no longer capped at two to four sentences, and a
+ *    bill explanation now arrives as several. Collapsing them into one block is how a
+ *    good answer gets made to look like a wall of text.
+ * 3. **Always abort.** An in-flight stream outlives the component, and a second question
  *    asked over the top of the first would interleave two answers in the same bubble.
  */
 
@@ -36,27 +41,32 @@ type Message = {
   id: number
   role: 'user' | 'assistant'
   text: string
-  report?: DoneEvent
-  failed?: boolean
+  /** What the assistant looked up. Rendered as the transparency panel under the answer. */
+  sources?: SourceRef[]
+  /** Live tool activity while the answer is being written. */
+  activity?: { name: string; done: boolean }[]
+  /** The lookup this answer is about, drawn. Absent on most answers — see `AnswerChart`. */
+  chart?: ChartEvent
+  /** The service could not answer — never a fabricated stand-in. See `onError`. */
+  error?: string
 }
 
-// From #69. The three hardcoded `responses` that sat beside it there are deliberately
-// not carried across: they asserted "$326.40, around 29% higher than your usual range"
-// as assistant output, which is both an invented figure and a comparison against billing
-// history this product does not hold. The prompts below ask the same questions of the
-// real pipeline instead.
 const SHOW_ASSISTANT_DESCRIPTION = false
 
 /**
- * Every one of these is verified to route to a real analytics path against the current
- * backend — a starter chip that lands on `out_of_scope` is worse than no chip. Each one
- * lands on a DIFFERENT intent, so clicking through them shows four genuinely different
- * answers rather than four rewordings of the same bundle.
+ * Starter chips.
  *
- * "Was that just the cold snap?" is back: it routes to weather attribution now that the
- * golden set's router fix has landed. "Which day was my highest usage?" is here because
- * it was the question that exposed the routing bug — it used to be answered with the
- * bill explainer.
+ * These were briefly rewritten during the agent work to show off different capabilities —
+ * a projection, a peer comparison, an honest refusal. That was churn nobody asked for,
+ * and it broke `qa/e2e/tests/assistant.spec.ts`, which covers these four by their exact
+ * text. The chips are a product decision and the suite encodes the current one, so they
+ * are back as they were.
+ *
+ * Each still lands somewhere real, which is the rule that matters: a starter chip the
+ * assistant cannot answer is worse than no chip. The capabilities the rewrite wanted to
+ * show — the month-end projection, the peer cohort, the hour-of-day refusal — are all
+ * reachable by typing, and `get_hourly_profile` now returns real data for the mart
+ * accounts rather than refusing for everyone.
  */
 const PROMPTS = [
   'Why is my power bill so high?',
@@ -97,6 +107,9 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // piper binaries, the flag is off, or the browser will not hand over a microphone
   // on an insecure origin. Each has a different fix, so the button names which one.
   const [voiceHint, setVoiceHint] = useState('Checking whether voice is available…')
+  // Set once the customer asks why the mic is unavailable, so the reason is
+  // announced to a screen reader rather than living only in a tooltip.
+  const [voiceReasonShown, setVoiceReasonShown] = useState(false)
 
   // Derived rather than stored. A second `useState` for the orb would need updating at
   // every one of the six places that change busy/listening/speaking, and would be wrong
@@ -104,6 +117,10 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const sparkState = listening ? 'listening' : speaking ? 'speaking' : busy ? 'thinking' : 'idle'
 
   const nextId = useRef(2)
+  // Threads the conversation server-side so a follow-up ("what about last month?") has
+  // the turn before it to resolve against. Null until the first answer comes back, and
+  // null forever when persistence is off — the backend treats it as optional either way.
+  const conversationId = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const fileInput = useRef<HTMLInputElement | null>(null)
   const photoInput = useRef<HTMLInputElement | null>(null)
@@ -200,18 +217,43 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       const patch = (fn: (m: Message) => Message) =>
         setMessages((current) => current.map((m) => (m.id === answerId ? fn(m) : m)))
 
-      let intent = 'unknown'
       try {
         await streamChat(
-          { customer_id: customerId, message: question },
+          { customer_id: customerId, message: question, conversation_id: conversationId.current },
           {
-            onMeta: (meta) => { intent = meta.intent; setEscalating(meta.escalate) },
             onToken: (token) => patch((m) => ({ ...m, text: m.text + token.text })),
-            onDone: (report) => {
-              patch((m) => ({ ...m, report, failed: !isSafeToDisplay(report) }))
-              // Demo line 6. Recorded for every answer, including rejected ones — a log
+            // The round that produced this text turned out to be a lookup, so the text
+            // was a preamble rather than the answer. Dropping it is the whole reason the
+            // stream can start before the assistant has decided what to fetch.
+            onReset: () => patch((m) => ({ ...m, text: '' })),
+            onTool: (tool) =>
+              patch((m) => ({
+                ...m,
+                activity: [...(m.activity ?? []), { name: tool.name, done: false }],
+              })),
+            onToolResult: (result) =>
+              patch((m) => ({
+                ...m,
+                activity: (m.activity ?? []).map((a) =>
+                  a.name === result.name && !a.done ? { ...a, done: true } : a,
+                ),
+              })),
+            // The server sends at most one, so this never overwrites a better chart with
+            // a worse one — but keep the first anyway rather than trusting that here.
+            onChart: (chart) => patch((m) => (m.chart ? m : { ...m, chart })),
+            onDone: (done) => {
+              conversationId.current = done.conversation_id
+              setEscalating(done.escalate_to_human)
+              patch((m) => ({ ...m, sources: done.sources, activity: undefined }))
+              // Demo line 6. Recorded for every answer, including unsourced ones — a log
               // that only records successes is not evidence.
-              fromDoneEvent(report, { customerId, question, intent })
+              fromDoneEvent(done, { customerId, question })
+            },
+            // The service could not answer. It says so; it does not substitute a
+            // plausible paragraph, and neither does this.
+            onError: (failure) => {
+              patch((m) => ({ ...m, text: '', activity: undefined, error: failure.message }))
+              onToast(failure.message, 'warning')
             },
           },
           controller.signal,
@@ -219,7 +261,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       } catch (error) {
         if (controller.signal.aborted) return
         setBackendDown(true)
-        patch((m) => ({ ...m, text: '', failed: true }))
+        patch((m) => ({
+          ...m,
+          text: '',
+          activity: undefined,
+          error: 'Sparky can’t reach your usage data right now.',
+        }))
         onToast(error instanceof Error ? error.message : 'Could not reach Sparky', 'warning')
       } finally {
         if (!controller.signal.aborted) setBusy(false)
@@ -266,7 +313,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             setStarted(true)
             setMessages((current) => [...current, { id: nextId.current++, role: 'user', text }])
           },
-          onMeta: (_intent, escalate) => setEscalating(escalate),
+          onMeta: (escalate) => setEscalating(escalate),
           onAnswer: (answer) => {
             setSpeaking(true)
             setMessages((current) => [
@@ -275,10 +322,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                 id: nextId.current++,
                 role: 'assistant',
                 text: answer.text,
-                // The socket sends the verification verdict in the same shape /chat's
-                // `done` event uses, so the badge logic is shared rather than copied.
-                report: answer.verification as DoneEvent,
-                failed: !isSafeToDisplay(answer.verification as DoneEvent),
+                // The socket sends `sources` in the same shape /chat's `done` event
+                // uses, so the transparency panel is shared rather than copied. Voice
+                // runs the identical agent (ADR-0003), so a spoken answer cites exactly
+                // what a typed one would.
+                sources: answer.sources,
               },
             ])
             if (answer.escalate_to_human) setEscalating(true)
@@ -362,7 +410,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             </select>
           </label>
         )}
-        <button className="new-chat-action" onClick={newChat}><MessageSquarePlus/>New chat</button>
+        {/* KEA-141 §7. Was rendered unconditionally, so it sat on the start screen
+            offering to leave a chat that had not begun — a control that does nothing is
+            worse than one that is absent, because people click it and learn the UI lies. */}
+        {started && (
+          <button className="new-chat-action" onClick={newChat}><MessageSquarePlus/>New chat</button>
+        )}
       </div>
     </div>
 
@@ -391,27 +444,62 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                       <button onClick={() => saveEdit(item.id)}>Save</button>
                     </span>
                   </div>
-                ) : item.failed ? (
-                  <p className="answer-withheld">
-                    I couldn’t produce an answer I can stand behind for that one, so I’d rather
-                    not guess. Let me put you through to someone who can help.
-                  </p>
+                ) : item.error ? (
+                  /* Not a handoff, and deliberately not phrased as one. The old copy
+                     here said "let me put you through to someone who can help", which
+                     turned every backend hiccup into a fake escalation — and it was the
+                     same sentence customers saw whenever the keyword router failed to
+                     recognise a question, so a service outage and an unrecognised
+                     question were indistinguishable. This says what happened. */
+                  <p className="answer-withheld">{item.error}</p>
                 ) : (
                   <>
-                    {item.text.split('\n').filter(Boolean).map((line, i) => <p key={i}>{line}</p>)}
-                    {/* Only when the answer actually contains figures.
-                        A hardship reply carries none by design, and stamping "every
-                        figure checked" on a message to someone who cannot pay their bill
-                        is both meaningless and the wrong tone.
-                        Testing `report.checked.length` would be wrong: the template
-                        fallback is built straight from verified facts without running the
-                        checker, so `checked` is empty even when the answer is full of
-                        figures. The claim is about figures, so look for figures. */}
-                    {item.report && !item.failed && /\d/.test(item.text) && (
-                      <small className="verified-badge">
-                        <ShieldCheck aria-hidden="true"/>
-                        Every figure checked against your meter data
-                      </small>
+                    {/* Sparky writes in markdown whether or not it was asked to, so the
+                        emphasis and lists it reaches for are rendered rather than shown as
+                        literal asterisks. See components/AnswerText for why this is
+                        hand-written: the string is model output, and no HTML is built
+                        from it. */}
+                    <AnswerText text={item.text}/>
+
+                    {/* The figures the answer is about, drawn from the same lookup that
+                        produced them. Under the prose rather than above it: the sentence
+                        is the answer and the chart is the evidence for it, and a chart
+                        that arrives before the words reads as the point being made. */}
+                    {item.chart && <AnswerChart spec={item.chart}/>}
+
+                    {/* Live lookup activity, replaced by the source list when done. This
+                        is the product working, so it is shown rather than hidden behind a
+                        spinner — "reading your daily meter data" is a more honest and more
+                        reassuring wait than three bouncing dots. */}
+                    {item.activity && item.activity.length > 0 && (
+                      <ul className="tool-activity">
+                        {item.activity.map((a, i) => (
+                          <li key={i} className={a.done ? 'done' : 'running'}>
+                            <Search aria-hidden="true"/>{toolLabel(a.name)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Only when the answer actually contains figures. A handoff to a
+                        person carries none by design, and stamping a provenance badge on
+                        a message to someone who cannot pay their bill is both meaningless
+                        and the wrong tone. */}
+                    {item.sources && item.sources.some((s) => s.ok) && /\d/.test(item.text) && (
+                      <details className="verified-badge answer-sources">
+                        <summary>
+                          <ShieldCheck aria-hidden="true"/>
+                          Answered from your own meter data
+                        </summary>
+                        <ul>
+                          {item.sources.filter((s) => s.ok).map((s, i) => (
+                            <li key={i}>
+                              <strong>{toolLabel(s.tool)}</strong>
+                              {s.source && <span>{s.source}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
                     )}
                   </>
                 )}
@@ -421,8 +509,14 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
               )}
             </div>
           ))}
-          {busy && messages[messages.length - 1]?.text === '' && (
-            <div className="bubble assistant-bubble thinking"><SparkySparks state="thinking" size={32}/>Sparky is checking your usage…</div>
+          {/* Only until the first lookup or the first word arrives. After that the
+              message bubble shows what is actually happening — which tool is running —
+              and a generic "checking your usage" line underneath it would be both
+              redundant and less informative than the thing it sits below. */}
+          {busy
+            && messages[messages.length - 1]?.text === ''
+            && !messages[messages.length - 1]?.activity?.length && (
+            <div className="bubble assistant-bubble thinking"><SparkySparks state="thinking" size={32}/>Sparky is reading your account…</div>
           )}
         </div>
       ) : (
@@ -479,20 +573,33 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             refused the mic, or an insecure origin are three different problems with
             three different fixes. `title` and aria-disabled rather than `disabled`, so
             the button still takes a click and can deliver that reason. */}
+        {/* KEA-141 §8. This used `aria-disabled` so the button would still take a click
+            and could explain itself — but `aria-disabled="true"` IS the disabled state
+            for the ARIA contract, so screen readers and Playwright both refuse to
+            operate it, and the explanation was only ever reachable via a `title`
+            tooltip that touch and screen-reader users never see.
+
+            The button is genuinely enabled instead. The reason lives in the accessible
+            name and in a live region, so it is announced rather than hovered. */}
         <button
-          aria-label={listening ? 'Stop listening' : 'Voice input'}
-          aria-pressed={listening}
-          aria-disabled={!voiceReady || busy || backendDown}
+          aria-label={
+            voiceReady
+              ? (listening ? 'Stop listening' : 'Ask by voice')
+              : `Voice input unavailable. ${voiceHint}`
+          }
+          aria-pressed={voiceReady ? listening : undefined}
           className={`mic-button${listening ? ' listening' : ''}${voiceReady ? '' : ' unavailable'}`}
           title={voiceReady ? (listening ? 'Stop listening' : 'Ask by voice') : voiceHint}
           onClick={() => {
             if (busy || backendDown) return
-            if (!voiceReady) { onToast(voiceHint, 'info'); return }
+            if (!voiceReady) { setVoiceReasonShown(true); onToast(voiceHint, 'info'); return }
             void toggleVoice()
           }}
         ><Mic/></button>
         <button className="send-button" aria-label="Send message" disabled={busy || backendDown || !message.trim()} onClick={submit}><ArrowUp/></button>
       </div>
+      {/* Announced, not hovered — see the mic button above. */}
+      <p className="sr-only" role="status">{voiceReasonShown ? voiceHint : ''}</p>
       <div className="chat-footer">
         Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Check Terms &amp; Conditions</button> · <button onClick={onEscalate}>Talk to a human</button>
       </div>
@@ -500,8 +607,17 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
     {termsOpen && (
       <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)}>
-        <p>Sparky explains your account using figures calculated from your own meter data. Every number in an answer is checked against those calculations before you see it.</p>
-        <p>Sparky does not identify individual appliances from half-hourly meter data, and estimated costs use an illustrative rate.</p>
+        {/* Reworded twice. First when the assistant started reading the data itself —
+            the original text promised every number was "checked against those
+            calculations before you see it", which described a control that no longer
+            exists. Then again to take out the remaining absolutes: what is left says
+            what Sparky does and what it cannot do, and is careful not to promise an
+            accuracy Kea would then have to make good on. The bill is the record; this
+            is a tool for understanding it. */}
+        <p>Sparky reads your own meter readings and account records to answer your questions, and lists what it looked up each time so you can see where its figures came from.</p>
+        <p>Sparky can get things wrong. Costs and projections are estimates based on the information available at the time — your actual bill is what counts, and it may differ. Please don’t treat Sparky’s answers as financial advice or as a final word on your account.</p>
+        <p>Sparky can’t tell which individual appliance used power, because a meter reads the whole house. Where a rate isn’t published, dollar figures are illustrative and Sparky says so.</p>
+        <p>If something looks wrong, or you’d like an answer checked, ask to talk to a human at any time and our team will take it from there.</p>
       </Modal>
     )}
   </div>

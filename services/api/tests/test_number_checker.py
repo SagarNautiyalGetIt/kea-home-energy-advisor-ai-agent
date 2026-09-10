@@ -91,6 +91,14 @@ class TestFallback:
         text = template_fallback(bundle)
         assert verify(text, bundle).passed, "the fallback must never fail its own checker"
 
-    def test_empty_bundle_offers_a_human(self) -> None:
+    def test_empty_bundle_points_at_going_back_online(self) -> None:
+        """It used to offer to put the customer through to a person.
+
+        This runs on a phone with no connection, so there is nothing to put them through
+        *with* — the device cannot reach us either. Offering a handoff it cannot perform
+        is worse than saying plainly that a real answer needs signal.
+        """
         empty = FactBundle(customer_id="H-JUL", intent=Intent.OUT_OF_SCOPE, period="July 2026")
-        assert "someone" in template_fallback(empty).lower()
+        text = template_fallback(empty).lower()
+        assert "back online" in text
+        assert "connect you with our team" not in text

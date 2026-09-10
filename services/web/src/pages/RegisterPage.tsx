@@ -45,6 +45,11 @@ export default function RegisterPage({ onRegister }: { onRegister: () => void })
       <section className="login-panel" aria-labelledby="register-title">
         <div className="login-content register-content">
           <header><h1 id="register-title">Sign up</h1></header>
+          {/* Said before the fields rather than after the button. This build has no
+              signup endpoint, so anything typed below is discarded — and a form that
+              asks for a password without saying that is inviting somebody to type a
+              real one into a demo. */}
+          <p className="auth-note">This is a preview build, so signing up won’t create a real account. To look around, sign in with one of the demo accounts on the login page.</p>
           <form onSubmit={submit} noValidate>
             <label htmlFor="full-name">Full name<span>*</span></label>
             <input id="full-name" name="name" type="text" placeholder="Adela Parkson" autoComplete="name" value={name} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name?'name-error':undefined} onChange={(event)=>setName(event.target.value)} />

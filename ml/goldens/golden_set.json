@@ -402,6 +402,178 @@
       "expect_intent": "time_of_day",
       "expect_facts": [],
       "note": "The seeded half-hourly data is one fixed shape scaled per day, so no hourly claim is honest."
+    },
+    {
+      "id": "R-200",
+      "question": "how much do i owe",
+      "customer_id": "H-JUL",
+      "expect_intent": "account_balance",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have a current balance",
+      "note": "Unroutable before the resolver landed. The fixtures carry no balance, so the answer must decline rather than reach for the period cost."
+    },
+    {
+      "id": "R-201",
+      "question": "when is my bill due?",
+      "customer_id": "H-COLD",
+      "expect_intent": "bill_due",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have a due date"
+    },
+    {
+      "id": "R-202",
+      "question": "what plan am i on",
+      "customer_id": "H-TARIFF",
+      "expect_intent": "plan_details",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have plan details",
+      "note": "Must NOT route to tariff_check. 'What plan am I on' is a lookup; 'is there a better plan' is an analysis. The old router sent both to tariff_check."
+    },
+    {
+      "id": "R-203",
+      "question": "what am i paying per kwh",
+      "customer_id": "H-JUL",
+      "expect_intent": "rate_details",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have the rates"
+    },
+    {
+      "id": "R-204",
+      "question": "how do i pay my bill",
+      "customer_id": "H-SPIKE",
+      "expect_intent": "payment_method",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have a payment method"
+    },
+    {
+      "id": "R-205",
+      "question": "what is my icp number",
+      "customer_id": "H-JUL",
+      "expect_intent": "account_identity",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have those details"
+    },
+    {
+      "id": "R-206",
+      "question": "when is my next meter read",
+      "customer_id": "H-DROP",
+      "expect_intent": "billing_cycle",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have billing cycle dates"
+    },
+    {
+      "id": "R-210",
+      "question": "how much power did i use in july",
+      "customer_id": "H-JUL",
+      "expect_intent": "usage_total",
+      "expect_facts": [
+        "total_usage",
+        "mean_daily"
+      ],
+      "expect_caveat_substring": "cannot identify appliances"
+    },
+    {
+      "id": "R-211",
+      "question": "am i using more than similar homes",
+      "customer_id": "H-JUL",
+      "expect_intent": "compare_to_similar",
+      "expect_facts": [
+        "your_daily_use",
+        "peer_daily_use",
+        "daily_difference"
+      ],
+      "expect_caveat_substring": "NOT a New Zealand average",
+      "note": "The peer baseline is the seeded cohort. Presenting it as a national average would be a fabricated statistic in the one place nobody would check it."
+    },
+    {
+      "id": "R-212",
+      "question": "can you break down my bill",
+      "customer_id": "H-JUL",
+      "expect_intent": "bill_breakdown",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have a bill to break down"
+    },
+    {
+      "id": "R-213",
+      "question": "how can i reduce my bill",
+      "customer_id": "H-JUL",
+      "expect_intent": "how_to_reduce",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "NO figures to base advice on",
+      "note": "Must decline rather than fall back to generic energy-saving tips — advice not grounded in this household's own figures is the thing customers have already read."
+    },
+    {
+      "id": "R-214",
+      "question": "how much did my solar export",
+      "customer_id": "H-JUL",
+      "expect_intent": "solar_export",
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT have any export readings"
+    },
+    {
+      "id": "R-215",
+      "question": "is this an estimate or a real reading",
+      "customer_id": "H-JUL",
+      "expect_intent": "supply_quality",
+      "expect_facts": [
+        "estimated_pct"
+      ],
+      "expect_caveat_substring": "stored detail"
+    },
+    {
+      "id": "R-220",
+      "question": "this bill is wrong, i never used that much",
+      "customer_id": "H-JUL",
+      "expect_intent": "dispute",
+      "expect_escalation": true,
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT defend the bill",
+      "note": "Routes to a human like hardship does. A customer disputing the meter is making a claim about the world; re-quoting our own figures at them is the same data said again with more confidence."
+    },
+    {
+      "id": "R-221",
+      "question": "ive been overcharged",
+      "customer_id": "H-COLD",
+      "expect_intent": "dispute",
+      "expect_escalation": true,
+      "expect_facts": [],
+      "expect_empty_bundle": true,
+      "expect_caveat_substring": "do NOT defend the bill"
+    },
+    {
+      "id": "R-230",
+      "question": "how much power did i use last month",
+      "customer_id": "H-ZARA",
+      "expect_intent": "usage_total",
+      "expect_facts": [
+        "total_usage",
+        "mean_daily"
+      ],
+      "expect_caveat_substring": "cannot identify appliances",
+      "note": "The household where nothing happened. R-210 asks the same of H-JUL, which has a story; this one has none, and the bundle must still be a total and a mean rather than a search for one."
+    },
+    {
+      "id": "R-231",
+      "question": "is my power use creeping up",
+      "customer_id": "H-AROHA",
+      "expect_intent": "using_more_than_usual",
+      "expect_facts": [
+        "weather_share",
+        "weather_cost",
+        "other_cost"
+      ],
+      "note": "A month-long drift with no alarming day. H-COLD (R-020) rises and falls back, so weather explains most of it; here the weather share is small and the honest answer is mostly other_cost."
     }
   ],
   "verification_must_pass": [

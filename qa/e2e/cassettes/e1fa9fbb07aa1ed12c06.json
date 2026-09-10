@@ -1,0 +1,83 @@
+{
+  "question": "Here is this customer's account summary, already looked up for you: {\"available\":true,\"account_reference\":\"DEMO-ACCT-228001\",\"usage_data_period\":{\"label\":\"Augus",
+  "model": "gemini-3.5-flash",
+  "events": [
+    {
+      "t": "delta",
+      "text": "Your August bill was **$144.6"
+    },
+    {
+      "t": "delta",
+      "text": "5** for 393.18 units (kWh). This is actually **$6.39 lower"
+    },
+    {
+      "t": "delta",
+      "text": "** than your previous bill of $151.04, primarily because slightly warmer weather reduced your heating needs,"
+    },
+    {
+      "t": "delta",
+      "text": " saving you about $6.86. \n\nTo see why your bill sits at this level, we can look"
+    },
+    {
+      "t": "delta",
+      "text": " at how your home uses power. Your meter readings break down into three distinct areas:\n\n*   **Always-on background load"
+    },
+    {
+      "t": "delta",
+      "text": " ($66.66 or 46.1% of your bill):** This is the largest part of your power"
+    },
+    {
+      "t": "delta",
+      "text": " bill. It is the steady, continuous draw measured overnight between 2 am and 5 am when the household is asleep\u2014"
+    },
+    {
+      "t": "delta",
+      "text": "running things like fridges, standby appliances, chargers, or clocks. Your home draws an average of 5.84 units a day just"
+    },
+    {
+      "t": "delta",
+      "text": " to keep these running. Over a full year, this background draw costs you about **$785**. Finding and"
+    },
+    {
+      "t": "delta",
+      "text": " switching off appliances at the wall is often the easiest way to bring this number down.\n*   **Heating ($47.71 or"
+    },
+    {
+      "t": "delta",
+      "text": " 33.0% of your bill):** This is the portion of your power that moves up and down with the outdoor temperature"
+    },
+    {
+      "t": "delta",
+      "text": ". Your usage tracks the cold very closely, adding about 0.93 units of power for every degree the temperature"
+    },
+    {
+      "t": "delta",
+      "text": " drops. \n*   **Everything else ($30.28 or 20.9% of your bill):**"
+    },
+    {
+      "t": "delta",
+      "text": " This covers active daily use like cooking, laundry, lighting, and entertainment. Because your property does not have a separately met"
+    },
+    {
+      "t": "delta",
+      "text": "ered controlled load circuit, your hot water heating is also bundled into this category.\n\nFor context, your average daily usage of"
+    },
+    {
+      "t": "delta",
+      "text": " 12.68 units is actually slightly lower than the average of 13.74 units per day"
+    },
+    {
+      "t": "delta",
+      "text": " used by similar homes in this dataset during August."
+    },
+    {
+      "t": "complete",
+      "text": "Your August bill was **$144.65** for 393.18 units (kWh). This is actually **$6.39 lower** than your previous bill of $151.04, primarily because slightly warmer weather reduced your heating needs, saving you about $6.86. \n\nTo see why your bill sits at this level, we can look at how your home uses power. Your meter readings break down into three distinct areas:\n\n*   **Always-on background load ($66.66 or 46.1% of your bill):** This is the largest part of your power bill. It is the steady, continuous draw measured overnight between 2 am and 5 am when the household is asleep\u2014running things like fridges, standby appliances, chargers, or clocks. Your home draws an average of 5.84 units a day just to keep these running. Over a full year, this background draw costs you about **$785**. Finding and switching off appliances at the wall is often the easiest way to bring this number down.\n*   **Heating ($47.71 or 33.0% of your bill):** This is the portion of your power that moves up and down with the outdoor temperature. Your usage tracks the cold very closely, adding about 0.93 units of power for every degree the temperature drops. \n*   **Everything else ($30.28 or 20.9% of your bill):** This covers active daily use like cooking, laundry, lighting, and entertainment. Because your property does not have a separately metered controlled load circuit, your hot water heating is also bundled into this category.\n\nFor context, your average daily usage of 12.68 units is actually slightly lower than the average of 13.74 units per day used by similar homes in this dataset during August.",
+      "tool_calls": [],
+      "usage": {
+        "prompt_tokens": 7963,
+        "completion_tokens": 403
+      }
+    }
+  ]
+}

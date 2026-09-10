@@ -1,12 +1,14 @@
 import { Activity, Flame, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
+import EnergyBreakdownCard from '../components/EnergyBreakdownCard'
 import FeedbackState from '../components/FeedbackState'
 import TimeRangeSelector, { type TimeRange } from '../components/TimeRangeSelector'
 import ToggleButtons from '../components/ToggleButtons'
 import UsageGraph, { type UsageUnit } from '../components/UsageGraph'
 import UsageSummaryCard from '../components/UsageSummaryCard'
 import { dailyUsage, hourlyUsage, monthlyUsage } from '../data/mockData'
+import { loadSession } from '../lib/session'
 
 type BandKey = 'peak' | 'offPeak' | 'night'
 
@@ -92,8 +94,16 @@ const ranges: Record<TimeRange, RangeData> = {
 const tariff = 0.3
 
 export default function UsagePage() {
+  // Read once rather than per render: `customerId` is the only field used here and it
+  // cannot change without a re-login, which remounts the whole tree.
+  const [session] = useState(loadSession)
   const [range, setRange] = useState<TimeRange>('Daily')
-  const [unit, setUnit] = useState<UsageUnit>('kWh')
+  // Dollars, not kWh. Almost nobody opens an energy app worried about kilowatt-hours —
+  // they open it worried about the bill, and a first screen denominated in units they
+  // do not price forces them to do the conversion before the page means anything. The
+  // mobile app already defaulted to cost; the web did not, so the same customer got a
+  // different first impression depending on which one they opened.
+  const [unit, setUnit] = useState<UsageUnit>('$')
   const [compare, setCompare] = useState(false)
   const [date, setDate] = useState('2026-08-20')
   const [status, setStatus] = useState<'ready' | 'loading' | 'empty' | 'error'>('ready')
@@ -119,7 +129,10 @@ export default function UsagePage() {
           <div className="usage-toolbar-actions"><button className="refresh-usage" aria-label="Refresh usage" onClick={()=>refresh()}><RefreshCw/></button><label className="date-selector"><span>Date</span><input type="date" value={date} onChange={(event)=>{setDate(event.target.value);refresh()}}/></label><label className="compare-selector"><input type="checkbox" checked={compare} onChange={(event)=>setCompare(event.target.checked)}/><span>Compare previous</span></label><ToggleButtons
             className="unit-selector"
             ariaLabel="Graph metric"
-            options={[{ value: 'kWh', label: 'kWh' }, { value: '$', label: '$' }]}
+            /* Dollars first, so the selected option is the one on the left. A toggle
+               that opens with its second segment lit reads as though something was
+               changed for you. */
+            options={[{ value: '$', label: '$' }, { value: 'kWh', label: 'kWh' }]}
             value={unit}
             onChange={setUnit}
           /></div>
@@ -153,6 +166,13 @@ export default function UsagePage() {
           ))}
         </div></>}
       </section>
+
+      {/* Sits under the usage chart rather than on its own page: "how much did I use" and
+          "what was it for" are one question a customer asks in one breath, and splitting
+          them across two tabs means the second is never found. Reads the real backend —
+          the chart above is still on mock data, so the two will not always agree until
+          that is wired, and the breakdown names its own period to make that obvious. */}
+      {session && <EnergyBreakdownCard customerId={session.customerId} />}
     </>
   )
 }

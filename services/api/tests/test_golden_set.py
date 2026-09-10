@@ -1,25 +1,34 @@
-"""KEA-46 / KEA-57 — the golden set, executed as a CI gate.
+"""KEA-46 / KEA-57 — the golden set, executed as a CI gate. **Offline path.**
 
-This is the file that turns *"the model never invents a figure"* from a claim into a
-number we can put on a slide. It runs the whole deterministic pipeline — layer 0 routing,
-layer 1 analytics, layer 3 verification — against `ml/goldens/golden_set.json`.
+This runs the analytics and the number-checker against `ml/goldens/golden_set.json` with
+no model and no database, which is what lets it run in CI on every pull request rather
+than on one laptop with Ollama installed.
 
-**No model runs here, and no database is needed.** That is the point of ADR-0002: because
-Python decides and the model only narrates, the three layers that carry the trust claim
-are testable with nothing installed. A golden set that needed Ollama would run on one
-laptop; this one runs in CI on every pull request.
+## What it covers now, and what it stopped covering
 
-Layer 2 (the model) is deliberately out of scope. Scoring a real model against these same
-cases is the Day 6 bake-off (KEA-47) and belongs in `ml/evals/`. What this file proves is
-narrower and more important: *if* a model fabricates a figure, layer 3 catches it.
+It used to open with layer 0: each question was fed to the keyword router and asserted to
+land on the right intent, 56 cases of it. **That is gone with the router** (ADR-0011) —
+the agent reads the question rather than classifying it, so there is nothing to assert a
+routing decision about. The `routing` block in the JSON is kept and still exercised, but
+for what remains true of it: each `(intent, customer_id)` pair must still build the
+bundle it claims to, because `app/analytics/bundles.py` still builds those for the
+offline pack.
 
-The set tests both directions on purpose:
+The verification half is unchanged and still meaningful, because the offline path is
+still narrate-only: a device with no connection gets a fixed bundle and a small local
+model, and a token-by-token check against that bundle is exactly the right control there.
+See `app/analytics/bundles.py` for why offline keeps the architecture the server dropped.
+
+Both directions, on purpose:
 
 * `verification_must_reject` — invented figures are caught. Without these, the headline
   means nothing.
 * `verification_must_pass` — legitimate answers survive. Without these, a checker that
   rejected literally everything would score a perfect "0 fabricated figures", which is
   the failure mode nobody would notice until a demo produced no answers at all.
+
+The agent path is covered by `test_agent.py`, and its trust claim is a different one:
+not "no figure outside the bundle" but "every figure traces to a recorded tool result".
 """
 
 from __future__ import annotations
@@ -29,8 +38,7 @@ import pathlib
 
 import pytest
 
-from app.pipeline import _bundle_for
-from app.routing.intents import route
+from app.analytics.bundles import bundle_for as _bundle_for
 from app.schemas import Intent
 from app.verification.number_checker import verify
 
@@ -54,26 +62,18 @@ def _bundle(case: dict):
     return _bundle_for(Intent(case["intent"]), case["customer_id"])
 
 
-# ───────────────────────────── layer 0 + layer 1 ─────────────────────────────
+# ───────────────────────────── the offline bundles ─────────────────────────────
 
 
 @pytest.mark.parametrize("case", ROUTING, ids=_ids(ROUTING))
-def test_routing_and_facts(case: dict) -> None:
-    """Each question routes where it should, and gets the facts it should."""
-    routing = route(case["question"])
-    expected = Intent(case["expect_intent"])
-    assert routing.intent is expected, (
-        f"{case['id']}: {case['question']!r} routed to {routing.intent.value}, "
-        f"expected {expected.value}"
-    )
+def test_bundle_for_intent_and_household(case: dict) -> None:
+    """Each (intent, household) builds the facts and caveats it claims to.
 
-    if "expect_escalation" in case:
-        assert routing.is_escalation is case["expect_escalation"], (
-            f"{case['id']}: escalation flag wrong — a hardship disclosure that does not "
-            f"escalate is a Consumer Care Obligations problem, not a UX one"
-        )
-
-    bundle = _bundle_for(routing.intent, case["customer_id"])
+    The routing assertion this used to open with is gone with the router — see the module
+    docstring. `case["question"]` is left in the JSON because it documents what each
+    intent is *for*, and because the agent-path eval in `ml/evals/` reads the same file.
+    """
+    bundle = _bundle_for(Intent(case["expect_intent"]), case["customer_id"])
     keys = {f.key for f in bundle.facts}
 
     for key in case.get("expect_facts", []):
@@ -95,10 +95,11 @@ def test_routing_and_facts(case: dict) -> None:
 
 
 def test_every_intent_has_golden_cases() -> None:
-    """`schemas.Intent` says adding an intent means adding golden-set cases too.
+    """Every intent the offline pack can precompute has a case here.
 
-    This asserts that rule instead of trusting it. An intent that is routable but has no
-    case here is an intent nobody is checking.
+    Asserts the rule instead of trusting it: an intent with no case is one nobody is
+    checking, and the offline pack is the one place where a bad bundle reaches a customer
+    with no server-side tool result to contradict it.
     """
     covered = {Intent(c["expect_intent"]) for c in ROUTING}
     missing = sorted(i.value for i in Intent if i not in covered)
@@ -193,13 +194,14 @@ def test_headline_zero_fabricated_figures(capsys: pytest.CaptureFixture[str]) ->
         if not verify(case["draft"], _bundle(case)).passed:
             legitimate_wrongly_rejected.append(case["id"])
 
-    prompts = len(ROUTING)
+    bundles = len(ROUTING)
     drafts = len(MUST_PASS) + len(MUST_REJECT)
 
     with capsys.disabled():
         print(
-            f"\n  golden set: {prompts} prompts routed, {drafts} drafts verified, "
-            f"{len(fabricated_that_got_through)} fabricated figures reached the customer"
+            f"\n  golden set (offline path): {bundles} bundles built, {drafts} drafts "
+            f"verified, {len(fabricated_that_got_through)} fabricated figures reached "
+            f"the customer"
         )
 
     assert not fabricated_that_got_through, (

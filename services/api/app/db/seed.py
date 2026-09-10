@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.analytics.fixtures import HOUSEHOLDS, REGION
 from app.config import settings
 from app.db.models import (
+    AgentToolCallRow,
     Base,
     Benchmark,
     Conversation,
@@ -96,7 +97,8 @@ def _intervals(day: dt.date, daily_kwh: float) -> list[tuple[dt.datetime, Decima
 async def seed(session: AsyncSession) -> None:
     # Idempotent: wipe demo data in FK-safe order, then rebuild.
     for model in (
-        Escalation, VerificationRow, TokenUsageRow, FactBundleRow, Turn, Conversation,
+        AgentToolCallRow, Escalation, VerificationRow, TokenUsageRow, FactBundleRow,
+        Turn, Conversation,
         Reading, Meter, CustomerTariff, Customer, Tariff, Benchmark, WeatherDay,
     ):
         await session.execute(delete(model))

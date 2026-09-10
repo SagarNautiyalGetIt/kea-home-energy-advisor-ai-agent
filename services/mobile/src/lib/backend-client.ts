@@ -1,7 +1,31 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
+/**
+ * Where the backend is, per platform.
+ *
+ * `localhost` means three different machines depending on where the app runs, and
+ * getting it wrong presents as "the app is broken" rather than as a config problem:
+ *
+ *   iOS Simulator      http://localhost:8000        (shares the host's loopback)
+ *   Android Emulator   http://10.0.2.2:8000         (10.0.2.2 IS the host)
+ *   A physical phone   http://<your-wifi-ip>:8000   (loopback is the phone itself)
+ *
+ * The default picks correctly between the two emulators. A physical device has to be
+ * told, because nothing in the app can discover the development machine's address — so
+ * `apiBase()` is exported and surfaced on the Help screen, which turns "it doesn't work"
+ * into "it is pointed at the wrong host".
+ *
+ * Previously this was `EXPO_PUBLIC_API_URL` with no fallback, and every call threw
+ * "Backend service is not configured" on a fresh clone that had not copied .env.example.
+ */
+export function apiBase(): string {
+  const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  return Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+}
+
+const apiBaseUrl = apiBase();
 const TOKEN_KEY = 'kea-mobile-access-token';
 const REFRESH_TOKEN_KEY = 'kea-mobile-refresh-token';
 let memoryToken: string | null = null;
@@ -36,7 +60,7 @@ export async function storeTokenPair(accessToken: string | null, refreshToken: s
 
 async function refreshAccessToken() {
   if (!memoryRefreshToken && Platform.OS !== 'web') memoryRefreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-  if (!memoryRefreshToken || !apiBaseUrl) return null;
+  if (!memoryRefreshToken) return null;
   const path = process.env.EXPO_PUBLIC_REFRESH_TOKEN_PATH?.trim() || '/api/auth/refresh';
   const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: memoryRefreshToken }) });
   if (!response.ok) return null;
@@ -48,7 +72,6 @@ async function refreshAccessToken() {
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
-  if (!apiBaseUrl) throw new Error('Backend service is not configured.');
   if (!path.startsWith('/')) throw new Error('API paths must be relative to EXPO_PUBLIC_API_URL.');
   const token = await loadAccessToken();
   const headers = new Headers(init.headers);

@@ -292,6 +292,11 @@ class Turn(Base):
     created_at: Mapped[dt.datetime] = _now()
 
     conversation: Mapped[Conversation] = relationship(back_populates="turns")
+    tool_calls: Mapped[list[AgentToolCallRow]] = relationship(
+        back_populates="turn",
+        cascade="all, delete-orphan",
+        order_by="AgentToolCallRow.seq",
+    )
     fact_bundle: Mapped[FactBundleRow | None] = relationship(
         back_populates="turn", cascade="all, delete-orphan"
     )
@@ -303,9 +308,65 @@ class Turn(Base):
     )
 
 
+class AgentToolCallRow(Base):
+    """What the agent actually looked up to produce one answer, in the order it looked.
+
+    This is the provenance record, and it replaced `fact_bundle` as the receipt when the
+    agent replaced the pipeline (ADR-0011). The two are not the same claim and the
+    difference matters if a figure is ever disputed:
+
+    * `fact_bundle` recorded what Python decided to compute *before* the model saw the
+      question. It described the pipeline's intent, and it was identical for every
+      customer who tripped the same keyword — so it could not tell you what any
+      particular answer was based on.
+    * This records the calls the model made, with the arguments it passed and the source
+      each result named. It is the answer's actual basis, and replaying it reproduces
+      what the model was holding when it wrote the sentence.
+
+    `result` is stored whole rather than summarised. It is the only copy: the marts are
+    rebuilt on every load, so a row read in July is not necessarily still there in
+    September, and "we cannot reconstruct what we told them" is not an acceptable answer
+    to a billing complaint.
+    """
+
+    __tablename__ = "agent_tool_call"
+    __table_args__ = (
+        Index("ix_agent_tool_call_turn", "turn_id", "seq"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    turn_id: Mapped[int] = mapped_column(ForeignKey("app.turn.id"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Call order within the turn. The sequence is itself evidence — it shows whether
+    the model oriented before it answered or went straight for a figure."""
+
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    arguments: Mapped[dict | None] = mapped_column(JSONB)
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    source: Mapped[str | None] = mapped_column(Text)
+    """The `source` line the tool returned — the table or computation behind it. Copied
+    out of `result` so a provenance query does not have to reach into JSON."""
+
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    """False when the tool errored or reported the data unavailable. Counting these is
+    how "the assistant declined because the data was not there" stays distinguishable
+    from "the assistant declined because it was not trying"."""
+
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+
+    turn: Mapped[Turn] = relationship(back_populates="tool_calls")
+
+
 class FactBundleRow(Base):
     """Exactly what layer 2 was given. Stored so any answer can be reconstructed and
-    audited afterwards — if a figure is ever disputed, this is the receipt."""
+    audited afterwards — if a figure is ever disputed, this is the receipt.
+
+    **Superseded by `agent_tool_call` (ADR-0011).** Nothing writes this table any more;
+    the model no longer receives a pre-computed bundle. Kept, with its rows, because the
+    Sprint 2 evidence was collected into it and deleting the table would delete the
+    audit trail for every answer given before the agent landed.
+    """
 
     __tablename__ = "fact_bundle"
     __table_args__ = (_APP_SCHEMA,)
@@ -553,6 +614,13 @@ class AlertPreferenceRow(Base):
 
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # 15 / 40 / 75 is the ladder from before the preference system existed, kept on purpose
+    # — see the "Defaults reproduce the previous behaviour exactly" note in
+    # app/alerts/preferences.py. 15 and 75 do not sit on the four steps the settings screen
+    # offers (`TIER_OPTIONS` in web/src/lib/alerts.ts); the screen shows an off-scale saved
+    # value as its own option rather than snapping it, so this stays put. Moving these to
+    # 20 / 80 would change when the alert fires for every customer who never opened
+    # Settings, which is a migration and not a UI change.
     tier1_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=15)
     tier2_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=40)
     tier3_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=75)
@@ -615,3 +683,49 @@ class HouseholdContextRow(Base):
     asked — re-asking it next cycle is how an assistant becomes something people mute."""
 
     updated_at: Mapped[dt.datetime] = _now()
+
+
+class PlanChangeRequestRow(Base):
+    """A plan switch the customer asked for and confirmed, waiting for a person.
+
+    Append-only, and a row per request rather than a column on the account, because the
+    interesting question is not "what plan are they on" — the marts answer that — but
+    "what did they ask for, when, and what were they told it would save". A single
+    mutable field cannot answer any of those, and this is the one thing the assistant can
+    start that costs money if it is wrong.
+
+    Nothing here writes to the account's plan. That comes from `kea.mart_account_context`,
+    which the data platform owns and this service reads; a plan change is a commercial
+    event with a billing effective date, and a retailer applies it from the next period
+    rather than mid-cycle. See `app/account/changes.py`.
+
+    `quoted_saving_nzd_per_year` is the figure the customer was shown when they said yes.
+    Stored because the only defensible record of consent is one that says what was
+    consented to — a row carrying a plan code alone cannot answer "what were they told"
+    six weeks later, which is exactly when it gets asked.
+    """
+
+    __tablename__ = "plan_change_request"
+    __table_args__ = (
+        Index("ix_plan_change_request_account", "account_ref", "requested_at"),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    account_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    from_plan: Mapped[str | None] = mapped_column(String(120))
+    """Null when the account had no plan on file. Recorded as null rather than guessed —
+    this row is a document somebody will act on."""
+
+    to_plan_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    to_plan_name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    quoted_saving_nzd_per_year: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    quoted_from_period: Mapped[str | None] = mapped_column(String(64))
+
+    status: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="pending_review"
+    )
+    channel: Mapped[str] = mapped_column(String(24), nullable=False, server_default="chat")
+    requested_at: Mapped[dt.datetime] = _now()

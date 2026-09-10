@@ -12,12 +12,17 @@ The protocol, in full:
       {"type":"ready", ...capabilities}
       {"type":"speech_start"}
       {"type":"transcript","text":...}
-      {"type":"meta","intent":...,"escalate":...}
+      {"type":"meta","escalate":...}
       {"type":"audio","kind":"ack"|"answer","text":...,"sample_rate":N,"bytes":N}
       <binary>                                  the clip that header describes
-      {"type":"answer","text":...,"facts":[...],"verification":{...}}
+      {"type":"answer","text":...,"sources":[...],"escalate_to_human":bool}
       {"type":"done","latency":{...}}
       {"type":"error","message":...,"fatal":bool}
+
+`meta` no longer carries an intent and `answer` no longer carries `facts` or a
+`verification` verdict: there is no router deciding an intent up front, and no bundle for
+prose to be checked against. `sources` replaces them — what the agent actually looked up
+for this answer. See `app/pipeline.py`.
 
 Every audio header is immediately followed by exactly one binary frame. The header
 carries the sample rate because Piper voices are 16 kHz or 22.05 kHz depending on the
@@ -35,13 +40,23 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from app.pipeline import Answer, Plan, UnknownCustomerError, narrate, plan
+from app.agent.loop import AgentUnavailable
+from app.pipeline import Answer, UnknownCustomerError, answer
 from app.voice.audio import SAMPLE_RATE
 from app.voice.stt import SpeechToText
 from app.voice.tts import TextToSpeech
 from app.voice.vad import Event, TurnDetector
 
 log = logging.getLogger(__name__)
+
+#: Spoken when the model cannot be reached. Figure-free by construction, and it does not
+#: pretend to be an answer — the old architecture served a template built from verified
+#: facts here, which worked because the model was only formatting figures Python had
+#: already computed. Nothing stands in for reasoning, so this says so.
+_UNAVAILABLE = (
+    "I'm sorry — I can't reach your account details just now, so I'd rather not guess. "
+    "Please try again in a moment."
+)
 
 
 class Transport:
@@ -136,52 +151,57 @@ class VoiceSession:
         timings: Timings | None = None,
         started: float | None = None,
     ) -> Answer | None:
-        """Text in, spoken verified answer out. The only path to audio in this class."""
+        """Text in, spoken answer out. The only path to audio in this class."""
         timings = timings or Timings()
         started = started if started is not None else time.perf_counter()
 
-        plan_started = time.perf_counter()
-        try:
-            p = await plan(self.customer_id, message)
-        except UnknownCustomerError as exc:
-            await self.error(f"unknown customer: {exc}", fatal=True)
-            return None
-        timings.plan_ms = (time.perf_counter() - plan_started) * 1000.0
-
-        await self.transport.send_json(
-            {"type": "meta", "intent": p.intent, "escalate": p.escalate}
-        )
-
-        # ADR-0005: speak now, from a constant, while the model works. This is the only
-        # audio the caller hears that layer 3 never checked, which is why it is drawn
-        # from a reviewed dict of figure-free strings and never from model output.
-        first_audio_at = await self._speak_acknowledgement(p, started)
+        # ADR-0005: speak now, from a constant, while the agent works. This is the only
+        # audio the caller hears that was not produced from their own data, which is why
+        # it is drawn from a reviewed figure-free string and never from model output.
+        #
+        # It is generic rather than picked per intent because there is no intent to pick
+        # from at this moment — nothing has read the account yet. See `tts.ACKNOWLEDGEMENT`.
+        first_audio_at = await self._speak_acknowledgement(started)
         if first_audio_at is not None:
             timings.first_audio_ms = first_audio_at
 
         model_started = time.perf_counter()
-        # `channel="voice"` reaches the conversation row. Call deflection is the business
-        # case, so voice turns have to be countable separately from chat ones.
-        result = await narrate(p, message, channel="voice")
+        try:
+            result = await answer(self.customer_id, message, channel="voice")
+        except UnknownCustomerError as exc:
+            await self.error(f"unknown customer: {exc}", fatal=True)
+            return None
+        except AgentUnavailable as exc:
+            # Spoken, not silent. A caller who hears nothing has no idea whether to wait,
+            # hang up or repeat themselves, and this is a phone call.
+            log.error("voice: agent unavailable customer=%s: %s", self.customer_id, exc)
+            await self._speak_line(_UNAVAILABLE)
+            await self.error("the assistant is unavailable", fatal=False)
+            await self.transport.send_json(
+                {"type": "done", "latency": timings.as_dict()}
+            )
+            return None
         timings.model_ms = (time.perf_counter() - model_started) * 1000.0
 
+        await self.transport.send_json(
+            {"type": "meta", "escalate": result.escalate}
+        )
         await self.transport.send_json(
             {
                 "type": "answer",
                 "text": result.text,
-                "facts": [f.model_dump() for f in result.bundle.facts],
-                "verification": result.report.model_dump(),
+                "sources": result.sources,
                 "escalate_to_human": result.escalate,
             }
         )
 
-        # `result.sentences` is the verified text and nothing else. There is no branch
-        # in this class that synthesises a string the number-checker has not passed.
+        # `result.sentences` strips markdown before splitting — a synthesiser reading
+        # "asterisk asterisk your bill asterisk asterisk" down a phone line is the
+        # failure that property exists to prevent.
         #
-        # A synthesis failure degrades to a silent-but-correct turn, for the same reason
-        # `narrate_verified` degrades to a template: the answer has already been computed
-        # and verified, and the client has already been sent it. Throwing here would take
-        # a working answer off the screen because the speaker did not work.
+        # A synthesis failure degrades to a silent-but-correct turn: the answer has
+        # already been produced and sent to the client, and throwing here would take a
+        # working answer off the screen because the speaker did not work.
         try:
             async for utt in self.tts.stream(result.sentences):
                 if timings.first_audio_ms == 0.0:
@@ -194,11 +214,11 @@ class VoiceSession:
         timings.total_ms = (time.perf_counter() - started) * 1000.0
         await self.transport.send_json({"type": "done", "latency": timings.as_dict()})
         log.info(
-            "voice turn customer=%s intent=%s verified=%s stt=%.0fms model=%.0fms "
+            "voice turn customer=%s tools=%s escalate=%s stt=%.0fms model=%.0fms "
             "first_audio=%.0fms total=%.0fms",
             self.customer_id,
-            result.intent,
-            result.report.passed,
+            [t.name for t in result.tools_used],
+            result.escalate,
             timings.stt_ms,
             timings.model_ms,
             timings.first_audio_ms,
@@ -206,12 +226,21 @@ class VoiceSession:
         )
         return result
 
-    async def _speak_acknowledgement(self, p: Plan, started: float) -> float | None:
-        utt = await self.tts.acknowledgement(p.intent)
+    async def _speak_acknowledgement(self, started: float) -> float | None:
+        utt = await self.tts.acknowledgement()
         if utt is None:
             return None
         await self._send_audio("ack", utt.text, utt.pcm, utt.sample_rate)
         return (time.perf_counter() - started) * 1000.0
+
+    async def _speak_line(self, text: str) -> None:
+        """Say one reviewed constant. Silent if synthesis is unavailable — the client
+        still has the `error` frame, so the failure is never invisible."""
+        try:
+            utt = await self.tts.synthesise(text)
+        except Exception:  # noqa: BLE001 - already on the failure path
+            return
+        await self._send_audio("answer", utt.text, utt.pcm, utt.sample_rate)
 
     async def _send_audio(self, kind: str, text: str, pcm: bytes, sample_rate: int) -> None:
         await self.transport.send_json(

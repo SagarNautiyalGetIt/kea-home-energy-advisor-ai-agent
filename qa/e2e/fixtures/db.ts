@@ -123,6 +123,22 @@ export interface KeaDb {
   /** Every explained period for this account, oldest first. Rangi has twelve. */
   explanations(accountNumber: string): Promise<BillExplanation[]>
   /**
+   * The same period's heating demand measured three ways, so a test can tell a base
+   * disagreement apart from a mild winter.
+   *
+   * `stored` is `mart_daily_usage.heating_degree_days` as the warehouse wrote it.
+   * `atBase16` and `atBase18` are both recomputed from `temp_mean_c` — the temperature
+   * carries no base, so it is the only figure here the two conventions agree on.
+   *
+   * Exists because "is the observed figure below the normal?" has two very different
+   * causes, and one number cannot distinguish them: a genuinely mild month, or a base-16
+   * observation being scored against a base-18 normal. Reading the same days at both
+   * bases separates them.
+   */
+  heatingDemandByBase(
+    accountNumber: string,
+  ): Promise<{ days: number; stored: number; atBase16: number; atBase18: number } | null>
+  /**
    * The single highest-usage day inside a date range, inclusive.
    *
    * Exists so "which day was my highest usage?" can be checked against the period the
@@ -409,6 +425,36 @@ export function createDb(): { db: KeaDb; close: () => Promise<void> } {
         [accountNumber],
       )
       return rows.map(toBill)
+    },
+
+    async heatingDemandByBase(accountNumber) {
+      // Scoped to the billed period, via the same mart the API reads. Days with no
+      // weather join are excluded rather than zero-filled: the API zero-fills because a
+      // regression needs one value per day, but averaging those zeros in here would
+      // understate every base equally and hide the very difference being measured.
+      const { rows } = await pool.query(
+        `select count(*)::int                                          as days,
+                avg(u.heating_degree_days)                             as stored,
+                avg(greatest(16.0 - u.temp_mean_c, 0))                 as at_base_16,
+                avg(greatest(18.0 - u.temp_mean_c, 0))                 as at_base_18
+           from kea.mart_daily_usage u
+           join kea.mart_account_context c on c.icp_id = u.icp_id
+           join kea.mart_bill_explanation x on x.icp_id = u.icp_id
+          where c.account_number = $1
+            and u.temp_mean_c is not null
+            and u.usage_date between x.period_start and x.period_end
+            and x.period_end = (select max(period_end)
+                                  from kea.mart_bill_explanation
+                                 where icp_id = u.icp_id)`,
+        [accountNumber],
+      )
+      if (!rows.length || !rows[0].days) return null
+      return {
+        days: Number(rows[0].days),
+        stored: Number(rows[0].stored),
+        atBase16: Number(rows[0].at_base_16),
+        atBase18: Number(rows[0].at_base_18),
+      }
     },
 
     async billExplanation(accountNumber) {

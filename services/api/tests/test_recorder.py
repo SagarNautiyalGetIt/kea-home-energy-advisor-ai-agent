@@ -20,12 +20,13 @@ weight to put on a green run:
 from __future__ import annotations
 
 import pytest
+from fakes import ScriptedProvider
 from fastapi.testclient import TestClient
 
+from app.agent.loop import ToolInvocation
 from app.config import get_recorder, settings
 from app.db.recorder import DatabaseRecorder, NullRecorder, TurnRecord, build_recorder
 from app.main import app
-from app.schemas import FactBundle, Intent, VerificationReport
 
 
 @pytest.fixture(autouse=True)
@@ -35,15 +36,33 @@ def _reset_recorder_cache():
     get_recorder.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _scripted_model(monkeypatch):
+    """No real provider in this suite.
+
+    These tests are about the evidence path, not the model, and without this they reach
+    for whatever `KEA_PROVIDER` names and fail on credentials. They used to pass anyway,
+    which was itself the old architecture's problem in miniature: an unreachable model
+    fell back to a template built from the fact bundle, so `/chat` returned 200 with
+    plausible prose and nothing distinguished that from a working provider.
+    """
+    monkeypatch.setattr("app.pipeline.get_provider", lambda: ScriptedProvider())
+
+
 def _record(conversation_id: int | None = None) -> TurnRecord:
     return TurnRecord(
         customer_ref="H-JUL",
         conversation_id=conversation_id,
         question="Why is my bill so high?",
         answer="Your standing load is 7.1 kWh a day.",
-        intent=Intent.WHY_HIGH,
-        bundle=FactBundle(customer_id="H-JUL", intent=Intent.WHY_HIGH, period="July 2026"),
-        report=VerificationReport(passed=True),
+        tools=[
+            ToolInvocation(
+                name="get_daily_usage",
+                arguments={"last_n_days": 31},
+                result={"available": True, "source": "half-hourly meter data"},
+                duration_ms=3,
+            )
+        ],
         escalate=False,
     )
 
@@ -137,9 +156,8 @@ def test_stream_done_event_carries_the_conversation_id_field() -> None:
     """The UI reads `conversation_id` off the `done` event to thread the next question.
 
     Asserting the key exists even when null keeps the contract stable across the
-    persistence flag — the frontend reads the same shape either way.
+    persistence flag — both frontends read the same shape either way.
     """
-    import json
 
     with TestClient(app) as client, client.stream(
         "POST", "/api/chat/stream", json={"customer_id": "H-JUL", "message": "why so high"}
@@ -147,9 +165,33 @@ def test_stream_done_event_carries_the_conversation_id_field() -> None:
         assert response.status_code == 200
         payload = "".join(response.iter_text())
 
-    done = [ln for ln in payload.splitlines() if ln.startswith("data: ") and "passed" in ln]
+    frames = _sse_frames(payload)
+    done = [data for event, data in frames if event == "done"]
     assert done, f"no done event in stream: {payload[:300]}"
-    assert "conversation_id" in json.loads(done[-1].removeprefix("data: "))
+    assert "conversation_id" in done[-1]
+
+    # The whole point of streaming: tool activity and prose reach the client as they
+    # happen, not in one block at the end.
+    names = [event for event, _ in frames]
+    assert "tool" in names and "token" in names, names
+    assert names[-1] == "done"
+
+
+def _sse_frames(payload: str) -> list[tuple[str, dict]]:
+    """Parse an SSE body into (event, data) pairs."""
+    import json
+
+    frames = []
+    for block in payload.split("\n\n"):
+        event, data = None, None
+        for line in block.splitlines():
+            if line.startswith("event: "):
+                event = line.removeprefix("event: ").strip()
+            elif line.startswith("data: "):
+                data = json.loads(line.removeprefix("data: "))
+        if event is not None and data is not None:
+            frames.append((event, data))
+    return frames
 
 
 # ── the mart accounts had no evidence at all ────────────────────────────────
@@ -200,6 +242,7 @@ async def _purge(ref: str) -> None:
     from sqlalchemy import delete, select
 
     from app.db.models import (
+        AgentToolCallRow,
         Conversation,
         Customer,
         Escalation,
@@ -224,7 +267,15 @@ async def _purge(ref: str) -> None:
                 await s.execute(select(Turn.id).where(Turn.conversation_id.in_(convs)))
             ).scalars().all()
             if turns:
-                for model in (FactBundleRow, VerificationRow, TokenUsageRow):
+                # `agent_tool_call` is the live one; the other two hold pre-ADR-0011
+                # rows and are no longer written, but a fixture that skipped them would
+                # fail against any database that still has them.
+                for model in (
+                    AgentToolCallRow,
+                    FactBundleRow,
+                    VerificationRow,
+                    TokenUsageRow,
+                ):
                     await s.execute(delete(model).where(model.turn_id.in_(turns)))
                 await s.execute(delete(Escalation).where(Escalation.turn_id.in_(turns)))
             await s.execute(delete(Escalation).where(Escalation.conversation_id.in_(convs)))
@@ -239,9 +290,9 @@ async def test_an_account_with_no_seeded_row_is_still_recorded(_fresh_engine) ->
 
     `make api-seed` only creates `public.customer` rows for the five demo households.
     The nine ELT accounts live in `kea.*`, so the recorder's lookup missed, and it
-    returned None — their turns were answered, verified, and then dropped. That matters
-    beyond tidiness: "N answers, 0 fabricated figures" is counted from `app.verification`,
-    so the headline claim was missing two thirds of its evidence and nothing said so.
+    returned None — their turns were answered and then dropped. That matters beyond
+    tidiness: the provenance claim is counted from `app.agent_tool_call`, so the headline
+    was missing two thirds of its evidence and nothing said so.
     """
     if not await _has_database():
         pytest.skip("no PostgreSQL on KEA_DATABASE_URL")

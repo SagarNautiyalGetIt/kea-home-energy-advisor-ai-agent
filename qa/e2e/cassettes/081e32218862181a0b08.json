@@ -1,0 +1,115 @@
+{
+  "question": "Here is this customer's account summary, already looked up for you: {\"available\":true,\"account_reference\":\"DEMO-ACCT-224001\",\"usage_data_period\":{\"label\":\"June ",
+  "model": "gemini-3.5-flash",
+  "events": [
+    {
+      "t": "delta",
+      "text": "Your power"
+    },
+    {
+      "t": "delta",
+      "text": " bill for June was **$217.68**, which is **$84.03 higher** than your"
+    },
+    {
+      "t": "delta",
+      "text": " previous bill of $133.65. \n\nYour meter shows that this increase was almost entirely driven by a sudden, massive jump"
+    },
+    {
+      "t": "delta",
+      "text": " in your **always-on background power draw**\u2014the electricity your home uses around the clock, even when everyone is asleep. \n\nHere"
+    },
+    {
+      "t": "delta",
+      "text": " is exactly what the data shows:\n\n### The June 8 Jump\nUp until Friday, June 7, your"
+    },
+    {
+      "t": "delta",
+      "text": " background draw (often called base load) was running at a normal level of about 5 to 6 units (kilowatt hours) per"
+    },
+    {
+      "t": "delta",
+      "text": " day. \n\nOn **Saturday, June 8**, this background draw suddenly tripled to over 17 units per day,"
+    },
+    {
+      "t": "delta",
+      "text": " and it has stayed at that high level every single day since. Between 2:00 am and 5:00 am, when"
+    },
+    {
+      "t": "delta",
+      "text": " the household is asleep, your meter is recording a completely flat, continuous draw of nearly 0.6 units every single hour. \n\n"
+    },
+    {
+      "t": "delta",
+      "text": "### What this is costing you\n* **The Bill Impact:** This background draw alone made up **65.6% of"
+    },
+    {
+      "t": "delta",
+      "text": " your June bill**, costing you **$142.73**. The sudden increase on June 8 accounted for **$80."
+    },
+    {
+      "t": "delta",
+      "text": "31** of your $84.03 bill increase.\n* **The Annual Cost:** If this continuous"
+    },
+    {
+      "t": "delta",
+      "text": " draw remains unresolved, it will cost you approximately **$1,736 over a full year** just to keep this"
+    },
+    {
+      "t": "delta",
+      "text": " background load running.\n* **Comparison to Others:** Because of this constant draw, your average daily usage in June was "
+    },
+    {
+      "t": "delta",
+      "text": "21.95 units, while comparable homes in this dataset averaged just 11.71 units per day.\n\n###"
+    },
+    {
+      "t": "delta",
+      "text": " Other minor factors on your bill\n* **The Weather:** June was colder than May, which added about **$21"
+    },
+    {
+      "t": "delta",
+      "text": ".35** to your bill as your home used more energy to stay warm.\n* **Savings:** You saved"
+    },
+    {
+      "t": "delta",
+      "text": " **$13.31** because your average unit price dropped from 37 cents to 33 cents,"
+    },
+    {
+      "t": "delta",
+      "text": " and another **$4.31** because June has 30 days instead of 31. \n\n### Where to look\n"
+    },
+    {
+      "t": "delta",
+      "text": "Because a whole-house meter reads all your electricity together, it cannot identify individual appliances. However, the fact that this started suddenly on"
+    },
+    {
+      "t": "delta",
+      "text": " June 8 and runs continuously 24/7 points to a few specific possibilities. You might want to check if any"
+    },
+    {
+      "t": "delta",
+      "text": " of the following occurred on or around June 8:\n* Underfloor heating was switched on or left running.\n* A heated towel rail"
+    },
+    {
+      "t": "delta",
+      "text": " was turned on and left on.\n* A water pump, pool pump, or ventilation system became stuck or is running constantly"
+    },
+    {
+      "t": "delta",
+      "text": ".\n* An extra fridge or freezer was plugged in (e.g., in the garage).\n* A heater"
+    },
+    {
+      "t": "delta",
+      "text": " was left running continuously in a spare room or"
+    },
+    {
+      "t": "complete",
+      "text": "Your power bill for June was **$217.68**, which is **$84.03 higher** than your previous bill of $133.65. \n\nYour meter shows that this increase was almost entirely driven by a sudden, massive jump in your **always-on background power draw**\u2014the electricity your home uses around the clock, even when everyone is asleep. \n\nHere is exactly what the data shows:\n\n### The June 8 Jump\nUp until Friday, June 7, your background draw (often called base load) was running at a normal level of about 5 to 6 units (kilowatt hours) per day. \n\nOn **Saturday, June 8**, this background draw suddenly tripled to over 17 units per day, and it has stayed at that high level every single day since. Between 2:00 am and 5:00 am, when the household is asleep, your meter is recording a completely flat, continuous draw of nearly 0.6 units every single hour. \n\n### What this is costing you\n* **The Bill Impact:** This background draw alone made up **65.6% of your June bill**, costing you **$142.73**. The sudden increase on June 8 accounted for **$80.31** of your $84.03 bill increase.\n* **The Annual Cost:** If this continuous draw remains unresolved, it will cost you approximately **$1,736 over a full year** just to keep this background load running.\n* **Comparison to Others:** Because of this constant draw, your average daily usage in June was 21.95 units, while comparable homes in this dataset averaged just 11.71 units per day.\n\n### Other minor factors on your bill\n* **The Weather:** June was colder than May, which added about **$21.35** to your bill as your home used more energy to stay warm.\n* **Savings:** You saved **$13.31** because your average unit price dropped from 37 cents to 33 cents, and another **$4.31** because June has 30 days instead of 31. \n\n### Where to look\nBecause a whole-house meter reads all your electricity together, it cannot identify individual appliances. However, the fact that this started suddenly on June 8 and runs continuously 24/7 points to a few specific possibilities. You might want to check if any of the following occurred on or around June 8:\n* Underfloor heating was switched on or left running.\n* A heated towel rail was turned on and left on.\n* A water pump, pool pump, or ventilation system became stuck or is running constantly.\n* An extra fridge or freezer was plugged in (e.g., in the garage).\n* A heater was left running continuously in a spare room or",
+      "tool_calls": [],
+      "usage": {
+        "prompt_tokens": 15514,
+        "completion_tokens": 620
+      }
+    }
+  ]
+}

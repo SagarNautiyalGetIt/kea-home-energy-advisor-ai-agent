@@ -18,10 +18,10 @@ from __future__ import annotations
 import pytest
 
 from app.analytics import fixtures
+from app.analytics.bundles import bundle_for as _bundle_for
 from app.analytics.repository import UsageContext
 from app.narration.prompts import SYSTEM, build_user_prompt
 from app.offline import OFFLINE_INTENTS, PackBuilder
-from app.pipeline import _bundle_for
 from app.schemas import Fact, FactBundle, Intent
 from app.verification.number_checker import verify
 

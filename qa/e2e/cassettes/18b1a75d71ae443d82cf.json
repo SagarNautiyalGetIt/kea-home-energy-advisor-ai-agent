@@ -1,0 +1,21 @@
+{
+  "question": "Here is this customer's account summary, already looked up for you: {\"available\":true,\"account_reference\":\"DEMO-ACCT-226001\",\"usage_data_period\":{\"label\":\"June ",
+  "model": "gemini-3.5-flash",
+  "events": [
+    {
+      "t": "complete",
+      "text": "",
+      "tool_calls": [
+        {
+          "id": "get_daily_usage-0",
+          "name": "get_daily_usage",
+          "arguments": {}
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 7450,
+        "completion_tokens": 12
+      }
+    }
+  ]
+}

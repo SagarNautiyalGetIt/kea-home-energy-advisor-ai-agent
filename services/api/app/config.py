@@ -59,16 +59,17 @@ def _env(key: str, default: str) -> str:
 class Settings:
     #: One name, or a `+`-separated fallback chain. See `app.providers.resolver`.
     #:
-    #:   bedrock          the default — Claude on Bedrock
+    #:   gcp              the default — Gemini 3.6 Flash on GCP
+    #:   bedrock          Claude on Bedrock
     #:   ollama           local development, chosen deliberately
-    #:   bedrock+ollama   Bedrock, dropping to the local model only if it is unreachable
+    #:   gcp+ollama       GCP, dropping to the local model only if it is unreachable
     #:
-    #: The default changed from `ollama` in Sprint 3. A local model sized to whatever
+    #: The default changed to `gcp` for speed. A local model sized to whatever
     #: hardware happened to be present was right for a laptop demo and wrong as an
     #: architecture — the answer a customer gets should not depend on which machine served
     #: it. Nothing falls back automatically: a chain has to be written out, because a
     #: silent model downgrade looks like an answer and reads as the product getting worse.
-    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "bedrock"))
+    provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "gcp"))
 
     #: Sized to the machine — see `app.hardware`. On the 48 GB M4 this is `gemma3:27b`,
     #: on the 16 GB M5 `gemma3:12b`, and `gemma3:4b` everywhere else including CI.
@@ -86,6 +87,45 @@ class Settings:
     bedrock_model: str = field(
         default_factory=lambda: _env("KEA_BEDROCK_MODEL", "anthropic.claude-sonnet-5")
     )
+    gcp_model: str = field(
+        #: Not the newest flash model, on purpose.
+        #:
+        #: `gemini-3.6-flash` has a **20-request-per-day** free-tier cap. One agent turn
+        #: is three or four requests, so that is roughly five customer questions a day
+        #: before every subsequent call 429s — which surfaces as `AgentUnavailable` and
+        #: reads to a user as "it sometimes doesn't respond". Voice makes it worse
+        #: because transcription spends a request too.
+        #:
+        #: `gemini-3.5-flash` is capped the same way but has a larger per-minute
+        #: allowance, so it degrades to "wait twenty seconds" rather than "wait a day".
+        #:
+        #: **Neither is enough to demo on.** Measured 2026-09-08: 20 requests/day and
+        #: 5/minute per model. After pre-loading the account summary a turn costs two or
+        #: three requests, so the free tier is roughly seven to ten questions per DAY,
+        #: and voice spends one more on transcription. Plan the rehearsal around a billed
+        #: key or the AWS account; `KEA_GCP_MODEL` switches model to spread the load in
+        #: the meantime, since the cap is per model.
+        default_factory=lambda: _env("KEA_GCP_MODEL", "gemini-3.5-flash")
+    )
+
+    #: Gemini API keys, as a pool. See `app/providers/keypool.py`.
+    #:
+    #: The cap above is per model **per project**, so a second key from a second project
+    #: is a second allowance. The provider uses one key until it is exhausted and then
+    #: moves to the next, which is what makes the free tier usable for a rehearsal.
+    #:
+    #: Three ways to supply them, all read, in this order:
+    #:
+    #:   GEMINI_API_KEY        the existing single key — first, so nothing changes for an
+    #:                         .env that already has one
+    #:   GEMINI_API_KEYS       comma-separated: GEMINI_API_KEYS=AIza...one,AIza...two
+    #:   GEMINI_API_KEY_2..N   numbered, for adding them one at a time
+    #:
+    #: All empty means Application Default Credentials, which is how a deployment with a
+    #: service account works and how this provider behaved before the pool existed.
+    gemini_api_key: str = field(default_factory=lambda: _env("GEMINI_API_KEY", ""))
+    gemini_api_keys: str = field(default_factory=lambda: _env("GEMINI_API_KEYS", ""))
+
     aws_region: str = field(default_factory=lambda: _env("AWS_REGION", "ap-southeast-2"))
 
     cors_origins: str = field(
@@ -119,6 +159,14 @@ class Settings:
     voice_enabled: bool = field(
         default_factory=lambda: _env("KEA_VOICE_ENABLED", "0").lower() in {"1", "true", "yes"}
     )
+
+    #: Which transcriber runs: `gemini` (default) | `whisper` | `auto`.
+    #:
+    #: Defaults to Gemini because the local path is what made voice slow and
+    #: intermittently silent — see `app/voice/__init__.py`. `whisper` forces the local
+    #: binary; `auto` prefers it when it is actually installed, which is right on a
+    #: machine with a Metal build and wrong on everything else.
+    stt_engine: str = field(default_factory=lambda: _env("KEA_STT_ENGINE", "gemini"))
 
     # Paths, not auto-discovery. `ml/voice/setup.sh` writes these into .env, so a
     # broken voice stack fails with "no such file" naming the exact path we looked
@@ -201,6 +249,21 @@ class Settings:
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @property
+    def numbered_gemini_keys(self) -> dict[str, str]:
+        """`GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`, … — however many are set.
+
+        Scanned out of the environment rather than declared as fields, because the whole
+        point is that somebody can add a fifth key by adding one line to `.env` without
+        touching Python. `GEMINI_API_KEY` itself is excluded: it is read as the primary
+        above and would otherwise be added twice.
+        """
+        return {
+            name: value
+            for name, value in os.environ.items()
+            if name.startswith("GEMINI_API_KEY_") and value.strip()
+        }
+
 
 settings = Settings()
 
@@ -214,15 +277,23 @@ def get_provider():
     chat turn, and made token accounting per-request state that nothing could
     aggregate. `get_provider.cache_clear()` in tests that need a different provider.
     """
+    from app.providers.cassette import wrap_if_enabled
     from app.providers.resolver import build_provider
 
-    return build_provider(
+    provider = build_provider(
         settings.provider,
         bedrock_model=settings.bedrock_model,
         aws_region=settings.aws_region,
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
+        gcp_model=settings.gcp_model,
+        gemini_api_key=settings.gemini_api_key,
+        gemini_api_keys=settings.gemini_api_keys,
+        gemini_numbered_keys=settings.numbered_gemini_keys,
     )
+    # Off unless KEA_CASSETTE says otherwise, so the request path is unchanged in
+    # production and in every test that has not asked for a recording.
+    return wrap_if_enabled(provider)
 
 
 @lru_cache(maxsize=1)
@@ -293,6 +364,33 @@ def get_preferences_store():
     from app.alerts.store import build_preferences_store
 
     return build_preferences_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_change_store():
+    """Plan changes the customer asked for, waiting for a person to action them.
+
+    Same `persist` flag as everything else, so there is no state where a change request is
+    written to PostgreSQL and read from memory. `/health` reports which one is live, for
+    the reason the recorder disclosure exists: "your plan change was logged" and "your
+    plan change was logged until this process restarts" must not look the same from
+    outside.
+    """
+    from app.account.changes import build_change_store
+
+    return build_change_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_pending_changes():
+    """Staged, unconfirmed plan changes. In-process by design — see `account/changes.py`.
+
+    Cached like the stores because it holds state for the life of the process, and a fresh
+    instance per request would mean nothing was ever staged long enough to confirm.
+    """
+    from app.account.changes import PendingChanges
+
+    return PendingChanges()
 
 
 @lru_cache(maxsize=1)

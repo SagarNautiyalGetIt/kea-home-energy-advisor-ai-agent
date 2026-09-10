@@ -50,8 +50,8 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, Field
 
+from app.analytics.bundles import bundle_from_context
 from app.analytics.repository import UsageContext
-from app.pipeline import bundle_from_context
 from app.schemas import FactBundle, Intent
 
 #: Intents whose answers can be precomputed without knowing the question.

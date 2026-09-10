@@ -22,6 +22,17 @@ dependencies = [
 bedrock = [
     "anthropic[bedrock]>=0.40",
 ]
+gcp = [
+    "google-genai>=1.0",
+]
+# Smart-device discovery works without this: `app/homelink/discovery.py` falls back to a
+# stdlib one-shot mDNS query, because a demo feature that needs an extra install first is a
+# feature that will not be running when it matters. With zeroconf present the scan browses
+# continuously and picks up devices that only announce on a slow cycle, which the one-shot
+# query misses — so it is worth having and must not be required.
+homelink = [
+    "zeroconf>=0.132",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

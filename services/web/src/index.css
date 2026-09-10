@@ -519,6 +519,23 @@ html[data-theme=dark] .topbar-cluster{background:#1a2039}
 .prompt-grid button svg{width:19px;flex:0 0 19px;color:#6249e8}
 .chat-thread{max-width:860px;padding:12px 0}.message-row{display:flex;align-items:flex-start;gap:7px}.message-row.assistant{justify-content:flex-start}.message-row.user{justify-content:flex-end}
 .bubble{font-size:16px;line-height:1.65}.bubble.long{font-size:16px}.bubble p{margin:0 0 12px}.bubble p:last-child{margin-bottom:0}.bubble li{margin:7px 0}
+/* Rendered markdown inside an answer. See components/AnswerText — the model writes these
+   whether or not it is asked to, and until they were rendered the customer read the
+   asterisks. Emphasis is weighted rather than coloured: a dollar figure in purple inside
+   a bank-ish interface reads as a link. */
+.bubble strong{color:#1d2947;font-weight:650}
+.bubble em{font-style:italic}
+.bubble code{padding:1px 5px;border-radius:5px;background:#eef1fa;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+/* The markers are set explicitly: a reset earlier in this sheet strips list styling for
+   the nav and card lists, so without this a bulleted answer renders as unindented stacked
+   lines and the list stops reading as a list. */
+ul.answer-list{list-style:disc}
+ol.answer-list{list-style:decimal}
+.answer-list{margin:0 0 12px;padding-left:22px}
+.answer-list:last-child{margin-bottom:0}
+.answer-list li::marker{color:#8490ac}
+.answer-heading{margin:0 0 8px;color:#1d2947;font-weight:650}
+.user-bubble strong{color:inherit}.user-bubble code{background:rgb(255 255 255 / 18%)}
 .assistant-bubble{padding:15px 0;color:#34415f;background:transparent}.user-bubble{padding:12px 17px;background:linear-gradient(135deg,var(--purple2),var(--purple))}
 .edit-chat-button{width:32px;height:32px;min-height:32px;display:grid;place-items:center;border:0;border-radius:9px;color:#7380a0;background:transparent;opacity:0;transition:.15s}.message-row:hover .edit-chat-button,.edit-chat-button:focus{opacity:1}.edit-chat-button svg{width:15px}
 .edit-message{min-width:min(520px,65vw)}.edit-message textarea{width:100%;min-height:78px;padding:10px;border:1px solid #dfe3ee;border-radius:10px;font:inherit;resize:vertical}.edit-message span{display:flex;justify-content:flex-end;gap:7px;margin-top:8px}.edit-message button{min-height:34px;padding:5px 12px;border:0;border-radius:9px}.edit-message button:last-child{color:#4f35db;background:#fff}
@@ -575,11 +592,76 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 .assistant-offline button{flex:0 0 auto;margin-left:auto;padding:8px 14px;border:1px solid #e6cf9f;border-radius:10px;color:#8a6420;background:#fff;font-weight:700}
 
 /* Deliberately quiet. The claim is strong enough that shouting it reads as insecurity —
-   and it must never appear on an answer that failed verification. */
-.verified-badge{display:flex;align-items:center;gap:6px;margin-top:10px;color:#3f8f6b;font-size:11px;font-weight:600}
-.verified-badge svg{width:14px}
+   and it must never appear on an answer that consulted nothing. */
+.verified-badge{margin-top:10px;color:#3f8f6b;font-size:11px;font-weight:600}
+.verified-badge svg{flex:0 0 auto;width:14px}
 
+/* The transparency panel, collapsed by default.
+   Open-by-default was tried and is wrong: it puts a provenance list under every single
+   answer, which trains people to stop reading it. Shut, it is one quiet line that says
+   the receipt exists; open, it is the receipt. */
+.answer-sources summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none}
+.answer-sources summary::-webkit-details-marker{display:none}
+.answer-sources summary::after{content:'›';margin-left:2px;color:#9ab5a8;transition:transform .15s ease}
+.answer-sources[open] summary::after{transform:rotate(90deg)}
+.answer-sources ul{margin:8px 0 0;padding:0 0 0 20px;list-style:none;display:grid;gap:5px}
+.answer-sources li{display:grid;gap:1px;color:#5c6788;font-weight:500}
+.answer-sources li strong{color:#3f8f6b}
+.answer-sources li span{color:#8b94ad;font-size:10px;line-height:1.4}
+
+/* Live lookup activity. This is the product working, so it is shown rather than hidden
+   behind a spinner — "reading your daily meter data" is a more honest and more
+   reassuring wait than three bouncing dots. */
+.tool-activity{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:4px}
+.tool-activity li{display:flex;align-items:center;gap:6px;color:#8b94ad;font-size:11px;font-weight:600}
+.tool-activity li svg{flex:0 0 auto;width:13px}
+.tool-activity li.running{color:#6b74d0}
+.tool-activity li.running svg{animation:tool-pulse 1.1s ease-in-out infinite}
+.tool-activity li.done{color:#3f8f6b}
+@keyframes tool-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.tool-activity li.running svg{animation:none;opacity:.7}}
+
+/* The chart under an answer. Sized in the bubble's own width so it reflows with the
+   thread rather than needing its own breakpoint — see components/AnswerChart for why
+   the bars run horizontally. */
+.answer-chart{margin:12px 0 0;padding:12px 13px 10px;border:1px solid #e6e9f5;border-radius:var(--radius-sm,12px);background:#fbfbff}
+.answer-chart>figcaption{margin-bottom:10px;color:#2c3557;font-size:12px;font-weight:800;line-height:1.35}
+.answer-chart .area-chart,.answer-chart svg{width:100%}
+
+.answer-chart-bars{margin:0;padding:0;list-style:none;display:grid;gap:9px}
+.answer-chart-bars li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
+.answer-chart-bars .bar-label{min-width:0;color:#5c6788;font-size:11px;font-weight:600;line-height:1.3}
+.answer-chart-bars .bar-value{color:#2c3557;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.answer-chart-bars .bar-track{grid-column:1/-1;height:9px;border-radius:999px;background:#eceefb;overflow:hidden}
+.answer-chart-bars .bar-fill{display:block;height:100%;border-radius:999px;background:#b9bfe4;transition:width .45s cubic-bezier(.22,1,.36,1)}
+/* The point the question was about — their own home, or the plan they are on. */
+.answer-chart-bars li.highlight .bar-fill{background:linear-gradient(90deg,#4a25ff,#7b5cff)}
+.answer-chart-bars li.highlight .bar-label{color:#2c3557;font-weight:800}
+@media (prefers-reduced-motion:reduce){.answer-chart-bars .bar-fill{transition:none}}
+
+.answer-chart-caveat{margin:10px 0 0;color:#8b94ad;font-size:10px;line-height:1.45}
+.answer-chart-source{margin-top:8px}
+.answer-chart-source button{min-height:0;padding:0;border:0;background:none;color:#6b74d0;font-size:10px;font-weight:700;text-decoration:underline;cursor:pointer}
+.answer-chart-source button:hover{transform:none}
+.answer-chart-source p{margin:5px 0 0;color:#8b94ad;font-size:10px;line-height:1.45}
+
+/* Not a handoff, and styled so it does not read as one. */
 .answer-withheld{margin:0;color:#5c6788}
+
+.verification-sources li{flex-direction:column;align-items:flex-start;gap:1px;font-family:inherit}
+.verification-sources li small{color:#8b94ad;font-size:10px;font-family:inherit}
+.verification-sources li.bad{color:#7a8299;background:#eef0f5;opacity:.75}
+.verification-sources li.bad small{color:#98a0b5}
+
+html[data-theme=dark] .answer-sources li{color:#c3cdea}
+html[data-theme=dark] .answer-sources li span,html[data-theme=dark] .verification-sources li small{color:#7d88a6}
+html[data-theme=dark] .verification-sources li.bad{background:#1b2237;color:#7d88a6}
+/* Rendered markdown in an answer. Emphasis has to invert: the light theme darkens a
+   <strong> against near-black body text, which on a dark background would make the
+   emphasised words the least readable thing in the sentence. */
+html[data-theme=dark] .bubble strong,html[data-theme=dark] .answer-heading{color:#f2f5ff}
+html[data-theme=dark] .bubble code{background:#232b47;color:#dfe5fa}
+html[data-theme=dark] .answer-list li::marker{color:#7d88a6}
 
 .escalation-prompt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:11px 15px;border:1px solid #d9e3f8;border-radius:12px;background:#f2f6ff;color:#3c4a70;font-size:13px}
 .escalation-prompt button{padding:6px 12px;border:0;border-radius:9px;color:#fff;background:var(--purple);font-size:12px;font-weight:700}
@@ -587,7 +669,7 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 html[data-theme=dark] .assistant-offline{background:#2a2416;border-color:#4a3d22}
 html[data-theme=dark] .escalation-prompt{background:#161d33;border-color:#2c3552;color:#c3cdea}
 
-/* KEA-48 / demo line 6 — the operator's verification log.
+/* KEA-48 / demo line 6 — the operator's evidence log.
    The headline must be able to turn red. A panel that can only ever show a green tick is
    decoration, and a judge who suspects that won't believe the green tick either. */
 .verification-page{max-width:900px}
@@ -923,6 +1005,9 @@ html[data-theme=dark] .login-content input:-webkit-autofill:focus{-webkit-text-f
 .social-row button:hover,.social-row button:focus-visible{border-color:#4318ff;color:#4318ff;box-shadow:0 9px 20px rgb(67 24 255 / 12%);transform:translateY(-1px)}
 .social-row svg{width:20px;height:20px;flex:0 0 20px}
 .auth-switch{margin:26px 0 0;color:#68779f;font-size:14px;text-align:center}
+/* Preview-build notice above the signup fields. Readable, not a warning banner — this
+   is a normal thing to tell somebody, not an error. */
+.auth-note{margin:0 0 18px;padding:11px 13px;border:1px solid #e0e4f3;border-radius:var(--radius-sm,12px);background:#f6f7fd;color:#5c6788;font-size:12px;line-height:1.5}
 .auth-switch button{padding:0;border:0;color:var(--purple);background:transparent;font-size:14px;font-weight:700;text-decoration:none;text-underline-offset:3px}
 .auth-switch button:hover,.auth-switch button:focus-visible{color:#3515ed;text-decoration:underline}
 .login-content form>label:not(:first-of-type){margin-top:14px}
@@ -1079,6 +1164,9 @@ html[data-theme=dark] .plan-rate-table>div:not(:first-child):hover{background:#1
 .settings-link>svg:last-child{transition:transform .3s ease}
 .settings-link:hover>svg:last-child{transform:translateX(4px);color:var(--purple)}
 html[data-theme=dark] .setting-row input{background:#38415c}
+html[data-theme=dark] .threshold-choice{border-color:#38415c;color:#c3cdea;background:#141a30}
+html[data-theme=dark] .threshold-choice:hover{border-color:#4c5878;color:#eef1ff}
+html[data-theme=dark] .threshold-choice.selected{border-color:#8b74ff;color:#d6ccff;background:#241d52;box-shadow:none}
 html[data-theme=dark] .settings-link:hover{background:#141a30}
 /* Account-security rows are children of their section, like the toggles above */
 .settings-link{padding-left:38px}
@@ -1109,9 +1197,20 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
 .threshold-channel{display:inline-flex;align-items:center;gap:10px;color:#2f3e65}
 .threshold-channel svg{width:18px;color:#5c43e7}
 .threshold-head input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple)}
-.threshold-slider{width:100%;margin:12px 0 6px;accent-color:var(--purple)}
-/* 44px hit target on the handle — this is dragged on a phone. */
-.threshold-slider::-webkit-slider-thumb{width:22px;height:22px}
+/* Four labelled steps instead of a 5-200% slider. The native radio is hidden rather than
+   removed — it still owns focus, keyboard arrow-key movement within the group, and the
+   checked state that the label styling reads. */
+.threshold-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:8px;margin:12px 0 10px}
+.threshold-choice{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 4px;border:1.5px solid #e0e4ef;border-radius:12px;color:#5b6a90;background:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s,background .15s,box-shadow .15s}
+/* The canonical visually-hidden recipe, and note what is NOT in it: `opacity:0`. An
+   earlier version had it, and it took the radios out of the accessibility tree entirely —
+   the label was still announced, but the control it names was not, on the one screen where
+   the setting decides whether somebody hears about a $200 bill. Clip it, never fade it. */
+.threshold-choice input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;white-space:nowrap;clip-path:inset(50%)}
+.threshold-choice:hover{border-color:#c3ccec;color:#2f3e65}
+.threshold-choice.selected{border-color:var(--purple);color:var(--purple);background:#f3f0ff;box-shadow:0 1px 6px rgb(74 37 255 / 14%)}
+.threshold-choice:focus-within{outline:2px solid var(--purple);outline-offset:2px}
+.threshold-ladder:disabled .threshold-choice{cursor:not-allowed}
 .threshold-value{margin:0;color:#2f3e65;font-size:14px}
 .threshold-value span{color:#647191}
 .threshold-note{display:block;margin-top:4px;color:#8490ac;font-size:12px}
@@ -1144,4 +1243,71 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
   .threshold-channel,.threshold-value,.threshold-money-input,.threshold-quiet{color:#e6e9f5}
   .threshold-money-input input,.threshold-quiet input{border-color:rgb(255 255 255 / 14%);color:#e6e9f5;background:rgb(255 255 255 / 4%)}
   .offline-prompt{color:#c8cfe4}
+}
+
+/* Energy breakdown — where the power goes, split by behaviour rather than by appliance.
+   The estimated/measured distinction is carried in the fill (hatched vs solid) as well as
+   in the chip, because a chart that renders a regression estimate identically to a meter
+   reading overstates what is known. */
+.breakdown-card{padding:var(--space-3);margin-top:var(--space-3);background:var(--card)}
+.breakdown-card h2{display:flex;gap:var(--space-1);align-items:center;margin-bottom:var(--space-1);font-size:18px}
+.breakdown-lede{margin-bottom:var(--space-2);color:var(--muted);font-size:13px}
+.breakdown-empty{max-width:62ch;padding:var(--space-2);border-radius:var(--radius-sm);color:var(--muted);font-size:14px;background:rgb(74 37 255 / 4%)}
+.breakdown-empty svg{display:inline;vertical-align:-3px;width:16px;height:16px;margin-right:6px}
+.breakdown-bar{display:flex;overflow:hidden;height:14px;border-radius:999px;margin-bottom:var(--space-2);background:var(--line)}
+.breakdown-bar span{height:100%;transition:width .4s ease}
+.breakdown-always-on{background:#4a25ff}
+.breakdown-water{background:#00b2a9}
+.breakdown-heating{background:#ff7a45}
+.breakdown-other{background:#c3ccea}
+/* Hatched, not just a different hue: an estimate has to be distinguishable without
+   relying on colour, for the same reason the confidence chip exists in words. */
+.breakdown-estimated{background-image:repeating-linear-gradient(45deg,rgb(255 255 255 / 45%) 0 4px,transparent 4px 8px)}
+.breakdown-list{display:flex;flex-direction:column;gap:2px;list-style:none;margin:0;padding:0}
+.breakdown-row{display:flex;gap:var(--space-1);align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.breakdown-swatch{flex:none;width:12px;height:12px;border-radius:4px}
+.breakdown-label{flex:1;min-width:0;display:flex;flex-direction:column}
+.breakdown-label strong{font-size:14px}
+.breakdown-label small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.breakdown-figures{text-align:right}
+.breakdown-figures strong{display:block;font-size:15px}
+.breakdown-figures small{color:var(--muted);font-size:12px}
+.breakdown-why{flex:none;display:grid;place-items:center;width:32px;min-height:32px;height:32px;padding:0;border:0;border-radius:50%;color:var(--muted);background:transparent;cursor:pointer}
+.breakdown-why:hover{color:var(--purple);background:rgb(74 37 255 / 8%)}
+.breakdown-why svg{width:16px;height:16px}
+.breakdown-basis{max-width:70ch;margin:0 0 10px 22px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--ink);font-size:13px;line-height:1.5;background:rgb(74 37 255 / 5%)}
+.breakdown-footnote{max-width:70ch;margin-top:var(--space-2);color:var(--muted);font-size:12px;line-height:1.6}
+.breakdown-caveats{margin-top:var(--space-1)}
+.breakdown-caveats summary{color:var(--purple);font-size:13px;cursor:pointer}
+.breakdown-caveats ul{margin:var(--space-1) 0 0;padding-left:18px;color:var(--muted);font-size:12px;line-height:1.6}
+.breakdown-caveats li{margin-bottom:6px}
+
+/* Smart device discovery. Names only — there is deliberately nowhere here to render a
+   kWh or a dollar figure against a device, because an mDNS announcement carries neither. */
+.device-scan{padding:0}
+.device-scan h2{display:flex;gap:var(--space-1);align-items:center;margin-bottom:var(--space-1);font-size:16px}
+.device-scan-lede{max-width:70ch;margin-bottom:var(--space-2);color:var(--muted);font-size:13px;line-height:1.6}
+.device-scan button.primary{display:inline-flex;gap:8px;align-items:center;padding:0 18px;border:0;border-radius:999px;color:#fff;font-size:14px;font-weight:600;background:var(--purple);box-shadow:var(--shadow-button);cursor:pointer}
+.device-scan button.primary:disabled{opacity:.65;cursor:progress}
+.device-scan-empty{max-width:70ch;margin-top:var(--space-2);padding:var(--space-2);border-radius:var(--radius-sm);color:var(--muted);font-size:13px;line-height:1.6;background:rgb(74 37 255 / 4%)}
+.device-scan-empty svg{display:inline;vertical-align:-3px;width:16px;height:16px;margin-right:6px}
+.device-list{display:flex;flex-direction:column;gap:2px;list-style:none;margin:var(--space-2) 0 0;padding:0}
+.device-list li{padding:10px 0;border-top:1px solid var(--line)}
+.device-row{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.device-row strong{font-size:14px}
+.device-kind{color:var(--muted);font-size:12px}
+.device-platform{padding:2px 8px;border-radius:999px;color:var(--purple);font-size:11px;background:rgb(74 37 255 / 10%)}
+.device-list small{display:block;max-width:70ch;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.5}
+.device-scan-next{max-width:70ch;margin-top:var(--space-2);color:var(--ink);font-size:13px;line-height:1.6}
+.device-scan-footnote{max-width:70ch;margin-top:var(--space-1);color:var(--muted);font-size:11px;line-height:1.6}
+.spin{animation:kea-spin 1s linear infinite}
+@keyframes kea-spin{to{transform:rotate(360deg)}}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+:root[data-theme=dark]{
+  .breakdown-row,.device-list li{border-top-color:rgb(255 255 255 / 8%)}
+  .breakdown-label strong,.breakdown-figures strong,.device-row strong{color:#e6e9f5}
+  .breakdown-basis,.device-scan-next{color:#c8cfe4;background:rgb(255 255 255 / 5%)}
+  .breakdown-empty,.device-scan-empty{background:rgb(255 255 255 / 4%)}
+  .breakdown-other{background:#4a5680}
 }

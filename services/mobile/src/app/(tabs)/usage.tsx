@@ -354,7 +354,9 @@ export default function UsageScreen() {
           <View style={styles.chartHeader}>
             <View><Text style={[styles.totalLabel, { color: colors.textMuted }]}>Selected period</Text><Text style={[styles.total, { color: colors.text }]}>{totalDisplay} <Text style={styles.suffix}>{suffix}</Text></Text></View>
             <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
-              {(['kwh', 'cost'] as const).map((item) => <Pressable key={item} onPress={() => setUnit(item)} style={[styles.unitOption, unit === item && { backgroundColor: palette.violet }]}><Text style={[styles.unitText, { color: unit === item ? '#FFFFFF' : colors.textMuted }]}>{item === 'kwh' ? 'kWh' : '$'}</Text></Pressable>)}
+              {/* Cost first — it is the default, and the lit segment belongs on the
+                  left. Matches the web toggle. */}
+              {(['cost', 'kwh'] as const).map((item) => <Pressable key={item} onPress={() => setUnit(item)} style={[styles.unitOption, unit === item && { backgroundColor: palette.violet }]}><Text style={[styles.unitText, { color: unit === item ? '#FFFFFF' : colors.textMuted }]}>{item === 'kwh' ? 'kWh' : '$'}</Text></Pressable>)}
             </View>
           </View>
           <Animated.View pointerEvents="none" style={[styles.swipeHint, { backgroundColor: colors.input, opacity: hintOpacity, transform: [{ translateX: hintTranslateX }] }]}><Ionicons color={palette.violet} name="chevron-back" size={14} /><Text style={[styles.swipeHintText, { color: colors.textMuted }]}>Swipe for previous or next</Text><Ionicons color={palette.violet} name="chevron-forward" size={14} /></Animated.View>

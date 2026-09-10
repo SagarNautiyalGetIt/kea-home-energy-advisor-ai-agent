@@ -5,8 +5,9 @@ not a property you can assert by reading the code once; it is a property that de
 the first time someone is under demo pressure. So it is tested three ways:
 
   1. the same question through both channels produces the same text
-  2. every clip the session synthesises comes from the verified answer
-  3. the acknowledgements — the only unverified audio — contain no figures
+  2. every clip the session synthesises comes from the answer the agent wrote
+  3. the acknowledgement — the only audio produced before any data is read — has no
+     figures in it
 
 None of these need a microphone, a GPU, whisper.cpp or Piper. They must keep running
 in CI on a machine that has none of it (KEA-94's rule: a slow suite stops being run).
@@ -18,52 +19,21 @@ import math
 import struct
 
 import pytest
+from fakes import ScriptedProvider
 
 from app.config import Settings, get_provider
 from app.pipeline import answer
-from app.providers.base import TokenUsage
 from app.schemas import Intent
 from app.voice import audio
 from app.voice.session import Timings, VoiceSession
 from app.voice.stt import SpeechToText, _clean
-from app.voice.tts import ACKNOWLEDGEMENTS, TextToSpeech, Utterance
+from app.voice.tts import ACKNOWLEDGEMENT, ACKNOWLEDGEMENTS, TextToSpeech, Utterance
 from app.voice.vad import Detector, Event, TurnDetector
 
 CUSTOMER = "H-JUL"
 
 
 # ---------- doubles ----------
-
-
-class FakeProvider:
-    """Echoes the bundle's display strings, so layer 3 is genuinely exercised.
-
-    Same trick as KEA-94's stub: a real model here would take the suite from seconds
-    to minutes and people stop running it.
-    """
-
-    name = "fake"
-    model = "fake"
-
-    def __init__(self) -> None:
-        self.last_usage = TokenUsage(prompt_tokens=0, completion_tokens=0)
-
-    async def narrate(self, *, system, user, max_tokens=300):
-        # Caveat lines also start with "- " and carry no colon. Indexing [1] on those
-        # raised IndexError, which `narrate_verified` swallowed as "provider
-        # unavailable" — so the double silently stopped exercising layer 3 and every
-        # test was really checking the template fallback.
-        displays = [
-            ln.split(": ", 1)[1] for ln in user.splitlines() if ln.startswith("- ") and ": " in ln
-        ]
-        figures = [d for d in displays if any(c.isdigit() for c in d)]
-        if figures:
-            yield f"Your usage came to {figures[0]}. That is what the meter shows."
-        else:
-            yield "I cannot answer that one yet. Let me connect you with the team."
-
-    async def health(self) -> bool:
-        return True
 
 
 class RecordingTransport:
@@ -100,7 +70,7 @@ class FakeTTS(TextToSpeech):
 @pytest.fixture(autouse=True)
 def _fake_provider(monkeypatch):
     get_provider.cache_clear()
-    monkeypatch.setattr("app.pipeline.get_provider", lambda: FakeProvider())
+    monkeypatch.setattr("app.pipeline.get_provider", lambda: ScriptedProvider())
     yield
     get_provider.cache_clear()
 
@@ -132,46 +102,58 @@ async def test_voice_and_chat_produce_identical_text():
     assert spoken == typed.text
 
 
-async def test_only_verified_text_is_ever_synthesised():
-    """Every clip must be either the verified answer or a reviewed acknowledgement.
+async def test_only_the_answer_is_ever_synthesised():
+    """Every clip must be either the answer the agent wrote or the reviewed acknowledgement.
 
-    This is the test that catches "the model was slow in rehearsal so I made voice
-    speak the draft" — the exact shortcut ADR-0003 exists to prevent.
+    This is the test that catches "the model was slow in rehearsal so I made voice speak
+    the draft" — the exact shortcut ADR-0003 exists to prevent. It matters more now than
+    it did: the agent streams partial text mid-turn and some of that text belongs to
+    rounds that turned out to be tool lookups, so there is genuinely prose flowing through
+    the process that must never reach a speaker.
     """
     tts = FakeTTS()
     session, transport = _session(tts)
     await session.answer_text("why is my bill so high this month?")
 
-    verified = transport.of_type("answer")[0]["text"]
-    allowed = set(ACKNOWLEDGEMENTS.values())
+    written = transport.of_type("answer")[0]["text"]
+    allowed = {ACKNOWLEDGEMENT, *ACKNOWLEDGEMENTS.values()}
 
     for phrase in tts.spoken:
-        assert phrase in allowed or phrase in verified, f"synthesised unverified text: {phrase!r}"
+        assert phrase in allowed or phrase in written, f"synthesised unwritten text: {phrase!r}"
 
 
 def test_acknowledgements_contain_no_figures():
-    """They are spoken before layer 1 runs, so any number in them is uncomputed."""
-    for intent, text in ACKNOWLEDGEMENTS.items():
+    """Spoken before anything has read the account, so any number in one is uncomputed."""
+    for intent, text in {**ACKNOWLEDGEMENTS, "generic": ACKNOWLEDGEMENT}.items():
         assert not any(c.isdigit() for c in text), f"{intent} acknowledgement has a digit: {text!r}"
         assert "$" not in text, f"{intent} acknowledgement has a dollar sign: {text!r}"
 
 
-def test_every_intent_has_an_acknowledgement():
-    """A missing one is silence during the slowest part of the turn."""
+def test_every_offline_intent_has_an_acknowledgement():
+    """A missing one is silence during the slowest part of the turn.
+
+    Intent-keyed acknowledgements are the offline pack's now — the request path has no
+    intent to key on at the moment this is spoken, and uses `ACKNOWLEDGEMENT`.
+    """
     assert set(ACKNOWLEDGEMENTS) == set(Intent)
 
 
 # ---------- the session protocol ----------
 
 
-async def test_turn_emits_meta_before_the_model_runs():
-    """`meta` off layer 0 is what makes the acknowledgement possible at all."""
+async def test_turn_emits_meta_before_the_answer():
+    """The client needs somewhere to hang the escalation banner before the text lands.
+
+    `meta` used to carry layer 0's intent as well, decided from keywords before any data
+    was read. There is no such decision now, and asserting one would be asserting a
+    classifier this system deliberately does not have.
+    """
     session, transport = _session()
     await session.answer_text("why is my bill so high this month?")
 
     kinds = [m["type"] for m in transport.json]
     assert kinds.index("meta") < kinds.index("answer")
-    assert transport.of_type("meta")[0]["intent"] == Intent.WHY_HIGH
+    assert transport.of_type("meta")[0]["escalate"] is False
 
 
 async def test_audio_header_precedes_every_binary_frame():

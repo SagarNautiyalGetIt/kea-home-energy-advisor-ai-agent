@@ -383,6 +383,88 @@
         }
       }
     },
+    "/api/households/{customer_id}/energy-breakdown": {
+      "get": {
+        "summary": "Energy Breakdown",
+        "description": "Where this household's power goes, split by behaviour rather than by appliance.\n\nA GET on the household rather than a chat-only tool, because it is the same figure the\ndashboard draws and the assistant quotes \u2014 and two surfaces computing it separately is\nhow they start to disagree. Everything here comes out of\n`app/analytics/disaggregation.py`; this handler computes nothing.\n\n`available: false` with a reason is a real response and the frontend must render it.\nAn account with no half-hourly data cannot have its standing load separated, and the\nhonest screen says so rather than showing a chart with one slice in it.",
+        "operationId": "energy_breakdown_api_households__customer_id__energy_breakdown_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyBreakdown"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/homelink/providers": {
+      "get": {
+        "summary": "Homelink Providers",
+        "description": "Which platforms can be connected, and which of them are actually credentialled.\n\n`False` means the connector exists but has no client id, so the connect screen greys it\nout rather than offering a button that dead-ends. HomeKit reads True with no\ncredential and that is correct \u2014 there is nothing for this backend to hold, because the\niOS app reads HomeKit on the phone and posts daily totals.",
+        "operationId": "homelink_providers_api_homelink_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Homelink Providers Api Homelink Providers Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/homelink/discover": {
+      "post": {
+        "summary": "Homelink Discover",
+        "description": "Scan the local network for smart devices that announce themselves.\n\nA POST rather than a GET despite reading nothing, because it is not free and not\ncacheable: it puts multicast traffic on the customer's network and takes seconds. A GET\ninvites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that\nruns on every page load is a scan running without anybody asking.\n\nOnly ever runs when somebody asks. Nothing is stored \u2014 the result goes back to the\ncaller and is dropped. See `app/homelink/discovery.py` on why that matters more here\nthan anywhere else in this service.",
+        "operationId": "homelink_discover_api_homelink_discover_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Homelink Discover Api Homelink Discover Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/offline/models": {
       "get": {
         "summary": "Offline Models",
@@ -409,7 +491,7 @@
     "/api/households/{customer_id}/offline-pack": {
       "get": {
         "summary": "Offline Pack",
-        "description": "Everything a device needs to answer this household's questions with no network.\n\nFetched by the client while it still has a connection, on the customer's schedule \u2014\nthe server never pushes. Carries pre-computed fact bundles, not meter readings: a\ndevice holding the raw series is a device whose on-device model can be asked to add\nit up, which is the one thing this architecture exists to prevent, on the platform\nwhere it is hardest to audit.\n\nSee `app/offline.py` and `docs/adr/0007-offline-first-narration.md`.",
+        "description": "Everything a device needs to answer this household's questions with no network.\n\nFetched by the client while it still has a connection, on the customer's schedule \u2014\nthe server never pushes. Carries pre-computed fact bundles, not meter readings: a\ndevice holding the raw series is a device whose on-device model can be asked to add\nit up, which is the one thing this architecture exists to prevent, on the platform\nwhere it is hardest to audit.\n\nSee `app/offline.py` and `docs/adr/0008-offline-first-narration.md`.",
         "operationId": "offline_pack_api_households__customer_id__offline_pack_get",
         "parameters": [
           {
@@ -449,7 +531,7 @@
     "/api/chat": {
       "post": {
         "summary": "Chat",
-        "description": "Non-streaming path. Simpler to test; /chat/stream is what the UI uses.",
+        "description": "Non-streaming path. Simpler to test; /chat/stream is what the apps use.",
         "operationId": "chat_api_chat_post",
         "requestBody": {
           "content": {
@@ -488,7 +570,7 @@
     "/api/chat/stream": {
       "post": {
         "summary": "Chat Stream",
-        "description": "SSE. Streams the verified answer.\n\nNote the ordering constraint: verification is a whole-text check, so we cannot\nstream raw model output and verify afterwards \u2014 that would put an unverified\nnumber on screen. We verify first, then stream the approved text. On this\nhardware the wait is short; when we move to a hosted model, revisit whether\nsentence-level verification lets us start streaming earlier.",
+        "description": "SSE. Streams the answer as the assistant works.\n\nThe event sequence is documented on `pipeline.answer_stream`, which produces it.\nSix names, and `reset` is the one worth reading about before writing a client.\n\n`chart` is the newest and the only optional one: when a lookup returns something\nchartable, its own figures are emitted as `{kind, title, unit, points, caveat,\nsource}` so a client can draw the answer as well as print it. At most one arrives\nper turn and most turns have none, so a client that ignores the event is still\ncorrect \u2014 it just shows prose where another client shows prose and a picture.\n\n**What changed here, and why the old comment above this function no longer applies.**\nIt used to say verification is a whole-text check, so the answer had to be generated\nin full and checked before a single token could be streamed. That constraint came\nfrom the number-checker, which compared the finished prose against a pre-computed\nfact bundle. There is no bundle now \u2014 the model reads the data itself and its\nfigures are traceable to the tool results recorded alongside the answer \u2014 so nothing\nhas to be withheld until the last sentence lands. The stream is live again, which is\nmost of the perceived speed.",
         "operationId": "chat_stream_api_chat_stream_post",
         "requestBody": {
           "content": {
@@ -499,6 +581,61 @@
             }
           },
           "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vapi/chat/completions": {
+      "post": {
+        "summary": "Vapi Chat Completions",
+        "description": "Vapi Custom LLM endpoint. Same agent, OpenAI wire format.\n\nVapi places an outbound call (Tier 3 bill-shock alert), handles STT/TTS, and\nsends us an OpenAI-shaped request with the customer's transcribed speech. We\nrun it through the same `answer()` path every other channel uses and return the\nresult as OpenAI-compatible SSE chunks.\n\nErrors are spoken apologies, not HTTP status codes. A 404 on a phone call is\nsilence \u2014 the customer hears nothing. The apology is the error handling.\n\n**Escalation no longer short-circuits the answer.** The old version returned a\ntransfer line and hung up on the explanation, because layer 0 decided a call was a\nhardship call from keywords before anything had been read. The agent decides while\nholding the account, and an escalation is a thing it does *alongside* answering \u2014\nsomebody in payment difficulty who asked why the bill went up should be told why,\nwarmly, and then put through. `result.escalate` is logged so the Vapi assistant's\nown transfer rule can act on it.",
+        "operationId": "vapi_chat_completions_api_vapi_chat_completions_post",
+        "parameters": [
+          {
+            "name": "x-vapi-customer-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Vapi-Customer-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_VapiCompletionRequest"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
@@ -973,27 +1110,34 @@
             "type": "string",
             "title": "Customer Id"
           },
-          "intent": {
-            "$ref": "#/components/schemas/Intent"
-          },
           "text": {
             "type": "string",
             "title": "Text"
           },
-          "facts": {
+          "sources": {
             "items": {
-              "$ref": "#/components/schemas/Fact"
+              "$ref": "#/components/schemas/SourceRef"
             },
             "type": "array",
-            "title": "Facts"
-          },
-          "verification": {
-            "$ref": "#/components/schemas/VerificationReport"
+            "title": "Sources",
+            "description": "Every lookup behind this answer, in the order it was made."
           },
           "escalate_to_human": {
             "type": "boolean",
             "title": "Escalate To Human",
             "default": false
+          },
+          "escalation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Reason",
+            "description": "Why, in the assistant's own words. Null unless `escalate_to_human`. The UI should show the handoff, not this string \u2014 it is for the transcript and the escalation row."
           },
           "conversation_id": {
             "anyOf": [
@@ -1006,15 +1150,59 @@
             ],
             "title": "Conversation Id",
             "description": "Send this back on the next message to keep the thread together. Null when persistence is off \u2014 there is no conversation to continue."
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms",
+            "default": 0
+          },
+          "tier": {
+            "type": "integer",
+            "title": "Tier",
+            "description": "Who handled this turn. 1 the assistant alone, 2 the assistant with a Kea agent watching and able to step in, 3 a person only \u2014 the assistant acknowledges and stops. Decided in Python from the message and the account on every channel, never by the model; see app/hardship/. The model can raise it by calling handoff_to_human and can never lower it.",
+            "default": 1
+          },
+          "tier_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Reason",
+            "description": "Why this tier, in words a support lead would use."
+          },
+          "emotion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emotion",
+            "description": "How the customer's message read: frustration, anxiety, confusion, distrust, shame, resignation, urgency or gratitude. Null when nothing was detected, which is the common case. It changed how the reply was WRITTEN and nothing else \u2014 it is not a tier input and carries no score; see app/hardship/emotions.py. Intended for the agent console, not for showing back to the customer: telling somebody 'we detected that you are frustrated' is worse than simply answering them properly."
+          },
+          "emotion_intensity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emotion Intensity",
+            "description": "mild | moderate | strong. Null whenever `emotion` is."
           }
         },
         "type": "object",
         "required": [
           "customer_id",
-          "intent",
-          "text",
-          "facts",
-          "verification"
+          "text"
         ],
         "title": "ChatResponse"
       },
@@ -1097,6 +1285,162 @@
         "title": "DemoAccountCard",
         "description": "A sign-in the credentials panel can offer. Includes the password, which is only\nacceptable because every account behind it is synthetic \u2014 see app/auth.py."
       },
+      "EnergyBreakdown": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why there is no breakdown. Null when `available`. A real response the UI must render \u2014 an account with no half-hourly data cannot have its standing load separated, and the honest screen says so rather than drawing one slice."
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "default": ""
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "default": 0
+          },
+          "total_kwh": {
+            "type": "number",
+            "title": "Total Kwh",
+            "default": 0.0
+          },
+          "total_cost_nzd": {
+            "type": "number",
+            "title": "Total Cost Nzd",
+            "default": 0.0
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/EnergyCategory"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Caveats"
+          },
+          "heating_fit_r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heating Fit R Squared",
+            "description": "How much of daily variation the weather explains for this household. Null when heating was not broken out at all."
+          },
+          "heating_not_reported_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heating Not Reported Because"
+          },
+          "always_on_not_reported_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Always On Not Reported Because"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "available"
+        ],
+        "title": "EnergyBreakdown",
+        "description": "Where a household's power goes. See app/analytics/disaggregation.py.\n\n**This does not identify appliances**, and no surface rendering it may imply otherwise.\nA whole-house meter reads one number for the whole house; the categories here are\nbehaviours that are each separately measurable, which is a different claim and the only\nhonest one available."
+      },
+      "EnergyCategory": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kwh": {
+            "type": "number",
+            "title": "Kwh"
+          },
+          "cost_nzd": {
+            "type": "number",
+            "title": "Cost Nzd"
+          },
+          "share_pct": {
+            "type": "number",
+            "title": "Share Pct"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence",
+            "description": "measured | fitted | residual"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis",
+            "description": "How this figure was arrived at, in one clause."
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "kwh",
+          "cost_nzd",
+          "share_pct",
+          "confidence",
+          "basis"
+        ],
+        "title": "EnergyCategory",
+        "description": "One slice of the bill, split by behaviour rather than by appliance.\n\n`confidence` is the field that decides how this may be presented, and the frontend has\nto honour it as much as the assistant does. `measured` came off a meter. `fitted` came\noff this household's own regression and is an estimate \u2014 a chart that renders it\nidentically to a measured slice is a chart that overstates what is known. `residual` is\nwhat is left after the others, so it carries their error and must be labelled as\neverything else rather than as a finding."
+      },
       "Fact": {
         "properties": {
           "key": {
@@ -1163,6 +1507,18 @@
             "type": "array",
             "title": "Caveats",
             "description": "Claims the narrator must NOT make. Half-hourly data cannot identify an appliance, so 'do not name an appliance' belongs here on most bundles."
+          },
+          "narration_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narration Limit",
+            "description": "How many facts the *model* is shown, when that should be fewer than the API returns. Null means all of them, which is the right default for every bundle small enough to narrate whole."
           }
         },
         "type": "object",
@@ -1451,10 +1807,24 @@
           "compare_to_last_year",
           "tariff_check",
           "hardship",
-          "out_of_scope"
+          "out_of_scope",
+          "usage_total",
+          "compare_to_similar",
+          "bill_breakdown",
+          "how_to_reduce",
+          "solar_export",
+          "supply_quality",
+          "account_balance",
+          "bill_due",
+          "plan_details",
+          "rate_details",
+          "payment_method",
+          "account_identity",
+          "billing_cycle",
+          "dispute"
         ],
         "title": "Intent",
-        "description": "The questions we handle. Layer 0 maps free text onto exactly one of these.\n\nAdding an intent means adding: a router rule, an analytics path, a narration\nprompt, and golden-set cases. Don't add one without all four."
+        "description": "A closed set of pre-computable questions. **Offline and bill-shock only now.**\n\nThis was the spine of the request path: a keyword router mapped free text onto one\nof these, and the intent chose the analytics, the prompt and the caveats. It no\nlonger does \u2014 the agent reads the question and the data, and nothing classifies a\ncustomer's message into a bucket before it is understood. See `app/pipeline.py`.\n\nTwo things still use it, both legitimately:\n\n* `app/offline.py` pre-computes a pack of answers for a device with no connection.\n  It has to guess what will be asked, so a fixed list is the only option available.\n* `app/analytics/billshock.py` labels a proactive warning, which nobody asked a\n  question to receive.\n\nNeither is a classifier over customer text.\n\n## Two families, and why the second one exists\n\nThe **usage** intents below the divider are the original ten: they all answer a\nquestion about consumption, and every one of them needs analytics to run first.\n\nThe **account** intents are facts about the customer's own account \u2014 balance, plan,\nrates, connection, payment method. They were unroutable before, which meant \"what\nplan am I on?\" and \"when is my bill due?\" returned `OUT_OF_SCOPE`. That is a bad\nanswer to a question the service can answer perfectly from one mart row, and it is\na large share of what a real energy assistant is asked.\n\nThey are a separate family rather than more of the same because the layer-3\ncontract differs: an account fact is a *lookup*, so its bundle is a copy of stored\nvalues rather than the output of a computation. Nothing is derived, so nothing can\nbe derived wrongly."
       },
       "LoginRequest": {
         "properties": {
@@ -1679,6 +2049,52 @@
         "title": "QuestionResponse",
         "description": "What the customer sent back."
       },
+      "SourceRef": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool",
+            "description": "Which lookup \u2014 e.g. 'get_bill_comparison'."
+          },
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments",
+            "description": "What it was asked for, when that narrows the result."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "The table or computation behind it, in words a customer can read."
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "description": "False when the lookup failed or the data was not available for this account. Shown rather than hidden: 'I could not check that' is a different answer from 'I did not look', and only one of them is honest about a gap.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool"
+        ],
+        "title": "SourceRef",
+        "description": "One lookup the assistant made, for the transparency panel.\n\nThis replaced `facts` on the chat response. The two answer different questions and\nthe new one is the question customers were actually asking: `facts` listed the\nfigures Python computed *before* the model saw the message, which was the same list\nfor everyone who tripped the same keyword. This says what was consulted for *this*\nanswer and where each result came from \u2014 which is checkable, and is what makes\n\"every number traces to a source\" a claim rather than a slogan."
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1719,59 +2135,90 @@
         ],
         "title": "ValidationError"
       },
-      "VerificationReport": {
+      "_VapiCompletionRequest": {
         "properties": {
-          "passed": {
-            "type": "boolean",
-            "title": "Passed"
-          },
-          "checked": {
+          "messages": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/_VapiMessage"
             },
             "type": "array",
-            "title": "Checked",
-            "description": "numeric tokens in the draft"
+            "title": "Messages"
           },
-          "unverified": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Unverified",
-            "description": "tokens with no matching fact"
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
           },
-          "derived": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Derived",
-            "description": "Computed *relationships* stated without a number \u2014 'twice as much', 'half your bill', 'a third of the increase'. These contain no numeric token, so a token-by-token check passes them, but each one is a division the model performed. Reported separately from `unverified` because they are a different failure: not a wrong figure, an unauthorised calculation."
-          },
-          "regenerated": {
+          "stream": {
             "type": "boolean",
-            "title": "Regenerated",
-            "default": false
+            "title": "Stream",
+            "default": true
           },
-          "fell_back_to_template": {
-            "type": "boolean",
-            "title": "Fell Back To Template",
-            "default": false
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
           },
-          "provider_error": {
-            "type": "boolean",
-            "title": "Provider Error",
-            "description": "True when the template was served because the model was unreachable, as distinct from the number-checker rejecting its drafts. Without this the two fallback paths are indistinguishable, and this report is what 'N answers, 0 fabricated figures' is counted from \u2014 a day Ollama was down would otherwise read as a day the checker caught six fabrications, which is the opposite claim and a flattering one.",
-            "default": false
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "call": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call"
           }
         },
         "type": "object",
         "required": [
-          "passed"
+          "messages"
         ],
-        "title": "VerificationReport",
-        "description": "Layer 3's output. This is the evidence behind the pitch \u2014 log every one."
+        "title": "_VapiCompletionRequest",
+        "description": "Vapi's OpenAI-compatible request shape.\n\nVapi sends this as its \"Custom LLM\" integration. We accept the full shape\nand ignore everything except `messages` \u2014 the model choice is ours (layer 2),\nand streaming is always on because Vapi expects chunked SSE."
+      },
+      "_VapiMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "_VapiMessage"
       }
     }
   }

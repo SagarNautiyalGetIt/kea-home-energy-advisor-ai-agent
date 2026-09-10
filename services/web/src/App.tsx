@@ -54,9 +54,14 @@ function App() {
   const register = () => {
     // No signup endpoint yet. Inventing a Session here would give every page a
     // customerId the API cannot resolve, so the new customer signs in instead.
+    //
+    // The toast used to say "Your Kea Energy account is ready", which was not true —
+    // nothing was created, and the person was then sent to a sign-in page where the
+    // details they had just chosen did not work. Saying so is both kinder and the only
+    // version Kea could stand behind if somebody took it at its word.
     localStorage.removeItem('kea-onboarding-seen')
     navigate('/login')
-    addToast('Your Kea Energy account is ready — please sign in')
+    addToast('This is a preview build, so no account was created — sign in with one of the demo accounts to look around', 'info')
   }
   const confirmLogout = () => {
     clearSession()
