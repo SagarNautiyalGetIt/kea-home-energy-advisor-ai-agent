@@ -17,11 +17,26 @@ export type UsageGraphProps = {
   animate?: boolean
 }
 
+/** Exact. For tooltips and the screen-reader summary, where cents are the point. */
 const formatMetric = (value: number, unit: UsageUnit, max: number) => {
   if (unit === '$') return `$${value.toFixed(2)}`
 
 const decimals = max <= 2 ? 1 : 0
   return `${value.toFixed(decimals)} kWh`
+}
+
+/**
+ * Rounded, for the y-axis only.
+ *
+ * A month in dollars tops out around $230, and `$230.00` is both wider than the 52px
+ * left margin a narrow viewport gets and more precision than an axis tick is for — the
+ * gridline says roughly how high, the tooltip says exactly. Cents are kept below $20,
+ * where dropping them would collapse a daily chart's ticks into two or three identical
+ * labels.
+ */
+const formatAxisMetric = (value: number, unit: UsageUnit, max: number) => {
+  if (unit === '$') return max < 20 ? `$${value.toFixed(2)}` : `$${Math.round(value)}`
+  return formatMetric(value, unit, max)
 }
 
 export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false }: UsageGraphProps) {
@@ -96,7 +111,7 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
           return (
             <g key={ratio}>
               <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} className="grid-line" />
-              <text x={margin.left - 10} y={y + 4} textAnchor="end" className="axis-label y-axis-label">{formatMetric(value, unit, ceiling)}</text>
+              <text x={margin.left - 10} y={y + 4} textAnchor="end" className="axis-label y-axis-label">{formatAxisMetric(value, unit, ceiling)}</text>
             </g>
           )
         })}
