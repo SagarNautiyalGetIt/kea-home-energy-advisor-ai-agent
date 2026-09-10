@@ -104,13 +104,20 @@ async def seed(session: AsyncSession) -> None:
         await session.execute(delete(model))
     await session.flush()
 
+    # Kea's published styles, at the plan-page rates. These used to be "Kea Standard" and
+    # "Low Fixed Charge", which appear nowhere on the plan page — so a seeded household
+    # could be told it was on a plan the customer could not find in the app.
+    #
+    # Free Weekends rather than Time of Use as the second option: a seeded household has
+    # no band split on its readings, so a three-band plan could not be priced for it, and
+    # seeding a plan nothing can price would put an unanswerable option on the account.
     standard = Tariff(
-        name="Kea Standard (illustrative)", plan_type="standard",
-        unit_price_nzd=UNIT_PRICE, daily_fixed_nzd=DAILY_FIXED, is_illustrative=True,
+        name="Anytime Rate", plan_type="anytime",
+        unit_price_nzd=Decimal("0.325"), daily_fixed_nzd=Decimal("1.45"), is_illustrative=True,
     )
     low_fixed = Tariff(
-        name="Low Fixed Charge (illustrative)", plan_type="low_fixed_charge",
-        unit_price_nzd=Decimal("0.36"), daily_fixed_nzd=Decimal("0.30"), is_illustrative=True,
+        name="Free Weekends", plan_type="free_weekends",
+        unit_price_nzd=Decimal("0.365"), daily_fixed_nzd=Decimal("1.55"), is_illustrative=True,
     )
     session.add_all([standard, low_fixed])
     await session.flush()

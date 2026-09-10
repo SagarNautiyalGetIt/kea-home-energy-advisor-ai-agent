@@ -28,8 +28,11 @@ it:
 
 * One whole-house meter reading cannot identify an appliance. That is physics, not
   policy, and it does not become false because the model got better.
-* Kea's real tariffs are not public, so any dollar figure derived from a rate is
-  illustrative and has to say so.
+* Plan prices are Kea's published, GST-inclusive rates — Anytime Rate, Time of Use and
+  Free Weekends — and may be quoted as real. Where an account has a bill, dollar figures
+  come from its own effective rate and reconcile with that invoice. Where it has none,
+  energy is costed at the published Anytime Rate and excludes the daily charge, so call
+  it an energy cost rather than a bill total. Never call any of these illustrative.
 * Hardship, disputes and the Consumer Care flags route to a person. Under the Consumer
   Care Obligations that is closer to a legal duty than a product decision.
 
