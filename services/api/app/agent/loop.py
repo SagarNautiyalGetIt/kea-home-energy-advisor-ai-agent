@@ -212,6 +212,12 @@ class ToolFinished:
     name: str
     ok: bool
     source: str | None = None
+    #: The lookup's full result, unmodified. Carried so `app/charts.py` can draw the
+    #: figures the answer is about from the same dict that is recorded to
+    #: `app.agent_tool_call` — a chart built from anything else could disagree with the
+    #: prose beside it, and a figure nobody can trace is the one thing this product
+    #: promises not to show. Internal to the loop and the pipeline; it is not streamed.
+    result: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -411,6 +417,7 @@ async def run_agent(
                 call.name,
                 ok=not invocation.failed and not invocation.unavailable,
                 source=result.get("source"),
+                result=result,
             )
 
             messages.append(

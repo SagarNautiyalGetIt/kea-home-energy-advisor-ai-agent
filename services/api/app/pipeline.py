@@ -71,6 +71,7 @@ from app.agent.loop import (
 from app.agent.tools import ToolContext
 from app.analytics.account import AccountContext
 from app.analytics.repository import UsageContext
+from app.charts import chart_for
 from app.clarify import conversation as clarify_conversation
 from app.config import get_context_store, get_provider, get_recorder, get_repository
 from app.db.recorder import TurnRecord
@@ -496,9 +497,15 @@ async def answer_stream(
 
         tool    {"name", "arguments"}          a lookup started
         result  {"name", "ok", "source"}       and what it found
+        chart   {"kind", "title", "points", …} that result, drawn — at most one per turn
         reset   {}                             discard the text streamed this round
         token   {"text"}                       prose, as it is written
         done    {"sources", "escalate", ...}
+
+    `chart` is optional and most turns have none: it is emitted only when a lookup
+    returned something `app/charts.py` recognises, and it is built from that lookup's
+    own result dict so the picture and the prose can never be two different answers.
+    A client that ignores it loses nothing but the picture.
 
     `reset` is the one that needs explaining. Models routinely write a line before
     reaching for a tool ("Let me pull up your July bill"), and holding that back until
@@ -544,6 +551,7 @@ async def answer_stream(
         return
 
     result: AgentResult | None = None
+    charted = False
     try:
         async for event in run_agent(
             get_provider(), ctx, message, history, handling=_handling(tiering, emotion)
@@ -555,8 +563,17 @@ async def answer_stream(
                     yield "reset", {}
                 case ToolStarted(name=name, arguments=arguments):
                     yield "tool", {"name": name, "arguments": arguments or {}}
-                case ToolFinished(name=name, ok=ok, source=source):
+                case ToolFinished(name=name, ok=ok, source=source, result=payload):
                     yield "result", {"name": name, "ok": ok, "source": source}
+                    # At most one chart per answer. A turn that looks up three things
+                    # would otherwise stack three pictures under one paragraph, and the
+                    # first lookup is the one the question was about — the later ones
+                    # are usually the model checking its own footing.
+                    if ok and not charted:
+                        spec = chart_for(name, payload)
+                        if spec is not None:
+                            charted = True
+                            yield "chart", spec.as_payload()
                 case Finished(result=finished):
                     result = finished
     except AgentUnavailable as exc:

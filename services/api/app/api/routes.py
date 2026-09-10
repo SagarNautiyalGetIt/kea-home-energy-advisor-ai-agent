@@ -687,7 +687,13 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     """SSE. Streams the answer as the assistant works.
 
     The event sequence is documented on `pipeline.answer_stream`, which produces it.
-    Five names, and `reset` is the one worth reading about before writing a client.
+    Six names, and `reset` is the one worth reading about before writing a client.
+
+    `chart` is the newest and the only optional one: when a lookup returns something
+    chartable, its own figures are emitted as `{kind, title, unit, points, caveat,
+    source}` so a client can draw the answer as well as print it. At most one arrives
+    per turn and most turns have none, so a client that ignores the event is still
+    correct — it just shows prose where another client shows prose and a picture.
 
     **What changed here, and why the old comment above this function no longer applies.**
     It used to say verification is a whole-text check, so the answer had to be generated
