@@ -1,0 +1,31 @@
+{
+  "question": "Here is this customer's account summary, already looked up for you: {\"available\":true,\"account_reference\":\"DEMO-ACCT-227001\",\"usage_data_period\":{\"label\":\"June ",
+  "model": "gemini-3.5-flash",
+  "events": [
+    {
+      "t": "delta",
+      "text": "Your latest bill of **"
+    },
+    {
+      "t": "delta",
+      "text": "$189.60** is **$76.85 higher** than your previous bill of **$112"
+    },
+    {
+      "t": "delta",
+      "text": ".75**\u2014an increase of **68.2%**. \n\nAccording to your meter data, this"
+    },
+    {
+      "t": "delta",
+      "text": " increase is driven by two main factors: the length of the billing cycle and colder weather.\n\n### 1."
+    },
+    {
+      "t": "complete",
+      "text": "Your latest bill of **$189.60** is **$76.85 higher** than your previous bill of **$112.75**\u2014an increase of **68.2%**. \n\nAccording to your meter data, this increase is driven by two main factors: the length of the billing cycle and colder weather.\n\n### 1.",
+      "tool_calls": [],
+      "usage": {
+        "prompt_tokens": 12182,
+        "completion_tokens": 80
+      }
+    }
+  ]
+}

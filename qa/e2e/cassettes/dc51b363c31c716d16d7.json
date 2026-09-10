@@ -1,0 +1,83 @@
+{
+  "question": "Here is this customer's account summary, already looked up for you: {\"available\":true,\"account_reference\":\"DEMO-ACCT-223001\",\"usage_data_period\":{\"label\":\"June ",
+  "model": "gemini-3.5-flash",
+  "events": [
+    {
+      "t": "delta",
+      "text": "Yes, the increase in your bill was driven entirely by the colder weather. \n\nYour June bill was $"
+    },
+    {
+      "t": "delta",
+      "text": "163.19, which is $65.41 higher than your previous bill of $97"
+    },
+    {
+      "t": "delta",
+      "text": ".78 (a 66.9% increase). According to your meter data, the weather alone accounted for"
+    },
+    {
+      "t": "delta",
+      "text": " an estimated **$72.94** of that increase. This is because June was significantly colder than the previous"
+    },
+    {
+      "t": "delta",
+      "text": " period\u2014heating degree days (a measure of how far the temperature drops below 18\u00b0C) jumped from just "
+    },
+    {
+      "t": "delta",
+      "text": "1.5 to 216.4. \n\nThis weather-driven increase was slightly offset by a small"
+    },
+    {
+      "t": "delta",
+      "text": " decrease in your unit price (-$4.38) and having one fewer day in the billing cycle (-$3"
+    },
+    {
+      "t": "delta",
+      "text": ".15), bringing the net increase to $65.41.\n\nLooking at your energy breakdown for June"
+    },
+    {
+      "t": "delta",
+      "text": ":\n* **Heating (weather-dependent usage):** About **45% of your bill ($73."
+    },
+    {
+      "t": "delta",
+      "text": "42)** went toward heating. Your meter shows that for every degree-day the temperature drops, your home draws about"
+    },
+    {
+      "t": "delta",
+      "text": " 0.93 extra units (kWh) of electricity. On your coldest days\u2014like June 7th,"
+    },
+    {
+      "t": "delta",
+      "text": " 16th, and 25th, when the average temperature in Wellington dropped to around 6.5"
+    },
+    {
+      "t": "delta",
+      "text": "\u00b0C\u2014your daily usage peaked at just over 17 units, compared to around 13 units on milder"
+    },
+    {
+      "t": "delta",
+      "text": " days.\n* **Always-on background load:** About **42.4% of your bill ($69"
+    },
+    {
+      "t": "delta",
+      "text": ".26)** went to the always-on background load (the power your house draws overnight when nothing is actively being"
+    },
+    {
+      "t": "delta",
+      "text": " used, which averaged 6.33 units per day).\n* **Everything else:** The remaining **12"
+    },
+    {
+      "t": "delta",
+      "text": ".6% ($20.50)** went to everyday activities like cooking, laundry, and lighting."
+    },
+    {
+      "t": "complete",
+      "text": "Yes, the increase in your bill was driven entirely by the colder weather. \n\nYour June bill was $163.19, which is $65.41 higher than your previous bill of $97.78 (a 66.9% increase). According to your meter data, the weather alone accounted for an estimated **$72.94** of that increase. This is because June was significantly colder than the previous period\u2014heating degree days (a measure of how far the temperature drops below 18\u00b0C) jumped from just 1.5 to 216.4. \n\nThis weather-driven increase was slightly offset by a small decrease in your unit price (-$4.38) and having one fewer day in the billing cycle (-$3.15), bringing the net increase to $65.41.\n\nLooking at your energy breakdown for June:\n* **Heating (weather-dependent usage):** About **45% of your bill ($73.42)** went toward heating. Your meter shows that for every degree-day the temperature drops, your home draws about 0.93 extra units (kWh) of electricity. On your coldest days\u2014like June 7th, 16th, and 25th, when the average temperature in Wellington dropped to around 6.5\u00b0C\u2014your daily usage peaked at just over 17 units, compared to around 13 units on milder days.\n* **Always-on background load:** About **42.4% of your bill ($69.26)** went to the always-on background load (the power your house draws overnight when nothing is actively being used, which averaged 6.33 units per day).\n* **Everything else:** The remaining **12.6% ($20.50)** went to everyday activities like cooking, laundry, and lighting.",
+      "tool_calls": [],
+      "usage": {
+        "prompt_tokens": 11341,
+        "completion_tokens": 405
+      }
+    }
+  ]
+}

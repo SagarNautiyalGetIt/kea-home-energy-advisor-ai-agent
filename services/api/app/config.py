@@ -277,9 +277,10 @@ def get_provider():
     chat turn, and made token accounting per-request state that nothing could
     aggregate. `get_provider.cache_clear()` in tests that need a different provider.
     """
+    from app.providers.cassette import wrap_if_enabled
     from app.providers.resolver import build_provider
 
-    return build_provider(
+    provider = build_provider(
         settings.provider,
         bedrock_model=settings.bedrock_model,
         aws_region=settings.aws_region,
@@ -290,6 +291,9 @@ def get_provider():
         gemini_api_keys=settings.gemini_api_keys,
         gemini_numbered_keys=settings.numbered_gemini_keys,
     )
+    # Off unless KEA_CASSETTE says otherwise, so the request path is unchanged in
+    # production and in every test that has not asked for a recording.
+    return wrap_if_enabled(provider)
 
 
 @lru_cache(maxsize=1)
