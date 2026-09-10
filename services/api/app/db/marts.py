@@ -90,6 +90,41 @@ class MartAccountContext(Base):
     """`low_user` | `standard` — the NZ regulated categories. This is what makes the
     Low Fixed Charge comparison answerable at all."""
 
+    is_tou: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    daily_fixed_charge: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    payment_method: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # ── the billing cycle ──────────────────────────────────────────────────────
+    #
+    # These eleven columns below `user_type` existed in `kea.mart_account_context`
+    # from the start and were simply never mapped here, and because
+    # `analytics/repository.py` reads every one of them through
+    # `getattr(account, "...", None)`, the omission could not raise — it returned the
+    # default and the context assembled cleanly with the fields empty. The result was
+    # a set of features that reported success while doing nothing:
+    #
+    #   no cycle dates      -> days_remaining is always 0, so "what will I pay?"
+    #                          projects a cycle that is already over and quotes the
+    #                          money already spent as the forecast
+    #   no estimated_read_pct -> the account whose whole purpose is to make the
+    #                          assistant hedge about estimated reads never hedged
+    #   is_quarantined False -> the guard that is supposed to make the agent DECLINE
+    #                          on unresolved cross-system references never fired
+    #
+    # The last one is the reason this is a correctness fix and not a cosmetic one: a
+    # safety control that is silently off is worse than one that was never written,
+    # because the tests that assert the behaviour pass against a context that can
+    # never trigger it.
+    billing_cycle_day: Mapped[int | None] = mapped_column(SmallInteger)
+    current_period_start: Mapped[dt.date | None] = mapped_column(Date)
+    current_period_end: Mapped[dt.date | None] = mapped_column(Date)
+    days_into_period: Mapped[int | None] = mapped_column(SmallInteger)
+
+    estimated_read_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    last_read_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    is_quarantined: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    quarantine_reason: Mapped[str | None] = mapped_column(Text)
+
     built_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
