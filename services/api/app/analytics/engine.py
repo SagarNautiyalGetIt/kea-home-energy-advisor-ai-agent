@@ -23,8 +23,18 @@ from app.analytics.hardship import CollapseSignal as CollapseSignal
 from app.analytics.hardship import detect_usage_collapse as detect_usage_collapse
 from app.schemas import Fact, FactBundle, Intent
 
-#: Illustrative only — Kea's real tariff is not public. Label it wherever it shows.
-DEFAULT_UNIT_PRICE_NZD = 0.30
+#: Kea's published Anytime Rate, GST-inclusive, from the plan page — see
+#: docs/sprints/sprint-3/plans-and-terms.md.
+#:
+#: This was 30c and labelled "illustrative, Kea's real tariff is not public" for as long
+#: as there was no published tariff to use. There is one now, on the plans page the
+#: customer can open in the next tab, and quoting a made-up 30c beside it meant every
+#: figure the assistant gave was quietly 2.5c out from the app's own prices.
+#:
+#: The daily charge is not applied by this default — costs derived from it are energy
+#: only. Where a bill exists, the account's own effective rate is used instead and the
+#: answer says so (`BILLED_DISCLOSURE` in `agent/tools.py`).
+DEFAULT_UNIT_PRICE_NZD = 0.325
 
 #: Standing load is the floor a house never drops below. The lowest few days of a
 #: month approximate it better than the true minimum, which catches holidays away.
@@ -150,7 +160,9 @@ NO_APPLIANCE = (
     "data cannot identify appliances, and claiming otherwise is a fabrication."
 )
 _ILLUSTRATIVE_PRICE = (
-    "Dollar figures use an illustrative 30c/kWh; say so if you quote one."
+    f"Dollar figures use Kea's published Anytime Rate of "
+    f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh and exclude the daily charge, so they are "
+    "an energy cost rather than a bill total. Say that if you quote one."
 )
 
 

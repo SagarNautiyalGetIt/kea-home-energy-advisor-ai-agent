@@ -164,8 +164,27 @@ class DayUsage:
     controlled_kwh: float = 0.0
     uncontrolled_kwh: float = 0.0
     base_load_kwh: float | None = None
+    # ── the three time-of-use bands ────────────────────────────────────────────
+    #
+    # Kea's published Time of Use plan has three, on the boundaries in
+    # docs/sprints/sprint-3/plans-and-terms.md:
+    #
+    #     peak      07:00-11:00 and 17:00-21:00
+    #     off-peak  11:00-17:00 and 21:00-23:00
+    #     night     23:00-07:00
+    #
+    # `kea.mart_daily_usage` carries two columns, and the second one is misnamed: its
+    # `off_peak_kwh` filters `hr < 7 OR hr >= 23`, which is the NIGHT window. The
+    # 11:00-17:00 and 21:00-23:00 usage — around 28% of a typical day — was in neither
+    # column and had no name anywhere in this service.
+    #
+    # So the model was handed a field called `off_peak_kwh` holding night usage, and
+    # the time-of-use plan priced two bands as though they partitioned the day. Both are
+    # fixed by deriving the third here rather than by touching the mart, which the
+    # loader owns.
     peak_kwh: float | None = None
     off_peak_kwh: float | None = None
+    night_kwh: float | None = None
     temp_mean_c: float | None = None
     heating_degree_days: float | None = None
     is_weekend: bool = False
@@ -221,6 +240,12 @@ class AccountContext:
     """The two sides of the comparison. `prior_bill` is None for a first bill — which is
     itself a complete explanation and one the narration should give, not treat as an
     error."""
+
+    weekend_free_share: float | None = None
+    """Fraction of this household's weekend import falling in 09:00-17:00, from its own
+    hourly profile. The one thing needed to price Free Weekends, and None when there is
+    no profile to measure it from — in which case that plan is declined rather than
+    guessed at."""
 
     heating_sensitivity_kwh_per_hdd: float | None = None
     weather_fit_r2: float | None = None

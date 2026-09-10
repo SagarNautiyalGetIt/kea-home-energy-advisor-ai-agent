@@ -23,6 +23,7 @@ from app.alerts.channels import (
 from app.alerts.policy import CONFIDENCE_FLOORS, decide, tier_for
 from app.alerts.preferences import AlertPreferences, defaults_for
 from app.analytics.billshock import BillShockAssessment
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD
 from app.analytics.forecast import (
     Attribution,
     CycleForecast,
@@ -268,12 +269,20 @@ def test_quiet_hours_defer_the_phone_but_never_the_email():
 
 def test_the_email_carries_its_basis_disclosure():
     """An alert that leaves the app without its caveat is the regression this repo has
-    already had once, on the invoice PDF."""
+    already had once, on the invoice PDF.
+
+    Asserted against the live rate rather than a pinned "30c/kWh". That literal was the
+    invented illustrative rate; the price is now Kea's published Anytime Rate, and a test
+    that hardcodes the number would have to be edited every time the tariff moves — which
+    is exactly how a stale disclosure ends up in a customer's inbox.
+    """
     a = fake_assessment(probabilities={1: 0.9, 2: 0.1, 3: 0.0})
     prefs = AlertPreferences(account_ref="H-JUL", **CONTACTABLE)
     body = render.body_for(a, decide(a, prefs))
     assert "similar homes" in body
-    assert "30c/kWh" in body
+    assert f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh" in body
+    # And it still says the daily charge is not in that figure.
+    assert "daily charge" in body
 
 
 def test_the_email_says_how_confident_we_are():

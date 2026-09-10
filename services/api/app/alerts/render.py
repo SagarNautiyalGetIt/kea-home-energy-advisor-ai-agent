@@ -34,6 +34,7 @@ from __future__ import annotations
 from app.alerts.channels import SMS_SEGMENT_CHARS
 from app.alerts.policy import AlertDecision
 from app.analytics.billshock import BillShockAssessment
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD
 from app.analytics.forecast import ExpectationBasis, ForecastMethod
 
 #: How each basis is described to the customer. Mirrors `forecast.BASIS_CLAIM_RULES`,
@@ -51,7 +52,10 @@ _BASIS_SENTENCE: dict[ExpectationBasis, str] = {
     ),
 }
 
-_PRICE_DISCLOSURE = "Costs are estimated at an illustrative 30c/kWh."
+_PRICE_DISCLOSURE = (
+    f"Costs are estimated at Kea's published Anytime Rate of "
+    f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh, excluding the daily charge."
+)
 
 #: What each cause is called in a sentence a customer reads. Keys match
 #: `BillShockAssessment.dominant_cause`.

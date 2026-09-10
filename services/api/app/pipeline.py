@@ -201,8 +201,28 @@ class Answer:
         return [t.summary() for t in self.tools_used]
 
 
+#: Appended when the customer did not speak English.
+#:
+#: Answering a Hindi question in English is not answering it, and the model will default
+#: to English without being told — the system prompt, the tool results and the caveats it
+#: is reasoning over are all in English, so English is the path of least resistance.
+#:
+#: The exemptions are deliberate. Plan names are products with printed names, and a
+#: customer told about "किसी भी समय दर" cannot find Anytime Rate on the plans page or ask
+#: for it on the phone. Figures stay in NZD for the same reason.
+_LANGUAGE_NOTE = (
+    "LANGUAGE: the customer spoke to you in {language}. Write your entire answer in "
+    "{language}, naturally, as a native speaker would — not as a translation of an "
+    "English sentence. Keep Kea's plan names (Anytime Rate, Time of Use, Free Weekends) "
+    "in English, because those are the names printed in the app and on their bill, and "
+    "keep dollar amounts in New Zealand dollars."
+)
+
+
 def _handling(
-    tiering: hardship.TierDecision, emotion: hardship.EmotionalRead
+    tiering: hardship.TierDecision,
+    emotion: hardship.EmotionalRead,
+    language: str | None = None,
 ) -> str:
     """The whole instruction appended to the system prompt for this turn.
 
@@ -218,7 +238,13 @@ def _handling(
     in practice, and the one that must win is the policy.
     """
     tone = emotion.guidance
-    return f"{tone}\n\n{tiering.guidance}" if tone else tiering.guidance
+    blocks = [b for b in (tone, tiering.guidance) if b]
+    # Last, so it wins on the same "nearer the end of the prompt" rule the policy note
+    # relies on. A tier-3 handover said in English to somebody who does not read English
+    # is not a handover.
+    if language and not language.lower().startswith("en"):
+        blocks.append(_LANGUAGE_NOTE.format(language=language))
+    return "\n\n".join(blocks)
 
 
 async def build_context(customer_id: str) -> ToolContext:
@@ -361,6 +387,7 @@ async def answer(
     channel: str = "chat",
     conversation_id: int | None = None,
     history: list[dict[str, Any]] | None = None,
+    language: str | None = None,
 ) -> Answer:
     """Question in, answer out. The non-streaming path."""
     ctx = await build_context(customer_id)
@@ -386,7 +413,7 @@ async def answer(
 
     result: AgentResult | None = None
     async for event in run_agent(
-        get_provider(), ctx, message, history, handling=_handling(tiering, emotion)
+        get_provider(), ctx, message, history, handling=_handling(tiering, emotion, language)
     ):
         if isinstance(event, Finished):
             result = event.result
@@ -490,6 +517,7 @@ async def answer_stream(
     channel: str = "chat",
     conversation_id: int | None = None,
     history: list[dict[str, Any]] | None = None,
+    language: str | None = None,
 ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
     """The streaming path, as `(event_name, payload)` pairs the transports format.
 
@@ -554,7 +582,7 @@ async def answer_stream(
     charted = False
     try:
         async for event in run_agent(
-            get_provider(), ctx, message, history, handling=_handling(tiering, emotion)
+            get_provider(), ctx, message, history, handling=_handling(tiering, emotion, language)
         ):
             match event:
                 case Thinking(text=text):

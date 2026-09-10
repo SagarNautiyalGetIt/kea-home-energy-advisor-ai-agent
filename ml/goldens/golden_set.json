@@ -199,11 +199,10 @@
       "expect_intent": "tariff_check",
       "expect_facts": [
         "current_plan_cost",
-        "alternative_plan_cost",
-        "annual_saving"
+        "alternative_plan_cost"
       ],
       "demo_line": "Line 3",
-      "note": "H-TARIFF is the low steady user for whom Low Fixed Charge genuinely wins."
+      "note": "H-TARIFF is a low steady user. Against Kea's published styles the flat Anytime Rate already beats Free Weekends for them, so the correct answer is that there is nothing to switch to -- not a saving."
     },
     {
       "id": "R-041",
@@ -211,7 +210,8 @@
       "customer_id": "H-TARIFF",
       "expect_intent": "tariff_check",
       "expect_facts": [
-        "annual_saving"
+        "current_plan_cost",
+        "alternative_plan_cost"
       ]
     },
     {
@@ -229,7 +229,8 @@
       "customer_id": "H-SPIKE",
       "expect_intent": "tariff_check",
       "expect_facts": [
-        "annual_saving"
+        "current_plan_cost",
+        "alternative_plan_cost"
       ]
     },
     {
@@ -581,7 +582,7 @@
       "id": "V-001",
       "customer_id": "H-JUL",
       "intent": "why_bill_high",
-      "draft": "Your July 2026 usage ran about 2.4 kWh a day above similar homes, which works out to roughly $292 a year. The one-off spike cost $2.52, only 10% of the difference.",
+      "draft": "Your July 2026 usage ran about 2.4 kWh a day above similar homes, which works out to roughly $317 a year. The one-off spike cost $2.73, only 10% of the difference.",
       "why": "Every figure is copied from the fact bundle. A legitimate answer must not be rejected — a checker that fails everything makes '0 fabricated figures' meaningless."
     },
     {
@@ -595,35 +596,35 @@
       "id": "V-003",
       "customer_id": "H-COLD",
       "intent": "using_more_than_usual",
-      "draft": "Colder weather explains about 13% of your July 2026 increase, or $10.58. The remaining $70.45 came from everything else.",
+      "draft": "Colder weather explains about 13% of your July 2026 increase, or $11.46. The remaining $76.32 came from everything else.",
       "why": "The weather-attribution answer for the household where the cold snap defence is genuinely true."
     },
     {
       "id": "V-004",
       "customer_id": "H-TARIFF",
       "intent": "tariff_check",
-      "draft": "On your current plan July 2026 came to $103. On the Low Fixed Charge plan the same usage would have cost $77.38, which is about $310 a year.",
+      "draft": "On your current plan July 2026 came to $106.41. On Free Weekends the same usage would have cost $117.07, so moving would not save you anything.",
       "why": "The tariff comparison for the household where switching genuinely wins."
     },
     {
       "id": "V-005",
       "customer_id": "H-SPIKE",
       "intent": "what_costs_most",
-      "draft": "Your steady background load is 4.1 kWh a day, which is around $449 a year. I can't tell which appliance that is from half-hourly meter data.",
+      "draft": "Your steady background load is 4.1 kWh a day, which is around $486 a year. I can't tell which appliance that is from half-hourly meter data.",
       "why": "The honest refusal, with real figures attached. Both halves have to survive the checker."
     },
     {
       "id": "V-006",
       "customer_id": "H-JUL",
       "intent": "why_bill_high",
-      "draft": "Rounded for readability: about $290 a year, and 2.4 kWh a day.",
+      "draft": "Rounded for readability: about $317 a year, and 2.4 kWh a day.",
       "why": "$290 is within 1% of the computed $292.03, so readable rounding is allowed. $300 would not be — see V-105."
     },
     {
       "id": "V-007",
       "customer_id": "H-JUL",
       "intent": "peak_usage",
-      "draft": "Your highest day was day 11, when you used 17.6 kWh costing $5.28. A typical day for you is closer to 9.2 kWh, so that day ran about 1.91× higher.",
+      "draft": "Your highest day was day 11, when you used 17.6 kWh costing $5.72. A typical day for you is closer to 9.2 kWh, so that day ran about 1.91× higher.",
       "why": "Every figure copied from the peak bundle, including the day number, which carries the days unit so layer 3 checks it as a claim."
     }
   ],

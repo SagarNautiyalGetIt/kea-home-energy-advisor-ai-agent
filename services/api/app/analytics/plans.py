@@ -39,15 +39,22 @@ is applied to is one billing period of a household whose life changes. `headroom
 is how far their average sits from the point where the answer flips, and it is the single
 most useful number in this whole module for anyone deciding whether to act.
 
-## What stays illustrative, and why that is stated rather than hidden
+## Where the rates come from
 
-Kea's real tariffs are not public. Every rate below is a plausible New Zealand retail
-shape, calibrated against the Low Fixed Charge regulation and the published range of NZ
-retail rates, and it is labelled as illustrative in every direction it can leave this
-module. What the comparison demonstrates truthfully is the *trade-off* — high fixed charge
-against high unit rate, flat against time-of-use — and the arithmetic that decides it,
-which is the part a customer needs and the part that does not change when the real numbers
-arrive.
+Every rate below is Kea's own published price, GST-inclusive, as printed on the plans
+page — recorded in docs/sprints/sprint-3/plans-and-terms.md and rendered by
+`services/web/src/data/mockData.ts`.
+
+They used to be invented. This module carried a plausible-looking New Zealand retail
+shape and labelled it "illustrative" in every direction it could leave by, which was the
+honest thing to do while there was no published tariff. There is one now, on a page the
+customer can open in the next tab — so an assistant still quoting invented rates was
+giving prices that disagreed with the app around it, and hedging them with a disclaimer
+that had stopped being true.
+
+What has not changed is the discipline: the usage is the household's own, the arithmetic
+is stated, and a plan that cannot be priced from this household's data is declined rather
+than estimated.
 """
 
 from __future__ import annotations
@@ -78,7 +85,19 @@ class PlanShape:
     """The all-hours rate for a flat plan, and the peak rate for a TOU one."""
 
     off_peak_rate_nzd: float | None = None
-    """Set only on time-of-use plans. Requires a peak/off-peak split on the meter."""
+    """Set only on time-of-use plans. Requires a band split on the meter."""
+
+    night_rate_nzd: float | None = None
+    """The 23:00-07:00 rate. Kea's published Time of Use plan has three bands, not two,
+    and the night rate is less than half the peak one — pricing night usage at the
+    off-peak rate overstates the plan by 9c on every one of those units and biases the
+    recommendation against the plan that suits people who run appliances overnight."""
+
+    free_weekend_window: tuple[int, int] | None = None
+    """Local hours, half-open, during which weekend import is free. `(9, 17)` on Free
+    Weekends. The fixed daily charge still applies inside it — "free" is a per-kWh
+    statement, and a plan page that let somebody read it as a free day would be
+    promising something the invoice then contradicts."""
 
     controlled_rate_nzd: float | None = None
     """Rate for the separately switched circuit, where one exists."""
@@ -102,63 +121,69 @@ class PlanShape:
         return self.off_peak_rate_nzd is not None
 
 
-#: Break-even between STANDARD and LOW_FIXED is (1.50 - 0.30) / (0.36 - 0.30) = 20 kWh/day,
-#: calibrated against NZ's Low Fixed Charge regulation — households under about 8,000
-#: kWh/year, which is roughly 22 kWh/day. These two are unchanged from the pair
-#: `agent/tools.py` has always offered, so a household that has been quoted a break-even
-#: before is quoted the same one now.
-STANDARD = PlanShape(
-    code="standard",
-    name="Kea Standard",
-    daily_fixed_nzd=1.50,
-    unit_rate_nzd=0.30,
+# ---------------------------------------------------------------------------
+# Kea's three published pricing styles.
+#
+# Rates and daily charges are the customer-facing, GST-inclusive figures from
+# docs/sprints/sprint-3/plans-and-terms.md, which records the plan-page screenshots.
+# They are the same numbers `services/web/src/data/mockData.ts` renders, and that is the
+# point of this block: the assistant used to answer out of a different, older catalogue
+# — "Kea Standard", "Low Fixed Charge", "Kea Day & Night" — so a customer could ask
+# which plans were available, be told two names, and then find three different ones on
+# the plans page with different prices on them.
+#
+# Whenever these change, they change in both places. There is no import between a
+# Python service and a TypeScript bundle that would keep them honest, so the guard is
+# `tests/test_plans.py::test_the_catalogue_matches_the_published_plan_page`.
+#
+# Solar buy-back is a flat 8c across all three. The screenshots do not price it, and
+# holding it constant keeps a solar household billable without inventing a buy-back
+# difference that would then drive the recommendation.
+# ---------------------------------------------------------------------------
+
+ANYTIME = PlanShape(
+    code="anytime",
+    name="Anytime Rate",
+    daily_fixed_nzd=1.45,
+    unit_rate_nzd=0.325,
     controlled_rate_nzd=0.22,
-    export_rate_nzd=0.12,
-    suits="households using more than about 20 kWh a day",
+    export_rate_nzd=0.08,
+    suits="customers who want one rate all day and a bill they can predict",
 )
 
-LOW_FIXED = PlanShape(
-    code="low_fixed",
-    name="Low Fixed Charge",
-    daily_fixed_nzd=0.30,
-    unit_rate_nzd=0.36,
-    controlled_rate_nzd=0.28,
-    export_rate_nzd=0.12,
-    user_type="low_user",
-    suits="small or low-use households — the daily charge is capped by regulation",
-)
-
-#: A time-of-use plan. Deliberately priced so it is NOT a free win: the peak rate is well
-#: above Standard's flat rate, so a household that cannot move its evening load pays more.
-#: A catalogue where the interesting plan always wins would make the comparison decorative.
+#: Three bands, and deliberately not a free win: peak is 6.5c above the Anytime rate, so
+#: a household that cannot move its evening load pays more. A catalogue where the
+#: interesting plan always wins would make the comparison decorative.
 TIME_OF_USE = PlanShape(
     code="time_of_use",
-    name="Kea Day & Night",
+    name="Time of Use",
     daily_fixed_nzd=1.50,
-    unit_rate_nzd=0.42,
-    off_peak_rate_nzd=0.18,
+    unit_rate_nzd=0.390,
+    off_peak_rate_nzd=0.270,
+    night_rate_nzd=0.180,
     controlled_rate_nzd=0.16,
-    export_rate_nzd=0.12,
+    export_rate_nzd=0.08,
     suits=(
         "households that can shift heavy use — hot water, laundry, an EV — out of the "
-        "evening peak"
+        "7-11am and 5-9pm peak"
     ),
 )
 
-#: Higher buy-back, paid for with a higher daily charge. Only ever worth quoting to a
-#: household whose connection actually has solar, which `compare` enforces rather than
-#: leaving to the model's judgement.
-SOLAR = PlanShape(
-    code="solar",
-    name="Kea Solar Plus",
-    daily_fixed_nzd=2.10,
-    unit_rate_nzd=0.29,
+#: Free from 9am to 5pm on Saturday and Sunday, paid for with the highest unit rate and
+#: daily charge of the three. Worth it only for a household that actually uses the
+#: window, which is a question about their own shape rather than about the plan.
+FREE_WEEKENDS = PlanShape(
+    code="free_weekends",
+    name="Free Weekends",
+    daily_fixed_nzd=1.55,
+    unit_rate_nzd=0.365,
     controlled_rate_nzd=0.22,
-    export_rate_nzd=0.24,
-    suits="households exporting a meaningful amount of solar",
+    export_rate_nzd=0.08,
+    free_weekend_window=(9, 17),
+    suits="households that can move laundry and big appliances to weekend daytimes",
 )
 
-CATALOGUE: tuple[PlanShape, ...] = (STANDARD, LOW_FIXED, TIME_OF_USE, SOLAR)
+CATALOGUE: tuple[PlanShape, ...] = (ANYTIME, TIME_OF_USE, FREE_WEEKENDS)
 
 # ---------------------------------------------------------------------------
 # Thresholds
@@ -230,13 +255,23 @@ def _sum(days: list[DayUsage], attr: str) -> float:
     return sum(getattr(d, attr, 0.0) or 0.0 for d in days)
 
 
-def price(plan: PlanShape, days: list[DayUsage], *, has_solar: bool) -> PlanCost | None:
+def price(
+    plan: PlanShape,
+    days: list[DayUsage],
+    *,
+    has_solar: bool,
+    weekend_free_share: float | None = None,
+) -> PlanCost | None:
     """Cost this plan over these days. Returns None when the data cannot support it.
 
     None, not a best guess. A time-of-use plan needs to know when the power was used, and
-    an account with no peak/off-peak split cannot answer that — pricing it at the peak rate
-    would overstate it and at a blended rate would understate it, and both would be
-    presented with the same confidence as a plan we can actually price.
+    an account with no band split cannot answer that — pricing it at the peak rate would
+    overstate it and at a blended rate would understate it, and both would be presented
+    with the same confidence as a plan we can actually price.
+
+    `weekend_free_share` is the fraction of this household's weekend import that falls
+    inside 09:00-17:00, measured from its own hourly profile. Free Weekends cannot be
+    priced without it for the same reason.
     """
     if not days:
         return None
@@ -257,16 +292,39 @@ def price(plan: PlanShape, days: list[DayUsage], *, has_solar: bool) -> PlanCost
     if plan.is_time_of_use:
         peak = _sum(days, "peak_kwh")
         off_peak = _sum(days, "off_peak_kwh")
-        if peak + off_peak <= 0:
+        night = _sum(days, "night_kwh")
+        banded = peak + off_peak + night
+        if banded <= 0:
             return None
-        # The split is over the whole import including the controlled circuit, so scale it
-        # down to the general portion rather than double-counting.
-        share = general_kwh / (peak + off_peak) if (peak + off_peak) else 0.0
+        # The bands are measured over the whole import including the controlled circuit,
+        # so scale them down to the general portion rather than double-counting it.
+        share = general_kwh / banded
         energy = (
             peak * share * plan.unit_rate_nzd
             + off_peak * share * (plan.off_peak_rate_nzd or plan.unit_rate_nzd)
+            + night * share * (plan.night_rate_nzd or plan.off_peak_rate_nzd or plan.unit_rate_nzd)
         )
-        priced_from = "the household's own peak / off-peak split"
+        priced_from = "the household's own peak / off-peak / night split"
+    elif plan.free_weekend_window is not None:
+        # Free weekend daytime. Which of this household's units fall inside the window
+        # is a fact about their own shape, and the daily totals cannot answer it — a
+        # weekend total says nothing about the hours it landed in. Without the shape,
+        # decline: pricing it as though none of the usage were free understates the
+        # plan, and as though all weekend usage were free overstates it, and both would
+        # be presented with the same confidence as a plan we can actually price.
+        if weekend_free_share is None:
+            return None
+        weekend_kwh = sum(d.import_kwh for d in days if d.is_weekend)
+        free_kwh = weekend_kwh * weekend_free_share
+        charged = max(total_kwh - free_kwh, 0.0)
+        # Scale to the general portion, as above, so the controlled circuit is not
+        # charged twice.
+        share = general_kwh / total_kwh if total_kwh else 0.0
+        energy = charged * share * plan.unit_rate_nzd
+        priced_from = (
+            f"the household's own weekend shape — {round(weekend_free_share * 100)}% of "
+            f"weekend use falls in the free window"
+        )
     else:
         energy = general_kwh * plan.unit_rate_nzd
         priced_from = "daily totals"
@@ -416,14 +474,19 @@ def _match_current(plan_name: str | None, plan_code: str | None) -> str | None:
     haystack = f"{plan_name or ''} {plan_code or ''}".lower()
     if not haystack.strip():
         return None
-    if "low" in haystack and "fixed" in haystack:
-        return LOW_FIXED.code
-    if any(token in haystack for token in ("tou", "time of use", "day & night", "day and night")):
+    if "free" in haystack and "weekend" in haystack:
+        return FREE_WEEKENDS.code
+    if any(
+        token in haystack
+        for token in ("tou", "time of use", "time_of_use", "day & night", "day and night")
+    ):
         return TIME_OF_USE.code
-    if "solar" in haystack:
-        return SOLAR.code
-    if "standard" in haystack:
-        return STANDARD.code
+    # The accounts loaded from the platform carry Sprint 2 plan names — "Demo Standard
+    # Fixed TOU", "Zero Standard Fixed TOU". "Fixed" here means a fixed daily charge,
+    # not a fixed term, and none of them is a Kea pricing style. They are matched last
+    # and to Anytime, the flat plan, which is what a single all-day rate is.
+    if any(token in haystack for token in ("anytime", "standard", "low", "fixed")):
+        return ANYTIME.code
     return None
 
 
@@ -436,6 +499,7 @@ def compare(
     plan_user_type: str | None = None,
     has_solar: bool = False,
     has_controlled_load: bool = False,
+    weekend_free_share: float | None = None,
 ) -> PlanComparison:
     """Price the catalogue against this household. Pure — no I/O, no model, no database.
 
@@ -460,7 +524,15 @@ def compare(
     share_winter = winter_share(days)
 
     candidates = [p for p in CATALOGUE if _offerable(p, days, has_solar=has_solar)]
-    costs = [c for p in candidates if (c := price(p, days, has_solar=has_solar))]
+    costs = [
+        c
+        for p in candidates
+        if (
+            c := price(
+                p, days, has_solar=has_solar, weekend_free_share=weekend_free_share
+            )
+        )
+    ]
 
     if not costs:
         return PlanComparison(
@@ -469,11 +541,12 @@ def compare(
         )
 
     current_code = _match_current(plan_name, plan_code)
-    if current_code is None and plan_user_type:
-        # The regulated category is a weaker signal than the plan name and a real one: a
-        # `low_user` account is on a low-fixed-charge plan by definition, whatever the
-        # retailer has called it.
-        current_code = LOW_FIXED.code if plan_user_type == "low_user" else None
+    # `plan_user_type` used to fall back to Low Fixed Charge for a `low_user` account.
+    # There is no low-fixed-charge style in Kea's published catalogue — the regulated
+    # category describes the daily charge cap, not which of the three pricing styles the
+    # customer chose, and guessing one from it would tell somebody they are on a plan
+    # they have never heard of.
+    del plan_user_type
 
     comparison = PlanComparison(
         available=True,
@@ -551,17 +624,17 @@ def compare(
 def _offerable(plan: PlanShape, days: list[DayUsage], *, has_solar: bool) -> bool:
     """Whether this plan should be in the comparison at all for this household.
 
-    Filtering here rather than ranking and letting the model decide, because a plan that
-    cannot help this household is not a worse option — it is a distraction with a price
-    attached, and the model has no way to know that Solar Plus is strictly worse for a
-    house with no panels than every other plan in the list.
+    All three of Kea's published styles are offered to everybody. The filter stays
+    because the reason for it does: a plan that cannot help this household is not a
+    worse option, it is a distraction with a price attached, and the model has no way to
+    know that. The catalogue this replaced carried a solar-only plan that was strictly
+    worse for a house with no panels, and it was dropped here rather than ranked.
+
+    Solar buy-back is a flat 8c on all three now, so there is nothing to exclude — but a
+    style aimed at one kind of connection would belong here and not in the ranking.
     """
-    if plan.code != SOLAR.code:
-        return True
-    if not has_solar:
-        return False
-    export_per_day = _sum(days, "export_kwh") / len(days)
-    return export_per_day >= MIN_EXPORT_KWH_PER_DAY
+    del plan, days, has_solar
+    return True
 
 
 def _seasonal(
@@ -605,9 +678,10 @@ def _caveats(
     lost in the four that did not.
     """
     out: list[str] = [
-        "These plans are illustrative — Kea's real tariffs are not public. The trade-off "
-        "they demonstrate (a high daily charge with a low unit rate, against the reverse) "
-        "is real and so is the arithmetic; the rates themselves are not Kea's. Say so once."
+        "These are Kea's published plan rates, GST-inclusive, the same ones on the plans "
+        "page. The usage is this household's own. You may quote the prices as real — do "
+        "NOT call them illustrative. Costs are still estimates of what the period would "
+        "have come to on each plan, not a quote."
     ]
 
     if share_winter is None:
@@ -664,15 +738,17 @@ def _caveats(
             "usually the hot water cylinder — usually, not certainly, so do not assert it."
         )
 
-    if any(p.code == SOLAR.code for p in skipped) and has_solar:
+    if any(p.code == FREE_WEEKENDS.code for p in skipped):
         out.append(
-            "The solar plan was left out: this connection exports too little for its "
-            "higher daily charge to pay for itself."
+            "Free Weekends could not be priced for this household: it depends on how "
+            "much of their weekend use falls between 9am and 5pm, and there is no "
+            "hourly profile on this account to measure that from. Say it could not be "
+            "compared — do not estimate it, and do not imply it would be worse."
         )
-    elif any(p.code == SOLAR.code for p in skipped):
+    if any(p.code == TIME_OF_USE.code for p in skipped):
         out.append(
-            "The solar plan was left out because this connection has no solar. Do not "
-            "mention it."
+            "Time of Use could not be priced: this account has no peak / off-peak / "
+            "night split on its meter data. Say so rather than comparing it."
         )
 
     if any(p.is_time_of_use for p in skipped):

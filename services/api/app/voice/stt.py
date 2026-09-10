@@ -36,6 +36,14 @@ class Transcript:
     text: str
     latency_ms: float
 
+    #: BCP-47 tag for the language actually spoken — "en", "hi", "mi", "zh". None when
+    #: the transcriber cannot tell, which is not the same as English.
+    #:
+    #: Carried because a customer who asks a question in Hindi and is answered in English
+    #: has not been served, and because the answer's language decides which voice can
+    #: read it aloud. Whisper's adapter leaves it None; the Gemini one fills it in.
+    language: str | None = None
+
 
 class SpeechToText:
     """whisper.cpp adapter. `available` is false when the binary or weights are missing."""

@@ -195,6 +195,69 @@ async function getJSON<T>(path: string): Promise<T> {
 export const getCustomerProfile = (customerId: string) =>
   getJSON<CustomerProfile>(`/api/households/${encodeURIComponent(customerId)}/profile`);
 
+/** What a model read off a photographed bill. Every money field may be null. */
+export interface BillReading {
+  is_electricity_bill: boolean;
+  retailer: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  days_in_period: number | null;
+  total_due_nzd: number | null;
+  total_kwh: number | null;
+  unit_rate_nzd_per_kwh: number | null;
+  daily_charge_nzd: number | null;
+  is_gst_inclusive: boolean | null;
+  has_time_of_use_rates: boolean | null;
+  confidence: "high" | "medium" | "low";
+  unreadable_fields: string[];
+  notes: string | null;
+}
+
+/** What that bill's usage would have cost on Kea, and whether that is a real saving. */
+export interface BillComparison {
+  comparable: boolean;
+  reason: string | null;
+  days: number | null;
+  their_total_nzd: number | null;
+  kea_total_nzd: number | null;
+  kea_plan: string | null;
+  period_saving_nzd: number | null;
+  annual_saving_nzd: number | null;
+  material: boolean | null;
+  their_effective_rate_nzd: number | null;
+  kea_unit_rate_nzd: number | null;
+  kea_daily_charge_nzd: number | null;
+  term_credit_nzd: number | null;
+  term_exit_fee_max_nzd: number | null;
+  caveats: string[];
+}
+
+export interface BillAnalysis {
+  reading: BillReading;
+  comparison: BillComparison;
+}
+
+/**
+ * Send a photographed bill to be read and priced.
+ *
+ * A 422 is the normal failure here and its `detail` is written to be shown to the
+ * customer as-is — wrong file type, too large, page unreadable. Anything else is ours.
+ */
+export async function analyseBill(file: File, customerId: string): Promise<BillAnalysis> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("customer_id", customerId);
+  const res = await fetch("/api/bills/analyse", { method: "POST", body });
+  if (!res.ok) {
+    const detail = await res
+      .json()
+      .then((d: { detail?: string }) => d.detail)
+      .catch(() => null);
+    throw new Error(detail ?? `Could not read that bill (${res.status}).`);
+  }
+  return (await res.json()) as BillAnalysis;
+}
+
 /**
  * The proactive half of the product.
  *
@@ -262,9 +325,14 @@ export const basisNote = (basis: string): string => {
     case 'own_same_period_last_year':
       return 'Compared with your own bill for the same period last year.';
     case 'own_recent_cycles':
-      return 'Compared with your own recent bills.';
+      return 'Compared with your own average across recent billing periods.';
     case 'comparable_homes':
-      return 'Compared with similar homes, not with your own past bills — Kea does not hold your billing history.';
+      // Only reached by an account with no completed prior cycle — a first bill, or one
+      // of the seeded households, which hold a single month. The wording used to say
+      // Kea "does not hold your billing history" as a blanket statement; that was true
+      // when nothing populated the own-history branch and is now specific to accounts
+      // that genuinely have none.
+      return 'Compared with similar homes — there is not yet a full billing period of your own to compare against.';
     default:
       return 'Compared with a reference figure for this cycle.';
   }

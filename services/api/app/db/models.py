@@ -641,6 +641,15 @@ class AlertPreferenceRow(Base):
         String(64), nullable=False, default="Pacific/Auckland"
     )
 
+    bill_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    """Remind the customer before a bill falls due. Defaults true, which is what the
+    Settings screen showed while this was React state — so an existing customer sees no
+    change, and the switch now actually reaches the alerting engine."""
+
+    theme: Mapped[str] = mapped_column(String(16), nullable=False, default="light")
+    """`light` or `dark`. Not a contact preference, but a per-customer one, and a
+    preference that lives only in `localStorage` is one they set again on every device."""
+
     offline_model_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     """The customer asked for an on-device model because their connection is unreliable.
     See app/offline.py — the server never pushes a model, it only records the request and

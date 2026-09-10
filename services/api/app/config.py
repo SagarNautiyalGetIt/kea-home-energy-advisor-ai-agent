@@ -37,7 +37,25 @@ def _load_dotenv() -> None:
         key = key.strip()
         value = value.strip().strip("\"'")
         if key:
+            if key in os.environ and os.environ[key] != value:
+                # `setdefault` is the right precedence — a variable the operator exported
+                # must beat a file — but losing silently is how an afternoon disappears.
+                # `KEA_VOICE_ENABLED=0` inherited from a launcher's environment beats
+                # `KEA_VOICE_ENABLED=1` in .env, /health then reports voice disabled, and
+                # the only visible symptom is a WebSocket that opens and closes again.
+                _OVERRIDDEN[key] = value
             os.environ.setdefault(key, value)
+
+
+#: `.env` keys the surrounding environment is overriding, and what the file wanted.
+#: Values are from the FILE, never from the environment — this is read by `/health` and
+#: an exported secret must not be echoed back over HTTP.
+_OVERRIDDEN: dict[str, str] = {}
+
+
+def dotenv_overrides() -> dict[str, str]:
+    """Which `.env` settings lost to an exported variable. Empty is the normal case."""
+    return dict(_OVERRIDDEN)
 
 
 _load_dotenv()

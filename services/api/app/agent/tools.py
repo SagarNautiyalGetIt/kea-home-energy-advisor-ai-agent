@@ -60,15 +60,19 @@ from app.analytics.repository import UsageContext
 
 log = logging.getLogger(__name__)
 
-#: The illustrative plan catalogue moved to `app/analytics/plans.py`, which prices all
-#: four shapes against the household's own daily rows and computes the reasoning with
-#: them. The two rates that used to live here — Standard at 30c/1.50, Low Fixed Charge at
-#: 36c/0.30, breaking even at 20 kWh/day — are unchanged there, so a household quoted a
-#: break-even before this change is quoted the same one now.
+#: The plan catalogue lives in `app/analytics/plans.py`, which prices Kea's three
+#: published styles — Anytime Rate, Time of Use and Free Weekends — against the
+#: household's own daily rows at the rates printed on the plan page.
+#:
+#: It used to hold two invented plans ("Kea Standard", "Low Fixed Charge") that appear
+#: nowhere in the product, so a customer could ask what plans were available, be given
+#: two names and two prices, and then open the plans page and find three different ones.
 
 ILLUSTRATIVE_DISCLOSURE = (
-    "Kea's real tariffs are not public, so dollar figures here use an ILLUSTRATIVE "
-    f"{DEFAULT_UNIT_PRICE_NZD * 100:.0f}c/kWh. Say so the first time you quote one."
+    "Where no bill is on file, energy is costed at Kea's published Anytime Rate of "
+    f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh, which is the rate on the plans page. It "
+    "excludes the daily charge, so it is an energy cost and not a bill total — say that "
+    "the first time you quote one."
 )
 
 BILLED_DISCLOSURE = (
@@ -244,8 +248,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "Use it for anything about plans, rates, switching, whether they are on the "
             "right plan, or how to pay less. Read `worth_switching` before recommending "
             "anything — a plan that wins by two dollars a month has not been shown to win "
-            "at all, and saying so is a real answer. The rates are illustrative because "
-            "Kea's real tariffs are not public; the usage and the arithmetic are real."
+            "at all, and saying so is a real answer. The rates are Kea's published ones "
+            "from the plans page; the usage and the arithmetic are this household's own."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -772,8 +776,14 @@ def get_daily_usage(
                 "controlled_kwh": _round(d.controlled_kwh) or None,
                 "uncontrolled_kwh": _round(d.uncontrolled_kwh) or None,
                 "export_kwh": _round(d.export_kwh) or None,
+                # Three bands, on Kea's published Time of Use boundaries: peak is
+                # 7-11am and 5-9pm, off-peak 11am-5pm and 9-11pm, night 11pm-7am. Until
+                # now `off_peak_kwh` carried the NIGHT figure and the 11am-5pm block had
+                # no field at all, so an answer about "your off-peak use" was describing
+                # what the house drew while everyone was asleep.
                 "peak_kwh": _round(d.peak_kwh),
                 "off_peak_kwh": _round(d.off_peak_kwh),
+                "night_kwh": _round(d.night_kwh),
                 "temp_mean_c": _round(d.temp_mean_c, 1),
                 "heating_degree_days": _round(d.heating_degree_days, 1),
                 "weekend": d.is_weekend or None,
@@ -1098,6 +1108,7 @@ def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
         plan_user_type=plan.user_type if plan else None,
         has_solar=bool(connection and connection.has_solar),
         has_controlled_load=bool(connection and connection.has_controlled_load),
+        weekend_free_share=ctx.account.weekend_free_share,
     )
 
     if not comparison.available:
@@ -1165,11 +1176,11 @@ def get_plan_options(ctx: ToolContext) -> dict[str, Any]:
             f"household's own daily meter readings for {comparison.period}"
         ),
         "tariff_note": (
-            "These plans are illustrative. Kea's real tariffs are not public, so the "
-            "comparison shows the SHAPE of the trade-off — high fixed charge and low "
-            "unit rate against the reverse, flat against time-of-use — rather than Kea's "
-            "actual prices. The USAGE is this household's own, and so is the arithmetic. "
-            "Say so once."
+            "These are Kea's published plan rates, GST-inclusive — Anytime Rate, Time of "
+            "Use and Free Weekends, the same three on the plans page. The usage is this "
+            "household's own and so is the arithmetic. Quote the prices as real; do NOT "
+            "call them illustrative. What each plan WOULD have cost is still an estimate "
+            "over a past period, not a quote for a future one."
         ),
     }
 
@@ -1757,6 +1768,7 @@ async def request_plan_change(
         plan_user_type=plan.user_type if plan else None,
         has_solar=bool(connection and connection.has_solar),
         has_controlled_load=bool(connection and connection.has_controlled_load),
+        weekend_free_share=ctx.account.weekend_free_share,
     )
 
     if not comparison.available:

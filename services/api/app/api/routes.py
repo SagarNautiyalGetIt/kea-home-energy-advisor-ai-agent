@@ -15,8 +15,18 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as _VapiBaseModel
 
@@ -24,8 +34,10 @@ from app import auth, hardware, offline, voice
 from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock, disaggregation
+from app.analytics import forecast as forecast_mod
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
+from app.bills import BillReadError, compare_to_kea, read_bill
 from app.clarify import apply, detect, questions
 from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
 from app.config import (
@@ -48,6 +60,7 @@ from app.pipeline import (
 )
 from app.schemas import (
     AlertSummary,
+    BillAnalysis,
     BillShockWarning,
     CauseBreakdown,
     ChatRequest,
@@ -116,6 +129,54 @@ async def health() -> dict[str, object]:
             else {}
         ),
     }
+
+
+def _cycle_days(ctx: UsageContext) -> int:
+    """How long this account's billing cycle actually is.
+
+    Both bill-shock call sites passed `DAYS_IN_JULY` — 31 — for every account. That is
+    right for the seeded households, whose whole world is July 2026, and wrong for any
+    real billing period that is not a calendar month. Daniel's is 1 May to 12 June: 43
+    readings into a 31-day cycle, and `forecast_cycle` raises
+    `days_in_cycle is shorter than the readings supplied`, so the endpoint 500s.
+
+    His fixture exists specifically to demonstrate "a longer billing period, not more
+    usage — the classic false alarm", which made the one account that most needed the
+    warning the one account that could not produce it.
+
+    Falls back to the reading count, then to `DAYS_IN_JULY`, so a household with no
+    billing dates behaves exactly as it did before.
+    """
+    billing = ctx.account.billing if ctx.account else None
+    if billing and billing.current_period_start and billing.current_period_end:
+        span = (billing.current_period_end - billing.current_period_start).days + 1
+        if span > 0:
+            return max(span, len(ctx.window.daily_kwh))
+    return max(DAYS_IN_JULY, len(ctx.window.daily_kwh))
+
+
+def _own_history(ctx: UsageContext) -> tuple[list[float], float | None]:
+    """This household's own completed cycles, for the bill-shock expectation.
+
+    Bill shock is a violated *personal* expectation, so the anchor should be their own
+    recent bills wherever they exist. Both call sites below used to omit these, which
+    meant `choose_expectation` always reached its comparable-homes branch and every
+    warning said "more than similar homes" — true, and no use to somebody who has always
+    run hot.
+
+    Empty for the seeded `public.*` households, which hold one month and genuinely have
+    no prior cycle. That falls back to the cohort, which is the honest answer there and
+    is labelled as such by `ExpectationBasis`.
+    """
+    account = ctx.account
+    if account is None or not account.days:
+        return [], None
+    start = account.billing.current_period_start if account.billing else None
+    return forecast_mod.own_cycle_costs(
+        [(d.date, d.import_kwh) for d in account.days],
+        unit_price_nzd=ctx.window.unit_price_nzd,
+        current_cycle_start=start,
+    )
 
 
 def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
@@ -226,6 +287,50 @@ async def get_customer_profile(customer_id: str) -> CustomerProfile:
     )
 
 
+@router.post("/bills/analyse", response_model=BillAnalysis)
+async def analyse_bill(
+    # `Annotated` rather than `= File(...)`: same thing to FastAPI, and it keeps the
+    # call out of an argument default, which is a real footgun everywhere except here.
+    file: Annotated[UploadFile, File()],
+    customer_id: Annotated[str, Form()] = "",
+) -> BillAnalysis:
+    """Read an electricity bill from a photo or PDF and price it against Kea.
+
+    Open to a bill from any retailer — the point is somebody holding a bill from
+    somewhere else, asking whether they would be better off here.
+
+    **The reading and the recommendation are separated on purpose.** `bills/reader.py`
+    gets numbers off the page and knows nothing about Kea; `bills/compare.py` does
+    arithmetic on those numbers and never calls a model. The response carries both, so
+    the client can show the customer what was read *before* anything is concluded from
+    it — they are holding the bill, and they are the cheapest validator available.
+
+    Nothing is stored. The bytes are read, sent once, and dropped: a photographed bill
+    carries a name, an address and an account number, and this endpoint has no reason to
+    be the place any of that comes to rest.
+    """
+    data = await file.read()
+    try:
+        reading = await read_bill(data, file.content_type or "")
+    except BillReadError as exc:
+        # 422, not 500: every one of these is something the customer can fix, and the
+        # message is written to be shown to them as-is.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    comparison = compare_to_kea(reading)
+    log.info(
+        "bill analysed customer=%s retailer=%r comparable=%s saving=%s",
+        customer_id or "(anonymous)",
+        reading.retailer,
+        comparison.comparable,
+        comparison.annual_saving_nzd,
+    )
+    return BillAnalysis(
+        reading=reading.as_payload(),
+        comparison=comparison.as_payload(),
+    )
+
+
 @router.get("/households/{customer_id}/bill-shock", response_model=BillShockWarning)
 async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShockWarning:
     """The bill-shock warning. A GET, because it has to reach the customer unprompted.
@@ -278,13 +383,16 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
         )
 
     preferences = await _preferences_for(customer_id)
+    own_recent, own_last_year = _own_history(ctx)
     assessment = billshock.assess(
         window,
-        days_in_cycle=DAYS_IN_JULY,
+        days_in_cycle=_cycle_days(ctx),
         daily_hdd=ctx.hdd[: len(window.daily_kwh)],
         normal_hdd_per_day=ctx.normal_hdd,
         comparable_home_kwh_per_day=ctx.baseline,
         preferences=preferences,
+        recent_cycle_costs_nzd=own_recent,
+        same_period_last_year_nzd=own_last_year,
     )
     # The clarifying-question path. Python decides there is a gap worth asking about;
     # the model only delivers the question it is handed. See app/clarify/.
@@ -516,13 +624,16 @@ def _rebuild_question(
     """
     from app.alerts.preferences import defaults_for
 
+    own_recent, own_last_year = _own_history(ctx)
     assessment = billshock.assess(
         ctx.window,
-        days_in_cycle=DAYS_IN_JULY,
+        days_in_cycle=_cycle_days(ctx),
         daily_hdd=ctx.hdd[: len(ctx.window.daily_kwh)],
         normal_hdd_per_day=ctx.normal_hdd,
         comparable_home_kwh_per_day=ctx.baseline,
         preferences=defaults_for(customer_id),
+        recent_cycle_costs_nzd=own_recent,
+        same_period_last_year_nzd=own_last_year,
     )
     gaps = detect.find_gaps(
         daily_kwh=ctx.window.daily_kwh,

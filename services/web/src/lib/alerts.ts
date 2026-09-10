@@ -38,6 +38,10 @@ export interface AlertPreferences {
   quiet_hours_end: number | null
   timezone: string
   offline_model_opt_in: boolean
+  /** Remind me before a bill falls due. Server-backed — see migration 0008. */
+  bill_reminders: boolean
+  /** 'light' | 'dark'. Stored per customer so it survives a new device. */
+  theme: 'light' | 'dark'
 }
 
 export interface OfflineModelOption {

@@ -401,5 +401,13 @@ def test_the_prompt_keeps_the_constraints_that_are_true_about_the_data() -> None
     one number for the whole house; that does not become false because the model improved."""
     assert "cannot identify appliances" in SYSTEM
     assert "controlled load" in SYSTEM.lower()
-    assert "illustrative 30c" in SYSTEM
     assert "handoff_to_human" in SYSTEM
+
+    # The prompt used to pin the phrase "illustrative 30c". That constraint was true
+    # while the rates were invented; the catalogue is Kea's published one now, and the
+    # standing instruction is the opposite — quote the price as real, and say that a
+    # figure derived from the unit rate excludes the daily charge. Asserting the old
+    # wording would hold the prompt to a disclaimer that is no longer accurate.
+    assert "Anytime Rate" in SYSTEM
+    assert "daily charge" in SYSTEM.lower()
+    assert "illustrative" not in SYSTEM.lower()

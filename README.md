@@ -36,6 +36,21 @@ make check            # everything CI runs — do this before you push
 
 `make help` lists every target, grouped by team.
 
+**If something starts but does not work, check `/api/health` before reading code.** It
+discloses which degraded state you are in — whether the recorder is writing to a
+database or to memory, where alert preferences are stored, how many model keys still
+have quota, and why voice is off when it is off. Several failures in this stack report
+success and do nothing; that endpoint exists to tell them apart.
+
+```bash
+curl -s localhost:8000/api/health | python3 -m json.tool
+```
+
+Voice has two failure modes that look identical from the browser — an inherited
+`KEA_VOICE_ENABLED=0` that `.env` cannot override, and a stale process still holding
+port 8000. Both are written up with the commands to tell them apart in
+[`docs/voice.md`](docs/voice.md#the-voice-websocket-failed-to-load).
+
 ## Layout
 
 ```

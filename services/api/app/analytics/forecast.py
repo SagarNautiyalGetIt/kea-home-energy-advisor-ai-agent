@@ -387,6 +387,75 @@ class Expectation:
     claim_rule: str
 
 
+#: A month has to be this complete before it counts as one of "your recent bills".
+#:
+#: The guard matters more than it looks. A cycle with ten days of readings costs about a
+#: third of a full one, and dropped into the median it drags the expectation down — so
+#: the customer is told they are heading well over their usual, on the strength of a
+#: month that was never fully metered. An incomplete cycle is not a cheap cycle.
+MIN_CYCLE_COVERAGE = 0.8
+
+
+def own_cycle_costs(
+    history: list[tuple[date, float]],
+    *,
+    unit_price_nzd: float,
+    current_cycle_start: date | None = None,
+    days_in_cycle: int = 31,
+) -> tuple[list[float], float | None]:
+    """This household's own completed cycles, costed, most recent last.
+
+    Returns `(recent_cycle_costs, same_period_last_year)` — exactly the two arguments
+    `choose_expectation` wants and has never been given. Until now both call sites
+    omitted them, so every account fell through to the comparable-homes branch and every
+    warning read "more than similar homes", which is a true statement that predicts
+    nothing: a household that has always run hot is not shocked by another hot month.
+
+    Costed at `unit_price_nzd` and energy only, because that is exactly how the
+    comparable-homes branch and `forecast.projected_cost_nzd` are computed. Mixing a
+    daily charge into one side of a comparison and not the other is the kind of error
+    that shows up as a permanent, plausible-looking overshoot.
+
+    Cycles are calendar months. The billing periods in this dataset are month-aligned,
+    and inferring cycle boundaries from a customer's `billing_cycle_day` would be a
+    guess dressed as precision on the one figure that decides whether their phone rings.
+    """
+    if not history:
+        return [], None
+
+    buckets: dict[tuple[int, int], list[float]] = {}
+    for day, kwh in history:
+        buckets.setdefault((day.year, day.month), []).append(kwh)
+
+    # The cycle in flight is not a bill yet, and including a part-month as though it
+    # were is the same bug MIN_CYCLE_COVERAGE guards against.
+    current = (
+        (current_cycle_start.year, current_cycle_start.month)
+        if current_cycle_start
+        else max(buckets)
+    )
+    buckets.pop(current, None)
+
+    complete = {
+        key: values
+        for key, values in buckets.items()
+        if len(values) >= days_in_cycle * MIN_CYCLE_COVERAGE
+    }
+    recent = [
+        round(sum(complete[key]) * unit_price_nzd, 2) for key in sorted(complete)
+    ]
+
+    # Same month, one year back. The strongest anchor there is: it is the only one that
+    # holds the season constant, so "more than you usually pay at this time of year" is
+    # a claim about them rather than about winter.
+    last_year = None
+    key = (current[0] - 1, current[1])
+    if key in complete:
+        last_year = round(sum(complete[key]) * unit_price_nzd, 2)
+
+    return recent, last_year
+
+
 def choose_expectation(
     *,
     days_in_cycle: int,

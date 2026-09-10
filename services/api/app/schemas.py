@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -719,6 +720,25 @@ class HouseholdSummary(BaseModel):
     daily_kwh: list[float]
     total_kwh: float
     estimated_cost_nzd: float
+
+
+class BillAnalysis(BaseModel):
+    """A photographed bill, read and priced against Kea.
+
+    Two objects rather than one flattened result, because they have different standings
+    and the client must be able to show that. `reading` is what a model saw on a
+    photograph — checkable by the person holding it, and wrong in ways our own data
+    never is. `comparison` is arithmetic over those numbers, and is exactly as reliable
+    as they are.
+
+    Left as free-form dicts on purpose: the shapes are defined and documented by
+    `app/bills/`, and restating them here as Pydantic models would be a second
+    definition to keep in step for no gain — nothing in this service validates against
+    them, and the client renders whichever fields are non-null.
+    """
+
+    reading: dict[str, Any]
+    comparison: dict[str, Any]
 
 
 class CustomerProfile(BaseModel):

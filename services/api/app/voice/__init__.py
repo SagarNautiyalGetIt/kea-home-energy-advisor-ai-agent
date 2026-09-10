@@ -78,13 +78,28 @@ def get_tts() -> TextToSpeech:
 def status() -> dict[str, object]:
     """What `/api/health` reports. Cheap — no subprocesses and no API calls, just path
     and credential checks, because this is read on every page load."""
+    from app.config import dotenv_overrides
+
     stt, tts = get_stt(), get_tts()
-    return {
+    out: dict[str, object] = {
         "enabled": settings.voice_enabled,
         "stt": stt.describe(),
         "tts": tts.describe(),
         "ready": settings.voice_enabled and stt.available and tts.available,
     }
+
+    # Why it is off, when `.env` says it should be on. Without this the two facts
+    # available from outside are "/health says disabled" and "my .env says 1", and
+    # nothing connects them — the socket opens, closes with the reason, and the browser
+    # shows a failed connection. Same disclosure rule as `recording` and `preferences`
+    # on the health payload: a degraded state must say which degradation it is.
+    if not settings.voice_enabled and "KEA_VOICE_ENABLED" in dotenv_overrides():
+        out["disabled_reason"] = (
+            "KEA_VOICE_ENABLED is set to 0 in this process's environment, which "
+            "overrides the 1 in .env. Unset it in the shell or launcher that starts "
+            "the API — editing .env cannot win against an exported variable."
+        )
+    return out
 
 
 __all__ = ["Transcriber", "get_stt", "get_tts", "status"]

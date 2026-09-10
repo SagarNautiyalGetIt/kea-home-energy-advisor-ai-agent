@@ -178,14 +178,35 @@ class TextToSpeech:
             text=text, pcm=stdout, sample_rate=self._sample_rate, latency_ms=latency
         )
 
-    async def stream(self, sentences: list[str]) -> AsyncIterator[Utterance]:
+    def speaks(self, language: str | None) -> bool:
+        """Whether the installed voice can read this language.
+
+        Piper voices are per-language: the file loaded here is `en_GB-alba-medium`, and
+        it has English phonemes and nothing else. Handed a Hindi or Mandarin answer it
+        does not fail — it reads the characters with English rules and produces confident
+        nonsense, which is worse than silence, because silence is obviously a gap and
+        fluent gibberish sounds like the product working.
+
+        So a non-English answer is returned as text and not spoken, unless a matching
+        voice has been installed. `ml/voice/setup.sh --voice <name>` fetches one, and the
+        language is the part before the first dash.
+        """
+        if not language:
+            return True
+        installed = Path(self._voice).name.split("-")[0].lower() if self._voice else ""
+        # `en_GB` covers `en`, and `en` covers `en-NZ`. Compare the base subtag only.
+        return installed.split("_")[0] == language.split("-")[0].lower()
+
+    async def stream(
+        self, sentences: list[str], *, language: str | None = None
+    ) -> AsyncIterator[Utterance]:
         """Yield each sentence's audio as it is ready.
 
         Synthesis of sentence n+1 is started before sentence n is yielded, so the
         caller is transmitting one clip while the next is being made. Order is
         preserved — a voice that says sentence three first is worse than a slow one.
         """
-        if not sentences:
+        if not sentences or not self.speaks(language):
             return
 
         pending = asyncio.create_task(self.synthesise(sentences[0]))

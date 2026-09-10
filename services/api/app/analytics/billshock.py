@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.alerts.preferences import CONFIDENCE_FLOORS, AlertPreferences
-from app.analytics.engine import NO_APPLIANCE, UsageWindow
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD, NO_APPLIANCE, UsageWindow
 from app.analytics.forecast import (
     Attribution,
     CycleForecast,
@@ -56,7 +56,13 @@ from app.clarify.detect import StepChange, find_step_change
 from app.clarify.schemas import ClarifyingQuestion, HouseholdContext
 from app.schemas import Fact, FactBundle, Intent
 
-_ILLUSTRATIVE_PRICE = "Dollar figures use an illustrative 30c/kWh; say so if you quote one."
+#: Kea's published Anytime Rate, not an invented one. Imported rather than restated so
+#: this cannot drift from the rate the figures were actually computed at.
+_ILLUSTRATIVE_PRICE = (
+    f"Dollar figures use Kea's published Anytime Rate of "
+    f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh and exclude the daily charge, so they are "
+    "an energy cost rather than a bill total."
+)
 
 #: A cause is only worth naming if it is a meaningful share of the overshoot. Below this
 #: the narration says there is no single cause rather than picking the largest of three

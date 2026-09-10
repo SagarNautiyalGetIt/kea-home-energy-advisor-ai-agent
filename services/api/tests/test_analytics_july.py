@@ -84,11 +84,16 @@ def test_spike_explains_only_about_a_tenth_of_the_overshoot(july: UsageWindow) -
     assert sustained_kwh > spike_kwh * 5
 
 
-def test_annual_overshoot_cost_is_about_290(july: UsageWindow) -> None:
-    """$290/year is the WHOLE overshoot annualised, not the sustained part alone.
-    See research/analysis.md: 81.0 kWh -> $24.30/month ~ $290/year."""
+def test_annual_overshoot_cost_is_about_317(july: UsageWindow) -> None:
+    """The WHOLE overshoot annualised, not the sustained part alone.
+
+    research/analysis.md worked this at 30c/kWh and got ~$290 (81.0 kWh -> $24.30/month).
+    The default rate is now Kea's published Anytime Rate of 32.5c, so the same 81.0 kWh
+    annualises to ~$317. The figure moved because the price did; the analysis did not
+    change, and 81.0 kWh a year of overshoot is still the finding.
+    """
     annual = build_why_high(july, COMPARISON_BASELINE).value_index()["overshoot_annual_cost"]
-    assert annual == pytest.approx(290.0, abs=20.0)
+    assert annual == pytest.approx(317.0, abs=20.0)
 
 
 def test_spike_costs_about_two_sixty(july: UsageWindow) -> None:

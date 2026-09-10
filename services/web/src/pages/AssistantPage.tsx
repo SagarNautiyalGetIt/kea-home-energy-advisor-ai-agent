@@ -4,6 +4,7 @@ import AnswerChart from '../components/AnswerChart'
 import AnswerText from '../components/AnswerText'
 import Modal from '../components/Modal'
 import {
+  analyseBill,
   getHealth,
   getHouseholds,
   streamChat,
@@ -48,6 +49,27 @@ type Message = {
   activity?: { name: string; done: boolean }[]
   /** The lookup this answer is about, drawn. Absent on most answers — see `AnswerChart`. */
   chart?: ChartEvent
+  /**
+   * True from the moment the answer starts until `done` or `error`.
+   *
+   * The chart is held back until this clears. The `chart` event arrives with the tool
+   * result, which is *before* the model has written a word — so rendering it on arrival
+   * put a chart on screen against an empty bubble and then shoved it down the page on
+   * every token that streamed in above it. The picture is evidence for the sentence; it
+   * has no reason to arrive first, and every reason not to move while the sentence is
+   * still being written.
+   */
+  streaming?: boolean
+  /**
+   * A file the customer attached, shown as a chip on their own bubble.
+   *
+   * Separate from `text` because the two are not the same thing. What gets *sent* is
+   * the extracted bill and its costing — several hundred characters of JSON the model
+   * needs. What gets *shown* is "meridian-july.png". Putting the payload in `text` is
+   * what made a wall of machine output appear in the thread under the customer's own
+   * name, as though they had typed it.
+   */
+  attachment?: { name: string; kind: 'image' | 'pdf'; status: 'reading' | 'ready' | 'failed' }
   /** The service could not answer — never a fabricated stand-in. See `onError`. */
   error?: string
 }
@@ -118,6 +140,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const sparkState = listening ? 'listening' : speaking ? 'speaking' : busy ? 'thinking' : 'idle'
 
   const nextId = useRef(2)
+  // `askAboutBill` runs long after its own render — an upload round trip — so reading
+  // `messages` from its closure would append the answer to a thread that has since moved
+  // on. The ref is always the current one.
+  const messagesRef = useRef<Message[]>([])
+  messagesRef.current = messages
   // Threads the conversation server-side so a follow-up ("what about last month?") has
   // the turn before it to resolve against. Null until the first answer comes back, and
   // null forever when persistence is off — the backend treats it as optional either way.
@@ -229,8 +256,104 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     [],
   )
 
+  /**
+   * A bill the customer photographed, read and then asked about.
+   *
+   * The extracted figures are handed to the model as the customer's own message rather
+   * than rendered as a card on their own. Two reasons, and the second is the one that
+   * matters: the answer reads as a reply to what they just did instead of a form that
+   * appeared, and — because it is an ordinary turn in the thread — every follow-up
+   * ("what about the daily charge?", "what if I use less in winter?") already works
+   * through the conversation history. A card would have needed its own question box.
+   *
+   * The comparison arithmetic is done server-side and travels with the facts, so the
+   * model is restating a saving rather than deriving one.
+   */
+  const askAboutBill = useCallback(
+    async (file: File) => {
+      setAttachOpen(false)
+      if (!customerId) {
+        onToast('Still connecting to your account — try again in a moment', 'warning')
+        return
+      }
+      const kind: 'image' | 'pdf' = file.type === 'application/pdf' ? 'pdf' : 'image'
+
+      // The chip goes up the instant the picker closes, before the upload starts.
+      // Reading a bill takes about ten seconds, and previously that was ten seconds of
+      // nothing at all — the file dialog shut and the page looked as though the click
+      // had missed.
+      const history = messagesRef.current
+      const pendingId = nextId.current++
+      setStarted(true)
+      setBusy(true)
+      setMessages([
+        ...history,
+        {
+          id: pendingId,
+          role: 'user',
+          text: '',
+          attachment: { name: file.name, kind, status: 'reading' },
+        },
+      ])
+
+      const fail = (message: string) => {
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === pendingId
+              ? { ...m, attachment: { name: file.name, kind, status: 'failed' } }
+              : m,
+          ),
+        )
+        onToast(message, 'warning')
+      }
+
+      try {
+        const { reading, comparison } = await analyseBill(file, customerId)
+        if (!reading.is_electricity_bill) {
+          fail('That does not look like an electricity bill')
+          return
+        }
+        const who = reading.retailer ? `my ${reading.retailer} bill` : 'my power bill'
+        // Sent: the figures. Shown: the file they picked. See `Message.attachment`.
+        await ask(
+          `I've uploaded ${who}. Here is what was read off the page and how it prices ` +
+            `against Kea — explain it to me plainly, and tell me honestly whether I ` +
+            `would be better off switching.\n\n` +
+            `BILL AS READ (from a photo, so check these with me if anything looks off):\n` +
+            JSON.stringify(reading) +
+            `\n\nPRICED AGAINST KEA (arithmetic, not a guess):\n` +
+            JSON.stringify(comparison),
+          history,
+          {
+            text: reading.retailer ? `Can you look at this ${reading.retailer} bill?` : 'Can you look at this bill?',
+            attachment: { name: file.name, kind, status: 'ready' },
+          },
+        )
+      } catch (error) {
+        // The server's message, verbatim — every one of these is written to be read by
+        // the customer and says what they can do about it.
+        fail((error as Error).message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customerId, onToast],
+  )
+
   const ask = useCallback(
-    async (question: string, history: Message[]) => {
+    async (
+      question: string,
+      history: Message[],
+      /**
+       * What the customer's own bubble shows, when that differs from what is sent.
+       *
+       * Only the bill upload uses it: the model needs the extracted figures, the
+       * customer needs to see the file they picked. Everything typed passes neither and
+       * shows exactly what was typed.
+       */
+      shown?: { text: string; attachment?: Message['attachment'] },
+    ) => {
       if (!customerId) {
         onToast('Still connecting to your account — try again in a moment', 'warning')
         return
@@ -246,8 +369,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       setEscalating(false)
       setMessages([
         ...history,
-        { id: nextId.current++, role: 'user', text: question },
-        { id: answerId, role: 'assistant', text: '' },
+        {
+          id: nextId.current++,
+          role: 'user',
+          text: shown?.text ?? question,
+          attachment: shown?.attachment,
+        },
+        { id: answerId, role: 'assistant', text: '', streaming: true },
       ])
 
       const patch = (fn: (m: Message) => Message) =>
@@ -280,7 +408,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             onDone: (done) => {
               conversationId.current = done.conversation_id
               setEscalating(done.escalate_to_human)
-              patch((m) => ({ ...m, sources: done.sources, activity: undefined }))
+              patch((m) => ({ ...m, sources: done.sources, activity: undefined, streaming: false }))
               // Demo line 6. Recorded for every answer, including unsourced ones — a log
               // that only records successes is not evidence.
               fromDoneEvent(done, { customerId, question })
@@ -288,7 +416,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             // The service could not answer. It says so; it does not substitute a
             // plausible paragraph, and neither does this.
             onError: (failure) => {
-              patch((m) => ({ ...m, text: '', activity: undefined, error: failure.message }))
+              patch((m) => ({
+                ...m,
+                text: '',
+                activity: undefined,
+                error: failure.message,
+                streaming: false,
+              }))
               onToast(failure.message, 'warning')
             },
           },
@@ -474,6 +608,23 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           {messages.map((item) => (
             <div className={`message-row ${item.role}`} key={item.id}>
               <div className={`bubble ${item.role === 'assistant' ? 'assistant-bubble' : 'user-bubble'} ${item.text.length > 90 ? 'long' : ''}`}>
+                {/* The file, as a chip. Above the text so the attachment reads as the
+                    subject of the sentence under it, and shown while the upload is
+                    still in flight so the picker closing is not the last feedback the
+                    customer gets. */}
+                {item.attachment && (
+                  <span className={`attachment-chip ${item.attachment.status}`}>
+                    {item.attachment.kind === 'pdf' ? <FileText aria-hidden="true"/> : <Image aria-hidden="true"/>}
+                    <span className="attachment-name">{item.attachment.name}</span>
+                    <small>
+                      {item.attachment.status === 'reading'
+                        ? 'Reading your bill…'
+                        : item.attachment.status === 'failed'
+                          ? 'Could not be read'
+                          : 'Attached'}
+                    </small>
+                  </span>
+                )}
                 {editingId === item.id ? (
                   <div className="edit-message">
                     <textarea value={editText} onChange={(e) => setEditText(e.target.value)}/>
@@ -502,8 +653,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                     {/* The figures the answer is about, drawn from the same lookup that
                         produced them. Under the prose rather than above it: the sentence
                         is the answer and the chart is the evidence for it, and a chart
-                        that arrives before the words reads as the point being made. */}
-                    {item.chart && <AnswerChart spec={item.chart}/>}
+                        that arrives before the words reads as the point being made.
+
+                        Held until the answer has finished streaming. The `chart` event
+                        lands with the tool result, well before the model writes anything,
+                        so rendering it on arrival showed a chart against an empty bubble
+                        and then pushed it down the page on every token. */}
+                    {item.chart && !item.streaming && <AnswerChart spec={item.chart}/>}
 
                     {/* Live lookup activity, replaced by the source list when done. This
                         is the product working, so it is shown rather than hidden behind a
@@ -588,14 +744,14 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           <button aria-label="Add attachment" aria-expanded={attachOpen} onClick={() => setAttachOpen((open) => !open)}>{attachOpen ? <X/> : <Paperclip/>}</button>
           {attachOpen && (
             <div className="attachment-menu">
-              <button onClick={() => fileInput.current?.click()}><FileText/><span><strong>Upload document</strong><small>PDF, Word, text, or CSV</small></span></button>
-              <button onClick={() => photoInput.current?.click()}><Image/><span><strong>Upload photo</strong><small>JPG, PNG, or image files</small></span></button>
-              <button onClick={() => { setAttachOpen(false); onToast('Camera access is not available on this device', 'info') }}><Camera/><span><strong>Take a photo</strong><small>Use your device camera</small></span></button>
+              <button onClick={() => fileInput.current?.click()}><FileText/><span><strong>Upload a bill</strong><small>PDF or photo, from any retailer</small></span></button>
+              <button onClick={() => photoInput.current?.click()}><Image/><span><strong>Upload photo</strong><small>A photo of your bill</small></span></button>
+              <button onClick={() => photoInput.current?.click()}><Camera/><span><strong>Take a photo</strong><small>Use your device camera</small></span></button>
             </div>
           )}
         </div>
-        <input ref={fileInput} type="file" className="sr-only" accept=".pdf,.doc,.docx,.txt,.csv" onChange={() => { setAttachOpen(false); onToast('Sparky can’t read attachments yet — ask your question in words', 'info') }}/>
-        <input ref={photoInput} type="file" className="sr-only" accept="image/*" onChange={() => { setAttachOpen(false); onToast('Sparky can’t read attachments yet — ask your question in words', 'info') }}/>
+        <input ref={fileInput} type="file" className="sr-only" accept="application/pdf,image/*" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
+        <input ref={photoInput} type="file" className="sr-only" accept="image/*" capture="environment" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
         <textarea
           rows={1}
           value={message}

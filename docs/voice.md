@@ -65,6 +65,100 @@ context; a LAN IP is not.
 returns the specific reason rather than letting it fail silently — call it before
 offering the button.
 
+## "The voice WebSocket failed to load"
+
+The socket opens and closes again immediately. The browser reports a failed connection
+and nothing else, because a policy close (code 1008) surfaces to JavaScript as a generic
+failure — the reason string is in the frame, but the console does not show it.
+
+Two causes, and they look identical from the outside. Check `/api/health` first: the
+`voice` block says which one you have.
+
+```bash
+curl -s localhost:8000/api/health | python3 -m json.tool | grep -A8 '"voice"'
+```
+
+### 1. `KEA_VOICE_ENABLED` is exported as `0` somewhere
+
+`voice.enabled` is `false` and `voice.disabled_reason` is present.
+
+`app/config.py` loads `.env` with `os.environ.setdefault()`. That precedence is correct —
+a variable an operator exported should beat a file — but it loses **silently**. If the
+process that starts the API inherits `KEA_VOICE_ENABLED=0` from a shell profile, a
+desktop launcher or an IDE, then the `KEA_VOICE_ENABLED=1` in your `.env` can never win,
+and editing `.env` again will not help. That is the part that costs an afternoon.
+
+`disabled_reason` exists to say so out loud. Fix it where the variable is set, or force
+it at launch:
+
+```bash
+cd services/api && KEA_VOICE_ENABLED=1 .venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+### 2. A stale API process is still holding port 8000
+
+`voice.enabled` is `false` and there is **no** `disabled_reason` — or you have restarted
+with the variable set correctly and nothing changed.
+
+`pkill -f uvicorn` reports success while leaving processes behind, and the survivor keeps
+the port. Every subsequent "fix" then starts a server that fails to bind and exits, while
+the old one — started before your change — goes on answering. The symptom is a setting
+that will not take no matter how you launch.
+
+Confirm the port is actually free before starting anything, and confirm afterwards that
+the process answering is the one you started:
+
+```bash
+for p in $(pgrep -f "uvicorn app.main"); do kill -9 "$p"; done
+sleep 3 && ss -ltnp | grep :8000 || echo "port free"
+
+cd services/api && KEA_START_TAG=mine KEA_VOICE_ENABLED=1 .venv/bin/uvicorn app.main:app --port 8000 &
+
+PID=$(ss -ltnp | grep '127.0.0.1:8000' | grep -oP 'pid=\K[0-9]+' | head -1)
+tr '\0' '\n' < /proc/$PID/environ | grep -E 'KEA_START_TAG|KEA_VOICE_ENABLED'
+```
+
+A tag is worth the extra variable. `/health` reporting `enabled: true` only tells you
+*some* process has voice on; the tag tells you it is yours.
+
+### Then prove the whole turn, not the flag
+
+`enabled: true` means the flag is set, not that voice works. This drives a complete turn
+over the socket from the browser console with no microphone involved — the `text` frame
+uses the same session as speech:
+
+```js
+const ws = new WebSocket(`ws://${location.host}/api/voice/stream`)
+ws.binaryType = 'arraybuffer'
+ws.onopen = () => {
+  ws.send(JSON.stringify({ type: 'hello', customer_id: 'H-ZARA' }))
+  setTimeout(() => ws.send(JSON.stringify({ type: 'text', message: 'what did I use in July?' })), 300)
+}
+ws.onmessage = (m) => console.log(typeof m.data === 'string' ? m.data.slice(0, 120) : `audio ${m.data.byteLength}B`)
+ws.onclose = (e) => console.log('close', e.code, e.reason)
+```
+
+A healthy turn is `ready` → audio → `meta` → `answer` → audio → `done`. A close with 1008
+and a reason means the server refused; anything else means the socket never reached it.
+
+### The microphone itself is a third, separate thing
+
+All of the above can be healthy while the browser still refuses to listen. `getUserMedia`
+needs a secure context (see the trap above) **and** a granted permission, and a denied
+permission is remembered per origin — the prompt does not reappear. `enumerateDevices()`
+returning inputs with blank labels means "device present, permission not granted", which
+is the useful signal:
+
+```js
+(await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput')
+```
+
+On Linux, check the OS sees an unmuted input before blaming the browser:
+
+```bash
+pactl get-default-source && pactl get-source-mute @DEFAULT_SOURCE@
+```
+
 ## What ADR-0003's latency budget assumes, and what is actually true
 
 The ADR budgets **under 2 s to first audio**, built from "VAD ~100 ms + STT ~400 ms +

@@ -142,6 +142,29 @@ class AlertPreferences(BaseModel):
         ),
     )
 
+    bill_reminders: bool = Field(
+        default=True,
+        description=(
+            "Send a reminder before a bill falls due. Same shape as the flag above and "
+            "here for the same reason: it is a per-customer choice about being "
+            "contacted. It sat in React state until now, so the Settings screen offered "
+            "a switch the alerting engine never heard — the customer turned reminders "
+            "off, the toggle moved, and nothing else in the system changed."
+        ),
+    )
+
+    theme: str = Field(
+        default="light",
+        pattern="^(light|dark)$",
+        description=(
+            "Light or dark. Appearance rather than contact, but stored per customer "
+            "because a preference kept only in `localStorage` is one they have to set "
+            "again on every device and lose whenever the browser is cleared. The client "
+            "still writes localStorage first so the theme applies before this request "
+            "returns — the stored value is what a second device reads."
+        ),
+    )
+
     @model_validator(mode="after")
     def _ladder_must_be_monotonic(self) -> AlertPreferences:
         """A text at 60% and an email at 80% is not a ladder, it is a bug in someone's UI.

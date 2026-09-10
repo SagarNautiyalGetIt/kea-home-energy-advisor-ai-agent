@@ -142,7 +142,12 @@ class VoiceSession:
             )
             return
 
-        await self.answer_text(transcript.text, timings=timings, started=started)
+        await self.answer_text(
+            transcript.text,
+            timings=timings,
+            started=started,
+            language=transcript.language,
+        )
 
     async def answer_text(
         self,
@@ -150,6 +155,7 @@ class VoiceSession:
         *,
         timings: Timings | None = None,
         started: float | None = None,
+        language: str | None = None,
     ) -> Answer | None:
         """Text in, spoken answer out. The only path to audio in this class."""
         timings = timings or Timings()
@@ -167,7 +173,9 @@ class VoiceSession:
 
         model_started = time.perf_counter()
         try:
-            result = await answer(self.customer_id, message, channel="voice")
+            result = await answer(
+                self.customer_id, message, channel="voice", language=language
+            )
         except UnknownCustomerError as exc:
             await self.error(f"unknown customer: {exc}", fatal=True)
             return None
@@ -203,13 +211,30 @@ class VoiceSession:
         # already been produced and sent to the client, and throwing here would take a
         # working answer off the screen because the speaker did not work.
         try:
-            async for utt in self.tts.stream(result.sentences):
+            async for utt in self.tts.stream(result.sentences, language=language):
                 if timings.first_audio_ms == 0.0:
                     timings.first_audio_ms = (time.perf_counter() - started) * 1000.0
                 await self._send_audio("answer", utt.text, utt.pcm, utt.sample_rate)
         except Exception as exc:  # noqa: BLE001 - a mute demo beats a dead one
             log.error("tts failed mid-answer (%s) — turn completes without audio", exc)
             await self.error(f"speech synthesis unavailable: {exc}", fatal=False)
+
+        if not self.tts.speaks(language):
+            # The answer is on screen and correct; only the audio is missing. Saying so
+            # beats a silent turn that reads as a broken speaker — and beats reading
+            # Hindi with an English voice, which is what happens if this is skipped.
+            log.info("tts: no installed voice for %r — answer sent as text only", language)
+            await self.transport.send_json(
+                {
+                    "type": "notice",
+                    "reason": "no_voice_for_language",
+                    "language": language,
+                    "text": (
+                        "Sparky answered in your language, but can only speak English "
+                        "aloud on this device."
+                    ),
+                }
+            )
 
         timings.total_ms = (time.perf_counter() - started) * 1000.0
         await self.transport.send_json({"type": "done", "latency": timings.as_dict()})

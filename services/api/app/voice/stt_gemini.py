@@ -29,6 +29,7 @@ loop that was never slow — moving it would add a round trip to buy nothing.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 
@@ -47,10 +48,14 @@ TRANSCRIBE_TIMEOUT_S = 8.0
 #: own words is the failure to design against — the whole pipeline is built on the
 #: question being what the customer actually asked.
 _PROMPT = (
-    "Transcribe this audio to plain text, verbatim. It is one short utterance from a New "
-    "Zealand customer talking to their electricity retailer. Output only the words spoken "
-    "— no speaker labels, no timestamps, no punctuation you did not hear, no commentary, "
-    "and do not answer the question. If there is no intelligible speech, output nothing."
+    "Transcribe this audio verbatim, in the language it was spoken in. It is one short "
+    "utterance from a customer talking to their New Zealand electricity retailer, and it "
+    "may be in any language — do NOT translate it to English.\n\n"
+    "Reply with JSON only: {\"language\": \"<BCP-47 tag>\", \"text\": \"<the words "
+    "spoken>\"}\n\n"
+    "Output only the words spoken — no speaker labels, no timestamps, no punctuation you "
+    "did not hear, no commentary, and do not answer the question. If there is no "
+    "intelligible speech, return an empty string for text."
 )
 
 
@@ -130,6 +135,7 @@ class GeminiSpeechToText:
                         # paraphrases rather than transcribes.
                         temperature=0.0,
                         max_output_tokens=256,
+                        response_mime_type="application/json",
                     ),
                 ),
                 timeout=TRANSCRIBE_TIMEOUT_S,
@@ -142,15 +148,30 @@ class GeminiSpeechToText:
         except Exception as exc:  # noqa: BLE001 - the session reports this to the caller
             raise RuntimeError(f"Gemini transcription failed: {exc}") from exc
 
-        text = (response.text or "").strip()
+        # JSON now, because the transcript alone does not say what language it is in and
+        # answering a Hindi question in English is not answering it. A model that ignores
+        # the schema falls back to the raw text with no language, which is exactly the
+        # behaviour before this change rather than an error.
+        raw = (response.text or "").strip()
+        text, language = raw, None
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                text = str(parsed.get("text") or "")
+                tag = parsed.get("language")
+                language = str(tag).strip() or None if tag else None
+        except json.JSONDecodeError:
+            log.warning("stt(gemini) returned non-JSON, using it verbatim: %r", raw[:80])
+
         latency = (time.perf_counter() - started) * 1000.0
         log.info(
-            "stt(gemini) %.0f ms audio -> %.0f ms transcribe -> %r",
+            "stt(gemini) %.0f ms audio -> %.0f ms transcribe [%s] -> %r",
             duration_ms(pcm),
             latency,
+            language or "?",
             text[:80],
         )
         # `_clean` is shared with the whisper path rather than reimplemented. It strips
         # bracketed non-speech annotations, and a model told to output nothing for silence
         # sometimes writes "(no speech)" instead — the same shape, so the same filter.
-        return Transcript(text=_clean(text), latency_ms=latency)
+        return Transcript(text=_clean(text.strip()), latency_ms=latency, language=language)

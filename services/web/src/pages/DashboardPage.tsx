@@ -104,6 +104,26 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   const usageSoFar = shock?.usage_so_far_kwh ?? (daily.length ? daily.reduce((a, b) => a + b, 0) : undefined)
   const money = (n: number) => `${n.toFixed(2)} NZD`
 
+  /**
+   * This household's own effective rate — what a unit has actually cost them this
+   * cycle, from `cost_so_far / usage_so_far` on the bill-shock response.
+   *
+   * The dashboard used to multiply by a literal `0.30`. That was two bugs in one
+   * character: it was every customer's rate regardless of their plan, and after the
+   * catalogue moved to Kea's published prices it was not anybody's rate — the flat
+   * Anytime Rate is 32.5c. Deriving it means the tile reconciles with the "Cost so far"
+   * tile beside it, which is computed server-side, instead of quietly disagreeing.
+   *
+   * Falls back to the published Anytime Rate when the cycle has no usage yet, so a
+   * fresh cycle shows a plausible cost rather than zero.
+   */
+  const ANYTIME_RATE_NZD = 0.325
+  const effectiveRate =
+    shock && shock.usage_so_far_kwh > 0
+      ? shock.cost_so_far_nzd / shock.usage_so_far_kwh
+      : ANYTIME_RATE_NZD
+  const toCost = (kwh: number) => kwh * effectiveRate
+
   return <>
     <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
     <div className="metric-row">
@@ -111,7 +131,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
           literals, which put an invented "Projected Monthly Bill" on the same screen as
           a computed one — two numbers disagreeing in front of a judge. #69's refined
           visuals are kept; its hardcoded figures are not. */}
-      <article><i><DollarSign/></i><span>Latest day&rsquo;s cost<strong>{latest !== undefined ? money(latest * 0.30) : '—'}</strong></span></article>
+      <article><i><DollarSign/></i><span>Latest day&rsquo;s cost<strong>{latest !== undefined ? money(toCost(latest)) : '—'}</strong></span></article>
       <article><i><Zap/></i><span>Usage so far<strong>{usageSoFar !== undefined ? `${usageSoFar.toFixed(1)} kWh` : '—'}</strong></span></article>
       <article><i><DollarSign/></i><span>Cost so far<strong>{shock ? money(shock.cost_so_far_nzd) : '—'}</strong></span></article>
       <article><i><DollarSign/></i><span>Projected this cycle<strong>{shock ? money(shock.projected_cycle_cost_nzd) : '—'}</strong></span></article>
@@ -119,19 +139,23 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
     <div className="dashboard-grid">
       <article className="card usage-summary">
         <header>
-          <div><span>Typical day, by hour</span><h2>{latest !== undefined ? `${latest.toFixed(1)} kWh` : '—'}</h2></div>
+          <div><span>Typical day, by hour</span><h2>{latest !== undefined ? money(toCost(latest)) : '—'}</h2></div>
           <em>latest day<small>illustrative shape</small></em>
         </header>
-        <AreaChart compact animate values={hourlyUsage} labels={hours} max={2} xLabelInterval={3} showLegend={false} ariaLabel="An illustrative daily usage shape in one-hour intervals, measured in kilowatt-hours"/>
+        {/* Plotted in dollars at this household's own effective rate. The shape is the
+            same series as before — only the axis the customer reads it against has
+            changed, because "$0.34 at 7pm" is a sentence they can act on and "1.06 kWh"
+            is one they have to convert first. */}
+        <AreaChart compact animate unit="$" values={hourlyUsage.map(toCost)} labels={hours} max={toCost(2)} xLabelInterval={3} showLegend={false} ariaLabel="An illustrative daily cost shape in one-hour intervals, in New Zealand dollars"/>
       </article>
       <article className="card weekly-summary">
         <header>
-          <div><span>Last 7 days</span><h2>{recent.length ? `${recent.reduce((a,b)=>a+b,0).toFixed(1)} kWh` : '—'}</h2></div>
+          <div><span>Last 7 days</span><h2>{recent.length ? money(toCost(recent.reduce((a,b)=>a+b,0))) : '—'}</h2></div>
           {/* The only trend figure on this page that is computed rather than asserted —
               `recent_trend_pct` is layer 1's, off the same assessment as the warning. */}
           <em>{shock ? <span className={shock.recent_trend_pct >= 0 ? 'trend-up' : 'trend-down'}><Triangle aria-hidden="true"/>{shock.recent_trend_pct >= 0 ? '+' : ''}{shock.recent_trend_pct.toFixed(2)}%</span> : <span>{household?.period ?? ''}</span>}<small>{shock ? 'vs start of cycle' : 'from your meter'}</small></em>
         </header>
-        <AreaChart compact animate values={recent.length?recent:[0]} labels={days.slice(0,recent.length||1)} max={Math.max(6,...recent)} showLegend={false} ariaLabel="Daily electricity usage over the last seven days of the cycle, measured in kilowatt-hours"/>
+        <AreaChart compact animate unit="$" values={(recent.length?recent:[0]).map(toCost)} labels={days.slice(0,recent.length||1)} max={toCost(Math.max(6,...recent))} showLegend={false} ariaLabel="Daily electricity cost over the last seven days of the cycle, in New Zealand dollars"/>
       </article>
       {/* Only rendered when the assessment actually triggered. The previous version was
           always on and claimed "29% higher than your usual range" — a fabricated figure,
@@ -159,13 +183,13 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
             <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
           )}
           <div><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">{basisNote(shock.expectation_basis)} Estimated at an illustrative 30c/kWh.</small>
+          <small className="shock-basis">{basisNote(shock.expectation_basis)}</small>
         </article>
       ) : shock ? (
         <article className="card shock-card shock-ok"><h3><span className="bill-status-dot bill-status-dot-normal" aria-hidden="true"/><ShieldCheck/>No bill shock expected</h3>
           <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with the {money(shock.expected_cost_nzd)} you would normally expect.</p>
           <div><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">{basisNote(shock.expectation_basis)} Estimated at an illustrative 30c/kWh.</small>
+          <small className="shock-basis">{basisNote(shock.expectation_basis)}</small>
         </article>
       ) : (
         <article className="card shock-card shock-ok"><h3>Checking your usage…</h3><p>Sparky is looking at this cycle so far.</p></article>

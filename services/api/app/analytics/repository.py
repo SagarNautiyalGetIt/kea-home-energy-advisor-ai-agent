@@ -77,6 +77,64 @@ def _maybe_float(value: object) -> float | None:
         return None
 
 
+def _derived_off_peak(
+    import_kwh: object, peak_kwh: object, night_kwh: object
+) -> float | None:
+    """The 11:00-17:00 and 21:00-23:00 usage, which no mart column holds.
+
+    `import - peak - night`, and None when any of the three is missing rather than a
+    zero: a household with no band split would otherwise be reported as using nothing
+    off-peak, which prices a time-of-use plan as though its cheapest hours were unused.
+
+    Clamped at zero. The three columns are computed by separate aggregates over the same
+    intervals and can disagree by a rounding step; a small negative is that rounding, not
+    a household that used less than nothing.
+    """
+    total, peak, night = (
+        _maybe_float(import_kwh),
+        _maybe_float(peak_kwh),
+        _maybe_float(night_kwh),
+    )
+    if total is None or peak is None or night is None:
+        return None
+    return round(max(total - peak - night, 0.0), 4)
+
+
+async def _weekend_free_share(session: object, icp_id: object) -> float | None:
+    """Share of weekend import falling inside Free Weekends' 09:00-17:00 window.
+
+    Measured from `kea.mart_hourly_profile`, which is the only place this service can
+    see the hours behind a day's total. A weekend daily total cannot answer it: two
+    households with identical Saturday totals pay very different amounts on this plan
+    depending on whether they ran the washing machine at 10am or 10pm.
+
+    None when there is no profile, which is the normal state for the seeded `public.*`
+    households — `plans.price` then declines Free Weekends rather than estimating it.
+    """
+    if icp_id is None:
+        return None
+    from app.db.marts import MartHourlyProfile
+
+    rows = (
+        await session.execute(  # type: ignore[attr-defined]
+            select(MartHourlyProfile).where(
+                MartHourlyProfile.icp_id == icp_id,
+                MartHourlyProfile.is_weekday.is_(False),
+            )
+        )
+    ).scalars().all()
+    if not rows:
+        return None
+
+    total = sum(float(r.avg_import_kwh or 0) for r in rows)
+    if total <= 0:
+        return None
+    inside = sum(
+        float(r.avg_import_kwh or 0) for r in rows if 9 <= int(r.hour_of_day) < 17
+    )
+    return round(inside / total, 4)
+
+
 def _periods_from_explanation(
     row: object, daily_fixed_nzd: float | None
 ) -> tuple[BillPeriod | None, BillPeriod | None]:
@@ -604,6 +662,7 @@ class MartRepository:
         days: list[DayUsage] = []
         current = prior = None
         sensitivity = None
+        weekend_free_share = None
 
         try:
             async with get_sessionmaker()() as session:
@@ -622,8 +681,14 @@ class MartRepository:
                         controlled_kwh=float(r.controlled_kwh or 0),
                         uncontrolled_kwh=float(r.uncontrolled_kwh or 0),
                         base_load_kwh=_maybe_float(r.base_load_kwh),
+                        # `r.off_peak_kwh` is the mart's misnamed NIGHT column — see the
+                        # band note on DayUsage. True off-peak is what is left once peak
+                        # and night are taken off the day's import.
                         peak_kwh=_maybe_float(r.peak_kwh),
-                        off_peak_kwh=_maybe_float(r.off_peak_kwh),
+                        night_kwh=_maybe_float(r.off_peak_kwh),
+                        off_peak_kwh=_derived_off_peak(
+                            r.import_kwh, r.peak_kwh, r.off_peak_kwh
+                        ),
                         temp_mean_c=_maybe_float(r.temp_mean_c),
                         heating_degree_days=_maybe_float(r.heating_degree_days),
                         is_weekend=bool(r.is_weekend),
@@ -643,6 +708,12 @@ class MartRepository:
                         .limit(1)
                     )
                 ).scalar_one_or_none()
+
+                # How much of this household's weekend use lands inside Free Weekends'
+                # 09:00-17:00 window. Measured from their own hourly profile, because a
+                # weekend daily total says nothing about the hours it fell in — and
+                # without it that plan is declined rather than estimated.
+                weekend_free_share = await _weekend_free_share(session, icp_id)
 
             if explanation is not None:
                 sensitivity = _maybe_float(explanation.heating_sensitivity_kwh_per_hdd)
@@ -685,6 +756,7 @@ class MartRepository:
             days=days,
             current_bill=current,
             prior_bill=prior,
+            weekend_free_share=weekend_free_share,
             heating_sensitivity_kwh_per_hdd=sensitivity,
             is_medically_dependent=bool(getattr(account, "is_medically_dependent", False)),
             is_vulnerable=bool(getattr(account, "is_vulnerable", False)),

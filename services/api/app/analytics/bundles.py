@@ -45,11 +45,18 @@ from app.schemas import FactBundle, Intent
 
 log = logging.getLogger(__name__)
 
-#: Illustrative plans. Kept in step with `app/agent/tools.py`, which holds the same two
-#: for the online comparison — break-even is 20 kWh/day either way, and the two must not
-#: disagree or a customer would get one answer online and another on a plane.
-STANDARD_PLAN = TariffOption("Kea Standard", unit_price_nzd=0.30, daily_fixed_nzd=1.50)
-LOW_FIXED_PLAN = TariffOption("Low Fixed Charge", unit_price_nzd=0.36, daily_fixed_nzd=0.30)
+#: The two of Kea's three published styles that a flat `TariffOption` can express, at the
+#: rates on the plan page (docs/sprints/sprint-3/plans-and-terms.md).
+#:
+#: Time of Use is deliberately absent. The offline pack is pre-computed with no tools and
+#: no meter access, and a three-band plan cannot be priced without knowing which hours the
+#: power was used in. Offering it here at a blended rate would give a customer on a plane
+#: a different answer from the one they get on the ground, which is the one thing the
+#: offline path exists to avoid — see ADR-0008.
+ANYTIME_PLAN = TariffOption("Anytime Rate", unit_price_nzd=0.325, daily_fixed_nzd=1.45)
+FREE_WEEKENDS_PLAN = TariffOption(
+    "Free Weekends", unit_price_nzd=0.365, daily_fixed_nzd=1.55
+)
 
 DAYS_IN_JULY = 31
 """The demo cohort's cycle length. A fallback, not a fact about any real account."""
@@ -176,7 +183,7 @@ def bundle_from_context(intent: Intent, customer_id: str, ctx: UsageContext) -> 
         )
 
     if intent is Intent.TARIFF_CHECK:
-        return build_tariff_check(window, STANDARD_PLAN, LOW_FIXED_PLAN)
+        return build_tariff_check(window, ANYTIME_PLAN, FREE_WEEKENDS_PLAN)
 
     if intent is Intent.HARDSHIP:
         # No figures at all — nothing to get wrong, and a number has no place here.

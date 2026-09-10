@@ -1,4 +1,4 @@
-import UsageGraph from './UsageGraph'
+import UsageGraph, { type UsageUnit } from './UsageGraph'
 
 type AreaChartProps = {
   values: number[]
@@ -11,8 +11,11 @@ type AreaChartProps = {
   secondaryLabels?: string[]
   tooltipLabels?: string[]
   animate?: boolean
+  /** Defaults to kWh for the callers that still plot energy. The dashboard passes '$',
+   *  because the question people open this app with is what it is going to cost. */
+  unit?: UsageUnit
 }
 
-export default function AreaChart(props: AreaChartProps) {
-  return <UsageGraph {...props} unit="kWh" />
+export default function AreaChart({ unit = 'kWh', ...props }: AreaChartProps) {
+  return <UsageGraph {...props} unit={unit} />
 }

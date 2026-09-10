@@ -65,6 +65,8 @@ def _to_model(row: AlertPreferenceRow) -> AlertPreferences:
         quiet_hours_end=row.quiet_hours_end,
         timezone=row.timezone,
         offline_model_opt_in=row.offline_model_opt_in,
+        bill_reminders=row.bill_reminders,
+        theme=row.theme,
     )
 
 
@@ -83,6 +85,8 @@ def _apply(row: AlertPreferenceRow, prefs: AlertPreferences) -> None:
     row.quiet_hours_end = prefs.quiet_hours_end
     row.timezone = prefs.timezone
     row.offline_model_opt_in = prefs.offline_model_opt_in
+    row.bill_reminders = prefs.bill_reminders
+    row.theme = prefs.theme
 
 
 class DatabasePreferencesStore:
