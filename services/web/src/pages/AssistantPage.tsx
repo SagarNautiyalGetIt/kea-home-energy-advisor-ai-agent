@@ -14,6 +14,7 @@ import {
 } from '../lib/client'
 import { fromDoneEvent } from '../lib/answerLog'
 import { loadSession } from '../lib/session'
+import { clearThread, loadThread, saveThread } from '../lib/thread'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
 import { SparkySparks } from '../components/sparky'
 
@@ -138,6 +139,41 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       })
       .catch(() => setBackendDown(true))
   }, [])
+
+  // Put the thread back after a page change. Navigating to Usage and back unmounted this
+  // component and took the conversation with it — no warning, just the start screen
+  // again and a question you asked two minutes ago gone.
+  //
+  // `restoredFor` guards against re-running when the customer has not actually changed,
+  // which would otherwise overwrite a live thread with the last saved copy of itself
+  // mid-answer.
+  const restoredFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!customerId || restoredFor.current === customerId) return
+    restoredFor.current = customerId
+    const saved = loadThread<Message>(customerId)
+    if (!saved) return
+    setMessages(saved.messages)
+    setStarted(saved.started)
+    conversationId.current = saved.conversationId
+    // Past whatever the restored thread used, or the next message overwrites one of the
+    // messages we just put back.
+    nextId.current = Math.max(saved.nextId, ...saved.messages.map((m) => m.id + 1))
+  }, [customerId])
+
+  // Saved on every change rather than on unmount: a tab closed mid-thread never runs an
+  // unmount handler, and a thread that survives navigation but not a refresh would be a
+  // confusing half-fix.
+  useEffect(() => {
+    if (!customerId || restoredFor.current !== customerId) return
+    saveThread<Message>({
+      customerId,
+      messages,
+      started,
+      conversationId: conversationId.current,
+      nextId: nextId.current,
+    })
+  }, [customerId, messages, started])
 
   // Voice availability is a server fact plus a browser fact, and both have to hold.
   // `checkVoiceSupport` catches the secure-context trap: on http://192.168.x.x the whole
@@ -376,6 +412,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
   const newChat = () => {
     abortRef.current?.abort()
+    clearThread()
+    conversationId.current = null
     setMessages([{ id: nextId.current++, role: 'assistant', text: GREETING }])
     setStarted(false)
     setMessage('')
