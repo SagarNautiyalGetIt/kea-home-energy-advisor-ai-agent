@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import AnswerChart from '../components/AnswerChart'
 import AnswerText from '../components/AnswerText'
 import Modal from '../components/Modal'
 import {
@@ -8,6 +9,7 @@ import {
   streamChat,
   toolLabel,
   type HouseholdSummary,
+  type ChartEvent,
   type SourceRef,
 } from '../lib/client'
 import { fromDoneEvent } from '../lib/answerLog'
@@ -43,6 +45,8 @@ type Message = {
   sources?: SourceRef[]
   /** Live tool activity while the answer is being written. */
   activity?: { name: string; done: boolean }[]
+  /** The lookup this answer is about, drawn. Absent on most answers — see `AnswerChart`. */
+  chart?: ChartEvent
   /** The service could not answer — never a fabricated stand-in. See `onError`. */
   error?: string
 }
@@ -234,6 +238,9 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                   a.name === result.name && !a.done ? { ...a, done: true } : a,
                 ),
               })),
+            // The server sends at most one, so this never overwrites a better chart with
+            // a worse one — but keep the first anyway rather than trusting that here.
+            onChart: (chart) => patch((m) => (m.chart ? m : { ...m, chart })),
             onDone: (done) => {
               conversationId.current = done.conversation_id
               setEscalating(done.escalate_to_human)
@@ -454,6 +461,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                         from it. */}
                     <AnswerText text={item.text}/>
 
+                    {/* The figures the answer is about, drawn from the same lookup that
+                        produced them. Under the prose rather than above it: the sentence
+                        is the answer and the chart is the evidence for it, and a chart
+                        that arrives before the words reads as the point being made. */}
+                    {item.chart && <AnswerChart spec={item.chart}/>}
+
                     {/* Live lookup activity, replaced by the source list when done. This
                         is the product working, so it is shown rather than hidden behind a
                         spinner — "reading your daily meter data" is a more honest and more
@@ -594,13 +607,17 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
     {termsOpen && (
       <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)}>
-        {/* Reworded when the assistant started reading the data itself. The old text
-            said every number was "checked against those calculations before you see
-            it", which described the number-checker — a real control at the time, and a
-            claim that would now be false. What replaced it is narrower and true: the
-            answer names what it read, and you can see it. */}
-        <p>Sparky answers from your own meter readings and account records. Each answer lists what it looked up, so you can see where every figure came from.</p>
-        <p>Sparky does not identify individual appliances from half-hourly meter data, and estimated costs use an illustrative rate.</p>
+        {/* Reworded twice. First when the assistant started reading the data itself —
+            the original text promised every number was "checked against those
+            calculations before you see it", which described a control that no longer
+            exists. Then again to take out the remaining absolutes: what is left says
+            what Sparky does and what it cannot do, and is careful not to promise an
+            accuracy Kea would then have to make good on. The bill is the record; this
+            is a tool for understanding it. */}
+        <p>Sparky reads your own meter readings and account records to answer your questions, and lists what it looked up each time so you can see where its figures came from.</p>
+        <p>Sparky can get things wrong. Costs and projections are estimates based on the information available at the time — your actual bill is what counts, and it may differ. Please don’t treat Sparky’s answers as financial advice or as a final word on your account.</p>
+        <p>Sparky can’t tell which individual appliance used power, because a meter reads the whole house. Where a rate isn’t published, dollar figures are illustrative and Sparky says so.</p>
+        <p>If something looks wrong, or you’d like an answer checked, ask to talk to a human at any time and our team will take it from there.</p>
       </Modal>
     )}
   </div>

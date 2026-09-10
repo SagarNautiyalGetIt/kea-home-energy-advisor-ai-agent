@@ -60,6 +60,30 @@ export interface ToolResultEvent {
   source: string | null;
 }
 
+/** One plotted value. `highlight` marks the point the question was about. */
+export interface ChartPoint {
+  label: string;
+  value: number;
+  highlight: boolean;
+}
+
+/**
+ * `event: chart` — a lookup's own figures, drawn. Optional and at most one per answer.
+ *
+ * Built server-side from the same result dict that is recorded as evidence, so the
+ * chart and the prose beside it are two renderings of one lookup rather than two
+ * answers to one question. `source` is that lookup's source and should be shown with
+ * the chart for the same reason it is shown under the answer.
+ */
+export interface ChartEvent {
+  kind: "bar" | "line";
+  title: string;
+  unit: "nzd" | "kwh";
+  points: ChartPoint[];
+  caveat: string | null;
+  source: string | null;
+}
+
 /** `event: done` — the answer is complete and the evidence has been written. */
 export interface DoneEvent {
   /** Every lookup behind this answer, in the order it was made. */
@@ -101,6 +125,12 @@ export const TOOL_LABELS: Record<string, string> = {
   compare_to_similar_homes: 'Comparing with similar homes',
   get_plan_options: 'Checking your plan against the alternatives',
   project_this_bill: 'Projecting the rest of your cycle',
+  get_energy_breakdown: 'Working out where your power went',
+  discover_smart_devices: 'Looking for smart devices on your network',
+  search_help_topics: 'Checking Kea’s help articles',
+  answer_clarifying_question: 'Noting your answer',
+  update_alert_settings: 'Updating your alert settings',
+  request_plan_change: 'Preparing your plan change',
   handoff_to_human: 'Bringing in a person',
 };
 
@@ -396,6 +426,7 @@ export interface StreamHandlers {
   onReset?: () => void;
   onTool?: (e: ToolEvent) => void;
   onToolResult?: (e: ToolResultEvent) => void;
+  onChart?: (e: ChartEvent) => void;
   onDone?: (e: DoneEvent) => void;
   onError?: (e: ErrorEvent) => void;
 }
@@ -457,6 +488,9 @@ export async function streamChat(
           break;
         case "result":
           handlers.onToolResult?.(payload as ToolResultEvent);
+          break;
+        case "chart":
+          handlers.onChart?.(payload as ChartEvent);
           break;
         case "done":
           handlers.onDone?.(payload as DoneEvent);
