@@ -75,6 +75,28 @@ HOUSEHOLDS: list[Household] = [
         _flat(6.1), 6.0,
         "Line 3 / tariff check: low fixed charge modelling",
     ),
+    # The two below serve no demo line. Every household above has something wrong with
+    # it, so there was no account to sign in as and find nothing — and "the agent
+    # invents a cause when there isn't one" is the failure the survey worried about
+    # most. These exist to be poked at by hand.
+    Household(
+        "H-ZARA", "Unremarkable — steady, slightly under benchmark",
+        [
+            8.6, 8.2, 8.9, 8.1, 8.4, 8.7, 9.1, 8.3, 8.0, 8.5,
+            8.8, 8.2, 7.9, 8.4, 8.6, 9.0, 8.3, 8.1, 8.5, 8.7,
+            8.2, 7.8, 8.4, 8.9, 8.6, 8.3, 8.0, 8.5, 8.8, 8.4, 8.1,
+        ], 8.6,
+        "No demo line: the control case — nothing is wrong, and the answer should say so",
+    ),
+    Household(
+        "H-AROHA", "Gradual creep, no single alarming day",
+        [
+            6.4, 6.7, 6.5, 6.9, 7.0, 6.8, 7.3, 7.1, 7.5, 7.8,
+            7.6, 8.1, 8.3, 8.0, 8.6, 8.9, 8.7, 9.2, 9.4, 9.1,
+            9.7, 10.0, 9.8, 10.3, 10.6, 10.4, 10.9, 11.2, 11.0, 11.5, 11.3,
+        ], 7.5,
+        "No demo line: a month-long drift, not a snap (H-COLD) or a spike (H-SPIKE)",
+    ),
 ]
 
 _BY_REF: dict[str, Household] = {h.ref: h for h in HOUSEHOLDS}

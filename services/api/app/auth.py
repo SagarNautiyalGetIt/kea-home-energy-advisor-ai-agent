@@ -65,6 +65,13 @@ DEMO_ACCOUNTS: tuple[DemoAccount, ...] = (
                 "The hardship signal. Escalates to a human."),
     DemoAccount("tariff@kea.example", "lowfixed24", "H-TARIFF", "Low User Household",
                 "Low steady user, better off on another plan. Exercises the tariff check."),
+    # Person-named rather than "X Household", because these two are for sitting in
+    # front of the app as a customer rather than driving a demo line. Same rule as
+    # above holds: the name is a label here and is never written to `Customer`.
+    DemoAccount("zara@kea.example", "steady24", "H-ZARA", "Zara Duncan",
+                "Nothing is wrong. The account to check the agent doesn't invent a cause."),
+    DemoAccount("aroha@kea.example", "climbing24", "H-AROHA", "Aroha Fraser",
+                "Usage drifts up all month with no alarming day. Trips the forecast, not a spike."),
     # ── Harvey's fixture accounts (kea.*, loaded by `make data-load`) ───────────
     # Name and account number both come straight from kea.mart_account_context, so the
     # person you sign in as is the person the account belongs to.

@@ -550,6 +550,30 @@
       "expect_facts": [],
       "expect_empty_bundle": true,
       "expect_caveat_substring": "do NOT defend the bill"
+    },
+    {
+      "id": "R-230",
+      "question": "how much power did i use last month",
+      "customer_id": "H-ZARA",
+      "expect_intent": "usage_total",
+      "expect_facts": [
+        "total_usage",
+        "mean_daily"
+      ],
+      "expect_caveat_substring": "cannot identify appliances",
+      "note": "The household where nothing happened. R-210 asks the same of H-JUL, which has a story; this one has none, and the bundle must still be a total and a mean rather than a search for one."
+    },
+    {
+      "id": "R-231",
+      "question": "is my power use creeping up",
+      "customer_id": "H-AROHA",
+      "expect_intent": "using_more_than_usual",
+      "expect_facts": [
+        "weather_share",
+        "weather_cost",
+        "other_cost"
+      ],
+      "note": "A month-long drift with no alarming day. H-COLD (R-020) rises and falls back, so weather explains most of it; here the weather share is small and the honest answer is mostly other_cost."
     }
   ],
   "verification_must_pass": [
