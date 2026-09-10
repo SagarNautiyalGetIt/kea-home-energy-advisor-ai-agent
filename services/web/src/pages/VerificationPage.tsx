@@ -29,13 +29,27 @@ import {
  *   system prompt with no lookup behind it. That is the shape a confident, fluent,
  *   entirely unfounded answer takes, and it turns this page red.
  */
+/**
+ * What this page may and may not claim.
+ *
+ * It used to end on "Every figure shown traces to a row it named." That is a guarantee
+ * about the model's output, and this page cannot make it: it can see which lookups ran
+ * and what they returned, but not whether every number in the prose came from one. An
+ * assistant that reads four figures and then rounds a fifth in its head would still be
+ * reported as clean here.
+ *
+ * So the wording describes what was actually observed — these lookups ran, here is what
+ * they read — and leaves the customer to check the figures against it. That is the
+ * weaker claim and the true one, and it is also the one Kea can stand behind if an
+ * answer is ever disputed.
+ */
 function cleanSummary({ answers, lookups, gaps }: AnswerTally): string {
   if (answers === 0) return ''
-  const looked = `${lookups} ${lookups === 1 ? 'lookup' : 'lookups'} against this household's own data`
+  const looked = `${lookups} ${lookups === 1 ? 'lookup' : 'lookups'} against your own account data`
   if (gaps > 0) {
-    return `${looked}. ${gaps} of them found no data for this account — the assistant said so rather than filling the gap.`
+    return `${looked}. ${gaps} of them found nothing for this account, and Sparky said so rather than filling the gap.`
   }
-  return `${looked}. Every figure shown traces to a row it named.`
+  return `${looked}. Each answer lists what it read, so you can check any figure against it.`
 }
 
 export default function VerificationPage() {
@@ -49,7 +63,7 @@ export default function VerificationPage() {
   return <div className="verification-page">
     <div className="page-heading">
       <h1>Evidence log</h1>
-      <p>Every answer given in this session, and what the assistant read before you saw it.</p>
+      <p>The answers Sparky gave you in this session, and what it read before each one.</p>
     </div>
 
     <section className={`verification-headline ${clean ? 'clean' : 'breached'}`}>
@@ -62,7 +76,7 @@ export default function VerificationPage() {
         <small>
           {clean
             ? cleanSummary(totals)
-            : 'An answer was given without consulting any of this household’s data. Nothing backs it, and it should not be trusted.'}
+            : 'Sparky answered without reading anything from your account. Please don’t rely on that answer — ask again, or talk to our team and we’ll check it for you.'}
         </small>
       </div>
       {log.length > 0 && (

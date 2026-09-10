@@ -131,12 +131,13 @@ export const faqs = [
     note: 'Kea does not compare every electricity provider in New Zealand, only the big four energy providers.',
   },
   {
-    question: 'How does Sparky make sure its answers are accurate?',
-    answer: 'Bill amounts, projections and plan comparisons are calculated by verified services using defined pricing rules. Sparky explains those results and uses approved information for general questions. Important figures can be traced back to the data and calculation that produced them.',
+    question: 'Where do Sparky’s numbers come from?',
+    answer: 'From your own meter readings and account records. Bill amounts, projections and plan comparisons are worked out by Kea’s own systems using set pricing rules, and Sparky explains the result. Each answer lists what Sparky looked up, so you can see what it read before it replied.',
+    note: 'Projections and comparisons are estimates. Your issued bill is the record of what you owe.',
   },
   {
     question: 'Can Sparky make mistakes?',
-    answer: 'Yes. Like any AI system, Sparky may misunderstand a question or provide an incomplete response. It is designed to acknowledge uncertainty instead of guessing, but you should contact the Kea support team if an answer appears incorrect or you want an official review.',
+    answer: 'Yes. Like any AI assistant, Sparky can misread a question or give an incomplete answer, so please don’t treat its replies as financial advice or as a final decision on your account. It is built to say when it isn’t sure rather than guess. If an answer looks wrong, or you would like it checked, ask to talk to a human and our team will look into it.',
   },
   {
     question: 'How does Kea protect my information?',
