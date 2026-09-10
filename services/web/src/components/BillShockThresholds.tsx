@@ -125,8 +125,14 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
       </label>
 
       <fieldset className="threshold-ladder" disabled={!prefs.enabled}>
-        <legend>Tell me when my bill is tracking this far above normal</legend>
+        <legend>How we tell you, and how far over is far enough</legend>
 
+        {/* The three channels are wrapped and indented rather than left as siblings of
+            the master switch. They only exist as ways of delivering a bill-shock alert,
+            and a flat list read as three unrelated settings that happened to sit under
+            a heading — several people asked what the email toggle at the top had to do
+            with the call toggle at the bottom. */}
+        <div className="threshold-channels">
         {([1, 2, 3] as Tier[]).map((tier) => {
           const pct = tier === 1 ? prefs.tier1_pct : tier === 2 ? prefs.tier2_pct : prefs.tier3_pct
           const channelOn =
@@ -135,27 +141,37 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
           const Icon = TIER_ICON[tier]
 
           return (
-            <div className="threshold-row" key={tier}>
+            <div className={`threshold-row${channelOn ? '' : ' channel-off'}`} key={tier}>
               <div className="threshold-head">
                 <span className="threshold-channel">
                   <Icon aria-hidden="true" />
                   <strong>{CHANNEL_LABEL[tier]}</strong>
                 </span>
-                <input
-                  type="checkbox"
-                  aria-label={`Enable ${CHANNEL_LABEL[tier]}`}
-                  checked={channelOn}
-                  onChange={(event) =>
-                    update({
-                      ...prefs,
-                      ...(tier === 1
-                        ? { email_enabled: event.target.checked }
-                        : tier === 2
-                          ? { sms_enabled: event.target.checked }
-                          : { voice_enabled: event.target.checked }),
-                    })
-                  }
-                />
+                {/* A switch, not a tick. A tick reads as "this is selected"; these turn a
+                    way of contacting somebody on and off, which is a state, not a choice
+                    from a set. The master control above was already a switch and the
+                    three under it were not, which made them look like a different kind
+                    of setting. */}
+                <span className="channel-switch">
+                  <span aria-hidden="true">{channelOn ? 'On' : 'Off'}</span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-checked={channelOn}
+                    aria-label={`${CHANNEL_LABEL[tier]} alerts`}
+                    checked={channelOn}
+                    onChange={(event) =>
+                      update({
+                        ...prefs,
+                        ...(tier === 1
+                          ? { email_enabled: event.target.checked }
+                          : tier === 2
+                            ? { sms_enabled: event.target.checked }
+                            : { voice_enabled: event.target.checked }),
+                      })
+                    }
+                  />
+                </span>
               </div>
 
               {/* A saved value can sit off this scale — the ladder used to be a 5-200%
@@ -201,6 +217,7 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
             </div>
           )
         })}
+        </div>
 
         {ladder && (
           <p className="settings-inline-error" role="alert">
