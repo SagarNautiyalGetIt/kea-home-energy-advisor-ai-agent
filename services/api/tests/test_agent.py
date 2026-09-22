@@ -34,6 +34,7 @@ from app.agent.loop import answer_once, run_agent
 from app.agent.prompts import SYSTEM
 from app.agent.tools import TOOL_NAMES, TOOL_SCHEMAS, dispatch
 from app.analytics import fixtures
+from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD
 from app.pipeline import build_context
 
 #: A plausible value per declared type, so the sweep can call a tool that has a required
@@ -277,12 +278,22 @@ async def test_the_fixture_label_is_not_offered_as_a_persons_name(ctx) -> None:
     assert "NOT a person's name" in summary["name_note"]
 
 
-async def test_dollar_figures_carry_the_illustrative_rate_disclosure(ctx) -> None:
-    """Kea's real tariffs are not public. Every surface quoting a dollar figure has to
-    say so, and the model only knows to if it is told on the result carrying the money."""
-    for name in ("get_plan_options", "project_this_bill", "get_daily_usage"):
+async def test_dollar_figures_carry_the_applicable_rate_disclosure(ctx) -> None:
+    """Every surface quoting dollars identifies the rate and its billing limits.
+
+    The plan catalogue now contains Kea's published prices, while accounts without an
+    invoice use the published Anytime energy rate without pretending that energy-only
+    arithmetic is a complete bill. Keep those two disclosures distinct.
+    """
+    plans = await dispatch(ctx, "get_plan_options", {})
+    assert "Kea's published plan rates" in plans["tariff_note"]
+    assert "GST-inclusive" in plans["tariff_note"]
+
+    expected_rate = f"{DEFAULT_UNIT_PRICE_NZD * 100:.1f}c/kWh"
+    for name in ("project_this_bill", "get_daily_usage"):
         result = await dispatch(ctx, name, {})
-        assert "30c/kWh" in result["tariff_note"] or "illustrative" in result["tariff_note"]
+        assert expected_rate in result["tariff_note"]
+        assert "not a bill total" in result["tariff_note"]
 
 
 # ---------- the loop ----------

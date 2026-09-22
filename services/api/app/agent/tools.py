@@ -484,7 +484,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": (
                         "The plan to move to, as `code` from get_plan_options — e.g. "
-                        "standard, low_fixed, time_of_use, solar."
+                        "anytime, time_of_use, free_weekends."
                     ),
                 },
                 "confirm": {
