@@ -156,11 +156,77 @@ jobs:
             ./scripts/check-attribution.sh "HEAD~1..HEAD"
           fi
 
+  # The Data team's pipeline, under data/. Every step is a data/Makefile target, so
+  # `make ci` there runs exactly what these three jobs run. None of them reads
+  # data/.env: CI holds no Snowflake or kea-db credentials, so dbt is parsed rather
+  # than built, and the serving tests get a throwaway Postgres. The real `dbt build`
+  # runs in `make deploy`, on the machine that holds the key.
+  #
+  # Docker comes with the runner image. There is no layer cache (actions/cache is an
+  # action, note 1), so the dbt and Airflow images rebuild on every run, which is why
+  # their dependencies are pinned. The only network steps are image, pip and dbt-hub
+  # pulls.
+  data:
+    name: data (ruff + unit tests + migrations + story guard)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data
+    steps:
+      # See note 1 at the top: no actions, so checkout is git.
+      - name: Check out
+        working-directory: .
+        run: |
+          git clone --filter=blob:none \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
+          git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
+          git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: make ci-lint-test
+      # A serving migration already on the base must not change. On a push to main the
+      # base is the previous tip of main.
+      - run: make ci-migrations BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+      - run: make ci-story-guard
+
+  data-dbt:
+    name: data (dbt parse + serving publication on Postgres 16)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data
+    steps:
+      # See note 1 at the top: no actions, so checkout is git.
+      - name: Check out
+        working-directory: .
+        run: |
+          git clone --filter=blob:none \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
+          git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
+          git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: make ci-dbt-parse
+      - run: make ci-serving-db
+
+  data-dags:
+    name: data (DAG import)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data
+    steps:
+      # See note 1 at the top: no actions, so checkout is git.
+      - name: Check out
+        working-directory: .
+        run: |
+          git clone --filter=blob:none \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
+          git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
+          git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: make ci-dags
+
   # The single required check. Mark THIS one in branch protection and nothing else,
   # then adding or renaming a job above never touches the ruleset.
   check:
     name: check
-    needs: [api, contract, web, attribution]
+    needs: [api, contract, web, attribution, data, data-dbt, data-dags]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -170,10 +236,16 @@ jobs:
           echo "contract=${{ needs.contract.result }}"
           echo "web=${{ needs.web.result }}"
           echo "attribution=${{ needs.attribution.result }}"
+          echo "data=${{ needs.data.result }}"
+          echo "data-dbt=${{ needs.data-dbt.result }}"
+          echo "data-dags=${{ needs.data-dags.result }}"
           if [ "${{ needs.api.result }}" != "success" ] \
           || [ "${{ needs.contract.result }}" != "success" ] \
           || [ "${{ needs.attribution.result }}" != "success" ] \
-          || [ "${{ needs.web.result }}" != "success" ]; then
+          || [ "${{ needs.web.result }}" != "success" ] \
+          || [ "${{ needs.data.result }}" != "success" ] \
+          || [ "${{ needs.data-dbt.result }}" != "success" ] \
+          || [ "${{ needs.data-dags.result }}" != "success" ]; then
             echo "::error::At least one CI job did not succeed."
             exit 1
           fi
