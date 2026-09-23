@@ -36,6 +36,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
+  const [resetEmailError, setResetEmailError] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
@@ -79,6 +80,18 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
     if (!Object.keys(nextErrors).length) void signIn(email, password)
   }
 
+  const sendResetLink = () => {
+    const trimmedEmail = email.trim()
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setResetEmailError('Enter a valid email address including @ and a full stop.')
+      return
+    }
+    setEmail(trimmedEmail)
+    setResetEmailError('')
+    setShowForgot(false)
+    onToast('Password reset instructions prepared for your email', 'info')
+  }
+
   return (
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
@@ -91,7 +104,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
             <label htmlFor="password">Password<span>*</span></label>
             <div className={`password-field ${errors.password?'field-invalid':''}`}><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder="Min. 8 characters" autoComplete="current-password" value={password} aria-invalid={Boolean(errors.password)} aria-describedby={errors.password?'password-error':undefined} onChange={(event)=>setPassword(event.target.value)} /><button type="button" className="eye-button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></div>
             {errors.password&&<small className="field-error" id="password-error">{errors.password}</small>}
-            <button type="button" className="forgot-link" onClick={()=>setShowForgot(true)}>Forgot password?</button>
+            <button type="button" className="forgot-link" onClick={()=>{setResetEmailError('');setShowForgot(true)}}>Forgot password?</button>
             <label className="remember-row"><input type="checkbox" name="remember" defaultChecked /><span>Keep me logged in</span></label>
             {errors.form&&<small className="field-error" role="alert">{errors.form}</small>}
             <button className="login-button" type="submit" disabled={busy}>{busy?'Signing in…':'Login'}</button>
@@ -126,7 +139,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
       <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
-      {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={()=>{setShowForgot(false);onToast('Password reset instructions prepared for your email','info')}}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" onChange={(event)=>setEmail(event.target.value)}/></div></Modal>}
+      {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={sendResetLink}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" className={resetEmailError?'field-invalid':undefined} aria-invalid={Boolean(resetEmailError)} aria-describedby={resetEmailError?'reset-email-error':undefined} onChange={(event)=>{setEmail(event.target.value);setResetEmailError('')}}/>{resetEmailError&&<small className="field-error" id="reset-email-error" role="alert">{resetEmailError}</small>}</div></Modal>}
     </main>
   )
 }

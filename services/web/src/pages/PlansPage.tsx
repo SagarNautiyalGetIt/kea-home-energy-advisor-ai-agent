@@ -7,8 +7,7 @@ import { commitmentTerms, currentPlan, planInclusions, pricingStyles, type Commi
 
 const rateSummary = (styleId: PricingStyleId) => {
   const style = pricingStyles.find((item) => item.id === styleId)
-  if (!style) return ''
-  return style.rates.map((rate) => `${rate.value}${rate.unit} ${rate.label.toLowerCase()}`).join(' · ')
+  return style?.rates ?? []
 }
 
 export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'success'|'info'|'warning')=>void }) {
@@ -109,7 +108,7 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
       </div>
       <dl className="plan-summary-stats">
         <div><dt>Daily charge</dt><dd>{style.dailyCharge}</dd></div>
-        <div><dt>Usage rates</dt><dd>{rateSummary(style.id)}</dd></div>
+        <div><dt>Usage rates</dt><dd className="plan-usage-rates">{rateSummary(style.id).map((rate) => <span key={rate.label}>{rate.value}{rate.unit} {rate.label.toLowerCase()}</span>)}</dd></div>
         <div><dt>Monthly credit</dt><dd>{term.monthlyCredit}</dd></div>
         <div><dt>Credit over term</dt><dd>{term.totalCredit}</dd></div>
         <div><dt>Early exit fee</dt><dd>{term.earlyExitFee}</dd></div>

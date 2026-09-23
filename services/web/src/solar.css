@@ -2,3 +2,4 @@
 @media(max-width:900px){.solar-grid{grid-template-columns:1fr}.solar-entry{align-items:stretch;flex-direction:column}.solar-inputs,.solar-results{padding:20px}.solar-pair{grid-template-columns:1fr}.solar-page .page-heading h1{font-size:28px}.solar-stats dd{max-width:58%}}
 
 .solar-results{scroll-margin-top:100px}
+.solar-maintenance-note{margin-bottom:26px}

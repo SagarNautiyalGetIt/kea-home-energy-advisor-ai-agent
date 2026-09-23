@@ -38,6 +38,11 @@ const TIER_NOTE: Record<Tier, string> = {
   3: 'Sparky calls you. Off unless you turn it on.',
 }
 
+const HOURS = Array.from({ length: 24 }, (_, hour) => ({
+  value: hour,
+  label: new Intl.DateTimeFormat('en-NZ', { hour: 'numeric' }).format(new Date(2020, 0, 1, hour)),
+}))
+
 type Props = {
   customerId: string
   /** What this cycle would normally come to, from the bill-shock response. Null until it
@@ -249,7 +254,7 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
           </span>
         </label>
 
-        <label className="setting-row">
+        <div className="setting-row">
           <span>
             <strong>Quiet hours</strong>
             <small>
@@ -257,31 +262,30 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
               make a sound.
             </small>
           </span>
-          <span className="threshold-quiet">
-            <input
-              type="number"
-              min={0}
-              max={23}
+          <span className="threshold-quiet" aria-label="Quiet hours schedule">
+            <label>
+              <small>From</small>
+              <select
               value={prefs.quiet_hours_start ?? 21}
               aria-label="Quiet hours start"
               onChange={(event) =>
                 update({ ...prefs, quiet_hours_start: Number(event.target.value) })
               }
-            />
-            :00 to
-            <input
-              type="number"
-              min={0}
-              max={23}
+              >{HOURS.map((hour) => <option key={hour.value} value={hour.value}>{hour.label}</option>)}</select>
+            </label>
+            <span className="quiet-hours-arrow" aria-hidden="true">to</span>
+            <label>
+              <small>Until</small>
+              <select
               value={prefs.quiet_hours_end ?? 8}
               aria-label="Quiet hours end"
               onChange={(event) =>
                 update({ ...prefs, quiet_hours_end: Number(event.target.value) })
               }
-            />
-            :00
+              >{HOURS.map((hour) => <option key={hour.value} value={hour.value}>{hour.label}</option>)}</select>
+            </label>
           </span>
-        </label>
+        </div>
       </fieldset>
 
       {smallestModel && (

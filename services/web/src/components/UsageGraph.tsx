@@ -15,6 +15,7 @@ export type UsageGraphProps = {
   secondaryLabels?: string[]
   tooltipLabels?: string[]
   animate?: boolean
+  highlightPeak?: boolean
 }
 
 /** Exact. For tooltips and the screen-reader summary, where cents are the point. */
@@ -39,7 +40,7 @@ const formatAxisMetric = (value: number, unit: UsageUnit, max: number) => {
   return formatMetric(value, unit, max)
 }
 
-export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false }: UsageGraphProps) {
+export default function UsageGraph({ values, labels, unit, max, compact = false, ariaLabel = 'Electricity usage chart', comparisonValues, xLabelInterval = 1, showLegend = true, secondaryLabels, tooltipLabels, animate = false, highlightPeak = false }: UsageGraphProps) {
   const uid = useId().replaceAll(':', '')
   const gradientId = `usage-fill-${uid}`
   const tooltipGradientId = `usage-tooltip-${uid}`
@@ -51,6 +52,7 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
   const chartWidth = width - margin.left - margin.right
   const chartHeight = height - margin.top - margin.bottom
   const safeValues = values.length ? values : [0]
+  const peakIndex = safeValues.reduce((highest, value, index) => value > safeValues[highest]! ? index : highest, 0)
   const highestValue = Math.max(
   0,
   ...safeValues,
@@ -123,7 +125,11 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
           <g className={animate ? 'chart-points-reveal' : undefined}>
           {points.map((point, index) => {
             const value = safeValues[index] ?? 0
-            return <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r={activeIndex===index?6:compact?3:4} className="chart-point interactive-point" tabIndex={0} role="button" aria-label={`${tooltipLabels?.[index] ?? labels[index] ?? `Point ${index+1}`}: ${formatMetric(value,unit,ceiling)}`} onMouseEnter={()=>setActiveIndex(index)} onFocus={()=>setActiveIndex(index)} onBlur={()=>setActiveIndex(null)} />
+            const isPeak = highlightPeak && index === peakIndex
+            return <g key={`${point.x}-${index}`} className={isPeak?'chart-peak-marker':undefined}>
+              {isPeak&&<circle cx={point.x} cy={point.y} r={10} className="chart-peak-halo" aria-hidden="true"/>}
+              <circle cx={point.x} cy={point.y} r={activeIndex===index?6:isPeak?5:compact?3:4} className={`chart-point interactive-point${isPeak?' chart-peak-point':''}`} tabIndex={0} role="button" aria-label={`${isPeak?'Peak usage, ':''}${tooltipLabels?.[index] ?? labels[index] ?? `Point ${index+1}`}: ${formatMetric(value,unit,ceiling)}`} onMouseEnter={()=>setActiveIndex(index)} onFocus={()=>setActiveIndex(index)} onBlur={()=>setActiveIndex(null)} />
+            </g>
           })}
           </g>
         </g>
@@ -147,7 +153,7 @@ export default function UsageGraph({ values, labels, unit, max, compact = false,
         })}
       </svg>
       {showLegend&&<div className="chart-legend"><span><i className="legend-current"/>Current period</span>{comparisonValues&&<span><i className="legend-previous"/>Previous period</span>}</div>}
-      <p className="sr-only">{ariaLabel}. Highest value is {formatMetric(Math.max(...safeValues),unit,ceiling)} and lowest value is {formatMetric(Math.min(...safeValues),unit,ceiling)}.</p>
+      <p className="sr-only">{ariaLabel}. Peak usage is {formatMetric(Math.max(...safeValues),unit,ceiling)} at {tooltipLabels?.[peakIndex] ?? labels[peakIndex] ?? `point ${peakIndex + 1}`}. Lowest value is {formatMetric(Math.min(...safeValues),unit,ceiling)}.</p>
     </div>
   )
 }

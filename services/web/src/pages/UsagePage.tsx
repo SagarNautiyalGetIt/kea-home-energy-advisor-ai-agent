@@ -142,6 +142,7 @@ export default function UsagePage() {
           /* Remounting on any change to the selection replays the draw-in animation. */
           key={`${range}-${unit}-${date}-${compare}`}
           animate
+          highlightPeak
           values={graphValues}
           labels={labels}
           tooltipLabels={tooltipLabels}

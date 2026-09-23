@@ -100,7 +100,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   // screen that cannot both be true, which is the failure this whole page is about.
   const daily = (household?.daily_kwh ?? []).slice(0, shock?.days_elapsed ?? undefined)
   const recent = daily.slice(-7)
-  const latest = daily.length ? daily[daily.length - 1] : undefined
+  // The newest reading can still be accumulating. Use the last completed day so the
+  // dashboard does not compare a partial day with full-day figures elsewhere.
+  const previousDay = daily.length > 1 ? daily[daily.length - 2] : undefined
   const usageSoFar = shock?.usage_so_far_kwh ?? (daily.length ? daily.reduce((a, b) => a + b, 0) : undefined)
   const money = (n: number) => `${n.toFixed(2)} NZD`
 
@@ -123,6 +125,10 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
       ? shock.cost_so_far_nzd / shock.usage_so_far_kwh
       : ANYTIME_RATE_NZD
   const toCost = (kwh: number) => kwh * effectiveRate
+  const hourlyShapeTotal = hourlyUsage.reduce((total, value) => total + value, 0)
+  const previousDayHourlyUsage = previousDay === undefined
+    ? []
+    : hourlyUsage.map((value) => value / hourlyShapeTotal * previousDay)
 
   return <>
     <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
@@ -131,22 +137,22 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
           literals, which put an invented "Projected Monthly Bill" on the same screen as
           a computed one — two numbers disagreeing in front of a judge. #69's refined
           visuals are kept; its hardcoded figures are not. */}
-      <article><i><DollarSign/></i><span>Latest day&rsquo;s cost<strong>{latest !== undefined ? money(toCost(latest)) : '—'}</strong></span></article>
+      <article><i><DollarSign/></i><span>Previous day&rsquo;s cost<strong>{previousDay !== undefined ? money(toCost(previousDay)) : '—'}</strong></span></article>
       <article><i><Zap/></i><span>Usage so far<strong>{usageSoFar !== undefined ? `${usageSoFar.toFixed(1)} kWh` : '—'}</strong></span></article>
       <article><i><DollarSign/></i><span>Cost so far<strong>{shock ? money(shock.cost_so_far_nzd) : '—'}</strong></span></article>
-      <article><i><DollarSign/></i><span>Projected this cycle<strong>{shock ? money(shock.projected_cycle_cost_nzd) : '—'}</strong></span></article>
+      <article><i><DollarSign/></i><span>Projected this month<strong>{shock ? money(shock.projected_cycle_cost_nzd) : '—'}</strong></span></article>
     </div>
     <div className="dashboard-grid">
       <article className="card usage-summary">
         <header>
-          <div><span>Typical day, by hour</span><h2>{latest !== undefined ? money(toCost(latest)) : '—'}</h2></div>
-          <em>latest day<small>illustrative shape</small></em>
+          <div><span>Previous day, by hour</span><h2>{previousDay !== undefined ? money(toCost(previousDay)) : '—'}</h2></div>
+          <em>previous day<small>illustrative shape</small></em>
         </header>
         {/* Plotted in dollars at this household's own effective rate. The shape is the
             same series as before — only the axis the customer reads it against has
             changed, because "$0.34 at 7pm" is a sentence they can act on and "1.06 kWh"
             is one they have to convert first. */}
-        <AreaChart compact animate unit="$" values={hourlyUsage.map(toCost)} labels={hours} max={toCost(2)} xLabelInterval={3} showLegend={false} ariaLabel="An illustrative daily cost shape in one-hour intervals, in New Zealand dollars"/>
+        <AreaChart compact animate unit="$" values={previousDayHourlyUsage.map(toCost)} labels={hours} xLabelInterval={3} showLegend={false} ariaLabel="Previous day's electricity cost, distributed across an illustrative hourly shape, in New Zealand dollars"/>
       </article>
       <article className="card weekly-summary">
         <header>
