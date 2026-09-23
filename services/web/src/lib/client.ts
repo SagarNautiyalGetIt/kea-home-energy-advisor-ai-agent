@@ -406,6 +406,24 @@ export const getDemoAccounts = () => getJSON<DemoAccountCard[]>("/api/auth/demo-
 export const getHealth = () => getJSON<Health>("/api/health");
 export const getHouseholds = () => getJSON<HouseholdSummary[]>("/api/households");
 
+export interface AnnualDemandSummary {
+  customer_id: string;
+  available: boolean;
+  annual_kwh: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  days_available: number;
+  days_required: number;
+  estimated_read_pct: number | null;
+  source: string;
+  note: string;
+}
+
+export const getAnnualDemand = (customerId: string) =>
+  getJSON<AnnualDemandSummary>(
+    `/api/households/${encodeURIComponent(customerId)}/annual-demand`,
+  );
+
 /** `asAtDay` truncates the cycle — a warning delivered on day 31 is a bill, not a warning. */
 export const getBillShock = (customerId: string, asAtDay?: number) =>
   getJSON<BillShockWarning>(

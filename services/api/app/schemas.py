@@ -726,6 +726,21 @@ class HouseholdSummary(BaseModel):
     estimated_cost_nzd: float
 
 
+class AnnualDemandSummary(BaseModel):
+    """Exact annual demand or a labelled estimate from available account usage."""
+
+    customer_id: str
+    available: bool
+    annual_kwh: float | None = None
+    period_start: dt.date | None = None
+    period_end: dt.date | None = None
+    days_available: int
+    days_required: int
+    estimated_read_pct: float | None = None
+    source: str
+    note: str
+
+
 class BillAnalysis(BaseModel):
     """A photographed bill, read and priced against Kea.
 

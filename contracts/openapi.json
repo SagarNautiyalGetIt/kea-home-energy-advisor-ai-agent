@@ -149,6 +149,46 @@
         }
       }
     },
+    "/api/households/{customer_id}/annual-demand": {
+      "get": {
+        "summary": "Get Annual Demand",
+        "description": "Return exact annual demand or a labelled estimate from available account usage.",
+        "operationId": "get_annual_demand_api_households__customer_id__annual_demand_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnualDemandSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/billing": {
       "get": {
         "summary": "Get Household Billing",
@@ -1003,6 +1043,91 @@
         ],
         "title": "AlertSummary",
         "description": "What the warning escalated to, reported alongside the warning itself.\n\nOn the response rather than behind its own endpoint because the UI has to show the\ntier next to the figures that produced it, and a second request could return a\ndifferent assessment.\n\n`sent` is what actually went out \u2014 today only `email` can appear in it. `channels`\nis what the tier calls for, so the UI can show the full ladder with the\nnot-yet-wired rungs greyed rather than pretending tier 3 does not exist."
+      },
+      "AnnualDemandSummary": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "annual_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Kwh"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "days_available": {
+            "type": "integer",
+            "title": "Days Available"
+          },
+          "days_required": {
+            "type": "integer",
+            "title": "Days Required"
+          },
+          "estimated_read_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Read Pct"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "available",
+          "days_available",
+          "days_required",
+          "source",
+          "note"
+        ],
+        "title": "AnnualDemandSummary",
+        "description": "Exact annual demand or a labelled estimate from available account usage."
       },
       "Answer": {
         "type": "string",

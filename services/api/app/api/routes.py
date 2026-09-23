@@ -35,6 +35,7 @@ from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock, disaggregation
 from app.analytics import forecast as forecast_mod
+from app.analytics.annual_demand import from_context as annual_demand_from_context
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
 from app.bills import BillReadError, compare_to_kea, read_bill
@@ -60,6 +61,7 @@ from app.pipeline import (
 )
 from app.schemas import (
     AlertSummary,
+    AnnualDemandSummary,
     BillAnalysis,
     BillingChargeLine,
     BillingCustomer,
@@ -278,6 +280,17 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/annual-demand", response_model=AnnualDemandSummary)
+async def get_annual_demand(customer_id: str) -> AnnualDemandSummary:
+    """Return exact annual demand or a labelled estimate from available account usage."""
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    result = annual_demand_from_context(ctx)
+    return AnnualDemandSummary(customer_id=customer_id, **vars(result))
 
 
 @router.get("/households/{customer_id}/billing", response_model=HouseholdBilling)

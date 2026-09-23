@@ -4,14 +4,13 @@ export const solarConfig = {
   locations: { Auckland: 1322.76, Wellington: 1296.48, Christchurch: 1296.48, Queenstown: 1436.64 },
   systems: [{ kw: 3, cost: 8500 }, { kw: 5, cost: 11500 }, { kw: 10, cost: 20000 }],
   scenarios: [{ label: 'Lower', fraction: 0.3 }, { label: 'Middle', fraction: 0.5 }, { label: 'Higher', fraction: 0.7 }],
-  exportRate: 0.15, exampleImportRate: 0.30, exampleDemand: 7000,
+  exportRate: 0.15, exampleImportRate: 0.30,
   annualMaintenanceAllowance: 100, // NZD/year: product assumption, not a verified NZ average.
   sources: [
     { id: 'S1', title: 'EECA — Solar costs and savings', date: 'Accessed 14 September 2026', url: 'https://www.eeca.govt.nz/for-homes/solar-for-homes/solar-costs-and-savings/' },
     { id: 'S2', title: 'EECA — Appendix Seven, Table 1(b), page 6', date: '31 January 2025', url: 'https://www.eeca.govt.nz/assets/EECA-Resources/Research-papers-guides/Appendix-Seven-Solar-PV-data-and-performance.pdf' },
     { id: 'S3', title: 'Meridian — Plans and pricing (export context only)', date: 'Accessed 14 September 2026', url: 'https://www.meridianenergy.co.nz/for-home/pricing-rates' },
     { id: 'S4', title: 'EECA — Detailed solar calculator', date: 'Reference for future comparison; not our model', url: 'https://www.eeca.govt.nz/for-homes/solar-for-homes/solar-power-calculator/' },
-    { id: 'S5', title: 'EECA — Planning the right home solar system', date: 'Accessed 22 September 2026', url: 'https://www.eeca.govt.nz/for-homes/solar-for-homes/plan-your-solar-system/' },
   ],
 } as const
 

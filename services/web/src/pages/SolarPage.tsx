@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Sun, ArrowLeft, Info } from 'lucide-react'
 import { pricingStyles } from '../data/mockData'
-import { getCustomerProfile } from '../lib/client'
+import { getAnnualDemand, getCustomerProfile } from '../lib/client'
 import { loadSession } from '../lib/session'
 import { calculateSolar, centsToNzd, energy, money, numeric, solarConfig, type SolarContext } from '../lib/solar'
 import '../solar.css'
@@ -25,14 +25,35 @@ export default function SolarPage() {
   const [context, setContext] = useState<SolarContext | null>(null)
   const [stale, setStale] = useState(false)
   const [error, setError] = useState('')
-  const [accountNote, setAccountNote] = useState('No verified annual gross demand is available here. Enter a representative full year; do not multiply a seasonal month by 12.')
+  const [accountDemand, setAccountDemand] = useState<number | null>(null)
+  const [accountNote, setAccountNote] = useState('Checking this account’s usage history…')
+  const [profileNote, setProfileNote] = useState('')
   const customerId = loadSession()?.customerId ?? ''
   useEffect(() => {
     let active = true
-    if (customerId) void getCustomerProfile(customerId).then(profile => {
+    if (!customerId) {
+      setAccountNote('Sign in to load annual demand from account meter history, or enter a representative annual value.')
+      return () => { active = false }
+    }
+    void getCustomerProfile(customerId).then(profile => {
       if (!active) return
-      setAccountNote(`Account${profile.plan_name ? ` plan: ${profile.plan_name}.` : ':'} No verified full-year gross demand is supplied to this calculator. Enter a representative annual value. ${profile.address ? `Account location: ${profile.address}. Choose the matching reference city below.` : 'No account location is available; confirm a reference city.'}`)
-    }).catch(() => { /* Manual calculation stays available without the account service. */ })
+      setProfileNote(`${profile.plan_name ? `Account plan: ${profile.plan_name}. ` : ''}${profile.address ? `Account location: ${profile.address}. Choose the matching reference city below.` : 'No account location is available; confirm a reference city.'}`)
+    }).catch(() => { /* Demand can still load when profile details are unavailable. */ })
+    void getAnnualDemand(customerId).then(summary => {
+      if (!active) return
+      if (summary.available && summary.annual_kwh !== null) {
+        const roundedDemand = Math.round(summary.annual_kwh * 10) / 10
+        const value = String(roundedDemand)
+        setAccountDemand(roundedDemand)
+        setFields(prev => ({ ...prev, demand: value }))
+        setAccountNote('Annual demand was loaded automatically from this account’s usage history.')
+        setDemandOrigin(summary.note)
+      } else {
+        setAccountNote(summary.note)
+      }
+    }).catch(() => {
+      if (active) setAccountNote('Annual account demand could not be loaded. Enter a representative annual value.')
+    })
     return () => { active = false }
   }, [customerId])
   const changed = () => { setStale(true); setError('') }
@@ -64,10 +85,10 @@ export default function SolarPage() {
         <p className="solar-help">These represent example city conditions. Modelled generation assumes a north-facing, 30-degree roof and equal panel DC / inverter AC capacity (loading ratio 1.0). Shading and roof suitability need an installer assessment.</p>
         {field('generation', `Installer annual generation (kWh${location === 'Other location' ? ', required' : ', optional'})`, location !== 'Other location')}
         <p className="solar-help">An installer estimate replaces modelled generation; no location factor or extra efficiency deduction is applied.</p>
-        <h3>Electricity you use</h3><p className="solar-help">{accountNote}</p>
+        <h3>Electricity you use</h3><p className="solar-help">{accountNote} {profileNote}</p>
         {field('demand', 'Annual household demand (kWh)')}
-        <button type="button" className="solar-text-button" onClick={() => { update('demand', String(solarConfig.exampleDemand)); setDemandOrigin('Demonstration annual demand: 7,000 kWh; not account data') }}>Use demonstration demand: 7,000 kWh/year</button>
-        <p className="solar-help">The average New Zealand household consumes approximately 7,000 kWh of electricity per year (<a href="https://www.eeca.govt.nz/for-homes/solar-for-homes/plan-your-solar-system/" target="_blank" rel="noreferrer">EECA</a>). Use gross household consumption, not grid imports already reduced by existing solar. {demandOrigin}</p>
+        {accountDemand !== null && Number(fields.demand) !== accountDemand && <button type="button" className="solar-text-button" onClick={() => { update('demand', String(Math.round(accountDemand * 10) / 10)); setDemandOrigin('Restored from this account’s usage history') }}>Restore account demand: {energy(accountDemand)}/year</button>}
+        <p className="solar-help">We use your 365-day electricity history when available. Otherwise, we estimate annual use from your available daily usage. A shorter history may miss seasonal changes. {demandOrigin}</p>
         <fieldset><legend>Solar self-use assumption</legend><p className="solar-help">Solar self-use is the share of generated electricity you use directly at home.</p><div className="solar-choice">{solarConfig.scenarios.map(item => <label key={item.label}><input type="radio" name="self-use" checked={selfUse === item.fraction} onChange={() => { setSelfUse(item.fraction); changed() }}/>{item.label} {item.fraction * 100}%</label>)}</div><p className="solar-help">Scenarios, not researched averages or occupancy predictions. Annual matching cannot establish when electricity is consumed.</p></fieldset>
         <h3>Rates and running costs</h3>
         <p className="solar-callout">{flat ? `${selectedPlan.name}: using its demonstration marginal energy rate, not total bill divided by usage.` : `${selectedPlan.name} needs interval pricing. This is an example flat-rate calculation, not your account-specific bill forecast; it does not price free weekend hours or time-of-use bands.`}</p>
