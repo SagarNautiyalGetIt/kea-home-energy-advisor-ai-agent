@@ -1,8 +1,26 @@
 import { apiJson, apiPath, jsonRequest } from '@/lib/backend-client';
 
-export type NotificationPreferences = { emailNotifications: boolean; smsNotifications: boolean; phoneNotifications: boolean };
-const preferencesPath = process.env.EXPO_PUBLIC_NOTIFICATION_PREFERENCES_PATH?.trim() || '/api/households/{customer_id}/notification-preferences';
-const pushTokenPath = process.env.EXPO_PUBLIC_PUSH_TOKEN_PATH?.trim() || '/api/households/{customer_id}/push-tokens';
+/** Mobile view of the supported AlertPreferences contract. Phone alerts are voice calls, not device push notifications. */
+export type NotificationPreferences = {
+  accountRef: string;
+  enabled: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  phoneNotifications: boolean;
+  billReminders: boolean;
+  tier1Pct: number;
+  tier2Pct: number;
+  tier3Pct: number;
+  minOvershootNzd: number;
+  offlineModelOptIn: boolean;
+  email: string | null;
+  phoneE164: string | null;
+  quietHoursStart: number | null;
+  quietHoursEnd: number | null;
+  timezone: string;
+  theme: 'light' | 'dark';
+};
+const preferencesPath = '/api/households/{customer_id}/alert-preferences';
 
 function pathFor(template: string, customerId: string) {
   return apiPath(template, { customer_id: customerId });
@@ -11,25 +29,44 @@ function pathFor(template: string, customerId: string) {
 export async function loadNotificationPreferences(customerId: string): Promise<NotificationPreferences> {
   const value = await apiJson<Record<string, unknown>>(pathFor(preferencesPath, customerId));
   return {
-    emailNotifications: value.email_notifications === true,
-    smsNotifications: value.sms_notifications === true,
-    phoneNotifications: value.phone_notifications === true,
+    accountRef: typeof value.account_ref === 'string' ? value.account_ref : customerId,
+    enabled: value.enabled !== false,
+    emailNotifications: value.email_enabled === true,
+    smsNotifications: value.sms_enabled === true,
+    phoneNotifications: value.voice_enabled === true,
+    billReminders: value.bill_reminders !== false,
+    tier1Pct: typeof value.tier1_pct === 'number' ? value.tier1_pct : 15,
+    tier2Pct: typeof value.tier2_pct === 'number' ? value.tier2_pct : 40,
+    tier3Pct: typeof value.tier3_pct === 'number' ? value.tier3_pct : 75,
+    minOvershootNzd: typeof value.min_overshoot_nzd === 'number' ? value.min_overshoot_nzd : 20,
+    offlineModelOptIn: value.offline_model_opt_in === true,
+    email: typeof value.email === 'string' ? value.email : null,
+    phoneE164: typeof value.phone_e164 === 'string' ? value.phone_e164 : null,
+    quietHoursStart: typeof value.quiet_hours_start === 'number' ? value.quiet_hours_start : null,
+    quietHoursEnd: typeof value.quiet_hours_end === 'number' ? value.quiet_hours_end : null,
+    timezone: typeof value.timezone === 'string' ? value.timezone : 'Pacific/Auckland',
+    theme: value.theme === 'light' ? 'light' : 'dark',
   };
 }
 
 export function saveNotificationPreferences(customerId: string, preferences: NotificationPreferences) {
   return apiJson<void>(pathFor(preferencesPath, customerId), jsonRequest('PUT', {
-    customer_id: customerId,
-    email_notifications: preferences.emailNotifications,
-    sms_notifications: preferences.smsNotifications,
-    phone_notifications: preferences.phoneNotifications,
+    account_ref: preferences.accountRef || customerId,
+    enabled: preferences.enabled,
+    tier1_pct: preferences.tier1Pct,
+    tier2_pct: preferences.tier2Pct,
+    tier3_pct: preferences.tier3Pct,
+    min_overshoot_nzd: preferences.minOvershootNzd,
+    email_enabled: preferences.emailNotifications,
+    sms_enabled: preferences.smsNotifications,
+    voice_enabled: preferences.phoneNotifications,
+    bill_reminders: preferences.billReminders,
+    offline_model_opt_in: preferences.offlineModelOptIn,
+    email: preferences.email,
+    phone_e164: preferences.phoneE164,
+    quiet_hours_start: preferences.quietHoursStart,
+    quiet_hours_end: preferences.quietHoursEnd,
+    timezone: preferences.timezone,
+    theme: preferences.theme,
   }));
-}
-
-export function registerPushToken(customerId: string, token: string, platform: string) {
-  return apiJson<void>(pathFor(pushTokenPath, customerId), jsonRequest('POST', { customer_id: customerId, token, platform }));
-}
-
-export function unregisterPushToken(customerId: string, token: string) {
-  return apiJson<void>(pathFor(pushTokenPath, customerId), jsonRequest('DELETE', { customer_id: customerId, token }));
 }

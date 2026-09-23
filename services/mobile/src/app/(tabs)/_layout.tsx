@@ -1,16 +1,7 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
-
-const icons: Record<string, { active: keyof typeof Ionicons.glyphMap; idle: keyof typeof Ionicons.glyphMap }> = {
-  dashboard: { active: 'home', idle: 'home-outline' },
-  usage: { active: 'analytics', idle: 'analytics-outline' },
-  assistant: { active: 'sparkles', idle: 'sparkles-outline' },
-  billing: { active: 'receipt', idle: 'receipt-outline' },
-  more: { active: 'grid', idle: 'grid-outline' },
-};
 
 export default function TabsLayout() {
   const { ready, session } = useAuth();
@@ -19,18 +10,10 @@ export default function TabsLayout() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <Tabs screenOptions={({ route }) => ({
+    <Tabs screenOptions={{
       headerShown: false,
-      tabBarActiveTintColor: palette.violet,
-      tabBarInactiveTintColor: colors.textMuted,
-      tabBarHideOnKeyboard: true,
-      tabBarLabelStyle: styles.label,
-      tabBarStyle: [styles.tabBar, { backgroundColor: colors.tabBar, borderTopColor: colors.border }],
-      tabBarIcon: ({ color, focused, size }) => {
-        const icon = icons[route.name];
-        return icon ? <Ionicons color={color} name={focused ? icon.active : icon.idle} size={size} /> : null;
-      },
-    })}>
+      tabBarStyle: { display: 'none' },
+    }}>
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
       <Tabs.Screen name="usage" options={{ title: 'Usage' }} />
       <Tabs.Screen name="assistant" options={{ title: 'Sparky AI' }} />
@@ -46,6 +29,4 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabBar: { height: 70, paddingTop: 7, paddingBottom: 8, borderTopWidth: 1 },
-  label: { fontSize: 10, fontWeight: '800' },
 });

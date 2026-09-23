@@ -1,9 +1,7 @@
-import { news, notifications } from '@/data/mock';
+import { dashboardToday, notifications } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
 
-export const dashboardNews = news;
 export const dashboardNotifications = notifications;
-export type DashboardNewsItem = (typeof dashboardNews)[number];
 
 type HouseholdSummaryApi = {
   customer_id: string;
@@ -20,6 +18,12 @@ type BillShockApi = {
   usage_so_far_kwh: number;
   cost_so_far_nzd: number;
   projected_cycle_cost_nzd: number;
+  expected_cost_nzd: number;
+  overshoot_nzd: number;
+  overshoot_pct: number;
+  expectation_basis: string;
+  reasons?: string[];
+  caveats?: string[];
   recent_trend_pct: number;
 };
 
@@ -37,7 +41,14 @@ export type DashboardViewData = {
   weeklyDayLabels: string[];
   weeklyMonthLabels: string[];
   trendPercent: number | null;
+  overshootNzd: number | null;
+  overshootPct: number | null;
+  expectedCostNzd: number | null;
+  expectationBasis: string | null;
+  warningReasons: string[];
+  warningCaveats: string[];
   warningTriggered: boolean | null;
+  isDemo: boolean;
 };
 
 const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -66,6 +77,12 @@ function validateShock(value: unknown): BillShockApi {
   finite(row.usage_so_far_kwh, 'usage so far');
   finite(row.cost_so_far_nzd, 'cost so far');
   finite(row.projected_cycle_cost_nzd, 'projected cost');
+  finite(row.expected_cost_nzd, 'expected cost');
+  finite(row.overshoot_nzd, 'bill overshoot');
+  finite(row.overshoot_pct, 'bill overshoot percentage');
+  if (typeof row.expectation_basis !== 'string' || !row.expectation_basis) throw new Error('Bill-shock response is missing its expectation basis.');
+  if (row.reasons !== undefined && (!Array.isArray(row.reasons) || row.reasons.some((reason) => typeof reason !== 'string'))) throw new Error('Bill-shock response has invalid reasons.');
+  if (row.caveats !== undefined && (!Array.isArray(row.caveats) || row.caveats.some((caveat) => typeof caveat !== 'string'))) throw new Error('Bill-shock response has invalid caveats.');
   finite(row.recent_trend_pct, 'recent trend');
   return row as BillShockApi;
 }
@@ -121,11 +138,50 @@ async function loadApiDashboard(customerId: string, signal?: AbortSignal): Promi
     weeklyDayLabels: rows.days,
     weeklyMonthLabels: rows.months,
     trendPercent: shock.recent_trend_pct,
+    overshootNzd: shock.overshoot_nzd,
+    overshootPct: shock.overshoot_pct,
+    expectedCostNzd: shock.expected_cost_nzd,
+    expectationBasis: shock.expectation_basis,
+    warningReasons: shock.reasons ?? [],
+    warningCaveats: shock.caveats ?? [],
     warningTriggered: shock.triggered,
+    isDemo: false,
+  };
+}
+
+function loadDemoDashboard(): DashboardViewData {
+  const weeklyValuesKwh = [13.8, 15.1, 12.6, 17.4, 16.2, 11.3, 9.7];
+  const weeklyRate = 0.327;
+  const todayValuesKwh = [...dashboardToday.values];
+  const todayKwh = todayValuesKwh.reduce((sum, value) => sum + value, 0);
+  return {
+    latestDayCostNzd: 6.84,
+    usageSoFarKwh: 286.4,
+    costSoFarNzd: 93.65,
+    projectedCycleCostNzd: 148.2,
+    todayKwh,
+    todayValuesKwh,
+    todayTooltipLabels: dashboardToday.labels,
+    weeklyValuesKwh,
+    weeklyCostNzd: weeklyValuesKwh.reduce((sum, value) => sum + value, 0) * weeklyRate,
+    weeklyLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    weeklyDayLabels: ['14', '15', '16', '17', '18', '19', '20'],
+    weeklyMonthLabels: Array(7).fill('Sep'),
+    trendPercent: -8.4,
+    overshootNzd: 28.2,
+    overshootPct: 23.5,
+    expectedCostNzd: 120,
+    expectationBasis: 'own_recent_cycles',
+    warningReasons: ['Usage is tracking above your recent billing cycles.'],
+    warningCaveats: [],
+    warningTriggered: true,
+    isDemo: true,
   };
 }
 
 export function getDashboardView(customerId: string, signal?: AbortSignal) {
+  // Preview mode stays on until the real-data handoff is explicitly enabled.
+  if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true') return Promise.resolve(loadDemoDashboard());
   if (!process.env.EXPO_PUBLIC_API_URL) return Promise.reject(new Error('Dashboard data is waiting for the backend connection.'));
   if (!customerId) return Promise.reject(new Error('A signed-in customer is required to load the dashboard.'));
   return loadApiDashboard(customerId, signal);

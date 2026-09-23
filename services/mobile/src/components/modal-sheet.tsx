@@ -25,7 +25,7 @@ export function ModalSheet({ visible, title, children, footer, keyboardAware = f
   };
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" transparent visible={visible}>
+    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="overFullScreen" transparent visible={visible}>
       <SafeAreaView style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
         <Pressable accessibilityLabel={dismissOnBackdropPress ? 'Close dialog' : 'Dismiss keyboard'} onPress={handleBackdropPress} style={StyleSheet.absoluteFill} />
         <KeyboardAvoidingView behavior={keyboardAware ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined} pointerEvents="box-none" style={styles.keyboardAvoider}>

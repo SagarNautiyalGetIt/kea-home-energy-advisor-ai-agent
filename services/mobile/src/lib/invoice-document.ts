@@ -40,17 +40,16 @@ export function invoiceHtml(invoice: InvoiceDocument) {
   const amountDue = isPaid ? '$0.00' : money(invoice.amountDue ?? invoice.amount);
   const rows = [
     ['Invoice', invoice.id],
-    ['Invoice date', display(invoice.issued)],
-    ['Billing period', display(invoice.period)],
-    ['Billing days', display(invoice.days)],
-    ['Due date', display(invoice.due)],
+    ['Invoice date', invoice.issued],
+    ['Billing period', invoice.period],
+    ['Billing days', invoice.days],
+    ['Due date', invoice.due],
     ['Status', invoice.status],
-    ['Customer', display(invoice.customerName)],
+    ['Customer', invoice.customerName],
     ['Customer ID', invoice.customerId],
-    ['Current Plan', display(invoice.currentPlan)],
-    ['Meter read', '—'],
-    ['Supply address', display(invoice.customerAddress)],
-  ];
+    ['Current Plan', invoice.currentPlan],
+    ['Supply address', invoice.customerAddress],
+  ].filter((row) => row[1] !== null && row[1] !== undefined && row[1] !== '');
   const charges = invoice.chargeLines.length
     ? invoice.chargeLines.map((line) => [line.label, display(line.quantity), display(line.rate), money(line.amount)])
     : [['Charges unavailable', '—', '—', '—']];
@@ -61,12 +60,12 @@ export function invoiceHtml(invoice: InvoiceDocument) {
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <style>
-        @page { size: A4; margin: 0; }
+        @page { size: A4; margin: 12mm; }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; color: #172554; background: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }
-        .sheet { width: 210mm; height: 297mm; padding: 18mm 14mm 16mm; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
+        .sheet { width: 100%; break-after: page; page-break-after: always; background: #fff; }
         .sheet:last-child { break-after: auto; page-break-after: auto; }
-        .invoice { width: 100%; height: 100%; margin: 0 auto; border: 1.5px solid #cbd5e1; border-radius: 22px; overflow: hidden; }
+        .invoice { width: 100%; margin: 0 auto; border: 1.5px solid #cbd5e1; border-radius: 22px; overflow: hidden; break-inside: avoid; }
         header { display: flex; align-items: center; gap: 16px; padding: 24px 28px; background: linear-gradient(120deg, #ebe8ff, #f8f7ff 58%, #ffe8ed); }
         .mark { width: 64px; height: 64px; flex: 0 0 64px; padding: 5px; border: 1.5px solid #c8c1ff; border-radius: 18px; background: #fff; }
         .mark svg { display: block; width: 100%; height: 100%; }
@@ -81,6 +80,7 @@ export function invoiceHtml(invoice: InvoiceDocument) {
         .detail span { display: block; margin: 0 2px 5px; color: #52617f; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .25px; }
         .detail strong { display: flex; min-height: 44px; align-items: center; padding: 9px 12px; border: 1px solid #d8deea; border-radius: 11px; color: #172554; background: #f8fafc; font-size: 12px; line-height: 1.35; }
         .charges { margin-top: 0; } .charges h2 { margin: 0 0 5px; color: #172554; font-size: 19px; } .charges > p { margin: 0 0 12px; color: #475569; font-size: 12px; }
+        .page-heading { display: flex; align-items: center; justify-content: space-between; margin: -20px -28px 22px; padding: 22px 28px; color: #fff; background: #172554; } .page-heading h2 { margin: 0; color: #fff; font-size: 23px; } .page-heading span { font-size: 13px; font-weight: 700; opacity: .8; }
         table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; }
         th { padding: 10px 9px; color: #334155; background: #f1f5f9; font-size: 11px; text-align: left; } th:last-child, td:last-child { text-align: right; }
         td { padding: 11px 9px; color: #172554; border-top: 1px solid #d8deea; font-size: 12px; font-weight: 650; }
@@ -99,21 +99,22 @@ export function invoiceHtml(invoice: InvoiceDocument) {
             <span class="status">${printableText(invoice.status)}</span>
           </header>
           <main>
-            <div class="amount"><span>Total amount due</span><strong>${amountDue}</strong><span>${isPaid ? 'Payment received' : `Pay by ${printableText(display(invoice.due))}`}</span></div>
-            <div class="details">${rows.map(([label, value]) => `<div class="detail${label === 'Supply address' ? ' detail-wide' : ''}"><span>${printableText(label ?? '')}</span><strong>${printableText(String(value ?? ''))}</strong></div>`).join('')}</div>
+            <div class="amount"><span>${invoice.status === 'Pending' ? 'Estimated charges' : 'Total amount due'}</span><strong>${amountDue}</strong><span>${isPaid ? 'Payment received' : invoice.due ? `Pay by ${printableText(invoice.due)}` : printableText(invoice.status)}</span></div>
+            <div class="details">${rows.map(([label, value]) => `<div class="detail${label === 'Supply address' ? ' detail-wide' : ''}"><span>${printableText(String(label ?? ''))}</span><strong>${printableText(String(value ?? ''))}</strong></div>`).join('')}</div>
           </main>
         </section>
       </section>
       <section class="sheet">
         <section class="invoice">
           <main>
+            <div class="page-heading"><h2>Charges &amp; summary</h2><span>${printableText(display(invoice.period))}</span></div>
             <section class="charges">
               <h2>Electricity charges</h2>
               <p>Your electricity use this period was charged using the rates below. Rates and amounts include GST where provided.</p>
               <table><thead><tr><th>Description</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${charges.map((charge) => `<tr>${charge.map((value) => `<td>${printableText(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>
-              <div class="summary"><div><span>Current electricity charges</span><strong>${billedAmount}</strong></div><div><span>GST included</span><strong>${money(invoice.gst)}</strong></div><div><span>Previous balance</span><strong>${money(invoice.previousBalance)}</strong></div><div><span>Payments and credits</span><strong>${money(invoice.paymentsAndCredits)}</strong></div><div><span>Late payment fee</span><strong>${money(invoice.latePaymentFee)}</strong></div><div class="total"><span>Total amount due</span><strong>${amountDue}</strong></div></div>
+              <div class="summary"><div><span>Current electricity charges</span><strong>${billedAmount}</strong></div>${invoice.gst === null ? '' : `<div><span>GST included</span><strong>${money(invoice.gst)}</strong></div>`}${invoice.previousBalance === null ? '' : `<div><span>Previous balance</span><strong>${money(invoice.previousBalance)}</strong></div>`}${invoice.paymentsAndCredits === null ? '' : `<div><span>Payments and credits</span><strong>${money(invoice.paymentsAndCredits)}</strong></div>`}${invoice.latePaymentFee === null ? '' : `<div><span>Late payment fee</span><strong>${money(invoice.latePaymentFee)}</strong></div>`}<div class="total"><span>${invoice.status === 'Pending' ? 'Estimated total' : 'Total amount due'}</span><strong>${amountDue}</strong></div></div>
             </section>
-            <p class="note"><strong>Payment:</strong> Choose your preferred payment method and pay before the due date.</p>
+            <p class="note"><strong>${invoice.status === 'Pending' ? 'Estimate:' : 'Payment:'}</strong> ${invoice.status === 'Pending' ? 'This figure is based on usage currently available to Kea Energy and is not a final issued invoice.' : 'Choose your preferred payment method and pay before the due date.'}</p>
           </main>
           <footer><strong>Terms &amp; Conditions</strong><br />Please pay by the due date shown on this invoice.<br /><br />Thank you for choosing Kea Energy.</footer>
         </section>

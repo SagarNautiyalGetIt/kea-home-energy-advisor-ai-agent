@@ -1,152 +1,42 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ModalSheet } from '@/components/modal-sheet';
+import { useEffect, useRef, useState } from 'react';
+import { Dimensions, FlatList, Pressable, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Screen } from '@/components/screen';
-import { Card, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
+import { PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
+import { PlanCard } from '@/components/PlanCard';
 import { loadPlans, requestPlanSwitch, type CommitmentTerm, type PricingStyle } from '@/lib/plans-data';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
 
+const width = Dimensions.get('window').width;
+const cardWidth = Math.min(342, width - 72);
+const gap = 12;
+const interval = cardWidth + gap;
+const inset = (width - cardWidth) / 2;
+
 export default function PlansScreen() {
-  const { colors } = useAppTheme();
-  const { showToast } = useToast();
-  const { session } = useAuth();
-  const [pricingStyles, setPricingStyles] = useState<PricingStyle[]>([]);
-  const [commitmentTerms, setCommitmentTerms] = useState<CommitmentTerm[]>([]);
-  const [currentPlan, setCurrentPlan] = useState({ pricingStyle: '', term: '' });
-  const [styleId, setStyleId] = useState('');
-  const [termId, setTermId] = useState('');
-  const [loadError, setLoadError] = useState<string>();
-  const [compareOpen, setCompareOpen] = useState(false);
-  const style = pricingStyles.find((item) => item.id === styleId) ?? pricingStyles[0];
-  const term = commitmentTerms.find((item) => item.id === termId) ?? commitmentTerms[0];
-  const isCurrent = styleId === currentPlan.pricingStyle && termId === currentPlan.term;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadPlans(session?.customerId ?? '', controller.signal).then((data) => {
-      setPricingStyles(data.pricingStyles);
-      setCommitmentTerms(data.commitmentTerms);
-      setCurrentPlan(data.currentPlan);
-      setStyleId(data.currentPlan.pricingStyle);
-      setTermId(data.currentPlan.term);
-      setLoadError(undefined);
-    }).catch((error: unknown) => {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      setLoadError(error instanceof Error ? error.message : 'Plans could not be loaded.');
-    });
-    return () => controller.abort();
-  }, [session?.customerId]);
-
-  const select = <T extends string>(value: T, setter: (value: T) => void) => {
-    setter(value);
-    void Haptics.selectionAsync();
-  };
-
-  const switchPlan = async () => {
-    try {
-      await requestPlanSwitch(session?.customerId ?? '', styleId, termId);
-      showToast(`${style?.name} with the ${term?.name} term requested`);
-    } catch (error: unknown) {
-      showToast(error instanceof Error ? error.message : 'Plan switch could not be requested.', 'warning');
-    }
-  };
-
-  if (!style || !term) return <Screen><PageHeader title="Plans" subtitle="Build a plan around how your household uses power" /><Text style={[styles.commitmentIntro, { color: loadError ? palette.red : colors.textMuted }]}>{loadError ?? 'Loading plans…'}</Text></Screen>;
-
-  return (
-    <Screen>
-      <PageHeader
-        action={(
-          <Pressable
-            accessibilityLabel="Ask Sparky to recommend a plan"
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/assistant', params: { plan: `${style.name} (${term.name})` } })}
-            style={({ pressed }) => [styles.sparkyAction, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
-          >
-            <Ionicons color={palette.violet} name="sparkles-outline" size={18} />
-            <Text style={styles.sparkyActionText}>Ask Sparky to recommend a plan</Text>
-          </Pressable>
-        )}
-        title="Plans"
-        subtitle="Build a plan around how your household uses power"
-      />
-      <SectionTitle>1 · Choose your pricing</SectionTitle>
-      <View style={styles.stack}>
-        {pricingStyles.map((option) => {
-          const selected = option.id === styleId;
-          const current = option.id === currentPlan.pricingStyle;
-          return (
-            <Pressable key={option.id} onPress={() => select(option.id, setStyleId)} style={({ pressed }) => [pressed && styles.pressed]}>
-              <Card style={[styles.option, current && styles.currentOption, selected && styles.selected]}>
-                {current ? <Text style={styles.currentBadge}>CURRENT PLAN</Text> : option.badge ? <Text style={styles.badge}>{option.badge}</Text> : null}
-                <View style={styles.optionHeader}>
-                  <View style={[styles.radio, { borderColor: selected ? palette.violet : colors.border }]}>{selected ? <View style={styles.radioFill} /> : null}</View>
-                  <View style={styles.optionCopy}><Text style={[styles.optionTitle, { color: colors.text }]}>{option.name}</Text><Text style={styles.eyebrow}>{option.eyebrow}</Text></View>
-                  <Text style={[styles.rate, { color: colors.text }]}>{option.rate}</Text>
-                </View>
-                <Text style={[styles.bestFor, { color: colors.textMuted }]}>{option.bestFor} · {option.daily}</Text>
-                <View style={styles.chips}>{option.highlights.map((item) => <View key={item} style={[styles.chip, { backgroundColor: colors.input }]}><Ionicons color={palette.green} name="checkmark" size={13} /><Text style={[styles.chipText, { color: colors.textMuted }]}>{item}</Text></View>)}</View>
-              </Card>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <SectionTitle>2 · Choose your commitment</SectionTitle>
-      <Text style={[styles.commitmentIntro, { color: colors.textMuted }]}>Your rates stay the same. A longer term locks them in and earns a monthly bill credit.</Text>
-      <View style={styles.stack}>
-        {commitmentTerms.map((option) => {
-          const selected = option.id === termId;
-          const current = option.id === currentPlan.term;
-          return (
-            <Pressable key={option.id} onPress={() => select(option.id, setTermId)} style={({ pressed }) => [pressed && styles.pressed]}>
-              <Card style={[styles.term, current && styles.currentOption, selected && styles.selected]}>
-                <View style={[styles.radio, { borderColor: selected ? palette.violet : colors.border }]}>{selected ? <View style={styles.radioFill} /> : null}</View>
-                <View style={styles.optionCopy}>
-                  <View style={styles.termTitleRow}><Text style={[styles.optionTitle, { color: colors.text }]}>{option.name}</Text>{current ? <Text style={styles.currentSmallBadge}>CURRENT PLAN</Text> : option.badge ? <Text style={styles.smallBadge}>{option.badge}</Text> : null}</View>
-                  <Text style={[styles.termCredit, { color: colors.text }]}>{option.monthlyCredit}{option.monthlyCredit === 'No credit' ? '' : ' / month'}</Text>
-                  <Text style={[styles.termLine, { color: colors.textMuted }]}>{option.priceTreatment}</Text>
-                  <Text style={[styles.termLine, styles.termTotal]}>{option.totalCredit} total credit</Text>
-                  <Text style={[styles.termLine, { color: colors.textMuted }]}>Early exit fee: {option.earlyExitFee.toLowerCase()}</Text>
-                </View>
-              </Card>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <SectionTitle>Your selection</SectionTitle>
-      <Card style={styles.summary}>
-        <View style={styles.summaryIcon}><Ionicons color="#FFFFFF" name="flash" size={24} /></View>
-        <View style={styles.summaryCopy}><Text style={[styles.summaryTitle, { color: colors.text }]}>{style.name}</Text><Text style={[styles.summaryMeta, { color: colors.textMuted }]}>{term.name} · {style.rate} · {term.monthlyCredit}</Text></View>
-        <PrimaryButton disabled={isCurrent} label={isCurrent ? "You're on this plan" : 'Request switch'} onPress={() => void switchPlan()} />
-        <Pressable onPress={() => setCompareOpen(true)}><Text style={styles.compareLink}>Compare all rates and terms</Text></Pressable>
-      </Card>
-
-      <ModalSheet footer={<PrimaryButton label="Done" onPress={() => setCompareOpen(false)} />} onClose={() => setCompareOpen(false)} title="Plan comparison" visible={compareOpen}>
-        <Text style={[styles.modalHeading, { color: colors.text }]}>Pricing styles</Text>
-        {pricingStyles.map((item) => <View key={item.id} style={[styles.compareRow, { borderBottomColor: colors.border }]}><View><View style={styles.compareTitleRow}><Text style={[styles.compareTitle, { color: colors.text }]}>{item.name}</Text>{item.id === currentPlan.pricingStyle ? <Text style={styles.currentSmallBadge}>CURRENT</Text> : null}</View><Text style={[styles.compareMeta, { color: colors.textMuted }]}>{item.eyebrow}</Text></View><Text style={[styles.compareValue, { color: colors.text }]}>{item.rate}</Text></View>)}
-        <Text style={[styles.modalHeading, { color: colors.text }]}>Commitment terms</Text>
-        {commitmentTerms.map((item) => <View key={item.id} style={[styles.compareTermRow, { borderBottomColor: colors.border }]}><View style={styles.compareTitleRow}><Text style={[styles.compareTitle, { color: colors.text }]}>{item.name}</Text>{item.id === currentPlan.term ? <Text style={styles.currentSmallBadge}>CURRENT</Text> : item.badge ? <Text style={styles.smallBadge}>{item.badge}</Text> : null}</View><Text style={[styles.compareTermCredit, { color: colors.text }]}>{item.monthlyCredit}{item.monthlyCredit === 'No credit' ? '' : ' / month'}</Text><Text style={[styles.compareMeta, { color: colors.textMuted }]}>{item.priceTreatment}</Text><Text style={[styles.compareMeta, styles.termTotal]}>{item.totalCredit} total credit</Text><Text style={[styles.compareMeta, { color: colors.textMuted }]}>Early exit fee: {item.earlyExitFee.toLowerCase()}</Text></View>)}
-      </ModalSheet>
-    </Screen>
-  );
+  const { colors } = useAppTheme(); const { session } = useAuth(); const { showToast } = useToast(); const list = useRef<FlatList<PricingStyle>>(null);
+  const [plans, setPlans] = useState<PricingStyle[]>([]); const [terms, setTerms] = useState<CommitmentTerm[]>([]); const [current, setCurrent] = useState({ pricingStyle: '', term: '' }); const [planId, setPlanId] = useState(''); const [termId, setTermId] = useState(''); const [viewedIndex, setViewedIndex] = useState(0); const [error, setError] = useState<string>();
+  const plan = plans.find((item) => item.id === planId); const term = terms.find((item) => item.id === termId); const isCurrent = planId === current.pricingStyle && termId === current.term;
+  useEffect(() => { const controller = new AbortController(); void loadPlans(session?.customerId ?? '', controller.signal).then((data) => { setPlans(data.pricingStyles); setTerms(data.commitmentTerms); setCurrent(data.currentPlan); const recommended = data.pricingStyles.find((item) => item.badge) ?? data.pricingStyles[0]; setViewedIndex(Math.max(0, data.pricingStyles.findIndex((item) => item.id === recommended?.id))); setPlanId(data.currentPlan.pricingStyle); setTermId(data.currentPlan.term); }).catch((value: unknown) => { if (value instanceof Error && value.name !== 'AbortError') setError(value.message); }); return () => controller.abort(); }, [session?.customerId]);
+  const viewPlan = (index: number) => { if (!plans[index]) return; setViewedIndex(index); list.current?.scrollToOffset({ offset: index * interval, animated: true }); };
+  const choosePlan = (id: string) => { setPlanId(id); void Haptics.selectionAsync(); };
+  const onEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => setViewedIndex(Math.max(0, Math.min(plans.length - 1, Math.round(event.nativeEvent.contentOffset.x / interval))));
+  const selectTerm = (id: string) => { setTermId(id); void Haptics.selectionAsync(); };
+  const switchPlan = async () => { if (!plan || !term) return; try { await requestPlanSwitch(session?.customerId ?? '', plan.id, term.id); showToast(`${plan.name} with the ${term.name} term requested`); } catch (value: unknown) { showToast(value instanceof Error ? value.message : 'Plan switch could not be requested.', 'warning'); } };
+  if (!plan || !term) return <Screen><PageHeader title="Plans" subtitle="Build a plan around how your household uses power" /><Text style={[styles.loading, { color: error ? palette.red : colors.textMuted }]}>{error ?? 'Loading plans…'}</Text></Screen>;
+  return <Screen contentStyle={styles.content}>
+    <PageHeader title="Plans" subtitle="Build a plan around how your household uses power" action={<Pressable accessibilityLabel="Ask AI to recommend a plan" onPress={() => router.push({ pathname: '/assistant', params: { plan: `${plan.name} (${term.name})` } })} style={[styles.aiButton, { borderColor: colors.border }]}><Ionicons name="sparkles" size={20} color={colors.text} /><Text style={[styles.aiButtonText, { color: colors.text }]}>Ask AI</Text></Pressable>} />
+    <View style={[styles.intro, { backgroundColor: colors.input, borderColor: colors.border }]}><Ionicons color={palette.green} name="sparkles" size={17} /><Text style={[styles.introText, { color: colors.textMuted }]}>Choose a commitment first, then swipe through the pricing styles.</Text></View>
+    <SectionTitle>1. Your commitment</SectionTitle><Text style={[styles.copy, { color: colors.textMuted }]}>Lock in your rates and receive more credit each month.</Text>
+    <View style={styles.terms}>{terms.map((item) => { const selected = item.id === termId; const currentTerm = item.id === current.term; return <Pressable key={item.id} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => selectTerm(item.id)}><View style={[styles.termCard, { backgroundColor: selected ? colors.surfaceRaised : colors.surface, borderColor: selected ? palette.white : colors.border }]}><View style={[styles.radio, { borderColor: selected ? palette.white : colors.border }]}>{selected ? <View style={styles.dot} /> : null}</View><View style={styles.termCopy}><View style={styles.termTitle}><Text style={[styles.termName, { color: colors.text }]}>{item.name}</Text>{currentTerm ? <Text style={styles.currentBadge}>CURRENT</Text> : null}</View><Text style={[styles.termDetail, { color: colors.textMuted }]}>{item.priceTreatment}</Text><Text style={[styles.termFine, { color: colors.textMuted }]}>{item.earlyExitFee}</Text></View><View><Text style={[styles.credit, { color: colors.text }]}>{item.monthlyCredit}</Text><Text style={[styles.creditLabel, { color: colors.textMuted }]}>{item.monthlyCredit === 'No credit' ? 'monthly credit' : '/ month'}</Text></View></View></Pressable>; })}</View>
+    <View style={styles.planHead}><View><SectionTitle>2. Your power plan</SectionTitle><Text style={[styles.copy, { color: colors.textMuted }]}>Swipe to compare each way of paying for power.</Text></View><Text style={[styles.counter, { color: colors.textMuted }]}>{viewedIndex + 1} / {plans.length}</Text></View>
+    <FlatList ref={list} style={styles.carouselViewport} data={plans} horizontal initialScrollIndex={viewedIndex} getItemLayout={(_, index) => ({ length: interval, offset: index * interval, index })} keyExtractor={(item) => item.id} renderItem={({ item, index }) => <View style={styles.cardItem}><PlanCard current={item.id === current.pricingStyle} onPress={() => viewPlan(index)} onSelect={() => choosePlan(item.id)} plan={item} selected={item.id === planId} /></View>} contentContainerStyle={styles.carousel} decelerationRate="fast" disableIntervalMomentum onMomentumScrollEnd={onEnd} showsHorizontalScrollIndicator={false} snapToInterval={interval} />
+    <View style={styles.dots}>{plans.map((item, index) => <View key={item.id} style={[styles.pageDot, { backgroundColor: index === viewedIndex ? palette.white : colors.border }, index === viewedIndex && styles.activeDot]} />)}</View>
+    <View style={[styles.selection, { backgroundColor: colors.input, borderColor: colors.border }]}><View style={styles.selectionTop}><Ionicons color={palette.green} name="checkmark-circle" size={20} /><View style={styles.selectionCopy}><Text style={[styles.selectionLabel, { color: colors.textMuted }]}>YOUR SELECTION</Text><Text style={[styles.selectionValue, { color: colors.text }]}>{plan.name} · {term.name}</Text></View></View><PrimaryButton disabled={isCurrent} label={isCurrent ? "You're on this plan" : 'Send switch request'} onPress={() => void switchPlan()} /></View>
+  </Screen>;
 }
-
-const styles = StyleSheet.create({
-  sparkyAction: { maxWidth: 154, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 7 },
-  sparkyActionText: { flexShrink: 1, color: palette.violet, fontSize: 10, lineHeight: 13, fontWeight: '900' },
-  commitmentIntro: { marginTop: -8, marginBottom: 11, fontSize: 11, lineHeight: 16 },
-  stack: { gap: 10 }, pressed: { opacity: 0.8 }, option: { overflow: 'hidden' }, currentOption: { borderColor: palette.green, borderWidth: 2 }, selected: { borderColor: palette.violet, borderWidth: 2 },
-  badge: { position: 'absolute', top: 0, right: 0, color: '#FFFFFF', backgroundColor: palette.violet, borderBottomLeftRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
-  currentBadge: { position: 'absolute', top: 0, right: 0, color: '#FFFFFF', backgroundColor: palette.green, borderBottomLeftRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
-  optionHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 }, radio: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderRadius: 11 }, radioFill: { width: 11, height: 11, borderRadius: 6, backgroundColor: palette.violet }, optionCopy: { flex: 1 }, optionTitle: { fontSize: 15, fontWeight: '900' }, eyebrow: { marginTop: 2, color: palette.violet, fontSize: 10, fontWeight: '800' }, rate: { maxWidth: 105, fontSize: 12, fontWeight: '900', textAlign: 'right' }, bestFor: { marginTop: 10, fontSize: 11, lineHeight: 16 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }, chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 5 }, chipText: { fontSize: 9, fontWeight: '700' },
-  term: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 15 }, termTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }, termCredit: { marginTop: 8, fontSize: 16, lineHeight: 20, fontWeight: '900' }, termLine: { marginTop: 4, fontSize: 11, lineHeight: 16 }, termTotal: { color: palette.violet, fontWeight: '800' }, smallBadge: { color: '#FFFFFF', backgroundColor: palette.violet, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3, fontSize: 8, fontWeight: '900' }, currentSmallBadge: { color: '#FFFFFF', backgroundColor: palette.green, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3, fontSize: 8, fontWeight: '900' },
-  summary: { gap: 13 }, summaryIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: palette.violet }, summaryCopy: { marginTop: -56, marginLeft: 62, minHeight: 50, justifyContent: 'center' }, summaryTitle: { fontSize: 17, fontWeight: '900' }, summaryMeta: { marginTop: 3, fontSize: 11, lineHeight: 16 }, compareLink: { color: palette.violet, fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  modalHeading: { marginTop: 14, marginBottom: 4, fontSize: 16, fontWeight: '900' }, compareRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14, borderBottomWidth: 1, paddingVertical: 13 }, compareTermRow: { borderBottomWidth: 1, paddingVertical: 13 }, compareTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, compareTitle: { fontSize: 13, fontWeight: '800' }, compareTermCredit: { marginTop: 7, fontSize: 13, lineHeight: 18, fontWeight: '900' }, compareMeta: { marginTop: 3, fontSize: 10, lineHeight: 14 }, compareValue: { maxWidth: 130, fontSize: 11, fontWeight: '800', textAlign: 'right' },
-});
+const styles = StyleSheet.create({ content: { paddingHorizontal: 18, paddingBottom: 46 }, loading: { marginTop: 10, fontSize: 13 }, aiButton: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 }, aiButtonText: { fontWeight: 'bold', fontSize: 14 }, intro: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 16, marginBottom: 1, padding: 12 }, introText: { flex: 1, fontSize: 11, lineHeight: 16, fontWeight: '700' }, copy: { marginTop: -7, fontSize: 11, lineHeight: 16, fontWeight: '600' }, terms: { gap: 9, marginTop: 14 }, termCard: { minHeight: 79, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 19, paddingHorizontal: 13, paddingVertical: 11 }, radio: { width: 21, height: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 11 }, dot: { width: 11, height: 11, borderRadius: 6, backgroundColor: palette.white }, termCopy: { flex: 1, minWidth: 0 }, termTitle: { flexDirection: 'row', alignItems: 'center', gap: 7 }, termName: { fontSize: 14, fontWeight: '900' }, currentBadge: { color: palette.green, borderColor: palette.green, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, fontSize: 7, fontWeight: '900' }, termDetail: { marginTop: 3, fontSize: 10, fontWeight: '700' }, termFine: { marginTop: 2, fontSize: 9, fontWeight: '600' }, credit: { fontSize: 18, fontWeight: '900', textAlign: 'right' }, creditLabel: { marginTop: 2, fontSize: 8, fontWeight: '800', textAlign: 'right' }, planHead: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 6 }, counter: { marginBottom: 14, fontSize: 11, fontWeight: '800' }, carouselViewport: { marginHorizontal: -18 }, carousel: { paddingLeft: inset, paddingRight: inset }, cardItem: { width: cardWidth, marginRight: gap, paddingVertical: 7 }, dots: { flexDirection: 'row', alignSelf: 'center', gap: 6, marginTop: 7 }, pageDot: { width: 6, height: 6, borderRadius: 4 }, activeDot: { width: 20 }, selection: { gap: 13, borderWidth: 1, borderRadius: 17, marginTop: 19, padding: 13 }, selectionTop: { flexDirection: 'row', alignItems: 'center', gap: 10 }, selectionCopy: { flex: 1 }, selectionLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.65 }, selectionValue: { marginTop: 3, fontSize: 12, fontWeight: '900' }, });

@@ -1,154 +1,291 @@
-import type { ImageSourcePropType } from 'react-native';
+export const dailyUsage = [4.2, 4.8, 4.1, 5, 5.4, 2.6, 2.4]
+export const hourlyUsage = [
+  0.11, 0.1, 0.09, 0.06, 0.06, 0.08,
+  0.1, 0.13, 0.17, 0.18, 0.2, 0.22,
+  0.18, 0.16, 0.16, 0.2, 0.23, 0.27,
+  0.32, 0.37, 0.41, 0.18, 0.13, 0.09,
+]
+export const monthlyUsage = [24, 32, 34, 26]
+
+export const profile = {
+  customerId: '110733ap',
+  name: 'Adela Parkson',
+  address: 'Albany, Auckland',
+  phone: '02141236978',
+  email: 'Adela98@gmail.com',
+}
+
+/* A Kea plan is built from two independent choices — a pricing style and a
+   commitment term — so the three options in each field make nine plans.
+   Rates and credits follow the plan research document. */
+
+export type PricingStyleId = 'anytime' | 'time-of-use' | 'free-weekends'
+
+export type PricingStyle = {
+  id: PricingStyleId
+  name: string
+  eyebrow: string
+  summary: string
+  dailyCharge: string
+  rate: string
+  daily: string
+  rates: { label: string; value: string; unit: string; window?: string }[]
+  highlights: string[]
+  bestFor: string
+  flag?: string
+}
+
+export const pricingStyles: PricingStyle[] = [
+  {
+    id: 'anytime',
+    name: 'Anytime Rate',
+    eyebrow: 'One rate, all day',
+    summary: 'The same usage rate at every time of day, so your bill follows only how much you use.',
+    dailyCharge: '$1.45',
+    rate: '$0.325',
+    daily: '$1.45',
+    rates: [{ label: 'Anytime rate', value: '$0.325', unit: '/kWh' }],
+    highlights: ['Same rate day and night', 'Nothing to plan your day around', 'The easiest bill to predict'],
+    bestFor: 'Customers wanting simplicity',
+  },
+  {
+    id: 'time-of-use',
+    name: 'Time of Use',
+    eyebrow: 'Cheaper away from peak',
+    summary: 'Separate peak, off-peak and night rates, so moving usage out of the evening peak pays off.',
+    dailyCharge: '$1.50',
+    rate: '$0.390',
+    daily: '$1.50',
+    rates: [
+      { label: 'Peak', value: '$0.390', unit: '/kWh', window: '7–11 AM · 5–9 PM' },
+      { label: 'Off-peak', value: '$0.270', unit: '/kWh', window: '11 AM–5 PM · 9–11 PM' },
+      { label: 'Night', value: '$0.180', unit: '/kWh', window: '11 PM–7 AM' },
+    ],
+    highlights: ['The night rate is under half the peak rate', 'Ideal for delayed appliances and overnight EV charging', 'Matches the usage bands on your Usage page'],
+    bestFor: 'Customers able to shift usage',
+    flag: 'RECOMMENDED FOR YOU',
+  },
+  {
+    id: 'free-weekends',
+    name: 'Free Weekends',
+    eyebrow: '16 free hours weekly',
+    summary: 'Power is free from 9am to 5pm every Saturday and Sunday, with a higher rate outside that window.',
+    dailyCharge: '$1.55',
+    rate: '$0.365',
+    daily: '$1.55',
+    rates: [
+      { label: 'Anytime rate', value: '$0.365', unit: '/kWh' },
+      { label: 'Free period', value: 'Sat & Sun', unit: '', window: '9 AM–5 PM' },
+    ],
+    highlights: ['Eight free hours each weekend day', 'Run laundry and big appliances for nothing', 'A higher rate applies outside the free window'],
+    bestFor: 'Households using more electricity on weekends',
+  },
+]
+
+export type CommitmentTermId = 'flexible' | '6-months' | '12-months'
+
+export type CommitmentTerm = {
+  id: CommitmentTermId
+  name: string
+  priceTreatment: string
+  monthlyCredit: string
+  creditNote: string
+  totalCredit: string
+  earlyExitFee: string
+  flag?: string
+}
+
+export const commitmentTerms: CommitmentTerm[] = [
+  {
+    id: 'flexible',
+    name: 'Flexible',
+    priceTreatment: 'Rates may change with notice',
+    monthlyCredit: 'No credit',
+    creditNote: 'No fixed term — leave whenever you like',
+    totalCredit: '$0',
+    earlyExitFee: 'No exit fee',
+  },
+  {
+    id: '6-months',
+    name: '6 months',
+    priceTreatment: 'Rates locked for 6 months',
+    monthlyCredit: '$10',
+    creditNote: '$10 credit every month for 6 months',
+    totalCredit: '$60',
+    earlyExitFee: 'Up to $50',
+  },
+  {
+    id: '12-months',
+    name: '12 months',
+    priceTreatment: 'Rates locked for 12 months',
+    monthlyCredit: '$25',
+    creditNote: '$25 credit every month for 12 months',
+    totalCredit: '$300',
+    earlyExitFee: 'Up to $100',
+    flag: 'BEST VALUE',
+  },
+]
+
+/* What the customer is on today, so the page can mark it and show a switch. */
+export const currentPlan: { pricingStyle: PricingStyleId; term: CommitmentTermId } = {
+  pricingStyle: 'anytime',
+  term: 'flexible',
+}
+
+export const planInclusions = [
+  'AI usage tracking and bill forecasts',
+  'Personalised saving tips',
+  'Digital bills and account support',
+  'Smart meter required — check your address',
+]
+
+export type DemoHomeScenario = {
+  id: 'day' | 'evening' | 'night';
+  label: string;
+  detail: string;
+  solarKw: number;
+  evKw: number;
+  evCharging: boolean;
+  evSoc: number;
+  homeKw: number;
+  powerwallKw: number;
+  powerwallDischarging: boolean;
+  powerwallSoc: number;
+  gridKw: number;
+};
+
+export const demoHomeScenarios: DemoHomeScenario[] = [
+  {
+    id: 'day',
+    label: 'Solar mode',
+    detail: 'More solar generation and lower grid draw',
+    solarKw: 8.4,
+    evKw: 2.1,
+    evCharging: true,
+    evSoc: 78,
+    homeKw: 3.2,
+    powerwallKw: 1.8,
+    powerwallDischarging: false,
+    powerwallSoc: 74,
+    gridKw: 0.6,
+  },
+  {
+    id: 'evening',
+    label: 'Evening peak',
+    detail: 'Higher household demand after work and dinner',
+    solarKw: 2.4,
+    evKw: 4.6,
+    evCharging: true,
+    evSoc: 61,
+    homeKw: 5.7,
+    powerwallKw: 2.8,
+    powerwallDischarging: true,
+    powerwallSoc: 68,
+    gridKw: 1.9,
+  },
+  {
+    id: 'night',
+    label: 'Night standby',
+    detail: 'Powerwall covers overnight demand with efficient storage',
+    solarKw: 0,
+    evKw: 2.3,
+    evCharging: false,
+    evSoc: 52,
+    homeKw: 2.8,
+    powerwallKw: 3.1,
+    powerwallDischarging: true,
+    powerwallSoc: 56,
+    gridKw: 0.8,
+  },
+];
+
+export const dashboardToday = {
+  labels: ['6am', '9am', '12pm', '3pm', '6pm', '9pm'],
+  values: [2.1, 4.8, 6.7, 8.4, 7.2, 3.5],
+};
+
+export const notifications = [
+  { id: 'bill-shock', title: 'Bill shock risk', detail: 'Your forecast is tracking above last month.', unread: true },
+  { id: 'solar-win', title: 'Solar win', detail: 'Your roof is producing 18% more than forecast.', unread: false },
+  { id: 'plan-tip', title: 'Plan tip', detail: 'A Time of Use plan could save you $14 this cycle.', unread: true },
+];
 
 export const usage = {
   daily: {
-    labels: ['12 AM', '1 AM', '2 AM', '3 AM', '4 AM', '5 AM', '6 AM', '7 AM', '8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM', '8 PM', '9 PM', '10 PM', '11 PM'],
-    values: [0.11, 0.1, 0.09, 0.06, 0.06, 0.08, 0.1, 0.13, 0.17, 0.18, 0.2, 0.22, 0.18, 0.16, 0.16, 0.2, 0.23, 0.27, 0.32, 0.37, 0.41, 0.18, 0.13, 0.09],
-    previous: [0.1, 0.09, 0.08, 0.07, 0.06, 0.07, 0.11, 0.12, 0.15, 0.17, 0.18, 0.2, 0.17, 0.15, 0.17, 0.18, 0.21, 0.25, 0.3, 0.34, 0.38, 0.2, 0.14, 0.1],
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    values: [5.2, 6.1, 5.8, 7.3, 6.4, 4.7, 3.8],
+    previous: [4.9, 5.5, 5.4, 6.9, 5.9, 4.2, 3.5],
   },
   weekly: {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    values: [4.2, 4.8, 4.1, 5, 5.4, 2.6, 2.4],
-    previous: [4.5, 4.2, 4.7, 4.6, 5.1, 3.1, 2.9],
+    values: [31.4, 28.8, 33.1, 29.7, 35.6, 26.5, 22.2],
+    previous: [29.5, 30.1, 31.3, 27.8, 34.2, 25.7, 21.8],
   },
   monthly: {
-    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-    values: [24, 32, 34, 26],
-    previous: [27, 29, 31, 30],
+    labels: ['W1', 'W2', 'W3', 'W4'],
+    values: [84, 78, 92, 88],
+    previous: [80, 75, 86, 90],
   },
-} as const;
-
-export const dashboardToday = {
-  labels: Array.from({ length: 24 }, (_, hour) => `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`),
-  values: [0.32, 0.27, 0.21, 0.19, 0.18, 0.21, 0.32, 0.48, 0.58, 0.64, 0.69, 0.74, 0.8, 0.85, 0.9, 0.96, 1.06, 1.17, 1.33, 1.49, 1.59, 1.43, 1.17, 1.02],
-} as const;
-
-export type NewsItem = {
-  id: string;
-  title: string;
-  date: string;
-  summary: string;
-  body: string;
-  image: ImageSourcePropType;
 };
-
-export const news: NewsItem[] = [
-  {
-    id: 'care',
-    title: 'New consumer protection standards',
-    date: '24 Aug 2026',
-    summary: 'Clearer information and easier access to support.',
-    body: 'Kea Energy is updating customer communications and support processes to reflect the new consumer care standards.',
-    image: require('../../assets/kea/news/consumer-protection-policy.jpg'),
-  },
-  {
-    id: 'off-peak',
-    title: 'Off-peak discount coming soon',
-    date: '21 Aug 2026',
-    summary: 'Move flexible use away from busy periods.',
-    body: 'Eligible customers will be able to benefit from lower off-peak pricing. Full eligibility and timing will be shared before launch.',
-    image: require('../../assets/kea/news/off-peak-discount.jpg'),
-  },
-  {
-    id: 'winter',
-    title: 'Winter energy support available',
-    date: '18 Aug 2026',
-    summary: 'Practical guidance and account support when needed.',
-    body: 'Our winter support programme offers energy-saving guidance and account assistance during colder months.',
-    image: require('../../assets/kea/news/winter-energy-support.jpg'),
-  },
-  {
-    id: 'maintenance',
-    title: 'Planned network maintenance',
-    date: '15 Aug 2026',
-    summary: 'Selected areas will receive advance notice.',
-    body: 'Customers affected by planned maintenance will receive timing and restoration information in advance.',
-    image: require('../../assets/kea/news/network-maintenance.jpg'),
-  },
-];
-
-export const invoices = [
-  { id: '367274627', issued: '20 Aug 2026', period: '05 Aug 2026 – 19 Aug 2026', days: 15, due: '01 Sep 2026', amount: 184.5, status: 'Due' as const },
-  { id: '361892440', issued: '05 Aug 2026', period: '05 Jul 2026 – 04 Aug 2026', days: 31, due: '18 Aug 2026', amount: 148.2, status: 'Paid' as const },
-  { id: '355703118', issued: '05 Jul 2026', period: '05 Jun 2026 – 04 Jul 2026', days: 30, due: '18 Jul 2026', amount: 132.76, status: 'Paid' as const },
-];
-
-export type NotificationItem = {
-  id: string;
-  title: string;
-  detail: string;
-  time: string;
-  icon: keyof typeof import('@expo/vector-icons/Ionicons').default.glyphMap;
-  unread: boolean;
-};
-
-export const notifications: readonly NotificationItem[] = [
-  { id: 'high-bill', title: 'High bill warning', detail: 'Projected bill is 29% above your usual range.', time: 'Today, 9:30 AM', icon: 'warning-outline', unread: true },
-  { id: 'payment', title: 'Payment reminder', detail: 'Your current invoice is due on 1 Sep 2026.', time: 'Yesterday', icon: 'card-outline', unread: true },
-  { id: 'usage', title: 'Usage update', detail: 'New smart-meter readings are available.', time: '31 Aug 2026', icon: 'stats-chart-outline', unread: false },
-];
 
 export const faqs = [
   {
-    question: 'What is Sparky AI?',
-    answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand your electricity usage, bills and plan options. It turns complex energy information into clear explanations, provides early warnings about possible high bills and connects you with human support when needed.',
+    question: 'How do I understand my energy bill?',
+    answer: 'Sparky breaks your bill into usage, network costs, and plan rate changes so you can see what changed.',
+    note: 'Use the bill explanation screen for a detailed walk-through.',
   },
   {
-    question: 'What can Sparky help me with?',
-    answer: 'Sparky can explain changes in your electricity bill, warn you when your projected bill is higher than expected, compare Kea plans using your usage pattern and answer general questions about your energy account. It can also connect you with the Kea support team when a question requires human assistance.',
+    question: 'Can I compare plans?',
+    answer: 'Yes. The Plans screen compares pricing styles and commitment terms to show which option fits your household.',
   },
   {
-    question: 'How does Sparky work?',
-    answer: 'Sparky understands your question and requests information from approved accounts, usage and pricing services. These services perform important calculations, while Sparky explains the results in straightforward language. Sparky is not allowed to create its own bill amounts, projections or savings figures.',
-  },
-  {
-    question: 'What information does Sparky use?',
-    answer: 'Depending on your question, Sparky may use your electricity usage, billing history, current plan, alert preferences and information you choose to upload. It only uses the information needed to answer your request. The current prototype uses synthetic demonstration data rather than real customer accounts.',
-  },
-  {
-    question: 'How does the Bill Explainer work?',
-    answer: 'The Bill Explainer reads the information in your electricity bill and compares it with available usage and pricing data. It identifies the charges, days and time periods that contributed most to the total, then explains them in plain language. It will not claim that a particular appliance caused an increase unless supporting data is available.',
-  },
-  {
-    question: 'What can I upload to the Bill Explainer?',
-    answer: 'You can upload an electricity bill as a PDF, JPG or PNG file, including a clear photo or screenshot. Make sure the full bill is readable and avoid uploading unrelated documents or information that is not needed for the explanation.',
-  },
-  {
-    question: 'What is a bill-shock warning?',
-    answer: 'A bill-shock warning is an early notification that your projected bill has crossed your selected dollar threshold or is significantly higher than your normal pattern. It gives you an opportunity to review what changed and take action before the billing period ends.',
-  },
-  {
-    question: 'How often will Kea send warnings?',
-    answer: 'Kea sends an initial warning when your projected bill crosses the threshold you selected. It will not repeatedly send the same alert, but it may send another warning if the projection increases significantly. You can change your threshold, notification channel or opt out of warnings at any time.',
-  },
-  {
-    question: 'Is my projected bill the same as my final bill?',
-    answer: 'No. A projected bill is an estimate based on your usage so far, expected usage for the rest of the billing period and your current pricing information. Your final bill may differ if your usage changes, additional meter information becomes available or adjustments are applied.',
-  },
-  {
-    question: 'How does Kea compare plans?',
-    answer: 'Kea applies each available Kea plan to your usage pattern and calculates the estimated cost, including usage rates, daily charges, free-power periods, monthly credits, commitment length and possible exit fees. It may recommend staying on your current plan if changing would not provide a meaningful benefit.',
-    note: 'Kea does not compare every electricity provider in New Zealand, only the big four energy providers.',
-  },
-  {
-    question: 'Where do Sparky’s numbers come from?',
-    answer: 'From your own meter readings and account records. Bill amounts, projections and plan comparisons are worked out by Kea’s own systems using set pricing rules, and Sparky explains the result. Each answer lists what Sparky looked up, so you can see what it read before it replied.',
-    note: 'Projections and comparisons are estimates. Your issued bill is the record of what you owe.',
-  },
-  {
-    question: 'Can Sparky make mistakes?',
-    answer: 'Yes. Like any AI assistant, Sparky can misread a question or give an incomplete answer, so please don’t treat its replies as financial advice or as a final decision on your account. It is built to say when it isn’t sure rather than guess. If an answer looks wrong, or you would like it checked, ask to talk to a human and our team will look into it.',
-  },
-  {
-    question: 'How does Kea protect my information?',
-    answer: 'Kea uses authentication, encryption and access controls to protect customer information. The system is designed to use only the data needed for each request and prevent customers from accessing another person’s account. Sensitive account details are not disclosed until the customer’s identity has been verified.',
-  },
-  {
-    question: 'Are my conversations with Sparky stored?',
-    answer: 'Conversations may be stored securely for a limited period to provide the service, maintain an audit record, investigate problems and improve safety and quality. Access is restricted to authorised systems and staff. Kea does not use your private account conversations to train a publicly available AI model.',
-  },
-  {
-    question: 'Can I speak to a real person?',
-    answer: 'Yes. You can request human assistance at any time. Sparky will also offer a handoff when it cannot answer safely, when you dispute important information or when your situation requires additional support. Where possible, relevant conversation context will be transferred so you do not have to repeat everything.',
+    question: 'What is a bill shock warning?',
+    answer: 'It highlights when your projected cycle cost is materially higher than normal and suggests likely drivers.',
   },
 ];
+
+export const demoPlansData = {
+  pricingStyles,
+  commitmentTerms,
+  currentPlan,
+};
+
+export const demoProfileData = {
+  customerId: profile.customerId,
+  name: profile.name,
+  address: profile.address,
+  phone: profile.phone,
+  email: profile.email,
+};
+
+export const demoBillingData = {
+  customer: {
+    name: profile.name,
+    id: profile.customerId,
+    address: profile.address,
+    currentPlan: 'Anytime Rate',
+  },
+  invoices: [
+    {
+      id: 'INV-1024',
+      issued: '2026-08-12',
+      period: 'Aug 2026',
+      days: 31,
+      due: '2026-09-06',
+      amount: 148.2,
+      amountDue: 148.2,
+      status: 'Due' as const,
+      chargeLines: [
+        { label: 'Energy use', quantity: '431 kWh', rate: '$0.325 / kWh', amount: 140.08 },
+        { label: 'Daily charge', quantity: '31 days', rate: '$1.45 / day', amount: 44.95 },
+      ],
+      gst: 18.42,
+      previousBalance: 0,
+      paymentsAndCredits: 0,
+      latePaymentFee: 0,
+    },
+  ],
+  savedPaymentMethods: [
+    { id: 'pm-1', brand: 'Visa', last4: '4242', cardholder: profile.name, expiry: '09/28', isDefault: true },
+  ],
+};

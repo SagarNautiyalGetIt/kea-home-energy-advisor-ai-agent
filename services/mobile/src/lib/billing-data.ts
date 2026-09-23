@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/backend-client';
+import { demoBillingData } from '@/data/mock';
 
 export type PaymentStatus = 'Due' | 'Paid' | 'Pending' | 'Cancelled' | 'Unknown';
 
@@ -32,34 +33,22 @@ export type BillingCustomer = {
   currentPlan: string | null;
 };
 
-export type SavedPaymentMethod = {
-  id: string;
-  brand: string;
-  last4: string;
-  cardholder: string | null;
-  expiry: string | null;
-  isDefault: boolean;
-};
-
 export type BillingViewData = {
   customer: BillingCustomer;
   invoices: BillingInvoice[];
-  savedPaymentMethods: SavedPaymentMethod[];
 };
 
 export type BillingLoadResult =
   | { state: 'ready'; data: BillingViewData }
   | { state: 'unavailable'; message: string; data: BillingViewData };
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
-const billingPath = process.env.EXPO_PUBLIC_BILLING_PATH?.trim() || '/api/households/{customer_id}/billing';
+const billingPath = '/api/households/{customer_id}/billing';
 const EMPTY_VALUE = '—';
 
 export function emptyBillingData(customerId: string): BillingViewData {
   return {
     customer: { name: null, id: customerId, address: null, currentPlan: null },
     invoices: [],
-    savedPaymentMethods: [],
   };
 }
 
@@ -129,24 +118,6 @@ function validateBillingResponse(value: unknown, customerId: string): BillingVie
   const responseCustomerId = customer.id ?? customer.customer_id;
   if (responseCustomerId !== customerId) throw new Error('Billing response belongs to a different customer.');
   const currentPlan = value.currentPlan ?? value.current_plan;
-  const rawPaymentMethods = value.savedPaymentMethods ?? value.saved_payment_methods;
-  const savedPaymentMethods = Array.isArray(rawPaymentMethods)
-    ? rawPaymentMethods.flatMap((method): SavedPaymentMethod[] => {
-      if (!isRecord(method)) return [];
-      const id = method.id;
-      const brand = method.brand;
-      const last4 = method.last4 ?? method.last_4;
-      if (typeof id !== 'string' || typeof brand !== 'string' || typeof last4 !== 'string') return [];
-      return [{
-        id,
-        brand,
-        last4,
-        cardholder: nullableString(method.cardholder ?? method.cardholderName, 'cardholder'),
-        expiry: nullableString(method.expiry, 'card expiry'),
-        isDefault: method.isDefault === true || method.is_default === true,
-      }];
-    })
-    : [];
   return {
     customer: {
       name: nullableString(customer.name ?? customer.display_name, 'customer name'),
@@ -157,12 +128,10 @@ function validateBillingResponse(value: unknown, customerId: string): BillingVie
         : nullableString(currentPlan, 'current plan'),
     },
     invoices: value.invoices.map(validateInvoice),
-    savedPaymentMethods,
   };
 }
 
 async function fetchBilling(customerId: string, signal: AbortSignal): Promise<BillingViewData> {
-  if (!apiBaseUrl) throw new Error('Billing service is not connected yet.');
   const endpoint = billingPath.replace('{customer_id}', encodeURIComponent(customerId));
   if (!endpoint.startsWith('/')) throw new Error('Billing path must be relative to EXPO_PUBLIC_API_URL.');
   const response = await apiFetch(endpoint, { signal });
@@ -171,9 +140,21 @@ async function fetchBilling(customerId: string, signal: AbortSignal): Promise<Bi
 }
 
 export async function loadBillingData(customerId: string, signal: AbortSignal): Promise<BillingLoadResult> {
-  if (!apiBaseUrl) return { state: 'unavailable', message: 'Billing service is not connected yet.', data: emptyBillingData(customerId) };
-  if (!customerId) throw new Error('A verified customer ID is required to load billing. Please sign in again.');
-  return { state: 'ready', data: await fetchBilling(customerId, signal) };
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
+  if (!useRealData) {
+    return { state: 'ready', data: demoBillingData };
+  }
+  if (!customerId) return { state: 'unavailable', data: emptyBillingData(customerId), message: 'A signed-in customer is required to load billing.' };
+  try {
+    return { state: 'ready', data: await fetchBilling(customerId, signal) };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    return {
+      state: 'unavailable',
+      data: emptyBillingData(customerId),
+      message: error instanceof Error ? error.message : 'Billing data is unavailable right now.',
+    };
+  }
 }
 
 export function billingPlaceholderInvoice(): BillingInvoice {

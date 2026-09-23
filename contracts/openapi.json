@@ -149,6 +149,46 @@
         }
       }
     },
+    "/api/households/{customer_id}/billing": {
+      "get": {
+        "summary": "Get Household Billing",
+        "description": "Billing data already held by the account repository, shaped for clients.\n\nDatabase-backed accounts receive their actual current/prior bill facts. Fixture\naccounts have no invoice ledger, so the endpoint returns the backend's own usage-cost\nestimate as Pending rather than inventing due dates, payments or card details.",
+        "operationId": "get_household_billing_api_households__customer_id__billing_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdBilling"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/profile": {
       "get": {
         "summary": "Get Customer Profile",
@@ -1146,6 +1186,224 @@
         "title": "BillShockWarning",
         "description": "The proactive half of the product.\n\nEverything else in this API answers a question the customer asked. This one has to\nreach them *before* the bill does, so it is a GET the dashboard polls rather than a\nchat intent \u2014 a warning that only appears if you think to ask for it is not a\nwarning.\n\n`triggered` is the only field the UI should branch on. The figures are present either\nway so the dashboard can show a calm \"on track\" state without a second request."
       },
+      "BillingChargeLine": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "BillingChargeLine"
+      },
+      "BillingCustomer": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "BillingCustomer"
+      },
+      "BillingInvoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "issued": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_due": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Due"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "charge_lines": {
+            "items": {
+              "$ref": "#/components/schemas/BillingChargeLine"
+            },
+            "type": "array",
+            "title": "Charge Lines"
+          },
+          "gst": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gst"
+          },
+          "previous_balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Balance"
+          },
+          "payments_and_credits": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payments And Credits"
+          },
+          "late_payment_fee": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Payment Fee"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "BillingInvoice"
+      },
       "Body_analyse_bill_api_bills_analyse_post": {
         "properties": {
           "file": {
@@ -1879,6 +2137,37 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HouseholdBilling": {
+        "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/BillingCustomer"
+          },
+          "current_plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Plan"
+          },
+          "invoices": {
+            "items": {
+              "$ref": "#/components/schemas/BillingInvoice"
+            },
+            "type": "array",
+            "title": "Invoices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer",
+          "invoices"
+        ],
+        "title": "HouseholdBilling"
+      },
       "HouseholdContext": {
         "properties": {
           "account_ref": {
@@ -2007,6 +2296,59 @@
             "type": "array",
             "title": "Daily Kwh"
           },
+          "daily_peak_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Peak Kwh"
+          },
+          "daily_off_peak_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Off Peak Kwh"
+          },
+          "daily_night_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Night Kwh"
+          },
+          "band_data_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Data Source"
+          },
           "total_kwh": {
             "type": "number",
             "title": "Total Kwh"
@@ -2022,6 +2364,9 @@
           "label",
           "period",
           "daily_kwh",
+          "daily_peak_kwh",
+          "daily_off_peak_kwh",
+          "daily_night_kwh",
           "total_kwh",
           "estimated_cost_nzd"
         ],

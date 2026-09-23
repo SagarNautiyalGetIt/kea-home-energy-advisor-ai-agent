@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
-import { Card, PageHeader, PrimaryButton, Segmented, SectionTitle } from '@/components/ui';
+import { PageHeader, PrimaryButton, Segmented } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
+import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
@@ -23,8 +25,6 @@ const periodOptions = [
 ];
 
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const dailyChartLabels = ['12', '', '', '3', '', '', '6', '', '', '9', '', '', '12', '', '', '3', '', '', '6', '', '', '', '', '', '12'];
-const dailyTimeBands = [{ label: 'AM', startIndex: 0, endIndex: 12 }, { label: 'PM', startIndex: 12, endIndex: 24 }];
 const unavailableBands: UsageBand[] = [
   { key: 'peak', label: 'Peak usage', window: null, kwh: null, costNzd: null },
   { key: 'offPeak', label: 'Off-peak usage', window: null, kwh: null, costNzd: null },
@@ -46,12 +46,12 @@ function addDays(date: Date, days: number) {
   return shifted;
 }
 
-function shortDate(date: Date) {
-  return `${date.getDate()} ${monthLabels[date.getMonth()]}`;
+function startOfWeek(date: Date) {
+  return addDays(date, -((date.getDay() + 6) % 7));
 }
 
-function compactNumericDate(date: Date) {
-  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+function shortDate(date: Date) {
+  return `${date.getDate()} ${monthLabels[date.getMonth()]}`;
 }
 
 function weekRangeLabel(selected: string) {
@@ -105,18 +105,6 @@ function compactWeekLabel(selected: string) {
   return `${startDay} ${monthLabels[start.getMonth()]} ${start.getFullYear()}-${endDay} ${monthLabels[end.getMonth()]} ${end.getFullYear()}`;
 }
 
-function weekMonthBands(selected: string, row = 0) {
-  const dates = weekDates(selected);
-  const bands: { label: string; startIndex: number; endIndex: number; row: number }[] = [];
-  dates.forEach((value, index) => {
-    const label = monthLabels[value.getMonth()] ?? '';
-    const previous = bands.at(-1);
-    if (previous?.label === label) previous.endIndex = index;
-    else bands.push({ label, startIndex: index, endIndex: index, row });
-  });
-  return bands;
-}
-
 function comparisonSelectionLabel(period: Period, comparison: ComparisonSelection) {
   const first = parseDate(comparison.first);
   const second = parseDate(comparison.second);
@@ -130,25 +118,35 @@ function comparisonSelectionLabel(period: Period, comparison: ComparisonSelectio
 }
 
 function bandPresentation(key: UsageBand['key']) {
-  if (key === 'peak') return { icon: 'flame-outline' as const, color: palette.red, tone: '#FFF0F2' };
-  if (key === 'offPeak') return { icon: 'sunny-outline' as const, color: palette.amber, tone: '#FFF4D9' };
-  return { icon: 'moon-outline' as const, color: palette.periwinkle, tone: '#F0EDFF' };
+  if (key === 'peak') return { icon: 'flame-outline' as const, color: palette.red };
+  if (key === 'offPeak') return { icon: 'sunny-outline' as const, color: palette.amber };
+  return { icon: 'moon-outline' as const, color: palette.periwinkle };
+}
+
+function energyCategoryPresentation(key: string) {
+  const normalized = key.toLowerCase();
+  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: palette.red };
+  if (normalized.includes('always') || normalized.includes('base')) return { icon: 'pulse-outline' as const, color: '#38BDF8' };
+  return { icon: 'flash-outline' as const, color: palette.amber };
 }
 
 export default function UsageScreen() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
+  const { height: screenHeight } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
   const [unit, setUnit] = useState<Unit>('cost');
   const [comparisons, setComparisons] = useState<Record<Period, ComparisonSelection | null>>({ daily: null, weekly: null, monthly: null });
   const [date, setDate] = useState(() => toDateValue(new Date()));
   const [dateOpen, setDateOpen] = useState(false);
+  const [energyBreakdownOpen, setEnergyBreakdownOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareTarget, setCompareTarget] = useState<'first' | 'second'>('first');
   const [firstPeriod, setFirstPeriod] = useState(() => toDateValue(new Date()));
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
+  const [, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -159,39 +157,62 @@ export default function UsageScreen() {
   const [hintTranslateX] = useState(() => new Animated.Value(0));
   const [hintOpacity] = useState(() => new Animated.Value(0));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
+  const [usageHeight, setUsageHeight] = useState(620);
+  const [listInForeground, setListInForeground] = useState(false);
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
+  const breakdownListPeekHeight = 62 * 4.6;
+  const breakdownListStart = Math.max(0, screenHeight - breakdownListPeekHeight);
+
   const comparison = comparisons[period];
   const compare = comparison !== null;
+  const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
+  const unitOptions: readonly Unit[] = canShowCost ? ['cost', 'kwh'] : ['kwh'];
+  const displayUnit: Unit = canShowCost ? unit : 'kwh';
   const chartValues = useMemo(() => {
     if (!data) return [];
-    const values = unit === 'cost'
+    const values = displayUnit === 'cost'
       ? data.points.every((point) => point.costNzd !== null) ? data.points.map((point) => point.costNzd as number) : []
       : data.points.map((point) => point.kwh);
-    return period === 'daily' && values.length === 24 ? [...values, values[0] ?? 0] : values;
-  }, [data, period, unit]);
+    return values;
+  }, [data, displayUnit]);
   const chartPrevious = useMemo(() => {
     if (!data?.comparisonPoints) return undefined;
-    const values = unit === 'cost'
+    const values = displayUnit === 'cost'
       ? data.comparisonPoints.every((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd as number) : []
       : data.comparisonPoints.map((point) => point.kwh);
-    return period === 'daily' && values.length === 24 ? [...values, values[0] ?? 0] : values;
-  }, [data, period, unit]);
-  const suffix = unit === 'cost' ? 'NZD' : 'kWh';
-  const sourceLabels = data?.points.map((point) => point.axisLabel) ?? [];
-  const chartLabels = period === 'daily' && sourceLabels.length === 24 ? dailyChartLabels : sourceLabels;
-  const weeklyBands = period === 'weekly' && !comparison ? weekMonthBands(date) : undefined;
-  const weeklyDayLabels = period === 'weekly'
-    ? weekDates(comparison?.first ?? date).map((value) => comparison ? compactNumericDate(value) : String(value.getDate()))
-    : undefined;
-  const comparedWeeklyDayLabels = period === 'weekly' && comparison
-    ? weekDates(comparison.second).map(compactNumericDate)
-    : undefined;
+    return values;
+  }, [data, displayUnit]);
+  const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
+  const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
+  // The official API publishes daily meter totals, so the X axis must follow the
+  // actual returned dates. Hour labels would imply readings the backend does not send.
+  const chartAxisLabels = chartLabels;
   const tooltipLabels = data?.points.map((point) => point.tooltipLabel);
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
+  useEffect(() => {
+    if (canShowCost || unit !== 'cost') return;
+    const timer = setTimeout(() => setUnit('kwh'), 0);
+    return () => clearTimeout(timer);
+  }, [canShowCost, unit]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+      void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+      return () => controller.abort();
+    }
+    void loadEnergyBreakdown(session.customerId, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result.available ? result : null); })
+      .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+    return () => controller.abort();
+  }, [session?.customerId, reloadToken]);
   const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
   const totalDisplay = unit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
+
 
   const refresh = () => {
     setReloadToken((token) => token + 1);
@@ -209,7 +230,20 @@ export default function UsageScreen() {
       setData(null);
       try {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
-        if (!controller.signal.aborted) setData(result);
+        if (!controller.signal.aborted) {
+          setData(result);
+          // Move a date outside the fixture range to available data. Weekly charts
+          // deliberately settle on the latest complete Monday-Sunday week, so their
+          // X axis is never cut short at the final reading (for example, Friday).
+          const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
+          if (!comparison && !result.isDemo && needsAvailableRange && result.availableTo) {
+            const latest = parseDate(result.availableTo);
+            const fallbackDate = period === 'weekly'
+              ? toDateValue(addDays(startOfWeek(latest), -1))
+              : result.availableTo;
+            if (fallbackDate !== date) setDate(fallbackDate);
+          }
+        }
       } catch (error: unknown) {
         if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Usage could not be loaded.');
       } finally {
@@ -218,7 +252,7 @@ export default function UsageScreen() {
     };
     void load();
     return () => controller.abort();
-  }, [comparison?.second, date, period, reloadToken, session?.customerId]);
+  }, [comparison, date, period, reloadToken, session?.customerId]);
 
   useFocusEffect(useCallback(() => {
     setAnimationRun((run) => run + 1);
@@ -274,7 +308,7 @@ export default function UsageScreen() {
         ]).start(() => setSwipeInProgress(false));
       });
     });
-  }, [comparison, graphOpacity, graphScale, graphTranslateX, period, swipeInProgress]);
+  }, [comparison, graphOpacity, graphScale, graphTranslateX, period, setAnimationRun, setChartActive, setComparisons, setDate, setSwipeInProgress, swipeInProgress]);
 
   const chartPanResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.15,
@@ -289,7 +323,6 @@ export default function UsageScreen() {
     onPanResponderRelease: (_event, gesture) => {
       const isHorizontalFlick = Math.abs(gesture.vx) >= 0.35 && Math.abs(gesture.dx) >= 18;
       if (Math.abs(gesture.dx) >= 48 || isHorizontalFlick) {
-        // Right-to-left advances the date; left-to-right returns to the previous date.
         shiftGraph(gesture.dx < 0 ? 'next' : 'previous');
         return;
       }
@@ -340,57 +373,645 @@ export default function UsageScreen() {
   };
 
   return (
-    <Screen onTouchStart={() => setChartActive(false)}>
-      <PageHeader title="Usage" subtitle="Understand your electricity patterns" action={<Pressable accessibilityLabel="Refresh usage" onPress={refresh} style={[styles.refresh, { backgroundColor: colors.surface, borderColor: colors.border }]}>{loading ? <ActivityIndicator color={palette.violet} /> : <Ionicons color={palette.violet} name="refresh" size={20} />}</Pressable>} />
-      <Segmented activeBackgroundColor={palette.violet} activeTextColor="#FFFFFF" onChange={changePeriod} options={periodOptions} value={period} />
+    <Screen contentStyle={styles.screenRoot} onTouchStart={() => setChartActive(false)} scroll={false}>
 
-      <View style={styles.toolbarRow}>
-        <Pressable accessibilityLabel={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`} onPress={compare ? openComparison : () => setDateOpen(true)} style={({ pressed }) => [styles.toolbarButton, compare && styles.comparisonDateButton, compare && period === 'weekly' && styles.weekComparisonDateButton, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}><Ionicons color={palette.violet} name="calendar-outline" size={19} /><Text numberOfLines={compare && period === 'weekly' ? 3 : 2} style={[styles.toolbarButtonText, { color: colors.text }]}>{selectedPeriodLabel}</Text><Ionicons color={colors.textMuted} name="chevron-down" size={14} /></Pressable>
-        <View style={[styles.toolbarButton, styles.compareButton, { backgroundColor: compare ? 'rgba(74, 37, 255, 0.18)' : colors.surface, borderColor: compare ? palette.violet : colors.border }]}><Pressable accessibilityLabel="Choose periods to compare" onPress={openComparison} style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}><Ionicons color={palette.violet} name="git-compare-outline" size={19} /><Text style={[styles.toolbarButtonText, { color: compare ? palette.violet : colors.text }]}>Compare</Text></Pressable>{compare ? <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}><Ionicons color={palette.violet} name="close" size={18} /></Pressable> : null}</View>
-      </View>
 
-      <Animated.View {...chartPanResponder.panHandlers} style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}>
-        <Card style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <View><Text style={[styles.totalLabel, { color: colors.textMuted }]}>Selected period</Text><Text style={[styles.total, { color: colors.text }]}>{totalDisplay} <Text style={styles.suffix}>{suffix}</Text></Text></View>
-            <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
-              {/* Cost first — it is the default, and the lit segment belongs on the
-                  left. Matches the web toggle. */}
-              {(['cost', 'kwh'] as const).map((item) => <Pressable key={item} onPress={() => setUnit(item)} style={[styles.unitOption, unit === item && { backgroundColor: palette.violet }]}><Text style={[styles.unitText, { color: unit === item ? '#FFFFFF' : colors.textMuted }]}>{item === 'kwh' ? 'kWh' : '$'}</Text></Pressable>)}
+      {/* Header, controls, and chart */}
+      <View
+        onLayout={(event) => setUsageHeight(event.nativeEvent.layout.height)}
+        pointerEvents="box-none"
+        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
+      >
+        <Animated.View style={styles.chartContainer}>
+          <View style={styles.headerControls}>
+            <PageHeader
+              action={
+                <Pressable
+                  accessibilityLabel="Refresh usage"
+                  onPress={refresh}
+                  style={[styles.refresh, { backgroundColor: colors.input }]}
+                >
+                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons color="#FFFFFF" name="refresh" size={20} />}
+                </Pressable>
+              }
+              subtitle="Track your usage"
+              title="Usage"
+            />
+
+            <Segmented
+              activeBackgroundColor="#FFFFFF"
+              activeTextColor="#000000"
+              onChange={changePeriod}
+              options={periodOptions}
+              value={period}
+            />
+
+            <View style={styles.toolbarRow}>
+              <Pressable
+                accessibilityLabel={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`}
+                onPress={compare ? openComparison : () => setDateOpen(true)}
+                style={({ pressed }) => [
+                  styles.toolbarButton,
+                  compare && styles.comparisonDateButton,
+                  compare && period === 'weekly' && styles.weekComparisonDateButton,
+                  { backgroundColor: colors.input, borderColor: colors.input },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons color="#FFFFFF" name="calendar-outline" size={19} />
+                <Text numberOfLines={compare && period === 'weekly' ? 3 : 2} style={[styles.toolbarButtonText, { color: colors.text }]}>
+                  {selectedPeriodLabel}
+                </Text>
+                <Ionicons color={colors.textMuted} name="chevron-down" size={14} />
+              </Pressable>
+
+              <View
+                style={[
+                  styles.toolbarButton,
+                  styles.compareButton,
+                  {
+                    backgroundColor: compare ? 'rgba(37,99,235,0.18)' : colors.input,
+                    borderColor: compare ? '#38BDF8' : colors.input,
+                  },
+                ]}
+              >
+                <Pressable
+                  accessibilityLabel="Choose periods to compare"
+                  onPress={openComparison}
+                  style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
+                >
+                  <Ionicons color={compare ? '#38BDF8' : '#FFFFFF'} name="git-compare-outline" size={19} />
+                  <Text style={[styles.toolbarButtonText, { color: compare ? '#38BDF8' : colors.text }]}>Compare</Text>
+                </Pressable>
+                {compare ? (
+                  <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
+                    <Ionicons color="#38BDF8" name="close" size={18} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           </View>
-          <Animated.View pointerEvents="none" style={[styles.swipeHint, { backgroundColor: colors.input, opacity: hintOpacity, transform: [{ translateX: hintTranslateX }] }]}><Ionicons color={palette.violet} name="chevron-back" size={14} /><Text style={[styles.swipeHintText, { color: colors.textMuted }]}>Swipe for previous or next</Text><Ionicons color={palette.violet} name="chevron-forward" size={14} /></Animated.View>
-          <UsageChart accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`} active={chartActive} key={`${period}-${unit}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`} labels={chartLabels} onActivate={() => setChartActive(true)} onDismiss={() => setChartActive(false)} previous={chartPrevious} previousTooltipLabels={previousTooltipLabels} secondaryLabels={weeklyDayLabels} tertiaryLabels={comparedWeeklyDayLabels} timeBands={period === 'daily' && chartLabels.length === 25 ? dailyTimeBands : weeklyBands} tooltipLabels={tooltipLabels} unit={unit} values={chartValues} xLabelInterval={period === 'daily' ? 3 : period === 'monthly' && chartLabels.length > 8 ? 5 : 1} />
-        </Card>
-      </Animated.View>
 
-      <SectionTitle>Usage breakdown</SectionTitle>
-        <View style={styles.summaryGrid}>
-          <Card style={styles.summaryCard}><View style={[styles.summaryIcon, { backgroundColor: '#F0EDFF' }]}><Ionicons color={palette.violet} name="pulse-outline" size={21} /></View><Text style={[styles.summaryTitle, { color: colors.textMuted }]}>{periodTitle}</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{formatAmount(data?.totalKwh ?? null, data?.totalCostNzd ?? null)}</Text><Text style={[styles.summaryDetail, { color: colors.textMuted }]}>Current selected period</Text><View style={[styles.summaryBadge, (data?.trendPercent ?? 0) < 0 && styles.summaryBadgeDown]}><Text style={[styles.summaryBadgeText, (data?.trendPercent ?? 0) < 0 && styles.summaryBadgeTextDown]}>{data?.trendPercent == null ? '—' : `${data.trendPercent > 0 ? '+' : ''}${data.trendPercent.toFixed(2)}%`}</Text></View></Card>
-          {bands.map((band) => { const presentation = bandPresentation(band.key); const share = band.kwh !== null && data?.totalKwh ? `${Math.round((band.kwh / data.totalKwh) * 100)}%` : '—'; return <Card key={band.key} style={styles.summaryCard}><View style={[styles.summaryIcon, { backgroundColor: presentation.tone }]}><Ionicons color={presentation.color} name={presentation.icon} size={21} /></View><Text style={[styles.summaryTitle, { color: colors.textMuted }]}>{band.label}</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{formatAmount(band.kwh, band.costNzd)}</Text><Text style={[styles.summaryDetail, { color: colors.textMuted }]}>{band.window ?? 'Not provided for this period'}</Text><View style={styles.shareBadge}><Text style={styles.shareBadgeText}>{share}</Text></View></Card>; })}
+          {/* Chart Header & Unit Toggle (Outside of PanResponder for instant, 100% reliable tapping) */}
+          <View style={styles.chartHeaderCard}>
+            <View style={styles.chartHeader}>
+              <View>
+                <Text style={[styles.total, { color: colors.text }]}>
+                  {totalDisplay} <Text style={styles.suffix}>{suffix}</Text>
+                </Text>
+              </View>
+              <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
+                {unitOptions.map((item) => (
+                  <Pressable
+                    hitSlop={8}
+                    key={item}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setUnit(item);
+                    }}
+                    style={[styles.unitOption, unit === item && { backgroundColor: '#FFFFFF' }]}
+                  >
+                    <Text style={[styles.unitText, { color: unit === item ? '#000000' : colors.textMuted }]}>
+                      {item === 'kwh' ? 'kWh' : '$'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.swipeHint,
+                { backgroundColor: colors.input, opacity: hintOpacity, transform: [{ translateX: hintTranslateX }] },
+              ]}
+            >
+              <Ionicons color="#38BDF8" name="chevron-back" size={14} />
+              <Text style={[styles.swipeHintText, { color: colors.textMuted }]}>Swipe for previous or next</Text>
+              <Ionicons color="#38BDF8" name="chevron-forward" size={14} />
+            </Animated.View>
+          </View>
+
+          {/* Interactive Graph Area with Swipe PanResponder */}
+          <Animated.View
+            {...chartPanResponder.panHandlers}
+            style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}
+          >
+            <View style={styles.fullWidthChartWrap}>
+              <UsageChart
+                accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
+                active={chartActive}
+                key={`${period}-${unit}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
+                axisLabels={chartAxisLabels}
+                labels={chartLabels}
+                onActivate={() => setChartActive(true)}
+                previous={chartPrevious}
+                previousTooltipLabels={previousTooltipLabels}
+                tooltipLabels={tooltipLabels}
+                unit={unit}
+                values={chartValues}
+                xLabelInterval={1}
+              />
+            </View>
+          </Animated.View>
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
+          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
+          <View pointerEvents="none" style={styles.backdropBlurShade} />
+        </Animated.View>
+      </View>
+
+      <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
+        <Animated.ScrollView
+          contentContainerStyle={styles.listScrollContent}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            {
+              listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                const nextForeground = event.nativeEvent.contentOffset.y > 2;
+                setListInForeground((current) => current === nextForeground ? current : nextForeground);
+              },
+              useNativeDriver: true,
+            },
+          )}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          style={styles.listScrollView}
+        >
+          <View pointerEvents="none" style={{ height: breakdownListStart }} />
+          <View style={styles.breakdownContent}>
+            <View style={styles.breakdownList}>
+              {energyBreakdown?.categories.length ? (
+                <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
+                  <View style={styles.breakdownIcon}>
+                    <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
+                  </View>
+                  <View style={styles.breakdownCopy}>
+                    <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
+                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown.period || 'Selected period'}</Text>
+                  </View>
+                  <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
+                </Pressable>
+              ) : null}
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownIcon}>
+                  <Ionicons color={colors.textMuted} name="pulse-outline" size={19} />
+                </View>
+                <View style={styles.breakdownCopy}>
+                  <Text style={[styles.breakdownTitle, { color: colors.text }]}>{periodTitle}</Text>
+                  <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>Current selected period</Text>
+                </View>
+                <View style={styles.breakdownValueWrap}>
+                  <Text style={[styles.breakdownValue, { color: colors.text }]}>
+                    {formatAmount(data?.totalKwh ?? null, data?.totalCostNzd ?? null)}
+                  </Text>
+                  <Text
+                    style={{
+                      color: (data?.trendPercent ?? 0) <= 0 ? palette.green : palette.red,
+                      fontSize: 12,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {data?.trendPercent == null ? '—' : `${data.trendPercent > 0 ? '+' : ''}${data.trendPercent.toFixed(1)}%`}
+                  </Text>
+                </View>
+              </View>
+
+              {bands.map((band) => {
+                const presentation = bandPresentation(band.key);
+                const share =
+                  band.kwh !== null && data?.totalKwh ? `${Math.round((band.kwh / data.totalKwh) * 100)}%` : '—';
+                return (
+                  <View key={band.key} style={styles.breakdownRow}>
+                    <View style={styles.breakdownIcon}>
+                      <Ionicons color={colors.textMuted} name={presentation.icon} size={19} />
+                    </View>
+                    <View style={styles.breakdownCopy}>
+                      <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
+                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>
+                        {band.window ?? 'No time window supplied'}
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownValueWrap}>
+                      <Text style={[styles.breakdownValue, { color: colors.text }]}>
+                        {formatAmount(band.kwh, band.costNzd)}
+                      </Text>
+                      <Text style={[styles.breakdownShare, { color: '#A1A1AA' }]}>{share}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+          </View>
+        </Animated.ScrollView>
+      </View>
+
+      {/* MODALS */}
+      <ModalSheet
+        footer={<PrimaryButton label="Done" onPress={() => setEnergyBreakdownOpen(false)} />}
+        onClose={() => setEnergyBreakdownOpen(false)}
+        title="Energy breakdown"
+        visible={energyBreakdownOpen}
+      >
+        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: colors.border }]}>
+          <View style={styles.energyBreakdownHeroIcon}><Ionicons color={palette.violet} name="pie-chart-outline" size={22} /></View>
+          <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
         </View>
-      <Card style={styles.disclosure}><Ionicons color={loadError ? palette.red : palette.periwinkle} name={loadError ? 'warning-outline' : 'information-circle-outline'} size={20} /><Text style={[styles.disclosureText, { color: colors.textMuted }]}>{loadError ?? (data?.isDemo ? 'Illustrative local fixture data. The screen switches to the contracted household API when EXPO_PUBLIC_API_URL is configured.' : data?.limitation ?? `Usage supplied for ${data?.sourcePeriod ?? 'the selected period'}.`)}</Text></Card>
-
-      <ModalSheet footer={<View style={styles.doneFooter}><View style={styles.doneButton}><PrimaryButton label="Done" onPress={() => setDateOpen(false)} /></View></View>} onClose={() => setDateOpen(false)} title={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`} visible={dateOpen}>
-        <View style={styles.dateDialog}><Text style={[styles.dialogLabel, { color: colors.textMuted }]}>Selected {period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}</Text><Text style={[styles.selectedDateText, { color: colors.text }]}>{selectionLabel(period, date)}</Text><CalendarPicker key={`date-${date}`} onChange={setDate} selectionMode={selectionMode} value={date} /></View>
+        <View style={styles.energyBreakdownSheet}>
+          {energyBreakdown?.categories.map((category) => {
+            const presentation = energyCategoryPresentation(category.key);
+            const estimated = category.confidence !== 'measured';
+            return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}><Ionicons color={presentation.color} name={presentation.icon} size={20} /></View>
+              <View style={[styles.energyCategoryCopy, styles.energyCategoryCopyCompact]}>
+                <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.label}</Text>
+                <View style={[styles.confidenceBadge, { backgroundColor: estimated ? 'rgba(255, 214, 10, 0.14)' : 'rgba(48, 209, 88, 0.14)' }]}><Text style={[styles.confidenceBadgeText, { color: estimated ? palette.amber : palette.green }]}>{estimated ? 'ESTIMATED' : 'MEASURED'}</Text></View>
+                <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{category.confidence === 'measured' ? category.basis : `Estimated · ${category.basis}`}</Text>
+                {category.caveat ? <Text style={[styles.energyCategoryCaveat, { color: colors.textMuted }]}>{category.caveat}</Text> : null}
+              </View>
+              <View style={styles.breakdownValueWrap}>
+                <Text style={[styles.breakdownValue, { color: colors.text }]}>{formatAmount(category.kwh, category.costNzd)}</Text>
+                <Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{category.kwh.toFixed(1)} kWh · {Math.round(category.sharePct)}%</Text>
+              </View>
+            </View>;
+          })}
+        </View>
+      </ModalSheet>
+      <ModalSheet
+        footer={
+          <View style={styles.doneFooter}>
+            <View style={styles.doneButton}>
+              <PrimaryButton label="Done" onPress={() => setDateOpen(false)} />
+            </View>
+          </View>
+        }
+        onClose={() => setDateOpen(false)}
+        title={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`}
+        visible={dateOpen}
+      >
+        <View style={styles.dateDialog}>
+          <Text style={[styles.dialogLabel, { color: colors.textMuted }]}>
+            Selected {period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}
+          </Text>
+          <Text style={[styles.selectedDateText, { color: colors.text }]}>{selectionLabel(period, date)}</Text>
+          <CalendarPicker key={`date-${date}`} onChange={setDate} selectionMode={selectionMode} value={date} />
+        </View>
       </ModalSheet>
 
-      <ModalSheet footer={<View style={styles.doneFooter}><View style={styles.doneButton}><PrimaryButton label="Done" onPress={applyComparison} /></View></View>} onClose={() => setCompareOpen(false)} title="Compare usage" visible={compareOpen}>
-        <View style={styles.compareDialog}><Text style={[styles.compareHelp, { color: colors.textMuted }]}>Choose the two {period === 'daily' ? 'dates' : period === 'weekly' ? 'weeks' : 'months'} you want to compare.</Text><View style={styles.periodBoxes}><Pressable onPress={() => setCompareTarget('first')} style={[styles.periodBox, { backgroundColor: colors.input, borderColor: compareTarget === 'first' ? palette.violet : colors.border }]}><Text style={[styles.periodBoxLabel, { color: colors.textMuted }]}>First</Text><Text numberOfLines={2} style={[styles.periodBoxValue, { color: colors.text }]}>{selectionLabel(period, firstPeriod)}</Text></Pressable><Pressable onPress={() => setCompareTarget('second')} style={[styles.periodBox, { backgroundColor: colors.input, borderColor: compareTarget === 'second' ? palette.violet : colors.border }]}><Text style={[styles.periodBoxLabel, { color: colors.textMuted }]}>Second</Text><Text numberOfLines={2} style={[styles.periodBoxValue, { color: colors.text }]}>{selectionLabel(period, secondPeriod)}</Text></Pressable></View><CalendarPicker key={`${compareTarget}-${compareTarget === 'first' ? firstPeriod : secondPeriod}`} onChange={compareTarget === 'first' ? setFirstPeriod : setSecondPeriod} selectionMode={selectionMode} value={compareTarget === 'first' ? firstPeriod : secondPeriod} /></View>
+      <ModalSheet
+        footer={
+          <View style={styles.doneFooter}>
+            <View style={styles.doneButton}>
+              <PrimaryButton label="Done" onPress={applyComparison} />
+            </View>
+          </View>
+        }
+        onClose={() => setCompareOpen(false)}
+        title="Compare usage"
+        visible={compareOpen}
+      >
+        <View style={styles.compareDialog}>
+          <Text style={[styles.compareHelp, { color: colors.textMuted }]}>
+            Choose the two {period === 'daily' ? 'dates' : period === 'weekly' ? 'weeks' : 'months'} you want to compare.
+          </Text>
+          <View style={styles.periodBoxes}>
+            <Pressable
+              onPress={() => setCompareTarget('first')}
+              style={[
+                styles.periodBox,
+                { backgroundColor: colors.input, borderColor: compareTarget === 'first' ? '#38BDF8' : colors.border },
+              ]}
+            >
+              <Text style={[styles.periodBoxLabel, { color: colors.textMuted }]}>First</Text>
+              <Text numberOfLines={2} style={[styles.periodBoxValue, { color: colors.text }]}>
+                {selectionLabel(period, firstPeriod)}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setCompareTarget('second')}
+              style={[
+                styles.periodBox,
+                { backgroundColor: colors.input, borderColor: compareTarget === 'second' ? '#38BDF8' : colors.border },
+              ]}
+            >
+              <Text style={[styles.periodBoxLabel, { color: colors.textMuted }]}>Second</Text>
+              <Text numberOfLines={2} style={[styles.periodBoxValue, { color: colors.text }]}>
+                {selectionLabel(period, secondPeriod)}
+              </Text>
+            </Pressable>
+          </View>
+          <CalendarPicker
+            key={`${compareTarget}-${compareTarget === 'first' ? firstPeriod : secondPeriod}`}
+            onChange={compareTarget === 'first' ? setFirstPeriod : setSecondPeriod}
+            selectionMode={selectionMode}
+            value={compareTarget === 'first' ? firstPeriod : secondPeriod}
+          />
+        </View>
       </ModalSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  refresh: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 15 },
-  toolbarRow: { flexDirection: 'row', gap: 4, marginTop: 10 }, toolbarButton: { minWidth: 0, minHeight: 50, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10, borderWidth: 1, borderRadius: 14 }, comparisonDateButton: { gap: 3, paddingHorizontal: 4 }, weekComparisonDateButton: { minHeight: 72 }, toolbarButtonText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', textAlign: 'center' }, compareButton: { gap: 0, overflow: 'hidden', paddingHorizontal: 0 }, compareMain: { minWidth: 0, minHeight: 48, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 9 }, compareClose: { width: 38, height: 32, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: 'rgba(74, 37, 255, 0.28)' }, pressed: { opacity: 0.78 },
-  chartCard: { marginTop: 14, paddingBottom: 8 },
-  chartHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }, totalLabel: { fontSize: 11, fontWeight: '700' }, total: { marginTop: 2, fontSize: 26, fontWeight: '900' }, suffix: { fontSize: 12, color: palette.violet },
-  swipeHint: { minHeight: 26, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: -5, marginBottom: 2, borderRadius: 13, paddingHorizontal: 9 }, swipeHintText: { fontSize: 8.5, lineHeight: 12, fontWeight: '800' },
-  unitToggle: { flexDirection: 'row', padding: 3, borderRadius: 12 }, unitOption: { width: 42, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 9 }, unitText: { fontSize: 12, fontWeight: '900' },
-  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, summaryCard: { width: '48.5%', minHeight: 142, padding: 12 }, summaryIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11 }, summaryTitle: { marginTop: 7, fontSize: 10.5, lineHeight: 14, fontWeight: '800' }, summaryValue: { marginTop: 2, fontSize: 17, lineHeight: 20, fontWeight: '900' }, summaryDetail: { marginTop: 3, fontSize: 8.5, lineHeight: 12 }, summaryBadge: { position: 'absolute', top: 12, right: 10, borderRadius: 9, backgroundColor: '#E7F8F1', paddingHorizontal: 6, paddingVertical: 4 }, summaryBadgeDown: { backgroundColor: '#FFEDF0' }, summaryBadgeText: { color: palette.green, fontSize: 9, fontWeight: '900' }, summaryBadgeTextDown: { color: palette.red }, shareBadge: { position: 'absolute', top: 12, right: 10, borderRadius: 9, backgroundColor: '#F0EDFF', paddingHorizontal: 6, paddingVertical: 4 }, shareBadgeText: { color: palette.violet, fontSize: 9, fontWeight: '900' },
-  disclosure: { flexDirection: 'row', gap: 10, marginTop: 14, padding: 14 }, disclosureText: { flex: 1, fontSize: 11, lineHeight: 16 },
-  dateDialog: { gap: 10 }, dialogLabel: { fontSize: 10, fontWeight: '800', textAlign: 'center' }, selectedDateText: { marginBottom: 2, fontSize: 17, fontWeight: '900', textAlign: 'center' }, doneFooter: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }, doneButton: { width: 132 },
-  compareDialog: { gap: 13 }, compareHelp: { fontSize: 12, lineHeight: 18 }, periodBoxes: { flexDirection: 'row', gap: 6 }, periodBox: { minWidth: 0, minHeight: 70, flex: 1, justifyContent: 'center', borderWidth: 1.5, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 9 }, periodBoxLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }, periodBoxValue: { marginTop: 4, fontSize: 11, lineHeight: 15, fontWeight: '900' },
+  screenRoot: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+  ambientGlowContainer: {
+    position: 'absolute',
+    top: 520,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  fixedBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 12,
+    backgroundColor: '#000000',
+  },
+  backdropBlurShade: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.48)',
+  },
+  headerControls: {
+    paddingHorizontal: 18,
+  },
+  chartContainer: {
+    width: '100%',
+  },
+  refresh: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 23,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 10,
+  },
+  toolbarButton: {
+    minWidth: 0,
+    minHeight: 50,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+  comparisonDateButton: {
+    gap: 3,
+    paddingHorizontal: 4,
+  },
+  weekComparisonDateButton: {
+    minHeight: 72,
+  },
+  toolbarButtonText: {
+    flexShrink: 1,
+    fontSize: 10.5,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  compareButton: {
+    gap: 0,
+    overflow: 'hidden',
+    paddingHorizontal: 0,
+  },
+  compareMain: {
+    minWidth: 0,
+    minHeight: 48,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 9,
+  },
+  compareClose: {
+    width: 38,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(56,189,248,0.32)',
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  chartHeaderCard: {
+    marginTop: 28,
+    paddingBottom: 4,
+    zIndex: 10,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    paddingHorizontal: 18,
+  },
+  totalLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  total: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    letterSpacing: -1.1,
+  },
+  suffix: {
+    fontSize: 9,
+    color: '#FFFFFF',
+  },
+  swipeHint: {
+    minHeight: 24,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    marginTop: -4,
+    marginBottom: 2,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+  },
+  swipeHintText: {
+    fontSize: 8.5,
+    lineHeight: 12,
+    fontWeight: '800',
+  },
+  unitToggle: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: 12,
+  },
+  unitOption: {
+    width: 38,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  unitText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  fullWidthChartWrap: {
+    alignSelf: 'stretch',
+    position: 'relative',
+    width: '100%',
+    marginTop: 8,
+    marginHorizontal: 0,
+    paddingHorizontal: 0,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  listViewport: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  listScrollView: {
+    flex: 1,
+  },
+  listScrollContent: {
+    paddingBottom: 20,
+  },
+  breakdownContent: {
+    paddingHorizontal: 0,
+    paddingBottom: 12,
+  },
+  breakdownList: {
+    marginTop: 22,
+    paddingHorizontal: 0,
+    paddingVertical: 10,
+  },
+  breakdownRow: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  energyBreakdownHero: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 18, padding: 13 },
+  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(168, 85, 247, 0.16)' },
+  energyBreakdownHeroCopy: { flex: 1 },
+  energyBreakdownHeroTitle: { fontSize: 15, fontWeight: '900' },
+  energyBreakdownIntro: { marginTop: 3, fontSize: 11, lineHeight: 16 },
+  energyBreakdownSheet: { gap: 10, marginTop: 14 },
+  energyCategoryCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 17, padding: 12 },
+  energyCategoryIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
+  energyCategoryCopy: { flex: 1, minWidth: 0 },
+  energyCategoryCopyCompact: { height: 34, overflow: 'hidden' },
+  energyCategoryTitle: { fontSize: 13, fontWeight: '800' },
+  energyCategoryCaveat: { marginTop: 4, fontSize: 10, lineHeight: 14 },
+  confidenceBadge: { alignSelf: 'flex-start', marginTop: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  confidenceBadgeText: { fontSize: 8, fontWeight: '900', letterSpacing: 0.35 },
+  breakdownIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: 'transparent',
+  },
+  breakdownCopy: {
+    minWidth: 0,
+    flex: 1,
+  },
+  breakdownTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  breakdownDetail: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  breakdownValueWrap: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  breakdownValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  breakdownShare: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dateDialog: {
+    gap: 10,
+  },
+  dialogLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  selectedDateText: {
+    marginBottom: 2,
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  doneFooter: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  doneButton: {
+    width: 132,
+  },
+  compareDialog: {
+    gap: 13,
+  },
+  compareHelp: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  periodBoxes: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  periodBox: {
+    minWidth: 0,
+    minHeight: 70,
+    flex: 1,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: 15,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  periodBoxLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  periodBoxValue: {
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '900',
+  },
 });

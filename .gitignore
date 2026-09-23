@@ -109,3 +109,9 @@ data/pipeline/scripts/gen_source/coverage.json
 # real people.
 .ollama.log
 services/api/var/
+
+# --- Local reference assets — never commit -----------------------------------
+# Store image references here and refer to them by relative path when asking me to
+# inspect them. This keeps them local-only and out of the git history.
+reference/
+!reference/README.md

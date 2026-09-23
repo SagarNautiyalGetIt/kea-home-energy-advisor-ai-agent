@@ -61,6 +61,9 @@ from app.pipeline import (
 from app.schemas import (
     AlertSummary,
     BillAnalysis,
+    BillingChargeLine,
+    BillingCustomer,
+    BillingInvoice,
     BillShockWarning,
     CauseBreakdown,
     ChatRequest,
@@ -70,6 +73,7 @@ from app.schemas import (
     EnergyBreakdown,
     EnergyCategory,
     ForecastSummary,
+    HouseholdBilling,
     HouseholdSummary,
     LoginRequest,
     LoginResponse,
@@ -181,15 +185,40 @@ def _own_history(ctx: UsageContext) -> tuple[list[float], float | None]:
 
 def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
     w = ctx.window
+    days = ctx.account.days if ctx.account else []
+    if ctx.period_start is not None and ctx.period_end is not None:
+        days = [day for day in days if ctx.period_start <= day.date <= ctx.period_end]
+
+    if len(days) == len(w.daily_kwh):
+        daily_peak = [day.peak_kwh for day in days]
+        daily_off_peak = [day.off_peak_kwh for day in days]
+        daily_night = [day.night_kwh for day in days]
+        band_source = (
+            "measured"
+            if any(value is not None for value in daily_peak + daily_off_peak + daily_night)
+            else None
+        )
+    else:
+        # The fixture repository has daily totals but no interval rows. Its database
+        # seeder uses this documented 48-interval presentation profile, so preserve that
+        # same explicitly illustrative split instead of returning empty cards.
+        peak_share, off_peak_share, night_share = 0.485352, 0.278749, 0.235899
+        daily_peak = [round(value * peak_share, 4) for value in w.daily_kwh]
+        daily_off_peak = [round(value * off_peak_share, 4) for value in w.daily_kwh]
+        daily_night = [round(value * night_share, 4) for value in w.daily_kwh]
+        band_source = "illustrative_fixture_profile"
     return HouseholdSummary(
         customer_id=customer_id,
         label=ctx.label,
         period=w.period,
         daily_kwh=w.daily_kwh,
+        daily_peak_kwh=daily_peak,
+        daily_off_peak_kwh=daily_off_peak,
+        daily_night_kwh=daily_night,
+        band_data_source=band_source,
         total_kwh=round(w.total_kwh, 2),
         estimated_cost_nzd=round(w.cost_nzd, 2),
     )
-
 
 
 @router.post("/auth/login", response_model=LoginResponse)
@@ -249,6 +278,104 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/billing", response_model=HouseholdBilling)
+async def get_household_billing(customer_id: str) -> HouseholdBilling:
+    """Billing data already held by the account repository, shaped for clients.
+
+    Database-backed accounts receive their actual current/prior bill facts. Fixture
+    accounts have no invoice ledger, so the endpoint returns the backend's own usage-cost
+    estimate as Pending rather than inventing due dates, payments or card details.
+    """
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    account = ctx.account
+    demo = next((item for item in auth.DEMO_ACCOUNTS if item.customer_id == customer_id), None)
+    customer = BillingCustomer(
+        id=customer_id,
+        name=(account.display_name if account else None) or (demo.display_name if demo else None),
+        address=account.connection.address_display if account and account.connection else None,
+    )
+
+    invoices: list[BillingInvoice] = []
+    if account and account.current_bill:
+        for index, bill in enumerate(filter(None, [account.current_bill, account.prior_bill])):
+            usage_amount = round(bill.total_kwh * bill.unit_rate_nzd, 2)
+            fixed_amount = round(bill.days * bill.daily_fixed_nzd, 2)
+            lines = [
+                BillingChargeLine(
+                    label="Electricity usage",
+                    quantity=f"{bill.total_kwh:.2f} kWh",
+                    rate=f"${bill.unit_rate_nzd:.4f}/kWh",
+                    amount=usage_amount,
+                )
+            ]
+            if fixed_amount:
+                lines.append(
+                    BillingChargeLine(
+                        label="Daily charges",
+                        quantity=f"{bill.days} days",
+                        rate=f"${bill.daily_fixed_nzd:.2f}/day",
+                        amount=fixed_amount,
+                    )
+                )
+            if bill.export_credit_nzd:
+                lines.append(
+                    BillingChargeLine(
+                        label="Export credit", amount=-round(bill.export_credit_nzd, 2)
+                    )
+                )
+            if bill.one_off_nzd:
+                lines.append(
+                    BillingChargeLine(label="Adjustments", amount=round(bill.one_off_nzd, 2))
+                )
+            is_current = index == 0
+            balance = account.billing.balance_nzd if is_current and account.billing else None
+            status = "Paid" if not is_current or (balance is not None and balance <= 0) else "Due"
+            invoices.append(
+                BillingInvoice(
+                    id=f"{customer_id}-{index + 1}",
+                    period=bill.label,
+                    days=bill.days,
+                    due=account.billing.due_date if is_current and account.billing else None,
+                    amount=round(bill.total_nzd, 2),
+                    amount_due=round(balance, 2)
+                    if balance is not None
+                    else round(bill.total_nzd, 2),
+                    status=status,
+                    charge_lines=lines,
+                )
+            )
+    else:
+        window = ctx.window
+        invoices.append(
+            BillingInvoice(
+                id=f"{customer_id}-estimate",
+                period=window.period,
+                days=len(window.daily_kwh),
+                amount=round(window.cost_nzd, 2),
+                amount_due=round(window.cost_nzd, 2),
+                status="Pending",
+                charge_lines=[
+                    BillingChargeLine(
+                        label="Estimated electricity usage",
+                        quantity=f"{window.total_kwh:.2f} kWh",
+                        rate=f"${window.unit_price_nzd:.2f}/kWh",
+                        amount=round(window.cost_nzd, 2),
+                    )
+                ],
+            )
+        )
+
+    return HouseholdBilling(
+        customer=customer,
+        current_plan=account.plan.name if account and account.plan else None,
+        invoices=invoices,
+    )
 
 
 @router.get("/households/{customer_id}/profile", response_model=CustomerProfile)
@@ -407,9 +534,7 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
         attribution_explained=assessment.attribution.explained,
     )
     question = questions.select(gaps, household, period=window.period)
-    bundle = billshock.build_bill_shock(
-        assessment, context=household, question=question
-    )
+    bundle = billshock.build_bill_shock(assessment, context=household, question=question)
 
     # Escalation. Idempotent by database constraint, so polling this endpoint does not
     # re-send; failures are recorded on the delivery rows and never raised into the
@@ -466,12 +591,8 @@ async def bill_shock(customer_id: str, as_at_day: int | None = None) -> BillShoc
             cost_p10_nzd=f.cost_p10_nzd,
             cost_p90_nzd=f.cost_p90_nzd,
             confidence_width_pct=f.confidence_width_pct,
-            base_load_kwh_per_day=(
-                f.response.base_load_kwh_per_day if f.response.usable else None
-            ),
-            heating_kwh_per_hdd=(
-                f.response.heating_kwh_per_hdd if f.response.usable else None
-            ),
+            base_load_kwh_per_day=(f.response.base_load_kwh_per_day if f.response.usable else None),
+            heating_kwh_per_hdd=(f.response.heating_kwh_per_hdd if f.response.usable else None),
             r_squared=f.response.r_squared if f.response.usable else None,
         ),
         causes=CauseBreakdown(
@@ -524,9 +645,7 @@ async def _preferences_for(customer_id: str) -> AlertPreferences:
     return prefs.model_copy(update=patch) if patch else prefs
 
 
-@router.get(
-    "/households/{customer_id}/alert-preferences", response_model=AlertPreferences
-)
+@router.get("/households/{customer_id}/alert-preferences", response_model=AlertPreferences)
 async def get_alert_preferences(customer_id: str) -> AlertPreferences:
     """What this household asked to be told about, and how.
 
@@ -537,12 +656,8 @@ async def get_alert_preferences(customer_id: str) -> AlertPreferences:
     return await get_preferences_store().get(customer_id)
 
 
-@router.put(
-    "/households/{customer_id}/alert-preferences", response_model=AlertPreferences
-)
-async def put_alert_preferences(
-    customer_id: str, prefs: AlertPreferences
-) -> AlertPreferences:
+@router.put("/households/{customer_id}/alert-preferences", response_model=AlertPreferences)
+async def put_alert_preferences(customer_id: str, prefs: AlertPreferences) -> AlertPreferences:
     """Set the thresholds.
 
     The path parameter wins over the body. A body carrying a different `account_ref` is a
@@ -554,14 +669,10 @@ async def put_alert_preferences(
     model, so an invalid ladder is a 422 with a readable message rather than a policy
     layer quietly sorting the numbers behind the customer's back.
     """
-    return await get_preferences_store().put(
-        prefs.model_copy(update={"account_ref": customer_id})
-    )
+    return await get_preferences_store().put(prefs.model_copy(update={"account_ref": customer_id}))
 
 
-@router.get(
-    "/households/{customer_id}/context", response_model=HouseholdContext
-)
+@router.get("/households/{customer_id}/context", response_model=HouseholdContext)
 async def get_household_context(customer_id: str) -> HouseholdContext:
     """What this household has told us about their home.
 
@@ -571,12 +682,8 @@ async def get_household_context(customer_id: str) -> HouseholdContext:
     return await get_context_store().get(customer_id)
 
 
-@router.post(
-    "/households/{customer_id}/context/answers", response_model=HouseholdContext
-)
-async def answer_question(
-    customer_id: str, response: QuestionResponse
-) -> HouseholdContext:
+@router.post("/households/{customer_id}/context/answers", response_model=HouseholdContext)
+async def answer_question(customer_id: str, response: QuestionResponse) -> HouseholdContext:
     """Record an answer to a clarifying question.
 
     The answer is a closed set — yes, no, not sure — plus at most a date and a count.
@@ -648,9 +755,7 @@ def _rebuild_question(
     return question if question and question.id == question_id else None
 
 
-@router.get(
-    "/households/{customer_id}/energy-breakdown", response_model=EnergyBreakdown
-)
+@router.get("/households/{customer_id}/energy-breakdown", response_model=EnergyBreakdown)
 async def energy_breakdown(customer_id: str) -> EnergyBreakdown:
     """Where this household's power goes, split by behaviour rather than by appliance.
 
@@ -673,7 +778,10 @@ async def energy_breakdown(customer_id: str) -> EnergyBreakdown:
         from app.analytics.account import AccountContext
 
         account = AccountContext.from_window(
-            customer_id, ctx.window, label=ctx.label, hdd=ctx.hdd,
+            customer_id,
+            ctx.window,
+            label=ctx.label,
+            hdd=ctx.hdd,
             peer_baseline=ctx.baseline,
         )
 
@@ -918,9 +1026,7 @@ class _VapiCompletionRequest(_VapiBaseModel):
 _CUSTOMER_ID_RE = re.compile(r"customer_id:\s*(\S+)", re.IGNORECASE)
 
 
-def _extract_customer_id(
-    messages: list[_VapiMessage], header: str | None
-) -> str | None:
+def _extract_customer_id(messages: list[_VapiMessage], header: str | None) -> str | None:
     """Find the customer this call is about.
 
     Two paths, because Vapi operators configure outbound calls differently:
@@ -1006,9 +1112,7 @@ async def vapi_chat_completions(
     user_messages = [m for m in req.messages if m.role == "user"]
     message = user_messages[-1].content.strip() if user_messages else ""
     if not message:
-        return _vapi_apology_response(
-            "I didn't quite catch that. Could you say that again?"
-        )
+        return _vapi_apology_response("I didn't quite catch that. Could you say that again?")
 
     try:
         await build_context(customer_id)
@@ -1047,7 +1151,6 @@ def _vapi_apology_response(text: str) -> StreamingResponse:
         yield _VAPI_DONE
 
     return StreamingResponse(stream(), media_type="text/event-stream")
-
 
 
 class _WebSocketTransport:

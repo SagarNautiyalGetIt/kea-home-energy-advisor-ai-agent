@@ -718,6 +718,10 @@ class HouseholdSummary(BaseModel):
     label: str
     period: str
     daily_kwh: list[float]
+    daily_peak_kwh: list[float | None]
+    daily_off_peak_kwh: list[float | None]
+    daily_night_kwh: list[float | None]
+    band_data_source: str | None = None
     total_kwh: float
     estimated_cost_nzd: float
 
@@ -739,6 +743,41 @@ class BillAnalysis(BaseModel):
 
     reading: dict[str, Any]
     comparison: dict[str, Any]
+
+
+class BillingChargeLine(BaseModel):
+    label: str
+    quantity: str | None = None
+    rate: str | None = None
+    amount: float | None = None
+
+
+class BillingInvoice(BaseModel):
+    id: str
+    issued: dt.date | None = None
+    period: str | None = None
+    days: int | None = None
+    due: dt.date | None = None
+    amount: float | None = None
+    amount_due: float | None = None
+    status: str
+    charge_lines: list[BillingChargeLine] = Field(default_factory=list)
+    gst: float | None = None
+    previous_balance: float | None = None
+    payments_and_credits: float | None = None
+    late_payment_fee: float | None = None
+
+
+class BillingCustomer(BaseModel):
+    id: str
+    name: str | None = None
+    address: str | None = None
+
+
+class HouseholdBilling(BaseModel):
+    customer: BillingCustomer
+    current_plan: str | None = None
+    invoices: list[BillingInvoice]
 
 
 class CustomerProfile(BaseModel):

@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,15 +22,15 @@ export function AuthShell({ title, subtitle, children, footer, compact = false }
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.surface }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: colors.surface }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <LinearGradient colors={['#8187EF', '#4023FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, compact && styles.heroCompact]}>
+          <View style={[styles.hero, compact && styles.heroCompact]}>
             <View style={[styles.brand, compact && styles.brandCompact]}><WebsiteAuthLogo size={compact ? 68 : 78} /><Text style={[styles.brandName, compact && styles.brandNameCompact]}>KEA ENERGY</Text></View>
-          </LinearGradient>
+          </View>
           <View style={[styles.panel, compact && styles.panelCompact, { backgroundColor: colors.surface }]}>
             <Text style={[styles.title, compact && styles.titleCompact, { color: colors.text }]}>{title}</Text>
             {subtitle ? <Text style={[styles.subtitle, compact && styles.subtitleCompact, { color: colors.textMuted }]}>{subtitle}</Text> : null}
             <View style={[styles.form, compact && styles.formCompact]}>{children}</View>
             {footer}
-            <Text style={[styles.legal, { color: colors.textMuted }]}>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</Text>
+            <Text style={[styles.legal, { color: colors.textMuted }]}>© 2026 Kea Energy. All rights reserved.</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -42,11 +41,11 @@ export function AuthShell({ title, subtitle, children, footer, compact = false }
 const styles = StyleSheet.create({
   safe: { flex: 1 }, flex: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
-  hero: { width: '100%', maxWidth: 760, minHeight: 170, alignItems: 'center', justifyContent: 'center', borderBottomRightRadius: 68, overflow: 'hidden' },
+  hero: { width: '100%', maxWidth: 760, minHeight: 170, alignItems: 'center', justifyContent: 'center', borderBottomRightRadius: 68, overflow: 'hidden', backgroundColor: '#000000' },
   heroCompact: { minHeight: 140, borderBottomRightRadius: 56 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   brandCompact: { gap: 13 },
-  brandName: { color: '#FFF7C8', fontSize: 40, lineHeight: 42, fontWeight: '900', letterSpacing: -1.8 },
+  brandName: { color: '#FFFFFF', fontSize: 40, lineHeight: 42, fontWeight: '900', letterSpacing: -1.8 },
   brandNameCompact: { fontSize: 35, lineHeight: 37, letterSpacing: -1.4 },
   panel: { width: '100%', maxWidth: 760, flex: 1, paddingHorizontal: 24, paddingTop: 38, paddingBottom: 20 },
   panelCompact: { paddingTop: 26, paddingBottom: 16 },

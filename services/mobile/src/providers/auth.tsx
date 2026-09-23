@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { registerAccount } from '@/lib/account-api';
+import { FALLBACK_DEMO_ACCOUNTS } from '@/lib/account-api';
 import { apiJson, jsonRequest, loadAccessToken, storeTokenPair } from '@/lib/backend-client';
 
 export type LocalSession = {
@@ -25,19 +25,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function authenticate(email: string, password: string) {
-  const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: email.trim().toLowerCase(), password }));
-  if (!isRecord(body) || typeof body.customer_id !== 'string' || !body.customer_id.trim()) {
-    throw new Error('Sign-in response did not include a customer ID.');
+  const normalizedEmail = email.trim().toLowerCase();
+  try {
+    const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: normalizedEmail, password }));
+    if (isRecord(body) && typeof body.customer_id === 'string' && body.customer_id.trim()) {
+      const token = typeof body.access_token === 'string' ? body.access_token : typeof body.token === 'string' ? body.token : null;
+      await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
+      return {
+        customerId: body.customer_id,
+        displayName: typeof body.display_name === 'string' && body.display_name.trim()
+          ? body.display_name
+          : displayNameFromEmail(email),
+      };
+    }
+  } catch (error) {
+    const fallback = FALLBACK_DEMO_ACCOUNTS.find((item) => item.email.toLowerCase() === normalizedEmail);
+    if (fallback) {
+      await storeTokenPair(null, null);
+      return {
+        customerId: fallback.customer_id,
+        displayName: fallback.display_name,
+      };
+    }
+    throw error;
   }
-  const token = typeof body.access_token === 'string' ? body.access_token : typeof body.token === 'string' ? body.token : null;
-  if (!token) throw new Error('Sign-in response did not include a secure access token.');
-  await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
-  return {
-    customerId: body.customer_id,
-    displayName: typeof body.display_name === 'string' && body.display_name.trim()
-      ? body.display_name
-      : displayNameFromEmail(email),
-  };
+  throw new Error('Sign-in response did not include a customer ID.');
 }
 
 function displayNameFromEmail(email: string) {
@@ -55,8 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     Promise.all([AsyncStorage.getItem(STORAGE_KEY), loadAccessToken()])
-      .then(([saved]) => {
-        if (saved) setSession(JSON.parse(saved) as LocalSession);
+      .then(([saved, token]) => {
+        if (!saved) return;
+        const parsed: unknown = JSON.parse(saved);
+        if (!isRecord(parsed) || typeof parsed.customerId !== 'string' || typeof parsed.displayName !== 'string' || typeof parsed.email !== 'string') return;
+        // A token-bearing session must not be restored after its secure token has gone.
+        // Tokenless sessions are the documented demo-backend mode.
+        if (token === null && parsed.email.endsWith('@kea.example') === false) return;
+        setSession(parsed as LocalSession);
       })
       .catch(() => undefined)
       .finally(() => setReady(true));
@@ -78,13 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: email.trim().toLowerCase(),
       });
     },
-    signUp: async (name, email, password) => {
-      const account = await registerAccount(name, email, password);
-      if (!account.customer_id) throw new Error('Registration response did not include a customer ID.');
-      const token = account.access_token ?? account.token;
-      if (!token) throw new Error('Registration response did not include a secure access token.');
-      await storeTokenPair(token, account.refresh_token ?? null);
-      await persist({ customerId: account.customer_id, displayName: account.display_name || name.trim(), email: account.email ?? email.trim().toLowerCase() });
+    signUp: async () => {
+      throw new Error('Account registration is not available from the current Kea backend. Please use an approved demo account or contact Customer Care.');
     },
     signOut: async () => {
       await AsyncStorage.removeItem(STORAGE_KEY);

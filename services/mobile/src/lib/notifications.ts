@@ -1,13 +1,24 @@
-import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { notificationRoute } from '@/lib/notification-route';
 
-export async function hasPhoneNotificationPermission() {
-  if (Platform.OS === 'web') return false;
+/** Expo Go may not include the native notifications module. Keep notification
+ * routing optional so a preview app still opens normally. */
+let notifications: typeof import('expo-notifications') | null = null;
+if (Platform.OS !== 'web') {
   try {
-    const permission = await Notifications.getPermissionsAsync();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    notifications = require('expo-notifications') as typeof import('expo-notifications');
+  } catch {
+    notifications = null;
+  }
+}
+
+export async function hasPhoneNotificationPermission() {
+  if (!notifications) return false;
+  try {
+    const permission = await notifications.getPermissionsAsync();
     return permission.granted;
   } catch {
     return false;
@@ -15,11 +26,11 @@ export async function hasPhoneNotificationPermission() {
 }
 
 export async function requestPhoneNotificationPermission() {
-  if (Platform.OS === 'web') return 'unavailable' as const;
+  if (!notifications) return 'unavailable' as const;
   try {
-    const current = await Notifications.getPermissionsAsync();
+    const current = await notifications.getPermissionsAsync();
     if (current.granted) return 'granted' as const;
-    const requested = await Notifications.requestPermissionsAsync();
+    const requested = await notifications.requestPermissionsAsync();
     return requested.granted ? 'granted' as const : 'denied' as const;
   } catch {
     return 'unavailable' as const;
@@ -27,17 +38,17 @@ export async function requestPhoneNotificationPermission() {
 }
 
 export async function getPhonePushToken() {
-  if (Platform.OS === 'web') return null;
+  if (!notifications) return null;
   const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
   if (!projectId) throw new Error('EXPO_PUBLIC_EAS_PROJECT_ID is required for push notifications.');
-  const result = await Notifications.getExpoPushTokenAsync({ projectId });
+  const result = await notifications.getExpoPushTokenAsync({ projectId });
   return result.data;
 }
 
 export function useNotificationResponseRouting() {
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    if (!notifications) return;
+    const subscription = notifications.addNotificationResponseReceivedListener((response) => {
       const destination = notificationRoute(response.notification.request.content.data?.screen);
       if (destination) router.push(destination);
     });

@@ -1,0 +1,22 @@
+export type HelpCategory = 'about' | 'accuracy' | 'bills' | 'privacy';
+
+export type HelpFaq = { category: HelpCategory; question: string; answer: string; note?: string };
+
+/** Official Help content, kept separate from preview account fixtures. */
+export const helpFaqs: HelpFaq[] = [
+  { category: 'about', question: 'What is Sparky AI?', answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand electricity usage, bills and plan options. It provides early high-bill warnings and can connect you with human support when needed.' },
+  { category: 'about', question: 'What can Sparky help me with?', answer: 'Sparky can explain bill changes, warn about projected high bills, compare Kea plans using your usage pattern and answer general questions about your energy account.' },
+  { category: 'about', question: 'How does Sparky work?', answer: 'Sparky requests information from approved account, usage and pricing services. Those services perform the calculations while Sparky explains the results. It is not allowed to create bill amounts, projections or savings figures.' },
+  { category: 'about', question: 'What information does Sparky use?', answer: 'Depending on your question, Sparky may use usage, billing history, current plan, alert preferences and information you choose to upload. It uses only information needed for your request.' },
+  { category: 'bills', question: 'How does the Bill Explainer work?', answer: 'The Bill Explainer compares bill information with available usage and pricing data. It identifies charges, days and time periods that contributed most, without claiming an appliance caused an increase unless supporting data is available.' },
+  { category: 'bills', question: 'What can I upload to the Bill Explainer?', answer: 'You can upload an electricity bill as a PDF, JPG or PNG, including a clear photo or screenshot. Make sure the full bill is readable and avoid unrelated documents.' },
+  { category: 'bills', question: 'What is a bill-shock warning?', answer: 'A bill-shock warning is an early notification that your projected bill crossed your selected threshold or is significantly higher than your normal pattern.' },
+  { category: 'bills', question: 'How often will Kea send warnings?', answer: 'Kea sends an initial warning when a projected bill crosses your selected threshold. It does not repeatedly send the same alert, but may send another if the projection increases significantly.' },
+  { category: 'bills', question: 'Is my projected bill the same as my final bill?', answer: 'No. A projected bill is an estimate based on usage so far, expected usage for the rest of the billing period and current pricing. Your final bill may differ.' },
+  { category: 'bills', question: 'How does Kea compare plans?', answer: 'Kea applies available Kea plans to your usage pattern and estimates costs, including rates, daily charges, free-power periods, credits, commitment length and possible exit fees.', note: 'Kea does not compare every electricity provider in New Zealand, only the big four energy providers.' },
+  { category: 'accuracy', question: 'Where do Sparky’s numbers come from?', answer: 'From your meter readings and account records. Bill amounts, projections and plan comparisons are worked out by Kea systems using set pricing rules; Sparky explains the result.', note: 'Projections and comparisons are estimates. Your issued bill is the record of what you owe.' },
+  { category: 'accuracy', question: 'Can Sparky make mistakes?', answer: 'Yes. Sparky can misread a question or give an incomplete answer, so do not treat replies as financial advice or a final account decision. It should say when it is not sure rather than guess.' },
+  { category: 'privacy', question: 'How does Kea protect my information?', answer: 'Kea uses authentication, encryption and access controls to protect customer information. The system is designed to use only data needed for each request and prevent access to another person’s account.' },
+  { category: 'privacy', question: 'Are my conversations with Sparky stored?', answer: 'Conversations may be stored securely for a limited period to provide the service, maintain an audit record, investigate problems and improve safety and quality.' },
+  { category: 'privacy', question: 'Can I speak to a real person?', answer: 'Yes. You can request human assistance at any time. Sparky also offers a handoff when it cannot answer safely, when important information is disputed or when more support is needed.' },
+];

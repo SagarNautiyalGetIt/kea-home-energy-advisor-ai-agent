@@ -21,6 +21,7 @@
       "package": "nz.co.keaenergy.mobile"
     },
     "web": {
+      "bundler": "metro",
       "output": "static",
       "favicon": "./assets/kea/kea-profile.png"
     },
