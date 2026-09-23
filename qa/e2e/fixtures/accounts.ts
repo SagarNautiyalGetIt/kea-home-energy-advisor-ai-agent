@@ -30,9 +30,15 @@
  * of a hardcoded list is that it goes stale silently — a new fixture household is added
  * and the suite keeps passing while covering one account less.
  *
- * `auth.setup.ts` closes that hole: it fails if the API's list and this one disagree. So
- * this is a snapshot of a contract with a guard on it, not a copy of the credentials.
- * Passwords are deliberately absent — setup reads those from the API at run time.
+ * `auth.setup.ts` only guards one direction of that: it fails if an account listed here
+ * has been withdrawn from the API, because that account genuinely cannot be signed into.
+ * The other direction — the API offering an account this list does not cover — is not
+ * checked anywhere at present. See CONVENTIONS.md §12 for why that check was removed
+ * rather than fixed, and what it costs to not have it.
+ *
+ * So this is a snapshot of a contract with a **partial** guard on it, not a copy of the
+ * credentials. Passwords are deliberately absent — setup reads those from the API at
+ * run time.
  */
 
 export type AccountKind = 'mart' | 'seed'

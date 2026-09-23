@@ -5,23 +5,30 @@ import { Pool } from 'pg'
  *
  * ## Which database
  *
- * There are two, and they are not synced:
+ * Port 5432 — the database the API reads. That is the whole reason: the question these
+ * tests ask is "does the screen agree with the data the API served", so they have to open
+ * the database that is actually in the request path.
  *
- * | port | what it is | who reads it |
- * |------|------------|--------------|
- * | 5432 | the application's Postgres (`infra/pg-local.sh`) | **the API — so, us** |
- * | 5433 | Harvey's warehouse (`kea-kea-serving-db-1`)      | Metabase |
- *
- * This connects to 5432, because the question these tests ask is "does the screen agree
- * with the data the API served", and the API reads 5432. Asserting against 5433 would
- * compare the UI to a database nothing in the request path has ever opened.
+ * It is no longer `infra/pg-local.sh`. Postgres now runs as the `kea-db` container
+ * (`postgres:16-alpine`), on the same port.
  *
  * ## Which credential
  *
- * `kea_app` — the role the schema ships with SELECT and nothing else. A test suite that
- * cannot write is a test suite that cannot corrupt the fixtures it is asserting against,
- * which matters more here than usual: these tests run against the same database the demo
- * runs on.
+ * `kea_app` / `kea_app` — the least-privilege role `data/design/kea_serving_schema.sql`
+ * defines: `GRANT SELECT ON ALL TABLES IN SCHEMA metering, billing, catalogue, kea TO
+ * kea_app`, and nothing else. Same guarantee this file has always relied on — a suite
+ * that cannot write cannot corrupt the fixtures it is asserting against, which matters
+ * more here than usual, since these tests run against the same database the demo does.
+ *
+ * That role is designed but not always provisioned: `make backend-schema`
+ * (`data/Makefile`) only applies `kea_serving_schema.sql` — the file that creates it —
+ * when the target schemas are empty, so a `kea-db` populated by any other path (a direct
+ * migration, a restored dump) never runs the `CREATE ROLE` block. If connecting fails
+ * with `password authentication failed for user "kea_app"` or `role "kea_app" does not
+ * exist`, that is what happened — the fix is to create the role from that file's own
+ * grants, not to fall back to the database owner. `kea` can log in to this database and
+ * is deliberately never used as a default here: it owns every schema, and a suite that
+ * can write is a suite that can corrupt the fixtures it is asserting against.
  *
  * ## Which tables, and why not more
  *
@@ -343,8 +350,9 @@ async function explanationRows(
 }
 
 export function createDb(): { db: KeaDb; close: () => Promise<void> } {
-  // Defaults match `infra/pg-local.sh`. Overridable so the same suite can point at a
-  // deployed database without editing a test.
+  // Defaults to the least-privilege `kea_app` role — see the file header on where it
+  // comes from and what to do when it has not been provisioned yet. Overridable so the
+  // same suite can point at a deployed database without editing a test.
   const pool = new Pool({
     host: process.env.KEA_DB_HOST ?? 'localhost',
     port: Number(process.env.KEA_DB_PORT ?? 5432),

@@ -1,6 +1,6 @@
 # How to write a test in here
 
-Nine rules. Each one is free to follow while writing and expensive to retrofit once the
+Twelve rules. Each one is free to follow while writing and expensive to retrofit once the
 suite has fifty tests in it. Most of them exist so this suite still passes the day it
 runs on CI instead of your laptop.
 
@@ -153,6 +153,10 @@ tests/
   pages/                 page objects, added when duplication justifies one
 ```
 
+One file per page, with no exceptions — a spec that tests the suite rather than the
+product does not belong beside the page specs, where its red is indistinguishable from a
+product defect at a glance.
+
 Test titles say what should be true, not what the test does:
 
 ```ts
@@ -209,6 +213,45 @@ the prose is only ever checked for structure: which figures appear in it, whethe
 in a question, whether a forbidden word is present. `AssistantPage.ask()` returns the
 `done` event from the page's *own* stream for the same reason: the report a test reasons
 about must belong to the words it is looking at.
+
+## 12. Only preconditions go in the setup project
+
+Every project declares `dependencies: ['setup']`, and Playwright will not **start** a
+dependent project when any test in its dependency failed. A red test in `auth.setup.ts`
+therefore does not cost one result — it costs the entire run, reported as `did not run`
+rather than as failures.
+
+That is the right behaviour for a genuine precondition. Without a `storageState` file the
+tests that load it cannot execute, so skipping them is honest.
+
+It is the wrong behaviour for anything else, and this suite has the scar to prove it. An
+assertion that the API offers *exactly* the accounts `ACCOUNTS` covers used to live there.
+The day two assistant accounts were added, all fourteen sign-ins passed, every
+`storageState` file was written, the environment was completely healthy — and **565
+runnable tests were skipped** to report a stale list.
+
+```ts
+// setup: an account we are about to sign in as must exist   ✅ blocking, it cannot be used
+// setup: the API offers nothing we do not cover             ❌ not a precondition
+```
+
+Before putting a test in `auth.setup.ts`, ask: *if this fails, can the other tests still
+run?* If the answer is yes it belongs in a page spec, where it goes red on its own.
+**A test that reports a gap must not also create one.**
+
+### The coverage check was removed, not relocated
+
+`fixtures/accounts.ts` is a hardcoded list, and the guard that kept it honest is gone by
+decision — `H-ZARA` and `H-AROHA` are assistant accounts with nothing to say about the
+Dashboard or Billing, so the drift it reported was not worth a file of its own.
+
+The tradeoff it leaves behind is worth stating plainly, because it is invisible: **nothing
+now notices when the product gains an account.** The suite will keep reporting green while
+covering fewer customers than the product ships. When somebody adds a household that these
+pages do care about, add it to `ACCOUNTS` by hand — no test will remind you.
+
+`auth.setup.ts` still catches the opposite direction: an account listed in `ACCOUNTS` that
+the API no longer offers fails there, because it genuinely cannot be signed into.
 
 ---
 

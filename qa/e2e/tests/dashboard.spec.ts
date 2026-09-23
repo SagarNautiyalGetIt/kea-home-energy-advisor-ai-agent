@@ -7,7 +7,7 @@ import {
 } from '../api/client'
 import { ACCOUNTS, authFile } from '../fixtures/accounts'
 import { expect, test } from '../fixtures/test'
-import { kwh, money } from '../pages/DashboardPage'
+import { dollars, kwh, money, rateFrom } from '../pages/DashboardPage'
 
 /**
  * Dashboard — identity and the four metric cards.
@@ -73,12 +73,14 @@ for (const account of ACCOUNTS) {
 
       await dashboard.goto()
 
-      // Computed in the browser at a hardcoded 30c/kWh, not returned by any endpoint.
-      // Asserted anyway, because it is a dollar figure on a product whose stated promise
-      // is that dollar figures come from a deterministic service — see the note below.
+      // Still computed in the browser rather than returned by any endpoint, but no longer
+      // at a flat 30c: the page derives its rate from the bill-shock figures and falls
+      // back to a published anytime rate, so the expectation follows `rateFrom`. Asserted
+      // anyway, because it is a dollar figure on a product whose stated promise is that
+      // dollar figures come from a deterministic service — see the note below.
       const latest = latestDayKwh(household, shock)
       expect(latest, `${account.customerId} has no daily readings in the cycle`).toBeDefined()
-      await expect(dashboard.latestDayCost).toHaveText(money(latest! * 0.3))
+      await expect(dashboard.latestDayCost).toHaveText(money(latest! * rateFrom(shock)))
 
       await expect(dashboard.usageSoFar).toHaveText(kwh(shock.usage_so_far_kwh))
       await expect(dashboard.costSoFar).toHaveText(money(shock.cost_so_far_nzd))
@@ -212,6 +214,50 @@ for (const account of ACCOUNTS) {
       ).toBe(true)
     })
 
+    // ── The charts are priced, not metered ────────────────────────────────────────
+    //
+    // The requirement changed: customers are shown dollars. Both charts and both chart
+    // headlines now render `toCost(kwh)`, and only the "Usage so far" tile is still in
+    // kilowatt-hours. Every chart assertion below therefore converts, and this test
+    // exists so the conversion has somewhere to fail on its own.
+    //
+    // The rate itself is derived (`cost_so_far_nzd / usage_so_far_kwh`), not returned by
+    // any endpoint — see `rateFrom()` for why that is a safe thing to mirror here and
+    // what it does not cover.
+
+    test("the charts price kWh at this account's own derived rate", async ({
+      dashboard,
+      request,
+    }) => {
+      const [household, shock] = await Promise.all([
+        getHousehold(request, account.customerId),
+        getBillShock(request, account.customerId),
+      ])
+      const latest = latestDayKwh(household, shock)!
+
+      await dashboard.goto()
+      await expect(dashboard.hourlyHeadline).not.toHaveText('—')
+      const headline = (await dashboard.hourlyHeadline.innerText()).trim()
+
+      // Reading the rate back off the screen rather than asserting the page agrees with a
+      // number this file also computed. If someone swaps the derivation, this is the test
+      // that says "the rate moved from X to Y" — one clear failure — instead of every
+      // plotted point being wrong by an unexplained multiple.
+      //
+      // This exercises `cost_so_far_nzd / usage_so_far_kwh` only. It says nothing about
+      // the `ANYTIME_RATE_NZD` fallback below — every demo account has usage by the time
+      // it signs in, so the fallback branch has no account to run this test against, and
+      // that gap is documented on the constant rather than papered over here.
+      const shown = Number(headline.replace(/[^\d.]/g, ''))
+      const impliedRate = shown / latest
+      expect(
+        impliedRate,
+        `the hourly headline reads ${headline} for a ${latest} kWh day, which prices ` +
+          `electricity at ${impliedRate.toFixed(4)} NZD/kWh. The page should be using ` +
+          `${rateFrom(shock).toFixed(4)} — cost_so_far_nzd / usage_so_far_kwh.`,
+      ).toBeCloseTo(rateFrom(shock), 3)
+    })
+
     // ── Chart 1 · "Typical day, by hour" ──────────────────────────────────────────
 
     test('the hourly chart headline is this customer\'s latest day', async ({
@@ -225,7 +271,9 @@ for (const account of ACCOUNTS) {
       const latest = latestDayKwh(household, shock)
 
       await dashboard.goto()
-      await expect(dashboard.hourlyHeadline).toHaveText(kwh(latest!))
+      // The headline is money now, not kilowatt-hours: `money(toCost(latest))`. The API
+      // still reports the day in kWh, so the expectation converts at the page's own rate.
+      await expect(dashboard.hourlyHeadline).toHaveText(money(latest! * rateFrom(shock)))
     })
 
     test('the hourly chart plots 24 points, midnight to 11pm', async ({ dashboard }) => {
@@ -247,6 +295,7 @@ for (const account of ACCOUNTS) {
         getBillShock(request, account.customerId),
       ])
       const latest = latestDayKwh(household, shock)!
+      const want = latest * rateFrom(shock)
 
       await dashboard.goto()
       await expect(dashboard.chartPoints(dashboard.hourlyCard)).toHaveCount(24)
@@ -255,20 +304,22 @@ for (const account of ACCOUNTS) {
 
       // A chart of one day, broken into hours, has exactly one arithmetic obligation:
       // the hours must add up to the day. They do not, and they cannot — the series is
-      // the literal on `DashboardPage.tsx:25`, twenty-four numbers summing to 18.60 kWh
-      // that every customer is shown regardless of what they actually used. The card's
-      // own subtitle admits it ("illustrative shape"), but the headline beside it is
-      // real, so the two halves of one card disagree.
+      // the literal on `DashboardPage.tsx:25`, twenty-four numbers that every customer is
+      // shown regardless of what they actually used. The card's own subtitle admits it
+      // ("illustrative shape"), but the headline beside it is real, so the two halves of
+      // one card disagree.
       //
-      // The y-axis follows from the same cause: `max={2}` is passed as a literal, so the
-      // scale reads 0.0–2.0 kWh for every account instead of adapting to the customer.
-      // Fixing the series fixes the axis; there is nothing separate to do.
+      // Switching the axis to dollars did not change that: `toCost` multiplies the same
+      // hardcoded shape by a rate, so the plotted hours are now a fixed shape in money
+      // instead of a fixed shape in kilowatt-hours. The y-axis follows from the same
+      // cause — `max={toCost(2)}` still derives from a literal 2. Fixing the series fixes
+      // the axis; there is nothing separate to do.
       expect(
         plotted,
-        `the 24 plotted hours total ${plotted.toFixed(2)} kWh but the headline says ` +
-          `${latest.toFixed(1)} kWh. The series is hardcoded at DashboardPage.tsx:25 ` +
-          `and is identical for all fourteen accounts.`,
-      ).toBeCloseTo(latest, 1)
+        `the 24 plotted hours total $${plotted.toFixed(2)} but the headline says ` +
+          `${want.toFixed(2)} NZD. The series is hardcoded at DashboardPage.tsx:25 and is ` +
+          `identical for all fourteen accounts.`,
+      ).toBeCloseTo(want, 2)
     })
 
     test.fixme('the API exposes hourly usage for this customer', async ({ request }) => {
@@ -300,7 +351,8 @@ for (const account of ACCOUNTS) {
       const total = week.reduce((sum, value) => sum + value, 0)
 
       await dashboard.goto()
-      await expect(dashboard.weeklyHeadline).toHaveText(kwh(total))
+      // Money, for the same reason as the hourly headline above.
+      await expect(dashboard.weeklyHeadline).toHaveText(money(total * rateFrom(shock)))
     })
 
     test('the weekly chart plots this customer\'s own last seven days', async ({
@@ -312,6 +364,7 @@ for (const account of ACCOUNTS) {
         getBillShock(request, account.customerId),
       ])
       const expected = lastSevenDays(household, shock)
+      const rate = rateFrom(shock)
 
       await dashboard.goto()
       // Waits for the series to arrive: the card paints a single zero point before the
@@ -320,13 +373,17 @@ for (const account of ACCOUNTS) {
       const points = await dashboard.plottedPoints(dashboard.weeklyCard)
 
       points.forEach((point, index) => {
+        // No unit check here: `plottedPoints` only parses dollars, so a chart that
+        // reverted to kilowatt-hours never reaches this loop. One place owns that rule.
+        //
         // Rounded to whatever precision the chart chose to render, so this asserts the
         // value rather than the formatting rule.
-        const want = Number(expected[index]!.toFixed(point.decimals))
+        const want = Number((expected[index]! * rate).toFixed(point.decimals))
         expect(
           point.value,
-          `point ${index + 1} (${point.label}) plots ${point.value} kWh; the API returned ` +
-            `${expected[index]} kWh for that day`,
+          `point ${index + 1} (${point.label}) plots ${dollars(point.value)}; the API ` +
+            `returned ${expected[index]} kWh for that day, which is ${dollars(want)} at ` +
+            `the ${rate.toFixed(4)} NZD/kWh this page converts with`,
         ).toBe(want)
       })
     })

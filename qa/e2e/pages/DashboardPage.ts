@@ -131,19 +131,38 @@ export class DashboardPage {
   /**
    * Every plotted point in a chart, in series order.
    *
-   * The value is parsed out of the accessible name rather than compared as a string,
-   * because the chart picks its own precision — one decimal when the axis ceiling is 2
-   * or less, none above it (`formatMetric`). Returning the digits that were actually
-   * rendered lets a caller round its expectation to the same precision instead of
-   * hardcoding the rule.
+   * ## Both charts plot money, and only money
+   *
+   * The requirement changed after the industry mentor review: these charts show customers
+   * what they are spending, so both `AreaChart`s are passed `unit="$"` and
+   * `values={…map(toCost)}`. `formatMetric` renders `$0.10` where it used to render
+   * `1.5 kWh`, and an accessible name now reads `"12am: $0.10"`.
+   *
+   * Dollars is the ONLY accepted format, deliberately. Accepting kilowatt-hours as an
+   * alternative would not be future-proofing — it would be accepting the state the
+   * requirement now forbids. Worse, it pushes enforcement onto the caller: a helper that
+   * parses both and hands back a bare number lets any test that forgets to check the unit
+   * compare dollars against kilowatt-hours and pass, wrong by the tariff and entirely
+   * plausible. One regex owns the rule, so a chart that reverts fails here, once, by name.
+   *
+   * `decimals` is reported because the chart picks its own precision (`formatMetric` uses
+   * two for money). Rounding the expectation to what was actually rendered asserts the
+   * value rather than the formatting rule.
    */
   async plottedPoints(card: Locator): Promise<{ label: string; value: number; decimals: number }[]> {
     const names = await card.locator('circle.chart-point').evaluateAll((nodes) =>
       nodes.map((n) => n.getAttribute('aria-label') ?? ''),
     )
     return names.map((name) => {
-      const match = /^(.*?):\s*([\d.]+)\s*kWh$/.exec(name)
-      if (!match) throw new Error(`chart point has an unreadable accessible name: "${name}"`)
+      // `"12am: $0.10"`, anchored at both ends so anything else is an error rather than a
+      // partial match. A kWh label lands here, which is the intended failure.
+      const match = /^(.*?):\s*\$([\d.]+)$/.exec(name)
+      if (!match) {
+        throw new Error(
+          `chart point is not priced in dollars: "${name}". The Dashboard charts show ` +
+            'spend, not consumption — see DashboardPage.tsx, both AreaChart props.',
+        )
+      }
       const rendered = match[2]!
       return {
         label: match[1]!.trim(),
@@ -215,8 +234,44 @@ export class DashboardPage {
   }
 }
 
-/** `money()` in `DashboardPage.tsx` — two decimals and a NZD suffix. */
+/** `money()` in `DashboardPage.tsx` — two decimals and a NZD suffix. Used by the metric
+ *  tiles and, since the charts switched to money, by both chart headlines. */
 export const money = (n: number): string => `${n.toFixed(2)} NZD`
 
-/** The usage tile's format — one decimal, kWh. */
+/** A plotted point's own format — `$0.10`, always two decimals (`formatMetric`). */
+export const dollars = (n: number): string => `$${n.toFixed(2)}`
+
+/** The usage tile's format — one decimal, kWh. Still correct for "Usage so far", which
+ *  is the one figure on this page the requirement change left in kilowatt-hours. */
 export const kwh = (n: number): string => `${n.toFixed(1)} kWh`
+
+/**
+ * `DashboardPage.tsx`'s fallback price when a cycle has no usage yet to derive a rate
+ * from. A copy of the app's own literal, not a value any endpoint supplies — the API
+ * has no concept of "the anytime rate", only `cost_so_far_nzd` and `usage_so_far_kwh`.
+ *
+ * That makes this the one piece of duplication in `rateFrom()` below, and an untested
+ * one: every demo account has usage by the time it can sign in, so no test in this suite
+ * ever exercises the branch that reads this constant. If the app's literal changes, this
+ * copy has to be updated by hand — nothing will fail to say so.
+ */
+export const ANYTIME_RATE_NZD = 0.325
+
+/**
+ * The rate the page converts kilowatt-hours to dollars with, when there IS usage to
+ * derive one from.
+ *
+ * ## Why this mirrors the app instead of asserting against a constant
+ *
+ * The API returns usage in kWh and the charts now plot dollars, so a test comparing the
+ * two needs the conversion. For the branch this function shares with the app —
+ * `cost_so_far_nzd / usage_so_far_kwh` — mirroring the formula is acceptable, narrowly,
+ * because it is a division of two fields the same API response already carries rather
+ * than a business rule reimplemented: there is no third source it could disagree with.
+ *
+ * The `ANYTIME_RATE_NZD` fallback is a different case and is NOT covered by that
+ * argument — see its own comment for why.
+ */
+export function rateFrom(shock: { cost_so_far_nzd: number; usage_so_far_kwh: number }): number {
+  return shock.usage_so_far_kwh > 0 ? shock.cost_so_far_nzd / shock.usage_so_far_kwh : ANYTIME_RATE_NZD
+}

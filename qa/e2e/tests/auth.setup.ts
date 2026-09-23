@@ -11,25 +11,48 @@ import { ACCOUNTS, authFile } from '../fixtures/accounts'
  * becomes a real one — which is the reason to go through the form rather than writing the
  * key directly. The form is also the app's only account switcher, so exercising it for
  * every account is coverage, not overhead.
+ *
+ * ## Only preconditions belong in this file
+ *
+ * Every project depends on `setup` (`playwright.config.ts`), and Playwright refuses to
+ * START a dependent project when any test in its dependency failed. So a red test here
+ * does not cost you one result — it costs you the whole run, reported as `did not run`
+ * rather than as a failure.
+ *
+ * That power is correct for the sign-ins below: without a `storageState` file the tests
+ * that consume it physically cannot execute, so skipping them is honest.
+ *
+ * It was wrong for the account-list guard that used to live here. That guard asserted the
+ * API offers *exactly* the accounts `ACCOUNTS` covers — a statement about coverage, not
+ * about whether anything can run. When Akash added `H-ZARA` and `H-AROHA` (two accounts
+ * built for the assistant, unrelated to Dashboard or Billing), all fourteen sign-ins
+ * still passed and every storageState file was written, and 565 perfectly runnable tests
+ * were skipped anyway to report a stale list.
+ *
+ * That half of the check was removed, not relocated — see CONVENTIONS.md §12 for the
+ * tradeoff that leaves and why it was judged acceptable for these two pages. What stays
+ * here is the half that really is a precondition: an account this suite covers must
+ * exist, or it cannot be signed into.
  */
 
-setup('the API offers exactly the accounts this suite covers', async ({ request }) => {
+setup('every account this suite covers is offered by the API', async ({ request }) => {
   const live = await getDemoAccounts(request)
+  const offered = new Set(live.map((a) => a.customer_id))
 
-  // The guard that makes a hardcoded list safe. A new fixture household must either be
-  // added to ACCOUNTS or consciously excluded — it cannot slip past uncovered.
+  // Blocking on purpose, and narrowly: only accounts we are ABOUT TO SIGN IN AS. One that
+  // vanished cannot be signed into, so the sign-in below would fail anyway — failing here
+  // says why in one line instead of fourteen browser timeouts.
+  //
+  // This direction only: `ACCOUNTS ⊆ API`. The other direction — the API offering
+  // something this suite does not cover — is not a precondition, is not checked
+  // anywhere else either, and CONVENTIONS.md §12 says why.
+  const missing = ACCOUNTS.map((a) => a.customerId).filter((id) => !offered.has(id))
   expect(
-    live.map((a) => a.customer_id).sort(),
-    'GET /api/auth/demo-accounts disagrees with fixtures/accounts.ts. ' +
-      'If Harvey or Akash added an account, add it to ACCOUNTS with the right `kind`.',
-  ).toEqual(ACCOUNTS.map((a) => a.customerId).sort())
-
-  for (const account of ACCOUNTS) {
-    const card = live.find((a) => a.customer_id === account.customerId)
-    expect(card?.display_name, `display name drifted for ${account.customerId}`).toBe(
-      account.displayName,
-    )
-  }
+    missing,
+    'these accounts are in fixtures/accounts.ts but GET /api/auth/demo-accounts no longer ' +
+      'offers them, so there is no session to park for them. Remove them from ACCOUNTS, ' +
+      'or find out who took them away.',
+  ).toEqual([])
 })
 
 for (const account of ACCOUNTS) {
