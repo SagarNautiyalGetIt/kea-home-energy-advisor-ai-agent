@@ -1,3 +1,5 @@
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { solarPrompt, type SolarContext } from '../lib/solar'
 import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AnswerChart from '../components/AnswerChart'
@@ -101,6 +103,10 @@ const PROMPTS = [
 const GREETING = 'Hello! I’m Sparky. Ask me about your bill, usage, or energy plan.'
 
 export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>void; onToast:(message:string,tone?:'success'|'info'|'warning')=>void }) {
+  const routeLocation = useLocation()
+  const navigateSolar = useNavigate()
+  const incomingSolar = (routeLocation.state as { solarContext?: SolarContext } | null)?.solarContext
+  const solarContext = incomingSolar?.customerId === loadSession()?.customerId ? incomingSolar : undefined
   const [households, setHouseholds] = useState<HouseholdSummary[]>([])
   const [customerId, setCustomerId] = useState('')
   const [backendDown, setBackendDown] = useState(false)
@@ -359,6 +365,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         return
       }
 
+      if (solarContext && /what.?if|recalculat|instead|change|increase|decrease|[0-9]/i.test(question)) {
+        setStarted(true)
+        setMessages([...history, { id: nextId.current++, role: 'user', text: question }, { id: nextId.current++, role: 'assistant', text: 'To compare different solar inputs, return to Explore solar savings, adjust your assumptions and select Calculate solar savings. This chat cannot recalculate solar figures.' }])
+        return
+      }
+
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -383,7 +395,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
       try {
         await streamChat(
-          { customer_id: customerId, message: question, conversation_id: conversationId.current },
+          { customer_id: customerId, message: solarContext ? solarPrompt(solarContext) + '\nCustomer question: ' + question : question, conversation_id: solarContext ? null : conversationId.current },
           {
             onToken: (token) => patch((m) => ({ ...m, text: m.text + token.text })),
             // The round that produced this text turned out to be a lookup, so the text
@@ -442,7 +454,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         if (!controller.signal.aborted) setBusy(false)
       }
     },
-    [customerId, onToast],
+    [customerId, onToast, solarContext],
   )
 
   /**
@@ -568,6 +580,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   }
 
   return <div className="assistant-page">
+    {solarContext && <section className="card solar-advisor"><h2>Your solar calculation</h2><p>Based on assumed solar self-use. {solarContext.result.display.netBenefit} annual net savings after maintenance and replacement allowance · {solarContext.result.display.payback} simple payback.</p><p>Kea can explain this scenario. For numerical what-if questions, <Link to="/solar">adjust the calculator and recalculate</Link>.</p><button className="primary-action" disabled={busy || !customerId} onClick={() => void ask('Explain these solar results and their limitations without calculating new figures.', messagesRef.current)}>Explain my solar results</button><button className="solar-text-button" onClick={() => navigateSolar('/assistant', { replace: true, state: null })}>Leave solar discussion</button></section>}
+
     <div className="page-heading assistant-heading">
       <div>
         <h1>AI Assistant</h1>

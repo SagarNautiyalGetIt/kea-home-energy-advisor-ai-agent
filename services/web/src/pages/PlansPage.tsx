@@ -1,3 +1,4 @@
+import '../solar.css'
 import { Check, MessagesSquare } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -126,6 +127,7 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
       </div>
     </section>
 
+    <section className="card solar-entry"><div><h2>Could solar lower your bills?</h2><p>Estimate your potential savings and how long rooftop solar could take to pay for itself.</p></div><button className="primary-action" onClick={() => navigate('/solar?plan=' + styleId)}>Explore solar savings</button></section>
     <ul className="plan-inclusions">
       {planInclusions.map((item) => <li key={item}><Check aria-hidden="true"/>{item}</li>)}
     </ul>

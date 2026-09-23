@@ -1,3 +1,4 @@
+import SolarPage from './pages/SolarPage'
 import { useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import AppShell from './components/AppShell'
@@ -87,6 +88,7 @@ function App() {
       <Route path="/usage" element={<UsagePage/>}/>
       <Route path="/billing" element={<BillingPage onToast={addToast}/>}/>
       <Route path="/assistant" element={<AssistantPage onEscalate={() => addToast('A Customer Care request has been prepared', 'info')} onToast={addToast}/>}/>
+      <Route path="/solar" element={<SolarPage/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
