@@ -1,0 +1,322 @@
+.energy-home-panel {
+  --energy-home-lime: #b5eb86;
+  width: 100%;
+  margin: 0 0 clamp(24px, 3vw, 38px);
+  color: #e9f1e9;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.energy-home-scene-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--glass-line, #edf0f8);
+  border-radius: 22px;
+  background: #f1f0fc;
+  box-shadow: 0 18px 52px rgb(86 73 155 / 12%);
+}
+
+html[data-theme='dark'] .energy-home-scene-shell {
+  border-color: var(--line);
+}
+
+.energy-home-scene {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  aspect-ratio: 2.32 / 1;
+  min-height: 360px;
+  overflow: hidden;
+  background: #f1f0fc;
+}
+
+.energy-home-scene > .weather-environment {
+  position: absolute;
+  inset: 0;
+}
+
+/* The embedded Usage preview keeps one light palette in every weather state. */
+.energy-home-scene .weather-environment .weather-sky {
+  background:
+    radial-gradient(ellipse 48% 54% at 52% 66%, rgb(178 165 239 / 20%), transparent 76%),
+    linear-gradient(180deg, #f9f8ff 0%, #eeedfb 46%, #d9ddf1 100%);
+  transition: none;
+}
+
+.energy-home-scene .weather-sky .weather-sky__haze {
+  background: radial-gradient(ellipse at 50% 62%, rgb(255 255 255 / 25%), transparent 68%);
+}
+
+.energy-home-scene .weather-sky .weather-sky__cloud {
+  filter: blur(10px) saturate(.8);
+}
+
+.energy-home-scene .weather-precipitation .weather-sky__rain {
+  background: transparent;
+}
+
+.energy-home-scene .weather-sky__star {
+  background: #7f95bc;
+  box-shadow: 0 0 7px 1px rgb(113 143 185 / 48%);
+}
+
+.energy-home-scene .weather-sky__shooting-star {
+  background: linear-gradient(90deg, transparent, rgb(107 137 187 / 65%) 58%, #7791b9 100%);
+}
+
+.energy-home-scene > .kea-energy-house {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 47.5%;
+  width: min(80%, 1440px);
+  margin: 0;
+  transform: translate(-50%, -49%);
+}
+
+.energy-home-ground {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 30% at 50% 77%, rgb(180 175 219 / 30%), transparent 76%),
+    linear-gradient(180deg, transparent 0%, rgb(229 226 250 / 8%) 48%, rgb(181 176 219 / 38%) 100%);
+}
+
+.energy-home-ground::before {
+  content: '';
+  position: absolute;
+  inset: auto -8% 0;
+  height: 52%;
+  background: radial-gradient(ellipse at 50% 100%, rgb(201 194 232 / 30%), transparent 72%);
+  filter: blur(22px);
+}
+
+.energy-home-ground::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 42% 24% at 52% 77%, rgb(247 244 255 / 27%), transparent 72%);
+}
+
+.energy-home-ground > span {
+  position: absolute;
+  right: 8%;
+  bottom: 4%;
+  left: 10%;
+  height: 29%;
+  border-radius: 50%;
+  background: rgb(77 68 117 / 18%);
+  filter: blur(24px);
+}
+
+.energy-home-topline,
+.energy-home-bottomline {
+  position: absolute;
+  z-index: 4;
+  right: 28px;
+  left: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.energy-home-topline { top: 24px; }
+.energy-home-bottomline { bottom: 24px; }
+
+.energy-home-weather {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #243b5e;
+  text-shadow: 0 1px 3px rgb(255 255 255 / 82%);
+}
+
+.energy-home-weather-icon {
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(75 100 143 / 22%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 56%);
+  backdrop-filter: blur(8px);
+}
+
+.energy-home-weather > div,
+.energy-home-status > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.energy-home-weather > div { gap: 4px; }
+.energy-home-weather strong { font-size: 14px; font-weight: 600; }
+.energy-home-weather small { font-size: 11px; letter-spacing: .03em; }
+
+.energy-home-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  pointer-events: auto;
+}
+
+.energy-home-direction,
+.energy-home-mode {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  color: #f5fff9;
+  background: rgb(13 37 40 / 62%);
+  backdrop-filter: blur(10px);
+}
+
+.energy-home-direction {
+  min-height: 36px;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid rgb(238 255 247 / 50%);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.energy-home-direction:hover,
+.energy-home-direction:focus-visible {
+  color: #fff;
+  background: #244c49;
+  transform: none;
+}
+
+.energy-home-mode {
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid rgb(226 240 239 / 25%);
+  font: 600 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .1em;
+  text-shadow: 0 1px 3px #16323b;
+}
+
+.energy-home-mode-dot,
+.energy-home-status-led {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--energy-home-lime);
+  box-shadow: 0 0 8px var(--energy-home-lime);
+}
+
+.energy-home-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid rgb(234 255 247 / 22%);
+  border-radius: 10px;
+  color: #f3faf2;
+  background: rgb(15 32 37 / 46%);
+  backdrop-filter: blur(8px);
+}
+
+.energy-home-status > div { gap: 2px; }
+.energy-home-status small { font: 600 8px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; }
+.energy-home-status strong { font-size: 12px; font-weight: 500; }
+
+.energy-home-scene .kea-energy-house-caption { bottom: 3%; }
+
+/* Settings stays part of this feature, but the dialog is shown only on demand. */
+.energy-home-panel .settings-dialog {
+  width: min(550px, calc(100% - 28px));
+  max-height: min(880px, 94vh);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #416c62;
+  border-radius: 18px;
+  color: #e9f4e9;
+  background: #102322;
+  box-shadow: 0 24px 100px #0009;
+}
+
+.energy-home-panel .settings-dialog::backdrop {
+  background: #051115be;
+  backdrop-filter: blur(5px);
+}
+
+.energy-home-panel .dialog-content { padding: 27px 30px 30px; }
+.energy-home-panel .dialog-content header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.energy-home-panel .dialog-content h2 { margin: 8px 0 4px; font-size: 28px; font-weight: 600; letter-spacing: -.048em; }
+.energy-home-panel .eyebrow { color: var(--energy-home-lime); font: 600 10px ui-monospace, monospace; letter-spacing: .2em; }
+.energy-home-panel .icon-button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #45655b; border-radius: 50%; color: #dae8da; background: #214039; }
+.energy-home-panel .dialog-intro { margin: 12px 0 21px; color: #b2c9b6; font-size: 13px; line-height: 1.55; }
+.energy-home-panel .settings-section { padding: 18px 0; border-top: 1px solid #31524b; }
+.energy-home-panel .settings-section h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; }
+.energy-home-panel .settings-section h3 svg,
+.energy-home-panel .settings-section h3 output { color: var(--energy-home-lime); }
+.energy-home-panel .settings-section h3 output { margin-left: auto; font: 12px ui-monospace, monospace; }
+.energy-home-panel .chosen-location { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 15px; border: 1px solid #416b50; border-radius: 10px; background: #1b3730; }
+.energy-home-panel .chosen-location div { display: flex; flex-direction: column; gap: 4px; }
+.energy-home-panel .chosen-location strong { font-size: 13px; }
+.energy-home-panel .chosen-location span { color: #a3bba8; font-size: 11px; }
+.energy-home-panel .chosen-location svg { color: var(--energy-home-lime); }
+.energy-home-panel .search-form { display: flex; align-items: center; gap: 8px; margin-top: 11px; padding: 3px 3px 3px 12px; border: 1px solid #3e6256; border-radius: 10px; background: #142e2b; }
+.energy-home-panel .search-form input { min-width: 0; flex: 1; padding: 9px 0; border: 0; outline: 0; color: #f0f8ee; background: transparent; }
+.energy-home-panel .search-form button { min-height: 36px; padding: 8px 13px; border: 0; border-radius: 8px; color: #163021; background: #a8d995; }
+.energy-home-panel .location-results { max-height: 180px; margin: 6px 0 0; padding: 0; overflow: auto; border: 1px solid #36564d; border-radius: 9px; list-style: none; }
+.energy-home-panel .location-results li + li { border-top: 1px solid #36564d; }
+.energy-home-panel .location-results button { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px; border: 0; color: #e5f2e7; text-align: left; background: #18322b; }
+.energy-home-panel .location-results button span { flex: 1; display: flex; flex-direction: column; }
+.energy-home-panel .text-button { min-height: 32px; padding: 9px 0 0; border: 0; color: var(--energy-home-lime); background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.energy-home-panel .field-note { margin: 9px 0 0; color: #9eb7a6; font-size: 10px; line-height: 1.5; }
+.energy-home-panel .coordinate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.energy-home-panel .coordinate-fields label { display: flex; flex-direction: column; gap: 5px; color: #b1c9b7; font-size: 10px; }
+.energy-home-panel .coordinate-fields input { min-width: 0; padding: 8px; border: 1px solid #406254; border-radius: 7px; color: #eaf7ec; background: #142e2b; }
+.energy-home-panel .timezone-field { grid-column: 1 / -1; }
+.energy-home-panel .range-labels { display: flex; justify-content: space-between; color: #89a696; font-size: 9px; }
+.energy-home-panel input[type='range'] { width: 100%; accent-color: var(--energy-home-lime); }
+.energy-home-panel .reserve-label { display: flex; justify-content: space-between; font-size: 12px; }
+.energy-home-panel .reserve-label output { color: var(--energy-home-lime); font-family: ui-monospace, monospace; }
+.energy-home-panel .form-error { padding: 9px 11px; border-radius: 7px; color: #ffccbc; background: #49342d; font-size: 11px; }
+.energy-home-panel .primary-button { width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 10px; padding: 13px; border: 0; border-radius: 10px; color: #142c20; background: var(--energy-home-lime); font-weight: 700; }
+.energy-home-panel .dialog-footnote { margin: 10px 0 0; color: #789985; font-size: 9px; text-align: center; }
+.energy-home-panel .loading-line { margin: 10px 0; color: #bcd4c0; font-size: 11px; }
+.energy-home-panel .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; border: 0; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .energy-home-scene {
+    aspect-ratio: 1.85 / 1;
+    min-height: 360px;
+  }
+
+  .energy-home-scene > .kea-energy-house { width: min(100%, 860px); }
+}
+
+@media (max-width: 620px) {
+  .energy-home-scene-shell { border-radius: 14px; }
+  .energy-home-scene { aspect-ratio: 1.3 / 1; min-height: 310px; }
+  .energy-home-topline { top: 12px; right: 12px; left: 12px; align-items: flex-start; }
+  .energy-home-bottomline { right: 12px; bottom: 10px; left: 12px; }
+  .energy-home-weather { gap: 7px; }
+  .energy-home-weather-icon { width: 30px; height: 30px; }
+  .energy-home-weather strong { font-size: 11px; }
+  .energy-home-weather small { font-size: 9px; }
+  .energy-home-actions { flex-direction: column; align-items: flex-end; gap: 6px; }
+  .energy-home-direction { min-height: 30px; padding: 6px 8px; font-size: 9px; }
+  .energy-home-mode { padding: 6px 7px; font-size: 7px; }
+  .energy-home-status { padding: 6px 8px; }
+  .energy-home-status strong { font-size: 10px; }
+  .energy-home-scene > .kea-energy-house { top: 54%; width: 112%; }
+  .energy-home-panel .dialog-content { padding: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-home-panel *,
+  .energy-home-panel *::before,
+  .energy-home-panel *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

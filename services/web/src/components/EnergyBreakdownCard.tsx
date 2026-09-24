@@ -1,6 +1,7 @@
 import { CircleHelp, Info, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getEnergyBreakdown, type EnergyBreakdown } from '../lib/client'
+import { energyBreakdownPresentation, unavailableBreakdownMessage } from '../lib/energyBreakdownPresentation'
 
 /**
  * Where this household's power goes, split by behaviour.
@@ -50,21 +51,27 @@ const CONFIDENCE_HINT: Record<string, string> = {
 }
 
 export default function EnergyBreakdownCard({ customerId }: { customerId: string }) {
-  const [data, setData] = useState<EnergyBreakdown | null>(null)
+  const [response, setResponse] = useState<EnergyBreakdown | null>(null)
+  const [settled, setSettled] = useState(false)
   const [failed, setFailed] = useState(false)
   const [openBasis, setOpenBasis] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
-    setData(null)
+    setResponse(null)
+    setSettled(false)
     setFailed(false)
+    setOpenBasis(null)
     getEnergyBreakdown(customerId)
-      .then((result) => { if (live) setData(result) })
+      .then((result) => { if (live) setResponse(result) })
       .catch(() => { if (live) setFailed(true) })
+      .finally(() => { if (live) setSettled(true) })
     return () => { live = false }
   }, [customerId])
 
-  if (failed) {
+  const { data, isDemo } = energyBreakdownPresentation(customerId, response)
+
+  if (failed && !isDemo) {
     return (
       <section className="card breakdown-card">
         <h2><CircleHelp aria-hidden="true"/>Where your power goes</h2>
@@ -76,7 +83,7 @@ export default function EnergyBreakdownCard({ customerId }: { customerId: string
     )
   }
 
-  if (!data) {
+  if (!settled || !data) {
     return (
       <section className="card breakdown-card">
         <h2><CircleHelp aria-hidden="true"/>Where your power goes</h2>
@@ -90,7 +97,7 @@ export default function EnergyBreakdownCard({ customerId }: { customerId: string
     return (
       <section className="card breakdown-card">
         <h2><CircleHelp aria-hidden="true"/>Where your power goes</h2>
-        <p className="breakdown-empty">{data.reason}</p>
+        <p className="breakdown-empty">{unavailableBreakdownMessage(data)}</p>
         <p className="breakdown-footnote">
           This is a limit of what your meter records, not a problem with your account.
         </p>
@@ -98,17 +105,23 @@ export default function EnergyBreakdownCard({ customerId }: { customerId: string
     )
   }
 
+  const blueOrangeBar = data.categories.length === 2
+    && data.categories[0]?.key === 'always_on'
+    && data.categories[1]?.key === 'everything_else'
+    && data.categories.every((category) => category.confidence !== 'fitted')
+
   return (
     <section className="card breakdown-card">
       <h2><CircleHelp aria-hidden="true"/>Where your power goes</h2>
       <p className="breakdown-lede">
         {data.period} · {data.days} days · {data.total_kwh.toFixed(0)} units
+        {isDemo && <><br/><small>Demo example · not live meter readings</small></>}
       </p>
 
       {/* One bar rather than a pie: shares of a whole are read more accurately along a
           line than around a circle, and a stacked bar keeps its labels legible at four
           categories where a pie needs leader lines. */}
-      <div className="breakdown-bar" role="img"
+      <div className={`breakdown-bar${blueOrangeBar ? ' breakdown-bar-blue-orange' : ''}`} role="img"
            aria-label={data.categories.map((c) => `${c.label} ${c.share_pct}%`).join(', ')}>
         {data.categories.map((category) => (
           <span

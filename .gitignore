@@ -11,6 +11,8 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+# qa/ is not an npm package; the actual test lockfile is in qa/e2e/.
+/qa/package-lock.json
 
 # --- Generated --------------------------------------------------------------
 *.db

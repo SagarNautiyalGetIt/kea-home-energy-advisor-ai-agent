@@ -53,18 +53,6 @@ function App() {
     // most visible symptom of the session having no identity in it.
     addToast(`Welcome back, ${next.displayName}`)
   }
-  const register = () => {
-    // No signup endpoint yet. Inventing a Session here would give every page a
-    // customerId the API cannot resolve, so the new customer signs in instead.
-    //
-    // The toast used to say "Your Kea Energy account is ready", which was not true —
-    // nothing was created, and the person was then sent to a sign-in page where the
-    // details they had just chosen did not work. Saying so is both kinder and the only
-    // version Kea could stand behind if somebody took it at its word.
-    localStorage.removeItem('kea-onboarding-seen')
-    navigate('/login')
-    addToast('This is a preview build, so no account was created — sign in with one of the demo accounts to look around', 'info')
-  }
   const confirmLogout = () => {
     clearSession()
     // The saved assistant thread is this customer's conversation about their own bill.
@@ -77,7 +65,7 @@ function App() {
   }
   const closeOnboarding = () => { localStorage.setItem('kea-onboarding-seen', 'true'); setShowOnboarding(false) }
 
-  if (!session) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="/register" element={<RegisterPage onRegister={register}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
+  if (!session) return <><Routes><Route path="/login" element={<LoginPage onLogin={login} onToast={addToast}/>}/><Route path="/register" element={<RegisterPage onToast={addToast}/>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes><ToastStack toasts={toasts} onDismiss={(id)=>setToasts((items)=>items.filter((item)=>item.id!==id))}/></>
 
   return <AppShell active={active} onNavigate={go} onLogout={() => setShowLogout(true)}>
     <Routes>

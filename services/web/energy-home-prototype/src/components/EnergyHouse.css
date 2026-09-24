@@ -1,0 +1,134 @@
+.kea-energy-house {
+  position: relative;
+  width: min(100%, 980px);
+  margin: 0 auto;
+  isolation: isolate;
+}
+
+.kea-energy-house-scene {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.kea-house-route {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kea-house-route--source-solar { color: #63f09a; }
+.kea-house-route--source-battery { color: #5ab8ff; }
+.kea-house-route--source-grid { color: #ff9f43; }
+
+.kea-house-route-glow {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-opacity: .68;
+  mix-blend-mode: screen;
+}
+
+.kea-house-route-pulse {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-opacity: .96;
+}
+
+.kea-house-route-pulse.is-still {
+  stroke-dasharray: none;
+  stroke-opacity: .43;
+}
+
+.kea-house-wall-light {
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.kea-house-chip {
+  cursor: pointer;
+  outline: none;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+}
+
+.kea-house-chip-back {
+  fill: #13201f;
+  fill-opacity: .84;
+  stroke: #cfdfdb;
+  stroke-opacity: .26;
+  stroke-width: 1;
+  transition: fill-opacity .18s ease, stroke-opacity .18s ease;
+}
+
+.kea-house-chip-accent { fill: #8dddc2; }
+.kea-house-chip--solar .kea-house-chip-accent { fill: #63f09a; }
+.kea-house-chip--battery .kea-house-chip-accent { fill: #5ab8ff; }
+.kea-house-chip--grid .kea-house-chip-accent { fill: #ff9f43; }
+.kea-house-chip-title {
+  fill: #b7cbc5;
+  font-size: 15px;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+
+.kea-house-chip-power {
+  fill: #f6faf7;
+  font-size: 25px;
+  letter-spacing: -.6px;
+  font-weight: 600;
+}
+
+.kea-house-chip:hover .kea-house-chip-back,
+.kea-house-chip:focus-visible .kea-house-chip-back,
+.kea-house-chip.is-selected .kea-house-chip-back {
+  fill-opacity: .97;
+  stroke-opacity: .85;
+}
+
+.kea-house-chip:focus-visible .kea-house-chip-back {
+  stroke: #a7f0d4;
+  stroke-width: 3;
+}
+
+.kea-energy-house-caption {
+  position: absolute;
+  right: 1.5%;
+  bottom: 1.5%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  border: 1px solid rgba(179, 205, 197, .18);
+  border-radius: 999px;
+  color: #a9bcb7;
+  background: rgba(5, 14, 15, .7);
+  backdrop-filter: blur(8px);
+  font-size: clamp(8px, 1.05vw, 12px);
+  letter-spacing: .04em;
+}
+
+.kea-flow-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.kea-flow-key i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.kea-flow-key--solar { color: #63f09a; }
+.kea-flow-key--battery { color: #5ab8ff; }
+.kea-flow-key--grid { color: #ff9f43; }
+
+@media (max-width: 700px) {
+  .kea-energy-house-scene { width: 100%; min-width: 0; }
+  .kea-house-hotspots { display: none; }
+  .kea-energy-house-caption { display: none; }
+}

@@ -8,6 +8,7 @@ import ToggleButtons from '../components/ToggleButtons'
 import UsageGraph, { type UsageUnit } from '../components/UsageGraph'
 import UsageSummaryCard from '../components/UsageSummaryCard'
 import { dailyUsage, hourlyUsage, monthlyUsage } from '../data/mockData'
+import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import { loadSession } from '../lib/session'
 
 type BandKey = 'peak' | 'offPeak' | 'night'
@@ -123,6 +124,7 @@ export default function UsagePage() {
   return (
     <>
       <div className="page-heading usage-page-heading"><h1>Usage</h1><p>Track your electricity usage patterns over time.</p></div>
+      <EnergyHomePanel />
       <section className="usage-card card" aria-label="Electricity usage insights">
         <header className="usage-toolbar">
           <TimeRangeSelector value={range} onChange={refresh} />
@@ -142,7 +144,6 @@ export default function UsagePage() {
           /* Remounting on any change to the selection replays the draw-in animation. */
           key={`${range}-${unit}-${date}-${compare}`}
           animate
-          highlightPeak
           values={graphValues}
           labels={labels}
           tooltipLabels={tooltipLabels}

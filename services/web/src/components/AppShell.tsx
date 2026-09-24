@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
+import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 import { loadSession } from '../lib/session'
 import type { PageId } from '../types/navigation'
 
@@ -11,6 +12,8 @@ const SHOW_PLANS_NAV_ITEM = true
 // Temporarily hide Profile from the navigation during Sprint 2. Its page and
 // route remain available; change this flag to true when it should be exposed.
 const SHOW_PROFILE_NAV_ITEM = false
+// Keep theme support intact, but hide the top-bar shortcut until it is needed again.
+const SHOW_THEME_TOGGLE = false
 
 type NavItem = { id: PageId; label: string; icon: typeof House; description: string; keywords: string }
 
@@ -100,12 +103,16 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
     </nav>
     <div className="sidebar-utilities">
       {utilityPages.map((item) => <button type="button" key={item.id} title={collapsed ? item.label : undefined} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon"/><span>{item.label}</span></button>)}
+      <button type="button" title={collapsed ? 'Logout' : undefined} onClick={onLogout}><LogOut className="nav-icon" aria-hidden="true"/><span>Logout</span></button>
     </div>
-    <button className="logout-button" title={collapsed ? 'Logout' : undefined} onClick={onLogout}><LogOut aria-hidden="true"/><span>Logout</span></button>
   </>
 
   return (
-    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <div className={`app-shell page-${active ?? 'default'} ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <div className="kea-energy-decor" aria-hidden="true">
+        <span className="kea-energy-burst kea-energy-burst-right"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>
+        {active === 'dashboard' && <span className="kea-energy-burst kea-energy-burst-left"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>}
+      </div>
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>{sidebarContent}<button className="mobile-drawer-close" aria-label="Close menu" onClick={() => setMobileOpen(false)}><X/></button></aside>
       {mobileOpen && <button className="mobile-menu-backdrop" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
 
@@ -125,11 +132,11 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
               {openPanel === 'notifications' && <div className="topbar-panel notifications-panel"><header><strong>Notifications</strong><button onClick={() => setNotifications((items) => items.map((item) => ({...item, unread:false})))}><CheckCheck/>Mark all read</button></header>{notifications.map((item) => <button className={item.unread?'unread':''} key={item.id} onClick={() => setNotifications((items) => items.map((entry) => entry.id === item.id ? {...entry, unread:false} : entry))}><span></span><div><strong>{item.title}</strong><small>{item.detail}</small></div></button>)}</div>}
             </div>
 
-            <button aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} theme`} className="round-action" onClick={toggleTheme}>{theme === 'dark' ? <Sun/> : <Moon/>}</button>
+            {SHOW_THEME_TOGGLE && <button aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} theme`} className="round-action" onClick={toggleTheme}>{theme === 'dark' ? <Sun/> : <Moon/>}</button>}
 
             <div className="topbar-control profile-control">
-              <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src="/assets/profile/kea-profile.png" alt=""/></button>
-              {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src="/assets/profile/kea-profile.png" alt=""/><div><strong>{customerName}</strong><small>CID: {customerId}</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My Profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; Support</button><button onClick={onLogout}><LogOut/>Logout</button></div>}
+              <button aria-label="Open profile menu" className="avatar profile-trigger" aria-expanded={openPanel === 'profile'} onClick={() => setOpenPanel(openPanel === 'profile' ? null : 'profile')}><img src={CUSTOMER_PROFILE_PHOTO} alt=""/></button>
+              {openPanel === 'profile' && <div className="topbar-panel profile-menu"><header><img src={CUSTOMER_PROFILE_PHOTO} alt=""/><div><strong>{customerName}</strong><small>CID: {customerId}</small></div></header><button onClick={() => go('profile')}><SquareUserRound/>My Profile</button><button onClick={() => go('settings')}><Settings/>Settings</button><button onClick={() => go('help')}><CircleHelp/>Help &amp; Support</button><button onClick={onLogout}><LogOut/>Logout</button></div>}
             </div>
           </div>
         </header>

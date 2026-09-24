@@ -1,0 +1,36 @@
+{
+  "name": "kea-energy-home",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive home-energy visualization with live weather, astronomical positioning, and deterministic power-flow simulation.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check": "npm run typecheck && npm test && npm run build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.13.0",
+    "lucide-react": "^0.468.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "suncalc": "2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
+  }
+}

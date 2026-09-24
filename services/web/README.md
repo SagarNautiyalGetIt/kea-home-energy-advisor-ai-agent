@@ -25,6 +25,32 @@ URLs and there is no CORS preflight in development.
 | `src/App.tsx` | A plain integration harness — proves the wiring works. **Not the pitch UI** |
 | `src/index.css` | Tailwind v4 entry. Design tokens live in `@theme`, not a config file |
 | `src/api.d.ts` | Generated, gitignored. Run `make web-types` |
+| `src/features/energy-home/` | Embedded Usage scene, adapted from the complete Kea home prototype |
+| `energy-home-prototype/` | Complete Kea home prototype, including its UI, controls, tests, documentation, assets, configuration, and license |
+
+## Kea home visualisation
+
+Usage shows the original house scene below its heading. The embedded view uses the
+prototype's weather, sky, house, and energy dispatch code, and displays a fixed
+**illustrative** 2.4 kW solar flow so the solar conduit remains active. The live sky
+is independent of these demo energy figures; they are not meter readings.
+
+The complete prototype code is retained in `energy-home-prototype/`. Its other
+interface sections (weather scenarios, whole-system cards, detail view, controls,
+settings, and footer) remain available in its standalone site and are not mounted
+on the Usage page. This keeps the current Usage chart and breakdown below the scene.
+The included files can be checked against `energy-home-prototype/SOURCE_SHA256SUMS.txt`.
+
+After `npm install` in `services/web`, run the full prototype from its folder:
+
+```bash
+cd energy-home-prototype
+npm run check
+npm run dev
+```
+
+Its Vite server defaults to port 5188. The integrated customer portal uses the
+usual `npm run dev` from `services/web`.
 
 Build the real interface around `client.ts`. Don't grow `App.tsx` into the product.
 

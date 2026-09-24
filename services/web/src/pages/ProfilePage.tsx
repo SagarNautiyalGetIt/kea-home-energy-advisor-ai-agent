@@ -2,6 +2,7 @@ import { KeyRound, Mail, MapPin, Phone, TriangleAlert, UserRound } from 'lucide-
 import { useEffect, useState } from 'react'
 import Modal from '../components/Modal'
 import { getCustomerProfile, type CustomerProfile } from '../lib/client'
+import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 import { loadSession } from '../lib/session'
 
 /**
@@ -74,7 +75,7 @@ export default function ProfilePage({ onToast }: { onToast: (message: string, to
     <div className="page-heading"><h1>Profile</h1><p className="profile-description">Review and manage your customer contact details.</p></div>
     <article className="profile-card card">
       <header>Your Profile</header>
-      <div className="profile-mascot"><img src="/assets/profile/kea-profile.png" alt="Kea Energy mascot"/></div>
+      <div className="profile-mascot"><img src={CUSTOMER_PROFILE_PHOTO} alt={`${name ?? 'Customer'} profile`}/></div>
       {!profile ? <p className="settings-loading">Loading your details…</p> : <dl>
         <dt>Name:</dt><dd>{name ?? NOT_ON_FILE}</dd>
         <dt>Account no.:</dt><dd>{profile.account_number ?? profile.customer_id}</dd>

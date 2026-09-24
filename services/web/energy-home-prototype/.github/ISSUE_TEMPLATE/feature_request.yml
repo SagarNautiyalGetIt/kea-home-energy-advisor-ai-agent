@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a focused improvement or new scenario.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What user need would this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Data and simulation boundaries
+      description: Explain whether this changes live data, simulated energy values, privacy, or provider terms.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
