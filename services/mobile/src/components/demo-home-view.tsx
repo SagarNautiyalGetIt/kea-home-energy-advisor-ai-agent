@@ -42,12 +42,12 @@ function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.gly
 }
 
 function sceneColors(weather: AucklandWeather | null): [string, string, string, string] {
-  if (!weather) return ['#22313D', '#303F48', '#172127', '#111111'];
-  if (!weather.isDay) return ['#16233B', '#304A67', '#253440', '#111111'];
-  if (weather.sunriseAt && weather.sunsetAt && Math.min(weather.observedAt - weather.sunriseAt, weather.sunsetAt - weather.observedAt) < 60 * 60 * 1000) return ['#607694', '#BA8492', '#465066', '#111111'];
-  if (['rain', 'storm', 'fog'].includes(weather.condition)) return ['#526574', '#8299A5', '#40515B', '#111111'];
-  if (weather.condition === 'cloudy') return ['#7296AA', '#A9C2CB', '#526772', '#111111'];
-  return ['#6EB8DD', '#B7DBE8', '#587B89', '#111111'];
+  if (!weather) return ['#141A22', '#22313D', '#1A232A', '#111111'];
+  if (!weather.isDay) return ['#11151D', '#18273E', '#223242', '#111111'];
+  if (weather.sunriseAt && weather.sunsetAt && Math.min(weather.observedAt - weather.sunriseAt, weather.sunsetAt - weather.observedAt) < 60 * 60 * 1000) return ['#2A2430', '#6B5B75', '#465066', '#111111'];
+  if (['rain', 'storm', 'fog'].includes(weather.condition)) return ['#1C2329', '#465561', '#323E46', '#111111'];
+  if (weather.condition === 'cloudy') return ['#202A32', '#587384', '#3E4F58', '#111111'];
+  return ['#22394A', '#5CA4C9', '#486877', '#111111'];
 }
 
 function deviceEnergy(scene: HomeSceneData | null, deviceClass: string): number | null {
@@ -217,6 +217,22 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     <Animated.View style={[{ opacity: sceneOpacity ?? 1 }, styles.sceneWrapper]}>
       <View style={styles.sceneCard}>
         <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={[
+            '#111111',
+            'rgba(17,17,17,0.96)',
+            'rgba(17,17,17,0.85)',
+            'rgba(17,17,17,0.68)',
+            'rgba(17,17,17,0.48)',
+            'rgba(17,17,17,0.28)',
+            'rgba(17,17,17,0.12)',
+            'rgba(17,17,17,0.03)',
+            'rgba(17,17,17,0)',
+          ]}
+          locations={[0, 0.12, 0.25, 0.40, 0.55, 0.70, 0.82, 0.93, 1]}
+          pointerEvents="none"
+          style={styles.topFade}
+        />
         <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
         {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
         <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth, marginLeft: (frameWidth - sceneWidth) / 2 }]}>
@@ -230,7 +246,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         </View>
         <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
       </View>
-      <LinearGradient colors={['#111111', 'rgba(17,17,17,0.7)', 'rgba(17,17,17,0.18)', 'rgba(17,17,17,0)']} locations={[0, 0.35, 0.72, 1]} pointerEvents="none" style={styles.topFade} />
       <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
       <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
@@ -261,13 +276,13 @@ const styles = StyleSheet.create({
   infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
   sceneWrapper: { position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
-  sceneArt: { position: 'relative', zIndex: 2 },
+  sceneArt: { position: 'relative', zIndex: 2, elevation: 2 },
   weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 12, zIndex: 20, elevation: 20 },
   weatherInSceneText: { color: '#E9F5FB', fontSize: 11, fontWeight: '700' },
-  skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 1, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
+  skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 2, elevation: 2, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
-  skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2 },
-  topFade: { top: -20, height: 60, left: 0, position: 'absolute', right: 0, zIndex: 5 },
+  skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2, elevation: 2 },
+  topFade: { top: 0, height: 140, left: 0, position: 'absolute', right: 0, zIndex: 1, elevation: 1 },
   bottomFade: { bottom: 0, height: 98, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#A8BBC6', fontSize: 10, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },

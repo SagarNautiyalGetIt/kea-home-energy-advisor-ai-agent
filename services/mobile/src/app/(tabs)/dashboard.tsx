@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   sceneBlurWrap: {
     position: 'absolute',
-    top: 142,
+    top: 160,
     left: 0,
     right: 0,
     bottom: 0,
