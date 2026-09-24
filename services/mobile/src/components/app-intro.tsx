@@ -197,7 +197,7 @@ export function AppIntro({ onDone }: { onDone: () => void }) {
 
 const introStyles = StyleSheet.create({
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     backgroundColor: '#000000',
     elevation: 60,

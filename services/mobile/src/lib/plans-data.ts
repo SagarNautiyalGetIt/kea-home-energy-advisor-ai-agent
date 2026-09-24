@@ -30,9 +30,11 @@ export type PlansViewData = {
   pricingStyles: PricingStyle[];
   commitmentTerms: CommitmentTerm[];
   currentPlan: { pricingStyle: string; term: string };
+  changeRequestsAvailable: boolean;
+  limitation: string | null;
 };
 
-const plansPath = process.env.EXPO_PUBLIC_PLANS_PATH?.trim();
+const plansPath = process.env.EXPO_PUBLIC_PLANS_PATH?.trim() || '/api/households/{customer_id}/plans';
 const switchPath = process.env.EXPO_PUBLIC_PLAN_SWITCH_PATH?.trim();
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -76,32 +78,26 @@ function normalizePlans(value: unknown): PlansViewData {
         badge: typeof (row.badge ?? row.flag) === 'string' ? String(row.badge ?? row.flag) : undefined,
       };
     }),
-    currentPlan: { pricingStyle: text(current.pricingStyle ?? current.pricing_style, 'current pricing style'), term: text(current.term, 'current term') },
+    currentPlan: {
+      pricingStyle: typeof (current.pricingStyle ?? current.pricing_style) === 'string' ? String(current.pricingStyle ?? current.pricing_style) : '',
+      term: typeof current.term === 'string' ? current.term : '',
+    },
+    changeRequestsAvailable: root.change_requests_available === true,
+    limitation: typeof root.limitation === 'string' ? root.limitation : null,
   };
 }
 
 export async function loadPlans(customerId: string, signal?: AbortSignal): Promise<PlansViewData> {
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (!useRealData || !apiBaseUrl) {
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
+  if (!useRealData) {
     return normalizePlans(demoPlansData);
   }
-  // Some local API profiles do not publish the catalogue route. Keep the fully
-  // designed catalogue on screen in that case; an unavailable optional endpoint
-  // must not turn the whole Plans tab into a blank loading message.
-  if (!plansPath) return normalizePlans(demoPlansData);
-  try {
-    return normalizePlans(await apiJson<unknown>(apiPath(plansPath, { customer_id: customerId }), { signal }));
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') throw error;
-    return normalizePlans(demoPlansData);
-  }
+  return normalizePlans(await apiJson<unknown>(apiPath(plansPath, { customer_id: customerId }), { signal }));
 }
 
 export async function requestPlanSwitch(customerId: string, pricingStyle: string, term: string): Promise<void> {
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (!useRealData || !apiBaseUrl) return Promise.reject(new Error('Plan changes are not available in demo mode.'));
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
+  if (!useRealData) return Promise.reject(new Error('Plan changes are not available in demo mode.'));
   if (!switchPath) return Promise.reject(new Error('Plan changes are not configured by the current Kea backend.'));
   return apiJson<void>(apiPath(switchPath, { customer_id: customerId }), jsonRequest('POST', {
     customer_id: customerId,

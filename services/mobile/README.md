@@ -1,8 +1,7 @@
 # Kea Energy mobile
 
 React Native client built with Expo SDK 57, TypeScript, and Expo Router. It
-implements the customer-facing authentication, dashboard, usage, Sparky,
-billing, plans, profile, settings, support, notification, and payment flows.
+shows the customer dashboard, usage, Sparky, billing, plans, profile, and settings.
 
 ## Run locally
 
@@ -20,48 +19,39 @@ Scan the Expo QR code from an iOS or Android device. For a browser preview, run
 
 ## Backend integration
 
-Set `EXPO_PUBLIC_API_URL` to the backend origin. Optional endpoint overrides and
-payment/push configuration are documented in `.env.example`. Values prefixed
-with `EXPO_PUBLIC_` are bundled into the client and must never contain private
-keys or server-side secrets.
+Set `EXPO_PUBLIC_API_URL` to the backend origin on a physical phone. The emulator
+defaults are in `src/lib/backend-client.ts`. Values prefixed with `EXPO_PUBLIC_`
+are bundled into the client and must never contain private keys.
 
-The shared client in `src/lib/backend-client.ts` sends the access token as a
-Bearer token, retries one `401` after refreshing the token, and keeps access and
-refresh tokens in Expo SecureStore on native platforms. Non-secret session
-display data is stored in AsyncStorage. Tokens are memory-only in the web
-preview.
+Live API data is the default. Set `EXPO_PUBLIC_USE_REAL_DATA=false` only for an
+explicit UI preview. Sparky always uses `/api/chat/stream`; if the API is offline,
+it reports an error rather than inventing a customer answer. Usage charts show
+only time periods actually returned by the backend.
 
-The following frontend flows have API adapters and loading, empty, and error
-states ready for backend responses:
+The energy breakdown comes from `GET /api/households/{customer_id}/energy-breakdown`
+and describes behavioural categories, not named appliances. Settings calls
+`POST /api/homelink/discover` on demand. That scan runs on the API server's LAN,
+not the phone's LAN, and supplies device names only. Actual device energy requires
+a supported, consented integration that returns measured readings. No such mobile
+connector is active yet.
 
-- login, registration, token refresh, forgot password, and change password;
-- dashboard usage totals and backend-computed bill-shock warnings;
-- daily, weekly, and monthly usage data;
-- billing details, invoices, invoice payment, and payment-method add/delete;
-- plans, current-plan selection, and plan-switch requests;
-- profile read/update;
-- notification-preference read/update and Expo push-token registration;
-- Sparky streaming chat, feedback, attachments, and voice transport.
+Connected surfaces: demo sign-in, dashboard and bill-shock assessment, daily
+usage, behavioural energy breakdown, read-only billing and plan catalogue,
+profile read, alert preferences, and streaming Sparky. Plans display published
+prices and known account state; switching is disabled because there is no mobile
+write route. No card or payment data is shown as if it came from Kea.
 
-Login and registration responses must include `customer_id` and a non-empty
-`access_token` (or `token`). They may also include `refresh_token`,
-`display_name`, and `email`. The backend must authorize every household route
-against the authenticated token instead of trusting the path or body
-`customer_id` alone.
-
-Card details are sent only to the configured payment provider's tokenization
-URL. The Kea backend receives the returned payment-method token and must never
-receive or log raw card numbers or CVC values.
+The demo login returns a customer ID without an access token. The shared client
+supports token storage for a future identity contract, but this deployment does
+not authenticate or authorize household access for real customers.
 
 ## Intentional frontend-only data
 
 - News, notification previews, and FAQs remain static demonstration/content
   data in `src/data/mock.ts`.
-- When `EXPO_PUBLIC_API_URL` is absent, only the Usage screen can use isolated
-  illustrative readings for frontend development. Its bill-shock warning is not
-  fabricated; live warning data must come from the backend.
-- Dashboard account metrics, billing, plans, and profile data do not invent a
-  customer record while the backend is unavailable.
+- `EXPO_PUBLIC_USE_REAL_DATA=false` enables explicitly labelled UI preview data.
+- The dashboard house illustration is a concept scene. It hides device figures
+  in live mode because the backend has no solar, EV, or battery telemetry.
 
 The current backend contract provides daily usage totals. Hourly readings,
 time-band totals, detailed period costs, and every newly configurable endpoint
@@ -71,13 +61,14 @@ customer-looking hardcoded data.
 
 ## Known integration constraints
 
-- The current login backend must be extended to return an access token before
-  the mobile login flow can succeed.
+- Real customer use needs an identity service and server-side household authorization.
+- Device-level energy needs consented connectors and measured or rated readings;
+  mDNS names and whole-home meter totals cannot provide it.
+- EV ownership and charging schedule answers need typed, account-scoped local
+  persistence before Sparky can reuse them across sessions. A yes to ownership
+  alone does not confirm that a night rise was charging.
 - The `Keep me logged in` control defaults to off, but session persistence is
   not yet conditional on that control.
-- Endpoint paths are frontend defaults, not proof that the corresponding
-  backend routes already exist. Coordinate request/response schemas with the
-  backend team and update `.env.example` when a route differs.
 - `support@kea-energy.example` is placeholder support content and must be
   replaced before production release.
 

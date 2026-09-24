@@ -66,7 +66,7 @@ async function profileRequest(expectedCustomerId: string, displayName: string, e
 }
 
 export async function loadCustomerProfile(customerId: string, displayName: string, email: string, signal: AbortSignal): Promise<ProfileLoadResult> {
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
   const fallbackProfile: CustomerProfile = {
     ...demoProfileData,
     customerId: customerId || demoProfileData.customerId,
@@ -87,7 +87,7 @@ export async function loadCustomerProfile(customerId: string, displayName: strin
 }
 
 export async function updateCustomerProfile(profile: CustomerProfile, signal: AbortSignal): Promise<CustomerProfile> {
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
   if (!useRealData) {
     return profile;
   }

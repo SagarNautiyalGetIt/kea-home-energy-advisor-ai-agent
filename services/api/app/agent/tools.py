@@ -280,7 +280,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "discover_smart_devices",
         "description": (
-            "Scan the customer's own home network for smart devices that announce "
+            "Scan the API server's local network for smart devices that announce "
             "themselves — Google Cast and Nest, Apple HomeKit accessories, Matter "
             "devices, Philips Hue, Shelly and Tasmota plugs, Home Assistant, SmartThings. "
             "Use it when they ask what smart devices you can see, whether you can connect "
@@ -289,8 +289,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "one, so never attach a kWh or dollar amount to anything it returns. What it "
             "is for is the next step — 'you have a Home Assistant and two Shelly plugs, "
             "connecting those would let me tell you what they actually used'. Takes a few "
-            "seconds and only works when the customer's device is on the same network as "
-            "this service, so an empty result usually means it is not."
+            "seconds and only sees devices sharing the API server's network, which may "
+            "be a cloud network rather than the customer's home."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },

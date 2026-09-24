@@ -77,6 +77,7 @@ export default function DashboardScreen() {
       >
         <Animated.View style={{ opacity: homeDimOpacity }}>
           <DemoHomeView
+            illustrativeOnly={process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false'}
             onExit={() => setWelcomeOpen(true)}
             onOpenInfo={() => setWelcomeOpen(true)}
             onOpenNotifications={() => setNotificationsOpen(true)}
@@ -268,10 +269,9 @@ export default function DashboardScreen() {
           <View style={[styles.shockIcon, { backgroundColor: palette.green }]}>
             <Ionicons color="#FFFFFF" name="leaf" size={32} />
           </View>
-          <Text style={[styles.shockTitle, { color: colors.text }]}>94% Self-Powered</Text>
-          <Text style={[styles.shockAmount, { color: palette.green }]}>10.6 kWh</Text>
+          <Text style={[styles.shockTitle, { color: colors.text }]}>Impact data unavailable</Text>
           <Text style={[styles.shockBody, { color: colors.textMuted }]}>
-            Your home generated 10.6 kWh of clean solar electricity today, offsetting 8.2 kg of CO₂ grid emissions.
+            The current backend has no measured solar generation, self-powered percentage or emissions data for this home.
           </Text>
         </View>
       </ModalSheet>

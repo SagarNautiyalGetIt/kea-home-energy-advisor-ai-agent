@@ -180,9 +180,7 @@ function loadDemoDashboard(): DashboardViewData {
 }
 
 export function getDashboardView(customerId: string, signal?: AbortSignal) {
-  // Preview mode stays on until the real-data handoff is explicitly enabled.
-  if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true') return Promise.resolve(loadDemoDashboard());
-  if (!process.env.EXPO_PUBLIC_API_URL) return Promise.reject(new Error('Dashboard data is waiting for the backend connection.'));
+  if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false') return Promise.resolve(loadDemoDashboard());
   if (!customerId) return Promise.reject(new Error('A signed-in customer is required to load the dashboard.'));
   return loadApiDashboard(customerId, signal);
 }

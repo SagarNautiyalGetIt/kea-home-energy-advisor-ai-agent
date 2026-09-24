@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { Card, FormField, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
 import { changeAccountPassword, requestPasswordReset } from '@/lib/account-api';
-import { apiJson, jsonRequest } from '@/lib/backend-client';
+import { apiBase, apiJson, jsonRequest } from '@/lib/backend-client';
 import { loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/settings-api';
 import { validateEmail, validateNewPassword, validateRequired } from '@/lib/validation';
 import { useToast } from '@/providers/toast';
@@ -112,7 +113,7 @@ export default function SettingsScreen() {
     try {
       const result = await apiJson<ScanResult>('/api/homelink/discover', jsonRequest('POST'));
       setScan(result);
-      showToast(result.devices_found ? `Found ${result.devices_found} devices` : 'No devices answered on this network', 'info');
+      showToast(result.devices_found ? `Found ${result.devices_found} devices near the API server` : 'No devices answered near the API server', 'info');
     } catch (error) {
       setScan({ error: error instanceof Error ? error.message : 'The scan could not be started.' });
     } finally {
@@ -142,15 +143,16 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionTitle>Connected home</SectionTitle>
-      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Find the smart devices on your network, so your bill explanation can name them.</Text>
+      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Find devices near the API server. Discovery alone cannot measure their power use.</Text>
       <Card style={styles.connectedCard}>
-        <View style={styles.connectedTitle}><Ionicons color={colors.text} name="radio-outline" size={22} /><Text style={[styles.modalHeading, { color: colors.text }]}>Smart devices on your network</Text></View>
-        <Text style={[styles.modalText, { color: colors.textMuted }]}>We can look for devices already announcing themselves on your home network. This tells us what you have; it does not read how much power they use.</Text>
-        <Pressable disabled={scanning} onPress={() => void scanNetwork()} style={styles.scanButton}>{scanning ? <ActivityIndicator color="#000000" /> : <Ionicons color="#000000" name="wifi-outline" size={18} />}<Text style={styles.scanButtonText}>{scanning ? 'Scanning…' : 'Scan my network'}</Text></Pressable>
+        <View style={styles.connectedTitle}><Ionicons color={colors.text} name="radio-outline" size={22} /><Text style={[styles.modalHeading, { color: colors.text }]}>Smart devices near the API server</Text></View>
+        <Text style={[styles.modalText, { color: colors.textMuted }]}>The scan runs where the Kea API is hosted ({apiBase()}), not on this phone. It can see device announcements only when that server shares your home network. Device power readings need a supported connection.</Text>
+        <Pressable disabled={scanning} onPress={() => void scanNetwork()} style={styles.scanButton}>{scanning ? <ActivityIndicator color="#000000" /> : <Ionicons color="#000000" name="wifi-outline" size={18} />}<Text style={styles.scanButtonText}>{scanning ? 'Scanning…' : 'Scan server network'}</Text></Pressable>
         {scan?.error ? <Text style={[styles.scanResult, { color: palette.red }]}>The scan couldn’t run here — {scan.error}</Text> : null}
-        {scan && !scan.error && !scan.devices_found ? <Text style={[styles.scanResult, { color: colors.textMuted }]}>Nothing answered. This may happen when you’re away from home, on mobile data, or using a guest network.</Text> : null}
+        {scan && !scan.error && !scan.devices_found ? <Text style={[styles.scanResult, { color: colors.textMuted }]}>Nothing answered on the server’s network. Your phone may be on a different network.</Text> : null}
         {scan?.devices?.map((device, index) => <View key={`${device.name}-${index}`} style={[styles.deviceRow, { borderTopColor: colors.border }]}><Text style={[styles.settingTitle, { color: colors.text }]}>{device.name ?? 'Smart device'}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{device.kind}{device.note ? ` · ${device.note}` : ''}</Text></View>)}
-        <Text style={[styles.footnote, { color: colors.textMuted }]}>Nothing found here is stored. Apple Home is read locally by the phone.</Text>
+        {scan && !scan.error ? <PrimaryButton label="Ask Sparky about usage and devices" onPress={() => router.push({ pathname: '/assistant', params: { question: 'What does my energy breakdown show, and what did the network scan find? Please keep measured usage separate from device names.' } })} /> : null}
+        <Text style={[styles.footnote, { color: colors.textMuted }]}>This scan stores nothing and does not read energy. Apple Home reading is not connected in this app yet.</Text>
       </Card>
 
       <SectionTitle>Account security</SectionTitle>

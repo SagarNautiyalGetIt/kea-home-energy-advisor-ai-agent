@@ -73,6 +73,9 @@ const TOOL_LABELS: Record<string, string> = {
   compare_to_similar_homes: 'Comparing with similar homes',
   get_plan_options: 'Checking your plan against the alternatives',
   project_this_bill: 'Projecting the rest of your cycle',
+  get_energy_breakdown: 'Checking your energy breakdown',
+  discover_smart_devices: 'Looking for smart devices',
+  answer_clarifying_question: 'Saving your answer',
   handoff_to_human: 'Bringing in a person',
 };
 
@@ -81,74 +84,6 @@ export const toolLabel = (name: string): string =>
 
 /** Returned by `streamAssistantReply` so a caller can cancel — the RN AbortController. */
 export type AssistantStream = { cancel: () => void };
-
-function simulateDemoStream(message: string, handlers: AssistantHandlers): AssistantStream {
-  let cancelled = false;
-  const lower = message.toLowerCase();
-  let reply = 'I analyzed your household energy profile. Your rooftop solar system is currently generating 4.8 kW, your Powerwall is supplying 1.2 kW to your home, and you are 92% self-powered today! Let me know if you would like a deep dive into your hourly usage, solar generation, or bill projections.';
-  if (lower.includes('high') || lower.includes('bill') || lower.includes('cost')) {
-    reply = 'Looking at your recent smart meter data, your bill increase this cycle ($214.50 vs $168.20 last month) was mainly driven by colder evening temperatures (+3.2 kWh/day for heat pump heating) and charging your EV during peak tariff hours (5pm–8pm).\n\n💡 Tip: Scheduling your EV charging to overnight (11:00 PM – 7:00 AM) on the Solar Optimizer plan can save you approx $38.40 on your next bill.';
-  } else if (lower.includes('highest') || lower.includes('day')) {
-    reply = 'Your highest usage day was Thursday, 14 Aug at 28.4 kWh. A cold snap hit with evening temperatures dropping to 6°C, causing your heat pump to run in heating boost mode between 6:00 PM and 10:30 PM.';
-  } else if (lower.includes('cold snap') || lower.includes('weather')) {
-    reply = 'Yes! Thursday and Friday had a significant polar cold snap. Your household consumed 42% more energy on space heating compared to your 30-day baseline average.';
-  } else if (lower.includes('plan') || lower.includes('save') || lower.includes('recommend')) {
-    reply = 'Based on your 4.8 kW rooftop solar installation and 13.5 kWh Powerwall, switching to Kea\'s "Solar Optimizer" plan would yield estimated savings of $412/year thanks to the 17c/kWh solar export bonus and half-price overnight off-peak EV charging.';
-  }
-
-  const timers: ReturnType<typeof setTimeout>[] = [];
-
-  timers.push(setTimeout(() => {
-    if (cancelled) return;
-    handlers.onTool?.('get_account_summary');
-  }, 150));
-
-  timers.push(setTimeout(() => {
-    if (cancelled) return;
-    handlers.onToolResult?.('get_account_summary', true);
-    handlers.onTool?.('get_daily_usage');
-  }, 400));
-
-  timers.push(setTimeout(() => {
-    if (cancelled) return;
-    handlers.onToolResult?.('get_daily_usage', true);
-    // Stream words in chunks
-    const words = reply.split(' ');
-    let currentIdx = 0;
-    const interval = setInterval(() => {
-      if (cancelled) {
-        clearInterval(interval);
-        return;
-      }
-      if (currentIdx >= words.length) {
-        clearInterval(interval);
-        handlers.onDone?.({
-          sources: [
-            { tool: 'get_account_summary', arguments: null, source: 'Kea Customer Profile', ok: true },
-            { tool: 'get_daily_usage', arguments: null, source: 'Smart Meter Telemetry (30 min)', ok: true },
-          ],
-          escalate_to_human: false,
-          escalation_reason: null,
-          conversation_id: 101,
-          latency_ms: 620,
-          tokens: 148,
-          tier: 1,
-        });
-        return;
-      }
-      const chunk = (currentIdx === 0 ? '' : ' ') + words[currentIdx];
-      handlers.onText(chunk);
-      currentIdx++;
-    }, 45);
-  }, 750));
-
-  return {
-    cancel: () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    },
-  };
-}
 
 export function streamAssistantReply(
   customerId: string,
@@ -161,17 +96,11 @@ export function streamAssistantReply(
     return { cancel: () => undefined };
   }
 
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
-  const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-
-  if (!useRealData || !apiBaseUrl) {
-    return simulateDemoStream(message, handlers);
-  }
-
   const xhr = new XMLHttpRequest();
-  xhr.timeout = 30_000;
+  xhr.timeout = 90_000;
   let consumed = 0;
   let cancelled = false;
+  let finished = false;
 
   const drain = (buffer: string) => {
     const boundary = buffer.lastIndexOf('\n\n');
@@ -201,8 +130,12 @@ export function streamAssistantReply(
         case 'reset': handlers.onReset?.(); break;
         case 'tool': handlers.onTool?.(payload.name); break;
         case 'result': handlers.onToolResult?.(payload.name, payload.ok); break;
-        case 'done': handlers.onDone?.(payload as AssistantDone); break;
-        case 'error': handlers.onError?.(payload.message); break;
+        case 'done':
+          if (!finished) { finished = true; handlers.onDone?.(payload as AssistantDone); }
+          break;
+        case 'error':
+          if (!finished) { finished = true; handlers.onError?.(payload.message); }
+          break;
       }
     }
   };
@@ -216,20 +149,26 @@ export function streamAssistantReply(
   xhr.onload = () => {
     if (cancelled) return;
     if (xhr.status === 404) {
+      finished = true;
       handlers.onError?.('That account could not be found. Please sign in again.');
       return;
     }
     if (xhr.status >= 400) {
+      finished = true;
       handlers.onError?.('Sparky is unavailable right now. Please try again shortly.');
       return;
     }
     drain(`${xhr.responseText}\n\n`);
+    if (!finished) {
+      finished = true;
+      handlers.onError?.('Sparky did not finish its answer. Please try again.');
+    }
   };
   xhr.onerror = () => {
-    if (!cancelled) handlers.onError?.('Sparky could not reach the backend. Please check your connection and try again.');
+    if (!cancelled && !finished) { finished = true; handlers.onError?.('Sparky could not reach the backend. Please check your connection and try again.'); }
   };
   xhr.ontimeout = () => {
-    if (!cancelled) handlers.onError?.('Sparky took too long to respond. Please try again.');
+    if (!cancelled && !finished) { finished = true; handlers.onError?.('Sparky took too long to respond. Please try again.'); }
   };
   xhr.send(
     JSON.stringify({

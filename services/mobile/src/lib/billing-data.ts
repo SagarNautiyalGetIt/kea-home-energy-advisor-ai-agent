@@ -139,7 +139,7 @@ async function fetchBilling(customerId: string, signal: AbortSignal): Promise<Bi
 }
 
 export async function loadBillingData(customerId: string, signal: AbortSignal): Promise<BillingLoadResult> {
-  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'true';
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
   if (!useRealData) {
     return { state: 'ready', data: demoBillingData };
   }

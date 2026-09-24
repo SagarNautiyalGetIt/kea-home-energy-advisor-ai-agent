@@ -18,6 +18,7 @@ import { palette } from '@/theme';
 
 type Props = {
   scenario?: DemoHomeScenario;
+  illustrativeOnly?: boolean;
   onOpenInfo?: () => void;
   onExit?: () => void;
   onOpenNotifications?: () => void;
@@ -26,6 +27,7 @@ type Props = {
 
 export function DemoHomeView({
   scenario: controlledScenario,
+  illustrativeOnly = false,
   onOpenInfo,
   onExit,
   onOpenNotifications,
@@ -258,6 +260,9 @@ export function DemoHomeView({
           <Line stroke="#D8D8D8" strokeWidth="0.85" x1="288" x2="288" y1="268" y2="295" />
         </Svg>
 
+        {/* Live accounts have no solar, EV, battery or home power telemetry. */}
+        <View style={styles.illustrativeNotice}><Text style={styles.illustrativeText}>{illustrativeOnly ? 'Illustrative home · device readings not connected' : 'Demo home · simulated readings'}</Text></View>
+        {!illustrativeOnly ? <>
         {/* --- CALLOUT TAGS (Crisp React Native Typography) --- */}
 
         {/* 1. SOLAR (Top Center) */}
@@ -304,6 +309,7 @@ export function DemoHomeView({
           <Text style={styles.calloutLabel}>GRID</Text>
           <Text style={styles.calloutValue}>{activeScenario.gridKw.toFixed(1)} kW</Text>
         </View>
+        </> : null}
       </View>
 
 
@@ -312,6 +318,8 @@ export function DemoHomeView({
 }
 
 const styles = StyleSheet.create({
+  illustrativeNotice: { position: 'absolute', bottom: 4, left: 18, right: 18, alignItems: 'center' },
+  illustrativeText: { color: '#FFFFFF', backgroundColor: '#242424', borderRadius: 10, overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 6, fontSize: 10, fontWeight: '700' },
   container: {
     width: '100%',
     overflow: 'hidden',

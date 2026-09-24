@@ -12,9 +12,9 @@ function RingSvg({ size, color }: { size: number; color: string }) {
   return (
     <Svg height={size} viewBox="0 0 256 256" width={size}>
       <Path d="M33 128A95 95 0 0 1 208.6 77.6" fill="none" stroke={color} strokeLinecap="round" strokeWidth={15} />
-      <Path d="M226 96L222 68L197 85Z" fill={color} stroke={color} strokeJoin="round" strokeWidth={5} />
+      <Path d="M226 96L222 68L197 85Z" fill={color} stroke={color} strokeLinejoin="round" strokeWidth={5} />
       <Path d="M223 128A95 95 0 0 1 47.4 178.4" fill="none" stroke={color} strokeLinecap="round" strokeWidth={15} />
-      <Path d="M30 160L34 188L59 171Z" fill={color} stroke={color} strokeJoin="round" strokeWidth={5} />
+      <Path d="M30 160L34 188L59 171Z" fill={color} stroke={color} strokeLinejoin="round" strokeWidth={5} />
     </Svg>
   );
 }

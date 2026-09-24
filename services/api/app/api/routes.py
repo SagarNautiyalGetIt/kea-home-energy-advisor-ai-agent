@@ -31,6 +31,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as _VapiBaseModel
 
 from app import auth, hardware, offline, voice
+from app.account.mobile_plans import MobilePlansView, mobile_plans
 from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock, disaggregation
@@ -280,6 +281,16 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/plans", response_model=MobilePlansView)
+async def get_mobile_plans(customer_id: str) -> MobilePlansView:
+    """Serve the published catalogue and only the plan fields known for this account."""
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return mobile_plans(ctx.account)
 
 
 @router.get("/households/{customer_id}/annual-demand", response_model=AnnualDemandSummary)

@@ -218,7 +218,7 @@ export default function UsageScreen() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
       void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
       return () => controller.abort();
     }

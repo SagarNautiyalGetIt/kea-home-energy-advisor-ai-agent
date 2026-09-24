@@ -8,7 +8,6 @@ import { BillingDoodle } from '@/components/BillingDoodle';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { Card, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
-import { demoBillingData } from '@/data/mock';
 import { billingPlaceholderInvoice, emptyBillingData, loadBillingData, type BillingInvoice, type BillingViewData } from '@/lib/billing-data';
 import { invoiceHtml } from '@/lib/invoice-document';
 import { useAuth } from '@/providers/auth';
@@ -26,7 +25,6 @@ export default function BillingScreen() {
   const [selected, setSelected] = useState<BillingInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [documentBusy, setDocumentBusy] = useState(false);
-  const [cardsOpen, setCardsOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -41,9 +39,6 @@ export default function BillingScreen() {
   }, [customerId, showToast]);
 
   const current = billing.invoices[0] ?? billingPlaceholderInvoice();
-  const savedPaymentMethod = demoBillingData.savedPaymentMethods[0];
-  const cardholderName = session?.displayName.trim() || billing.customer.name?.trim() || 'Current household';
-  const maskedCardholderName = `${cardholderName.split(/\s+/)[0] || 'Current'} ***`;
   const download = async (invoice: BillingInvoice) => {
     if (!invoice.amount || documentBusy) return;
     setDocumentBusy(true);
@@ -64,16 +59,10 @@ export default function BillingScreen() {
       {current.due ? <Text style={[styles.meta, { color: colors.textMuted }]}>Due {current.due}</Text> : null}
       <View style={styles.topActions}><View style={styles.topAction}><PrimaryButton icon="eye-outline" label="View" onPress={() => setSelected(current)} variant="blue" /></View><View style={styles.topAction}><PrimaryButton icon="download-outline" label={documentBusy ? 'Preparing…' : 'Download'} onPress={() => void download(current)} variant="blue" /></View></View>
     </Card></Animated.View> : null}
-    {savedPaymentMethod ? <Card style={[styles.paymentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.paymentCardTop}><View><Text style={[styles.eyebrow, { color: colors.textMuted }]}>Default payment method</Text><Text style={[styles.cardBrand, { color: colors.text }]}>{savedPaymentMethod.brand}</Text></View><Pressable accessibilityLabel="Manage payment method" onPress={() => setCardsOpen(true)}><Text style={styles.manage}>Manage</Text></Pressable></View>
-      <View style={styles.paymentCardChip}><Ionicons color="#000000" name="card" size={23} /></View>
-      <Text style={[styles.cardNumber, { color: colors.text }]}>•••• •••• •••• {savedPaymentMethod.last4}</Text>
-      <View style={styles.paymentCardBottom}><View><Text style={[styles.cardMetaLabel, { color: colors.textMuted }]}>CARDHOLDER</Text><Text style={[styles.cardholderName, { color: colors.text }]}>{maskedCardholderName}</Text></View></View>
-    </Card> : null}
+    <Card><Text style={[styles.meta, { color: colors.textMuted }]}>Payments and saved cards are not connected to the current Kea backend. Your invoice details above are read only.</Text></Card>
     {!loading && !billing.invoices.length ? <Card><Text style={[styles.empty, { color: colors.textMuted }]}>No billing records are available for this account.</Text></Card> : null}
     {billing.invoices.length ? <Animated.View entering={FadeInDown.duration(400)}><SectionTitle>Billing history</SectionTitle><Card style={styles.history}>{billing.invoices.map((invoice) => <Pressable key={invoice.id} onPress={() => setSelected(invoice)} style={[styles.invoiceRow, { borderBottomColor: colors.border }]}><View style={styles.invoiceCopy}><Text style={[styles.invoicePeriod, { color: colors.text }]}>{invoice.period ?? invoice.id}</Text><Text style={[styles.meta, { color: colors.textMuted }]}>{invoice.status}{invoice.due ? ` · Due ${invoice.due}` : ''}</Text></View>{money(invoice.amount) ? <Text style={[styles.invoiceAmount, { color: colors.text }]}>{money(invoice.amount)}</Text> : null}<Ionicons color={colors.textMuted} name="chevron-forward" size={18} /></Pressable>)}</Card></Animated.View> : null}
     <ModalSheet footer={selected ? <View style={styles.footer}><PrimaryButton icon="download-outline" label={documentBusy ? 'Preparing…' : 'Download PDF'} onPress={() => void download(selected)} variant="blue" /></View> : undefined} onClose={() => setSelected(null)} title={selected?.period ?? 'Billing details'} visible={selected !== null}>{selected ? <InvoiceDetails billing={billing} invoice={selected} /> : null}</ModalSheet>
-    <ModalSheet footer={<PrimaryButton label="Done" onPress={() => setCardsOpen(false)} />} onClose={() => setCardsOpen(false)} title="Manage cards" visible={cardsOpen}>{savedPaymentMethod ? <View style={[styles.savedCard, { backgroundColor: colors.input, borderColor: colors.border }]}><View style={styles.cardIcon}><Ionicons color="#000000" name="card-outline" size={22} /></View><View style={styles.cardCopy}><Text style={[styles.cardTitle, { color: colors.text }]}>{savedPaymentMethod.brand} ending in {savedPaymentMethod.last4}</Text><Text style={[styles.meta, { color: colors.textMuted }]}>{maskedCardholderName}</Text><Text style={styles.demoBadge}>DEMO CARD</Text></View></View> : null}<Text style={[styles.demoNote, { color: colors.textMuted }]}>Card management is shown with preview data. Billing totals and history above still come from the backend.</Text></ModalSheet>
   </Screen>;
 }
 

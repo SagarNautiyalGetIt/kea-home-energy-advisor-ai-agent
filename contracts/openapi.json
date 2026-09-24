@@ -149,6 +149,46 @@
         }
       }
     },
+    "/api/households/{customer_id}/plans": {
+      "get": {
+        "summary": "Get Mobile Plans",
+        "description": "Serve the published catalogue and only the plan fields known for this account.",
+        "operationId": "get_mobile_plans_api_households__customer_id__plans_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobilePlansView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/annual-demand": {
       "get": {
         "summary": "Get Annual Demand",
@@ -2582,6 +2622,161 @@
         ],
         "title": "LoginResponse",
         "description": "Who signed in, and which household to show them.\n\nCarries no token: the prototype session is `localStorage['kea-demo-session']` and\nthere is nothing to sign. `customer_id` is the whole point \u2014 it is what every\nsubsequent request scopes to, and what made one login show fourteen different\ncustomers instead of the same one fourteen times."
+      },
+      "MobileCommitmentTerm": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price_treatment": {
+            "type": "string",
+            "title": "Price Treatment"
+          },
+          "monthly_credit": {
+            "type": "string",
+            "title": "Monthly Credit"
+          },
+          "credit_note": {
+            "type": "string",
+            "title": "Credit Note"
+          },
+          "total_credit": {
+            "type": "string",
+            "title": "Total Credit"
+          },
+          "early_exit_fee": {
+            "type": "string",
+            "title": "Early Exit Fee"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "price_treatment",
+          "monthly_credit",
+          "credit_note",
+          "total_credit",
+          "early_exit_fee"
+        ],
+        "title": "MobileCommitmentTerm"
+      },
+      "MobileCurrentPlan": {
+        "properties": {
+          "pricing_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Style"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term"
+          }
+        },
+        "type": "object",
+        "title": "MobileCurrentPlan"
+      },
+      "MobilePlansView": {
+        "properties": {
+          "pricing_styles": {
+            "items": {
+              "$ref": "#/components/schemas/MobilePricingStyle"
+            },
+            "type": "array",
+            "title": "Pricing Styles"
+          },
+          "commitment_terms": {
+            "items": {
+              "$ref": "#/components/schemas/MobileCommitmentTerm"
+            },
+            "type": "array",
+            "title": "Commitment Terms"
+          },
+          "current_plan": {
+            "$ref": "#/components/schemas/MobileCurrentPlan"
+          },
+          "change_requests_available": {
+            "type": "boolean",
+            "title": "Change Requests Available",
+            "default": false
+          },
+          "limitation": {
+            "type": "string",
+            "title": "Limitation",
+            "default": "Plan switches are not available in the mobile API. Contact Customer Care to change plans."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pricing_styles",
+          "commitment_terms",
+          "current_plan"
+        ],
+        "title": "MobilePlansView"
+      },
+      "MobilePricingStyle": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "eyebrow": {
+            "type": "string",
+            "title": "Eyebrow"
+          },
+          "rate": {
+            "type": "string",
+            "title": "Rate"
+          },
+          "daily": {
+            "type": "string",
+            "title": "Daily"
+          },
+          "best_for": {
+            "type": "string",
+            "title": "Best For"
+          },
+          "highlights": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Highlights"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "eyebrow",
+          "rate",
+          "daily",
+          "best_for",
+          "highlights"
+        ],
+        "title": "MobilePricingStyle"
       },
       "OfflineAnswer": {
         "properties": {
