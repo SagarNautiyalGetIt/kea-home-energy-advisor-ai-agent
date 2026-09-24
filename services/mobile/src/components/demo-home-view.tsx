@@ -214,10 +214,9 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
       <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
     </View>
-    <Animated.View style={{ opacity: sceneOpacity ?? 1 }}>
+    <Animated.View style={[{ opacity: sceneOpacity ?? 1 }, styles.sceneWrapper]}>
       <View style={styles.sceneCard}>
         <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['#111111', 'rgba(17,17,17,0.72)', 'rgba(17,17,17,0.22)', 'rgba(17,17,17,0)']} locations={[0, 0.32, 0.68, 1]} pointerEvents="none" style={styles.topFade} />
         <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
         <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
         {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
@@ -232,6 +231,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         </View>
         <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
       </View>
+      <LinearGradient colors={['#111111', 'rgba(17,17,17,0.7)', 'rgba(17,17,17,0.18)', 'rgba(17,17,17,0)']} locations={[0, 0.35, 0.72, 1]} pointerEvents="none" style={styles.topFade} />
       <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
@@ -259,14 +259,15 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#E2E8EE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
   infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
+  sceneWrapper: { position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
   sceneArt: { position: 'relative', zIndex: 2 },
-  weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 13, zIndex: 4 },
+  weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 13, zIndex: 6 },
   weatherInSceneText: { color: '#E9F5FB', fontSize: 11, fontWeight: '700' },
   skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 1, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
   skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2 },
-  topFade: { top: 0, height: 85, left: 0, position: 'absolute', right: 0, zIndex: 3 },
+  topFade: { top: -20, height: 60, left: 0, position: 'absolute', right: 0, zIndex: 5 },
   bottomFade: { bottom: 0, height: 98, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#A8BBC6', fontSize: 10, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },
