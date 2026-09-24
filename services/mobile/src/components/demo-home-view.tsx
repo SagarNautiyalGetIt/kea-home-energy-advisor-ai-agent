@@ -1,486 +1,226 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, {
-  Defs,
-  G,
-  LinearGradient as SvgLinearGradient,
-  Path,
-  Polygon,
-  RadialGradient,
-  Rect,
-  Stop,
-  Line,
-} from 'react-native-svg';
+import { useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, Animated, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import { fetchAucklandWeather, WEATHER_REFRESH_MS, WEATHER_SOURCE_URL, type AucklandWeather } from '@/lib/auckland-weather';
+import { calculateEnergy, type EnergySnapshot } from '@/lib/home-energy';
 import { AnimatedLogo } from './animated-logo';
-import { demoHomeScenarios, type DemoHomeScenario } from '@/data/mock';
-import { palette } from '@/theme';
+
+type Device = 'solar' | 'home' | 'car' | 'battery' | 'grid';
+type Source = 'solar' | 'battery' | 'grid';
 
 type Props = {
-  scenario?: DemoHomeScenario;
-  illustrativeOnly?: boolean;
   onOpenInfo?: () => void;
-  onExit?: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
 };
 
-export function DemoHomeView({
-  scenario: controlledScenario,
-  illustrativeOnly = false,
-  onOpenInfo,
-  onExit,
-  onOpenNotifications,
-  onOpenProfile,
-}: Props) {
-  const activeScenario = controlledScenario ?? demoHomeScenarios[0];
+// Traced on Akash Nair's architectural image, in its 2048 × 1117.091 viewBox.
+const PIPE_PATHS = {
+  solar: 'M1460 311 Q1471 316 1459 321 L1338 363 Q1323 368 1333 379 L1425 461 Q1433 467 1433 480 L1432 571 Q1432 581 1422 584 L1410 587 Q1399 590 1399 601 L1399 628',
+  battery: 'M1393 697 L1393 768 Q1393 776 1385 781 L1291 817 Q1281 821 1281 812 L1281 800',
+  grid: 'M1401 697 L1401 770 Q1401 778 1409 782 L1425 789 Q1432 793 1435 801 L1525 832 Q1538 837 1550 832 L1805 727',
+  car: 'M1155 768 C1156 811 1155 850 1144 872 C1139 883 1131 891 1118 899 C1065 930 994 961 950 965 C920 969 906 956 902 939 C898 922 900 905 888 895 L883 892',
+} as const;
 
-  const isNight = activeScenario.id === 'night';
+const POWER_COLOR = '#83E2FF';
+const COLORS: Record<Source, string> = { solar: POWER_COLOR, battery: POWER_COLOR, grid: POWER_COLOR };
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-  return (
-    <View style={styles.container}>
-      {/* Sky & Ambient Background */}
-      <View style={StyleSheet.absoluteFill}>
-        <LinearGradient
-          colors={
-            ['#111111', '#0E0E0E', '#111111']
-          }
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
+  if (!weather) return 'cloud-outline';
+  if (!weather.isDay) return 'moon-outline';
+  if (weather.condition === 'rain' || weather.condition === 'drizzle') return 'rainy-outline';
+  if (weather.condition === 'storm') return 'thunderstorm-outline';
+  if (weather.condition === 'cloudy' || weather.condition === 'fog') return 'cloudy-outline';
+  if (weather.condition === 'partly-cloudy') return 'partly-sunny-outline';
+  return 'sunny-outline';
+}
+
+function sceneColors(weather: AucklandWeather | null): [string, string, string] {
+  if (!weather) return ['#657D8D', '#CBD8DD', '#F1F2EE'];
+  if (!weather.isDay) return ['#263B59', '#849DB2', '#E1E4E7'];
+  if (['rain', 'storm', 'fog'].includes(weather.condition)) return ['#8299A5', '#CCD9DD', '#EEF1F0'];
+  if (weather.condition === 'cloudy') return ['#ADC1CB', '#DBE3E5', '#F3F3EF'];
+  return ['#B7D8E6', '#E1EEF1', '#F5F4F0'];
+}
+
+function dominantSource(snapshot: EnergySnapshot, device: 'home' | 'car'): Source {
+  const flows = device === 'home'
+    ? [snapshot.flows.solarToHomeKw, snapshot.flows.batteryToHomeKw, snapshot.flows.gridToHomeKw]
+    : [snapshot.flows.solarToEvKw, snapshot.flows.batteryToEvKw, snapshot.flows.gridToEvKw];
+  const largest = Math.max(...flows);
+  return largest === flows[0] ? 'solar' : largest === flows[1] ? 'battery' : 'grid';
+}
+
+function reading(snapshot: EnergySnapshot | null, device: Device): { value: string; detail: string; color: string } {
+  if (!snapshot) return { value: '—', detail: 'Waiting for weather', color: POWER_COLOR };
+  switch (device) {
+    case 'solar': return { value: `${snapshot.solarKw.toFixed(1)} kW`, detail: snapshot.solarKw > 0.05 ? 'Generating' : 'Resting', color: COLORS.solar };
+    case 'home': return { value: `${snapshot.homeServedKw.toFixed(1)} kW`, detail: snapshot.homeState === 'powered' ? 'Powered' : 'Supply limited', color: COLORS[dominantSource(snapshot, 'home')] };
+    case 'car': return { value: snapshot.evServedKw > 0.05 ? `${snapshot.evServedKw.toFixed(1)} kW` : 'Idle', detail: snapshot.evServedKw > 0.05 ? 'Charging' : 'Not charging', color: COLORS[dominantSource(snapshot, 'car')] };
+    case 'battery': {
+      const power = Math.max(snapshot.batteryChargeKw, snapshot.batteryDischargeKw);
+      const state = snapshot.batteryChargeKw > 0.05 ? 'Charging' : snapshot.batteryDischargeKw > 0.05 ? 'Supplying' : 'Standing by';
+      return { value: `${power.toFixed(1)} kW`, detail: `${state} · ${Math.round(snapshot.batteryPercent)}%`, color: COLORS.battery };
+    }
+    case 'grid': {
+      const power = Math.max(snapshot.gridImportKw, snapshot.gridExportKw);
+      const state = snapshot.gridImportKw > 0.05 ? 'Importing' : snapshot.gridExportKw > 0.05 ? 'Exporting' : 'Balanced';
+      return { value: `${power.toFixed(1)} kW`, detail: state, color: COLORS.grid };
+    }
+  }
+}
+
+export function DemoHomeView({ onOpenInfo, onOpenNotifications, onOpenProfile }: Props) {
+  const { width } = useWindowDimensions();
+  const [weather, setWeather] = useState<AucklandWeather | null>(null);
+  const [weatherError, setWeatherError] = useState(false);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [weatherRefreshKey, setWeatherRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<Device>('solar');
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [phase] = useState(() => new Animated.Value(0));
+  const sceneWidth = Math.max(width + 24, 420);
+  const sceneHeight = sceneWidth * 1117.091 / 2048;
+  const snapshot = useMemo(() => weather ? calculateEnergy({
+    solarPotential: weather.isDay ? Math.min(1, Math.max(0, (weather.solarRadiationWm2 ?? 850 * (1 - weather.cloudCoverPercent / 100 * 0.82)) / 1000)) : 0,
+    batteryPercent: 65,
+    reservePercent: 25,
+    homeDemandKw: 1.5,
+    evEnabled: true,
+    evDemandKw: 2,
+    gridConnected: true,
+  }) : null, [weather]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let refreshing = false;
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const next = await fetchAucklandWeather(controller.signal);
+        if (active) { setWeather(next); setWeatherError(false); setWeatherLoading(false); }
+      } catch {
+        if (active) { setWeatherError(true); setWeatherLoading(false); }
+      } finally {
+        refreshing = false;
+      }
+    }
+    void refresh();
+    const interval = setInterval(() => { void refresh(); }, WEATHER_REFRESH_MS);
+    const appSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refresh();
+    });
+    return () => { active = false; controller.abort(); clearInterval(interval); appSubscription.remove(); };
+  }, [weatherRefreshKey]);
+
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(Animated.timing(phase, { toValue: 62, duration: 2200, useNativeDriver: false }));
+    phase.setValue(0);
+    loop.start();
+    return () => loop.stop();
+  }, [phase, reduceMotion]);
+
+  const routes: { id: keyof typeof PIPE_PATHS; kw: number; source: Source; reverse: boolean }[] = snapshot ? [
+    { id: 'solar', kw: snapshot.solarKw, source: 'solar', reverse: false },
+    { id: 'battery', kw: Math.max(snapshot.batteryChargeKw, snapshot.batteryDischargeKw), source: snapshot.batteryDischargeKw > 0.05 ? 'battery' : 'solar', reverse: snapshot.batteryDischargeKw > 0.05 },
+    { id: 'grid', kw: Math.max(snapshot.gridImportKw, snapshot.gridExportKw), source: snapshot.gridImportKw > 0.05 ? 'grid' : 'solar', reverse: snapshot.gridImportKw > 0.05 },
+    { id: 'car', kw: snapshot.evServedKw, source: dominantSource(snapshot, 'car'), reverse: false },
+  ] : [];
+  const offset = phase.interpolate({ inputRange: [0, 62], outputRange: [0, -62] });
+  const reverseOffset = phase.interpolate({ inputRange: [0, 62], outputRange: [0, 62] });
+  const selectedReading = reading(snapshot, selected);
+  const updatedAt = weather ? new Date(weather.observedAt).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: 'Pacific/Auckland' }) : null;
+
+  return <View style={styles.container}>
+    <View style={styles.topBar}>
+      <View style={styles.logoContainer}><AnimatedLogo size={36} /><Text style={styles.topTitle}>Kea Energy</Text></View>
+      <View style={styles.topIcons}>
+        <Pressable accessibilityLabel="Notifications" accessibilityRole="button" hitSlop={8} onPress={onOpenNotifications} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="notifications-outline" size={23} /></Pressable>
+        <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="person-circle-outline" size={24} /></Pressable>
       </View>
-
-      {/* Top Bar: Title & Controls */}
-      <View style={styles.topBar}>
-        <View style={styles.logoContainer}>
-          <AnimatedLogo size={36} />
-          <Text style={styles.topTitle}>Kea Energy</Text>
-        </View>
-        <View style={styles.topIcons}>
-          <Pressable
-            accessibilityLabel="Notifications"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onOpenNotifications}
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          >
-            <Ionicons color="#D8D8D8" name="notifications-outline" size={24} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Profile"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onOpenProfile}
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          >
-            <Ionicons color="#D8D8D8" name="person-circle-outline" size={24} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Isometric Vector House Graphic */}
-      <View style={styles.graphicContainer}>
-        <Svg height="320" viewBox="0 0 380 320" width="100%">
-          <Defs>
-            {/* Sun / Sky Light Glow */}
-            <RadialGradient cx="20%" cy="15%" id="sunGlow" r="50%">
-              <Stop offset="0%" stopColor={isNight ? '#3A4B6B' : '#FFF9D2'} stopOpacity={isNight ? 0.2 : 0.65} />
-              <Stop offset="40%" stopColor={isNight ? '#1E2D4A' : '#FFDD6B'} stopOpacity={isNight ? 0.08 : 0.2} />
-              <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-            </RadialGradient>
-
-            {/* Roof Shading */}
-            <SvgLinearGradient id="roofGrad" x1="0%" x2="100%" y1="0%" y2="100%">
-              <Stop offset="0%" stopColor="#373E4A" />
-              <Stop offset="100%" stopColor="#1E232B" />
-            </SvgLinearGradient>
-
-            {/* Solar Panel Gradient */}
-            <SvgLinearGradient id="solarGrad" x1="0%" x2="100%" y1="0%" y2="100%">
-              <Stop offset="0%" stopColor="#1C2B48" />
-              <Stop offset="50%" stopColor="#121D33" />
-              <Stop offset="100%" stopColor="#0B1322" />
-            </SvgLinearGradient>
-
-            {/* Solar Panel Glint */}
-            <SvgLinearGradient id="solarGlint" x1="0%" x2="0%" y1="0%" y2="100%">
-              <Stop offset="0%" stopColor="#6C8DC5" stopOpacity="0.4" />
-              <Stop offset="100%" stopColor="#1C2B48" stopOpacity="0.1" />
-            </SvgLinearGradient>
-
-            {/* Garage Wall */}
-            <SvgLinearGradient id="garageWall" x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0%" stopColor="#252A33" />
-              <Stop offset="100%" stopColor="#323844" />
-            </SvgLinearGradient>
-
-            {/* Main House Wall */}
-            <SvgLinearGradient id="mainWall" x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0%" stopColor="#2B313D" />
-              <Stop offset="100%" stopColor="#1D222A" />
-            </SvgLinearGradient>
-
-            {/* Car Paint Red */}
-            <SvgLinearGradient id="carRed" x1="0%" x2="100%" y1="0%" y2="50%">
-              <Stop offset="0%" stopColor="#D62734" />
-              <Stop offset="60%" stopColor="#A81420" />
-              <Stop offset="100%" stopColor="#660A11" />
-            </SvgLinearGradient>
-
-            {/* Powerwall Ambient Casing */}
-            <SvgLinearGradient id="pwCasing" x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0%" stopColor="#E6E8EB" />
-              <Stop offset="70%" stopColor="#D2D6DC" />
-              <Stop offset="100%" stopColor="#9AA0AC" />
-            </SvgLinearGradient>
-
-            {/* Ground Shadow */}
-            <RadialGradient cx="50%" cy="50%" id="groundShadow" r="50%">
-              <Stop offset="0%" stopColor="#000000" stopOpacity="0.6" />
-              <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-
-          {/* Ambient Sun Sphere / Atmosphere */}
-          <Rect fill="url(#sunGlow)" height="320" width="380" x="0" y="0" />
-
-          {/* Ground Plane Shadow */}
-          <Polygon fill="url(#groundShadow)" points="20,240 190,165 370,245 190,310" />
-
-          {/* --- HOUSE STRUCTURE --- */}
-          <G id="houseStructure">
-            {/* Left Garage Outer Side Wall */}
-            <Polygon fill="#1E232B" points="15,160 85,130 85,200 15,225" />
-
-            {/* Left Garage Front Wall with Open Door */}
-            <Polygon fill="url(#garageWall)" points="85,130 148,102 148,225 85,200" />
-
-            {/* Garage Interior Shadow (Open Door Cavity) */}
-            <Polygon fill="#0C0E12" points="92,168 142,146 142,223 92,201" />
-
-            {/* Garage Pitched Roof */}
-            <Polygon fill="url(#roofGrad)" points="15,160 85,130 148,102 78,132" />
-
-            {/* Solar Panels on Garage Roof */}
-            <Polygon fill="url(#solarGrad)" points="28,155 83,131 138,107 83,131" stroke="#25375A" strokeWidth="1" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="56" x2="111" y1="143" y2="119" />
-
-            {/* Wall Connector inside Garage */}
-            <Rect fill="#EAEAEA" height="12" rx="2" width="5" x="98" y="172" />
-            <Path d="M103,178 Q108,188 114,194" fill="none" stroke="#D8D8D8" strokeWidth="1.2" />
-
-            {/* Red Model 3 / EV inside Garage (Quarter Rear Angle) */}
-            <G id="carModel3">
-              {/* Car Body Base */}
-              <Polygon fill="url(#carRed)" points="108,206 140,192 144,212 110,222" />
-              {/* Car Rear Glass / Roof */}
-              <Polygon fill="#111620" points="115,192 135,183 138,193 118,202" />
-              {/* Car Taillight Bar */}
-              <Line stroke="#FF2D55" strokeWidth="2.5" x1="109" x2="122" y1="205" y2="200" />
-              <Line stroke="#FF2D55" strokeWidth="2.5" x1="130" x2="139" y1="196" y2="193" />
-              {/* Car Bumper & Shadow */}
-              <Polygon fill="#0E1015" points="110,222 144,212 144,217 110,225" />
-            </G>
-
-            {/* Main House Upper Roof Gable (Peak) */}
-            <Polygon fill="#2C323E" points="148,102 205,75 275,108 218,135" />
-
-            {/* Main House Back Roof Pitch */}
-            <Polygon fill="#1E232B" points="80,128 148,102 205,75 137,101" />
-
-            {/* Main Upper Solar Array Panels */}
-            <Polygon fill="url(#solarGrad)" points="152,100 203,77 268,107 217,130" stroke="#25375A" strokeWidth="1.2" />
-            {/* Grid division lines across solar panels */}
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="174" x2="239" y1="90" y2="120" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="195" x2="260" y1="81" y2="111" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="185" x2="185" y1="85" y2="115" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="210" x2="210" y1="74" y2="104" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="235" x2="235" y1="85" y2="115" />
-
-            {/* Lower Main Roof Pitch */}
-            <Polygon fill="url(#roofGrad)" points="148,102 218,135 295,170 225,137" />
-            {/* Lower Solar Panels */}
-            <Polygon fill="url(#solarGrad)" points="153,105 216,133 285,164 222,136" stroke="#25375A" strokeWidth="1" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="175" x2="244" y1="115" y2="143" />
-            <Line stroke="#384E7A" strokeWidth="0.75" x1="197" x2="266" y1="124" y2="152" />
-
-            {/* Main House Right Facade / Wall */}
-            <Polygon fill="url(#mainWall)" points="148,225 295,170 295,240 148,295" />
-
-            {/* Warm Illuminated Windows on House Wall */}
-            <G id="houseWindows">
-              {/* Window Frame 1 */}
-              <Polygon fill="#161A22" points="248,198 268,190 268,214 248,222" stroke="#3A4150" strokeWidth="1" />
-              {/* Glass Panes */}
-              <Polygon fill="#5B6A82" points="250,200 258,197 258,209 250,212" />
-              <Polygon fill="#5B6A82" points="260,196 266,194 266,206 260,208" />
-              <Polygon fill="#445065" points="250,214 258,211 258,220 250,221" />
-              <Polygon fill="#445065" points="260,210 266,208 266,217 260,218" />
-            </G>
-
-            {/* Wall-Mounted Tesla Powerwall Unit */}
-            <G id="powerwallUnit">
-              {/* Powerwall White Face */}
-              <Polygon fill="url(#pwCasing)" points="162,230 178,224 178,258 162,264" />
-              {/* Powerwall Side Edge */}
-              <Polygon fill="#3B4250" points="160,231 162,230 162,264 160,265" />
-              {/* Glowing Green LED Status Line */}
-              <Line stroke={palette.green} strokeWidth="1.8" x1="162" x2="162" y1="232" y2="263" />
-            </G>
-
-            {/* Inverter / Gateway Unit next to Powerwall */}
-            <Polygon fill="#323846" points="208,215 214,213 214,228 208,230" stroke="#485265" strokeWidth="0.75" />
-
-            {/* --- ENERGY CONDUIT FLOW LINES (Yellow Glowing) --- */}
-            {/* Conduit from Solar to Inverter */}
-            <Line stroke="#F5C028" strokeDasharray="3,3" strokeWidth="1.6" x1="210" x2="210" y1="134" y2="214" />
-            {/* Conduit from Inverter to Powerwall */}
-            <Path d="M208,222 L178,233" fill="none" stroke="#F5C028" strokeWidth="1.6" />
-            {/* Conduit from Inverter to House */}
-            <Path d="M214,220 L246,208" fill="none" stroke="#F5C028" strokeWidth="1.6" />
-            {/* Conduit to Grid (Right Offscreen) */}
-            <Path d="M211,228 L230,248 L320,278" fill="none" stroke="#3A4456" strokeWidth="1.4" />
-          </G>
-
-          {/* --- LEADER CALLOUT LINES --- */}
-          {/* Solar Callout Line */}
-          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="190" x2="190" y1="36" y2="80" />
-
-          {/* Model 3 Callout Line */}
-          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="88" x2="88" y1="52" y2="188" />
-
-          {/* Home Callout Line */}
-          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="285" x2="285" y1="52" y2="185" />
-
-          {/* Powerwall Callout Line */}
-          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="170" x2="170" y1="266" y2="295" />
-
-          {/* Grid Callout Line */}
-          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="288" x2="288" y1="268" y2="295" />
-        </Svg>
-
-        {/* Live accounts have no solar, EV, battery or home power telemetry. */}
-        <View style={styles.illustrativeNotice}><Text style={styles.illustrativeText}>{illustrativeOnly ? 'Illustrative home · device readings not connected' : 'Demo home · simulated readings'}</Text></View>
-        {!illustrativeOnly ? <>
-        {/* --- CALLOUT TAGS (Crisp React Native Typography) --- */}
-
-        {/* 1. SOLAR (Top Center) */}
-        <View style={styles.calloutSolar}>
-          <Text style={styles.calloutLabel}>SOLAR</Text>
-          <Text style={styles.calloutValue}>{activeScenario.solarKw.toFixed(1)} kW</Text>
-        </View>
-
-        {/* 2. MODEL 3 (Top Left) */}
-        <View style={styles.calloutEV}>
-          <Text style={styles.calloutLabel}>MODEL 3</Text>
-          <View style={styles.calloutRow}>
-            <Text style={styles.calloutValue}>{activeScenario.evKw.toFixed(1)} kW</Text>
-            {activeScenario.evCharging ? (
-              <Ionicons color={palette.green} name="caret-up" size={12} style={styles.arrowIcon} />
-            ) : null}
-            <Text style={styles.calloutPercent}>{activeScenario.evSoc}%</Text>
-          </View>
-        </View>
-
-        {/* 3. HOME (Top Right) */}
-        <View style={styles.calloutHome}>
-          <Text style={styles.calloutLabel}>HOME</Text>
-          <Text style={styles.calloutValue}>{activeScenario.homeKw.toFixed(1)} kW</Text>
-        </View>
-
-        {/* 4. POWERWALL (Bottom Center) */}
-        <View style={styles.calloutPowerwall}>
-          <Text style={styles.calloutLabel}>POWERWALL</Text>
-          <View style={styles.calloutRow}>
-            <Text style={styles.calloutValue}>{activeScenario.powerwallKw.toFixed(1)} kW</Text>
-            <Ionicons
-              color={activeScenario.powerwallDischarging ? palette.red : palette.green}
-              name={activeScenario.powerwallDischarging ? 'caret-down' : 'caret-up'}
-              size={12}
-              style={styles.arrowIcon}
-            />
-            <Text style={styles.calloutPercent}>{activeScenario.powerwallSoc}%</Text>
-          </View>
-        </View>
-
-        {/* 5. GRID (Bottom Right) */}
-        <View style={styles.calloutGrid}>
-          <Text style={styles.calloutLabel}>GRID</Text>
-          <Text style={styles.calloutValue}>{activeScenario.gridKw.toFixed(1)} kW</Text>
-        </View>
-        </> : null}
-      </View>
-
-
     </View>
-  );
+    <View style={styles.heading}>
+      <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
+      <Pressable accessibilityLabel="About this home preview" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
+    </View>
+    <View style={styles.weatherCard}>
+      <View style={styles.weatherIcon}><Ionicons name={weatherIcon(weather)} color={POWER_COLOR} size={25} /></View>
+      <View style={styles.weatherDetails}>
+        <Text style={styles.weatherLabel}>AUCKLAND WEATHER</Text>
+        <Text style={styles.weatherValue}>{weather ? `${weather.temperatureC.toFixed(1)}°C · ${weather.description}` : weatherLoading ? 'Loading current weather…' : 'Current weather unavailable'}</Text>
+        <Text style={styles.weatherMeta}>{weatherError ? weather ? 'Could not refresh · showing last update' : 'Check your connection and retry' : updatedAt ? `Updated ${updatedAt} · modelled conditions` : 'Modelled current conditions'}</Text>
+      </View>
+      {weatherError ? <Pressable accessibilityLabel="Retry Auckland weather" accessibilityRole="button" onPress={() => { setWeatherLoading(true); setWeatherRefreshKey((key) => key + 1); }} style={styles.weatherAction}><Ionicons name="refresh" color={POWER_COLOR} size={21} /></Pressable>
+        : <Pressable accessibilityLabel="Open Open-Meteo weather source" accessibilityRole="link" onPress={() => { void Linking.openURL(WEATHER_SOURCE_URL); }} style={styles.weatherAction}><Ionicons name="open-outline" color="#AFC4D2" size={18} /></Pressable>}
+    </View>
+    <View style={styles.sceneCard}>
+      <LinearGradient colors={sceneColors(weather)} style={StyleSheet.absoluteFill} />
+      <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth, marginLeft: (width - 24 - sceneWidth) / 2 - 12 }]}>
+        <Image accessibilityLabel="Kea solar home with battery, electric car, and grid connection" source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
+        <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
+          <Defs><RadialGradient id="homeGlow"><Stop offset="0" stopColor={selectedReading.color} stopOpacity="0.55" /><Stop offset="1" stopColor={selectedReading.color} stopOpacity="0" /></RadialGradient></Defs>
+          {routes.filter((route) => route.kw > 0.05).map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
+          {routes.filter((route) => route.kw > 0.05).map((route) => reduceMotion || Platform.OS === 'web'
+            ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
+            : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
+          <Circle cx={1578} cy={613} fill="url(#homeGlow)" r={47} />
+        </Svg>
+      </View>
+      <View style={styles.sceneCaption}><View style={styles.modeDot} /><Text style={styles.sceneCaptionText}>EXAMPLE ENERGY FLOW</Text></View>
+    </View>
+    <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
+      {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
+        const metric = reading(snapshot, device);
+        return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => setSelected(device)} style={[styles.deviceChip, selected === device && { borderColor: metric.color }]}>
+          <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={styles.deviceName}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
+          <Text style={styles.deviceValue}>{metric.value}</Text><Text numberOfLines={1} style={styles.deviceDetail}>{metric.detail}</Text>
+        </Pressable>;
+      })}
+    </ScrollView>
+    <Text style={styles.demoNote}>Live modelled Auckland weather · illustrative energy, not meter data. Weather: Open-Meteo.</Text>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  illustrativeNotice: { position: 'absolute', bottom: 4, left: 18, right: 18, alignItems: 'center' },
-  illustrativeText: { color: '#FFFFFF', backgroundColor: '#242424', borderRadius: 10, overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 6, fontSize: 10, fontWeight: '700' },
-  container: {
-    width: '100%',
-    overflow: 'hidden',
-    paddingBottom: 16,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-    zIndex: 10,
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  topTitle: {
-    color: '#D8D8D8',
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: -0.5,
-  },
-  topIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  graphicContainer: {
-    position: 'relative',
-    height: 320,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  // Callouts
-  calloutSolar: {
-    position: 'absolute',
-    top: 6,
-    alignSelf: 'center',
-    alignItems: 'center',
-  },
-  calloutEV: {
-    position: 'absolute',
-    top: 22,
-    left: 28,
-    alignItems: 'center',
-  },
-  calloutHome: {
-    position: 'absolute',
-    top: 22,
-    right: 36,
-    alignItems: 'center',
-  },
-  calloutPowerwall: {
-    position: 'absolute',
-    bottom: 2,
-    left: '32%',
-    alignItems: 'center',
-  },
-  calloutGrid: {
-    position: 'absolute',
-    bottom: 2,
-    right: '18%',
-    alignItems: 'center',
-  },
-  calloutLabel: {
-    color: '#A0A5B0',
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  calloutValue: {
-    color: '#D8D8D8',
-    fontSize: 15.5,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-    marginTop: 1,
-  },
-  calloutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 1,
-  },
-  calloutPercent: {
-    color: '#D8D8D8',
-    fontSize: 14.5,
-    fontWeight: '700',
-  },
-  arrowIcon: {
-    marginLeft: 2,
-  },
-  // Scenario Pill
-  scenarioSection: {
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    marginTop: 6,
-  },
-  demoModeLabel: {
-    color: palette.violet,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  scenarioPill: {
-    width: '100%',
-    maxWidth: 420,
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1E2430',
-    borderWidth: 1.5,
-    borderColor: '#38383A',
-    borderRadius: 28,
-    paddingHorizontal: 12,
-    shadowColor: '#000000',
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  pillNavBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-  },
-  pillContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    paddingHorizontal: 6,
-  },
-  pillCopy: {
-    alignItems: 'center',
-  },
-  pillTitle: {
-    color: '#D8D8D8',
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
-  pillSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
+  container: { width: '100%', paddingBottom: 16, backgroundColor: '#101217' },
+  topBar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 5, paddingHorizontal: 20, paddingTop: 8 },
+  logoContainer: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  topTitle: { color: '#F4F5F7', fontSize: 27, fontWeight: '700', letterSpacing: -0.7 },
+  topIcons: { alignItems: 'center', flexDirection: 'row', gap: 14 },
+  iconBtn: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
+  heading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 15, paddingBottom: 13 },
+  eyebrow: { color: POWER_COLOR, fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
+  infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
+  weatherCard: { alignItems: 'center', backgroundColor: '#1A2530', borderColor: '#30495A', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, marginHorizontal: 12, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  weatherIcon: { alignItems: 'center', justifyContent: 'center', height: 34, width: 34 },
+  weatherDetails: { flex: 1 },
+  weatherLabel: { color: POWER_COLOR, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  weatherValue: { color: '#F5F8FA', fontSize: 15, fontWeight: '700', marginTop: 2 },
+  weatherMeta: { color: '#AFC4D2', fontSize: 10, marginTop: 2 },
+  weatherAction: { alignItems: 'center', justifyContent: 'center', height: 34, width: 34 },
+  sceneCard: { borderRadius: 19, marginHorizontal: 12, overflow: 'hidden' },
+  sceneArt: { position: 'relative' },
+  sceneCaption: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: 'rgba(17,27,36,0.85)', borderRadius: 99, bottom: 10, flexDirection: 'row', gap: 6, left: 12, paddingHorizontal: 10, paddingVertical: 5, position: 'absolute' },
+  modeDot: { backgroundColor: POWER_COLOR, borderRadius: 4, height: 6, width: 6 },
+  sceneCaptionText: { color: '#F4F5F7', fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
+  deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },
+  deviceChip: { backgroundColor: '#1A2028', borderColor: '#303945', borderRadius: 14, borderWidth: 1, minHeight: 85, paddingHorizontal: 11, paddingVertical: 9, width: 111 },
+  deviceHeading: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  deviceDot: { borderRadius: 4, height: 7, width: 7 },
+  deviceName: { color: '#B9C1CB', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  deviceValue: { color: '#F7F8F9', fontSize: 17, fontWeight: '800', marginTop: 6 },
+  deviceDetail: { color: '#A9B3C0', fontSize: 9, marginTop: 3 },
+  demoNote: { color: '#9AA8B6', fontSize: 10, paddingHorizontal: 18, paddingTop: 8 },
 });

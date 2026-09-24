@@ -139,66 +139,6 @@ export const planInclusions = [
   'Smart meter required — check your address',
 ]
 
-export type DemoHomeScenario = {
-  id: 'day' | 'evening' | 'night';
-  label: string;
-  detail: string;
-  solarKw: number;
-  evKw: number;
-  evCharging: boolean;
-  evSoc: number;
-  homeKw: number;
-  powerwallKw: number;
-  powerwallDischarging: boolean;
-  powerwallSoc: number;
-  gridKw: number;
-};
-
-export const demoHomeScenarios: DemoHomeScenario[] = [
-  {
-    id: 'day',
-    label: 'Solar mode',
-    detail: 'More solar generation and lower grid draw',
-    solarKw: 8.4,
-    evKw: 2.1,
-    evCharging: true,
-    evSoc: 78,
-    homeKw: 3.2,
-    powerwallKw: 1.8,
-    powerwallDischarging: false,
-    powerwallSoc: 74,
-    gridKw: 0.6,
-  },
-  {
-    id: 'evening',
-    label: 'Evening peak',
-    detail: 'Higher household demand after work and dinner',
-    solarKw: 2.4,
-    evKw: 4.6,
-    evCharging: true,
-    evSoc: 61,
-    homeKw: 5.7,
-    powerwallKw: 2.8,
-    powerwallDischarging: true,
-    powerwallSoc: 68,
-    gridKw: 1.9,
-  },
-  {
-    id: 'night',
-    label: 'Night standby',
-    detail: 'Powerwall covers overnight demand with efficient storage',
-    solarKw: 0,
-    evKw: 2.3,
-    evCharging: false,
-    evSoc: 52,
-    homeKw: 2.8,
-    powerwallKw: 3.1,
-    powerwallDischarging: true,
-    powerwallSoc: 56,
-    gridKw: 0.8,
-  },
-];
-
 export const dashboardToday = {
   labels: ['6am', '9am', '12pm', '3pm', '6pm', '9pm'],
   values: [2.1, 4.8, 6.7, 8.4, 7.2, 3.5],

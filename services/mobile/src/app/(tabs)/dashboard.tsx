@@ -1,14 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import SemiCircleGauge from '@/components/SemiCircleGauge';
 import { PrimaryButton } from '@/components/ui';
-import { demoHomeScenarios } from '@/data/mock';
 import { dashboardNotifications, getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
@@ -17,7 +15,6 @@ export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
-  const { height: screenHeight } = useWindowDimensions();
 
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -27,14 +24,7 @@ export default function DashboardScreen() {
   const [dashboard, setDashboard] = useState<DashboardViewData | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [homeHeight, setHomeHeight] = useState(780);
-  const [homeActionsActive, setHomeActionsActive] = useState(true);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 80, 240], outputRange: [0, 0.5, 0.98], extrapolate: 'clamp' });
-  const homeDimOpacity = scrollY.interpolate({ inputRange: [0, 200], outputRange: [1, 0.35], extrapolate: 'clamp' });
   const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
-  const dashboardListPeekHeight = 68 * 4.6;
-  const dashboardListStart = Math.max(0, screenHeight - dashboardListPeekHeight);
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
   const outlookTitle = dashboard?.warningTriggered
@@ -69,52 +59,17 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} scroll={false}>
-      {/* Fixed home visual; only the action list below it is scrollable. */}
-      <View
-        onLayout={(event) => setHomeHeight(event.nativeEvent.layout.height)}
-        pointerEvents="box-none"
-        style={styles.fixedHome}
-      >
-        <Animated.View style={{ opacity: homeDimOpacity }}>
-          <DemoHomeView
-            illustrativeOnly={process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false'}
-            onExit={() => setWelcomeOpen(true)}
-            onOpenInfo={() => setWelcomeOpen(true)}
-            onOpenNotifications={() => setNotificationsOpen(true)}
-            onOpenProfile={() => router.push('/profile')}
-            scenario={demoHomeScenarios[0]}
-          />
-        </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: homeBlurOpacity }]}>
-          <BlurView experimentalBlurMethod="dimezisBlurView" intensity={48} style={StyleSheet.absoluteFill} tint="dark" />
-          <View style={styles.homeBlurShade} />
-        </Animated.View>
-      </View>
-
-      {/* The scrolling content sits above the fixed hero. These transparent hit targets
-          keep the two visible hero actions interactive until the user starts scrolling. */}
-      <View pointerEvents={homeActionsActive ? 'auto' : 'none'} style={styles.homeActionHitArea}>
-        <Pressable accessibilityLabel="Notifications" accessibilityRole="button" hitSlop={8} onPress={() => setNotificationsOpen(true)} style={styles.homeActionHitTarget} />
-        <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={() => router.push('/profile')} style={styles.homeActionHitTarget} />
-      </View>
-
-      <Animated.ScrollView
+      <ScrollView
         contentContainerStyle={styles.menuScrollContent}
-        decelerationRate="normal"
-        directionalLockEnabled={false}
         nestedScrollEnabled
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-          listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-            const active = event.nativeEvent.contentOffset.y <= 2;
-            setHomeActionsActive((current) => current === active ? current : active);
-          },
-          useNativeDriver: true,
-        })}
-        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         style={styles.menuScroll}
       >
-        <View pointerEvents="none" style={{ height: dashboardListStart }} />
+        <DemoHomeView
+          onOpenInfo={() => setWelcomeOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenProfile={() => router.push('/profile')}
+        />
 
         {/* Metrics */}
         {false ? <View style={styles.menuList}>
@@ -177,7 +132,7 @@ export default function DashboardScreen() {
           </View>
           </> : null}
         </View>
-      </Animated.ScrollView>
+      </ScrollView>
 
       {/* --- MODAL SHEET 1: Welcome to the Demo Home (Screenshot 2 exact match) --- */}
       <ModalSheet
@@ -214,12 +169,12 @@ export default function DashboardScreen() {
       <ModalSheet
         footer={<PrimaryButton label="Get Started" onPress={() => setWelcomeOpen(false)} />}
         onClose={() => setWelcomeOpen(false)}
-        title="Welcome to the Demo Home"
+        title="Explore your Kea home"
         visible={welcomeOpen}
       >
         <View style={styles.welcomeModal}>
           <Text style={[styles.welcomeSubtitle, { color: colors.textMuted }]}>
-            Experience Solar and Powerwall ownership and learn how Kea Energy products work.
+            This scene uses current modelled Auckland weather to illustrate how solar, the Kea battery, your home, and an electric car might share power. Energy values are examples, not readings from your home.
           </Text>
 
           <View style={styles.welcomeFeatures}>
@@ -235,7 +190,7 @@ export default function DashboardScreen() {
                 <Ionicons color={palette.battery} name="battery-charging" size={24} />
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
-                Store excess energy in Powerwall for use at night or during outages
+                Store excess energy in the Kea battery for use after dark
               </Text>
             </View>
 
@@ -360,32 +315,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
   },
-  fixedHome: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-  },
-  homeActionHitArea: {
-    position: 'absolute',
-    top: 8,
-    right: 20,
-    zIndex: 40,
-    flexDirection: 'row',
-    gap: 16,
-  },
-  homeActionHitTarget: {
-    width: 36,
-    height: 36,
-  },
-  homeBlurShade: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.42)',
-  },
   menuScroll: {
     flex: 1,
-    zIndex: 10,
   },
   menuScrollContent: {
     paddingBottom: 40,

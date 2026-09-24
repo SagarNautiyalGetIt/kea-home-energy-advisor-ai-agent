@@ -3,6 +3,16 @@
 React Native client built with Expo SDK 57, TypeScript, and Expo Router. It
 shows the customer dashboard, usage, Sparky, billing, plans, profile, and settings.
 
+The dashboard's interactive Kea Home scene adapts the illustration, conduit
+layout, and deterministic energy-dispatch model from
+[Akash Nair's Kea Energy Home](https://github.com/nair-akash/kea-energy-home).
+See [the attribution and MIT license](assets/kea/KEA_HOME_ATTRIBUTION.md).
+The scene fetches current modelled Auckland weather from
+[Open-Meteo](https://open-meteo.com/) and refreshes it every 15 minutes while
+the app is open. Weather and sunlight influence the illustrative power flows;
+energy values are examples, not customer meter data. If weather is unavailable,
+the screen offers a retry instead of inventing current conditions.
+
 ## Run locally
 
 From the repository root:
