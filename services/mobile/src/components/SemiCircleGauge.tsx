@@ -32,8 +32,6 @@ export default function SemiCircleGauge({ percentage, projectedCost }: SemiCircl
   // so the gauge displays vivid mint and sky-blue gradient arcs rather than an empty grey track.
   const displayPercentage = percentage === null || percentage <= 0 ? 68 : percentage;
   const progress = Math.max(0, Math.min(displayPercentage / 100, 1));
-  const mintEnd = Math.min(progress, 0.22);
-  const blueStart = 0.245;
 
   return (
     <View
@@ -46,42 +44,31 @@ export default function SemiCircleGauge({ percentage, projectedCost }: SemiCircl
     >
       <Svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
         <Defs>
-          <LinearGradient id="mint" x1="0" y1="1" x2="1" y2="0">
-            <Stop offset="0" stopColor="#7EE5BC" stopOpacity="0.65" />
-            <Stop offset="1" stopColor="#5AE8B2" />
-          </LinearGradient>
-          <LinearGradient id="blue" x1="0" y1="1" x2="1" y2="0">
-            <Stop offset="0" stopColor="#A8D8F5" />
-            <Stop offset="0.65" stopColor="#38BDF8" />
-            <Stop offset="1" stopColor="#268CEB" />
+          <LinearGradient id="progressGradient" x1="0" y1="1" x2="1" y2="0">
+            <Stop offset="0" stopColor="#5AE8B2" />
+            <Stop offset="0.32" stopColor="#38BDF8" />
+            <Stop offset="0.85" stopColor="#2563EB" />
           </LinearGradient>
           <LinearGradient id="track" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#74808E" stopOpacity="0.45" />
-            <Stop offset="1" stopColor="#74808E" stopOpacity="0.72" />
+            <Stop offset="0" stopColor="#4B5563" stopOpacity="0.4" />
+            <Stop offset="1" stopColor="#4B5563" stopOpacity="0.65" />
           </LinearGradient>
         </Defs>
+        {/* Grey background track */}
         <Path
           d={arcPath(0.015, 0.985)}
           fill="none"
           stroke="url(#track)"
-          strokeWidth={25}
+          strokeWidth={24}
           strokeLinecap="round"
         />
-        {mintEnd > 0.035 ? (
+        {/* Unified progress arc sitting flush and concentric on the grey track */}
+        {progress > 0.02 ? (
           <Path
-            d={arcPath(0.015, mintEnd)}
+            d={arcPath(0.015, Math.min(progress, 0.985))}
             fill="none"
-            stroke="url(#mint)"
-            strokeWidth={25}
-            strokeLinecap="round"
-          />
-        ) : null}
-        {progress !== null && progress > blueStart + 0.02 ? (
-          <Path
-            d={arcPath(blueStart, Math.min(progress, 0.985))}
-            fill="none"
-            stroke="url(#blue)"
-            strokeWidth={25}
+            stroke="url(#progressGradient)"
+            strokeWidth={24}
             strokeLinecap="round"
           />
         ) : null}

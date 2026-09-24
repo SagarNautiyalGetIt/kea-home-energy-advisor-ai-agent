@@ -209,25 +209,27 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="person-circle-outline" size={24} /></Pressable>
       </View>
     </View>
-    <View style={styles.heading}>
-      <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
-      <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
-    </View>
-    <View style={styles.sceneCard}>
+    <View style={styles.skySection}>
       <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
-      <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
-      <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
-      {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
-      <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth, marginLeft: (frameWidth - sceneWidth) / 2 }]}>
-        <Image accessibilityLabel="Kea solar home with battery, electric car, and grid connection" source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
-        <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
-          {routes.map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
-          {routes.map((route) => reduceMotion || Platform.OS === 'web'
-            ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
-            : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
-        </Svg>
+      <LinearGradient colors={['#111111', 'rgba(17,17,17,0.82)', 'rgba(17,17,17,0.35)', 'rgba(17,17,17,0)']} locations={[0, 0.28, 0.65, 1]} pointerEvents="none" style={styles.topFade} />
+      <View style={styles.heading}>
+        <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
+        <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
       </View>
-      <LinearGradient colors={['#111111', 'rgba(17,17,17,0)']} pointerEvents="none" style={styles.topFade} />
+      <View style={styles.sceneCard}>
+        <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
+        <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
+        {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
+        <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth, marginLeft: (frameWidth - sceneWidth) / 2 }]}>
+          <Image accessibilityLabel="Kea solar home with battery, electric car, and grid connection" source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
+          <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
+            {routes.map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
+            {routes.map((route) => reduceMotion || Platform.OS === 'web'
+              ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
+              : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
+          </Svg>
+        </View>
+      </View>
       <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
     </View>
     <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
@@ -256,6 +258,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#E2E8EE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
   infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
+  skySection: { overflow: 'hidden', position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
   sceneArt: { position: 'relative', zIndex: 2 },
   weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 13, zIndex: 4 },
@@ -263,7 +266,7 @@ const styles = StyleSheet.create({
   skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 1, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
   skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2 },
-  topFade: { top: 0, height: 72, left: 0, position: 'absolute', right: 0, zIndex: 3 },
+  topFade: { top: 0, height: 130, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   bottomFade: { bottom: 0, height: 98, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#A8BBC6', fontSize: 10, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },

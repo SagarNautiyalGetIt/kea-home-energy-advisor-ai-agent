@@ -163,7 +163,7 @@ export default function AssistantScreen() {
         <ScrollView contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
           {messages.map((message) => (
             <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
-              {message.role === 'assistant' ? <View style={styles.avatar}><SparkyPresence mode={message.streaming ? 'replying' : 'idle'} size={34} /></View> : null}
+              {message.role === 'assistant' ? <View style={styles.avatar}><SparkyPresence mode={message.streaming ? 'replying' : 'happy'} size={34} /></View> : null}
               <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : { backgroundColor: colors.surface, borderColor: message.failed ? palette.red : colors.border }]}>
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />

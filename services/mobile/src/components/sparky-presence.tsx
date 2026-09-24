@@ -3,7 +3,7 @@ import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import Animated, { cancelAnimation, Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
-type Mode = 'idle' | 'thinking' | 'replying';
+type Mode = 'idle' | 'thinking' | 'replying' | 'happy' | 'static';
 
 /** Kea's own companion: a soft energy core, attentive eyes and a measured motion cadence. */
 export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; mode?: Mode }) {
@@ -24,7 +24,7 @@ export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; m
     cancelAnimation(gaze);
     cancelAnimation(blink);
     cancelAnimation(halo);
-    if (reduceMotion) {
+    if (reduceMotion || mode === 'happy' || mode === 'static') {
       breath.value = 0;
       gaze.value = 0;
       blink.value = 1;
@@ -72,7 +72,7 @@ export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; m
     transform: [{ scale: interpolate(halo.value, [0, 1], [0.96, 1.07]) }],
   }));
 
-  return <View accessibilityLabel={mode === 'thinking' ? 'Sparky is thinking' : 'Sparky is here'} accessibilityRole="image" style={{ height: size, width: size }}>
+  return <View accessibilityLabel={mode === 'thinking' ? 'Sparky is thinking' : mode === 'happy' ? 'Sparky answered' : 'Sparky is here'} accessibilityRole="image" style={{ height: size, width: size }}>
     <Animated.View style={[styles.layer, haloStyle]}>
       <Svg height="100%" viewBox="0 0 120 120" width="100%">
         <Defs>
@@ -95,12 +95,25 @@ export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; m
       </Svg>
     </Animated.View>
     <Animated.View style={[styles.layer, gazeStyle]}>
-      <Svg height="100%" viewBox="0 0 120 120" width="100%">
-        <Ellipse cx="48" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
-        <Ellipse cx="72" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
-        <Circle cx="50" cy="59" fill="#123B50" r="2.2" />
-        <Circle cx="74" cy="59" fill="#123B50" r="2.2" />
-      </Svg>
+      {mode === 'happy' ? (
+        <Svg height="100%" viewBox="0 0 120 120" width="100%">
+          {/* Happy smiling eyes ^ ^ */}
+          <Path d="M 42 61 C 44 51 52 51 54 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
+          <Path d="M 66 61 C 68 51 76 51 78 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
+          {/* Subtle blush */}
+          <Circle cx="37" cy="65" fill="#FF8A80" opacity={0.4} r="4.5" />
+          <Circle cx="83" cy="65" fill="#FF8A80" opacity={0.4} r="4.5" />
+          {/* Gentle happy smile */}
+          <Path d="M 56 69 Q 60 74 64 69" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="2.2" />
+        </Svg>
+      ) : (
+        <Svg height="100%" viewBox="0 0 120 120" width="100%">
+          <Ellipse cx="48" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
+          <Ellipse cx="72" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
+          <Circle cx="50" cy="59" fill="#123B50" r="2.2" />
+          <Circle cx="74" cy="59" fill="#123B50" r="2.2" />
+        </Svg>
+      )}
     </Animated.View>
   </View>;
 }

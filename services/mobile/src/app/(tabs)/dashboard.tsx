@@ -30,6 +30,8 @@ export default function DashboardScreen() {
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
   const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 160], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
+  const homeHeroOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [1, 0.55, 0.18], extrapolate: 'clamp' });
+  const homeDarknessOpacity = scrollY.interpolate({ inputRange: [0, 60, 160], outputRange: [0, 0.65, 0.88], extrapolate: 'clamp' });
   const isZara = session?.customerId === 'H-ZARA';
   const gaugePercentage = dashboard?.overshootPct == null || dashboard.overshootPct <= 0 ? 68 : Math.min(Math.max(dashboard.overshootPct, 0), 100);
   const projectedCost = dashboard?.projectedCycleCostNzd ?? (isZara ? 84.92 : null);
@@ -76,18 +78,18 @@ export default function DashboardScreen() {
         pointerEvents="box-none"
         style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
-        <View style={styles.homeHero}>
+        <Animated.View style={[styles.homeHero, { opacity: homeHeroOpacity }]}>
           <DemoHomeView
             customerId={session?.customerId ?? null}
             onOpenInfo={() => setWelcomeOpen(true)}
             onOpenNotifications={() => setNotificationsOpen(true)}
             onOpenProfile={() => router.push('/profile')}
           />
-        </View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: homeBlurOpacity }]}>
-          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-          <View pointerEvents="none" style={styles.backdropBlurShade} />
         </Animated.View>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: homeBlurOpacity }]}>
+          <BlurView intensity={58} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: homeDarknessOpacity }]} />
       </View>
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
