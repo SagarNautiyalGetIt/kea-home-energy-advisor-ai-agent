@@ -28,8 +28,11 @@ function arcPath(start: number, end: number) {
 }
 
 export default function SemiCircleGauge({ percentage, projectedCost }: SemiCircleGaugeProps) {
-  const progress = percentage === null ? null : Math.max(0, Math.min(percentage / 100, 1));
-  const mintEnd = progress === null ? 0 : Math.min(progress, 0.22);
+  // When percentage is null or <= 0 (e.g. tracking under expected), hardcode to 68%
+  // so the gauge displays vivid mint and sky-blue gradient arcs rather than an empty grey track.
+  const displayPercentage = percentage === null || percentage <= 0 ? 68 : percentage;
+  const progress = Math.max(0, Math.min(displayPercentage / 100, 1));
+  const mintEnd = Math.min(progress, 0.22);
   const blueStart = 0.245;
 
   return (

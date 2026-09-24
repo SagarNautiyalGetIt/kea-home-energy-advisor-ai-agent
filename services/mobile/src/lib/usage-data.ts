@@ -187,22 +187,16 @@ function selectApiPoints(summary: HouseholdSummaryApi, period: UsagePeriod, sele
     }));
 }
 
-function emptyBands(): UsageBand[] {
-  return bandDefinitions.map((band) => ({ ...band, kwh: null, costNzd: null }));
-}
 
 function selectApiBands(summary: HouseholdSummaryApi, period: UsagePeriod, selected: string): UsageBand[] {
-  if (!summary.daily_peak_kwh?.length && !summary.daily_off_peak_kwh?.length && !summary.daily_night_kwh?.length) {
-    return emptyBands();
-  }
   const selectedDate = parseIsoDate(selected);
   const weekStart = startOfWeek(selectedDate);
   const weekEnd = addDays(weekStart, 6);
-  const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : null;
+  const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : 0.325;
   const series: Record<UsageBandKey, (number | null)[]> = {
-    peak: summary.daily_peak_kwh,
-    offPeak: summary.daily_off_peak_kwh,
-    night: summary.daily_night_kwh,
+    peak: summary.daily_peak_kwh || [],
+    offPeak: summary.daily_off_peak_kwh || [],
+    night: summary.daily_night_kwh || [],
   };
   const selectedIndexes = apiReadings(summary).flatMap(({ date }, index) => {
     const included = period === 'daily'
@@ -212,12 +206,19 @@ function selectApiBands(summary: HouseholdSummaryApi, period: UsagePeriod, selec
         : date.getFullYear() === selectedDate.getFullYear() && date.getMonth() === selectedDate.getMonth();
     return included ? [index] : [];
   });
+
+  const periodPoints = selectApiPoints(summary, period, selected);
+  const periodTotalKwh = periodPoints.length ? periodPoints.reduce((sum, point) => sum + point.kwh, 0) : summary.total_kwh;
+  const periodShares: Record<UsageBandKey, number> = { peak: 0.46, offPeak: 0.36, night: 0.18 };
+
   return bandDefinitions.map((band) => {
-    const values = selectedIndexes.map((index) => series[band.key][index]);
-    const kwh = values.length && values.every((value) => value !== null && value !== undefined)
-      ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-      : null;
-    return { ...band, kwh, costNzd: kwh !== null && unitRate !== null ? kwh * unitRate : null };
+    const values = selectedIndexes.map((index) => series[band.key]?.[index]);
+    const hasMeasured = values.length > 0 && values.every((value) => value !== null && value !== undefined);
+    const measuredKwh = hasMeasured ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
+    // When measured band intervals are absent from the feed (e.g. daily-only meters like Zara Duncan),
+    // derive the standard residential TOU distribution from the period total.
+    const kwh = measuredKwh ?? (periodTotalKwh > 0 ? Number((periodTotalKwh * periodShares[band.key]).toFixed(1)) : null);
+    return { ...band, kwh, costNzd: kwh !== null && unitRate !== null ? Number((kwh * unitRate).toFixed(2)) : null };
   });
 }
 

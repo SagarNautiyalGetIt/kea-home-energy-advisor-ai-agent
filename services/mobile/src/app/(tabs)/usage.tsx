@@ -27,9 +27,9 @@ const periodOptions = [
 
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const unavailableBands: UsageBand[] = [
-  { key: 'peak', label: 'Peak usage', window: null, kwh: null, costNzd: null },
-  { key: 'offPeak', label: 'Off-peak usage', window: null, kwh: null, costNzd: null },
-  { key: 'night', label: 'Night usage', window: null, kwh: null, costNzd: null },
+  { key: 'peak', label: 'Peak usage', window: '7–11 AM · 5–9 PM', kwh: null, costNzd: null },
+  { key: 'offPeak', label: 'Off-peak usage', window: '11 AM–5 PM · 9–11 PM', kwh: null, costNzd: null },
+  { key: 'night', label: 'Night usage', window: '11 PM–7 AM', kwh: null, costNzd: null },
 ];
 
 function parseDate(value: string) {
