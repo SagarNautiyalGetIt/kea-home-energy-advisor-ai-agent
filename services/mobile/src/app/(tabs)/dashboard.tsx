@@ -29,10 +29,10 @@ export default function DashboardScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
-  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, 90, 220], outputRange: [1, 0.55, 0.20], extrapolate: 'clamp' });
+  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, 90, 220], outputRange: [1, 0.55, 0.15], extrapolate: 'clamp' });
   const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [0, 0.35, 0.65], extrapolate: 'clamp' });
   const isZara = session?.customerId === 'H-ZARA';
-  const gaugePercentage = dashboard?.overshootPct == null || dashboard.overshootPct <= 0 ? 68 : Math.min(Math.max(dashboard.overshootPct, 0), 100);
+  const gaugePercentage = dashboard?.overshootPct == null ? null : Math.min(Math.max(dashboard.overshootPct, 0), 100);
   const projectedCost = dashboard?.projectedCycleCostNzd ?? (isZara ? 84.92 : null);
   const expectedCost = dashboard?.expectedCostNzd ?? (isZara ? 86.64 : null);
   const homeHeroPeekHeight = Math.max(380, Math.min(500, screenHeight - 240));
