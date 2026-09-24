@@ -217,7 +217,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     <Animated.View style={[{ opacity: sceneOpacity ?? 1 }, styles.sceneWrapper]}>
       <View style={styles.sceneCard}>
         <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
-        <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
         <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
         {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
         <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth, marginLeft: (frameWidth - sceneWidth) / 2 }]}>
@@ -232,6 +231,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
       </View>
       <LinearGradient colors={['#111111', 'rgba(17,17,17,0.7)', 'rgba(17,17,17,0.18)', 'rgba(17,17,17,0)']} locations={[0, 0.35, 0.72, 1]} pointerEvents="none" style={styles.topFade} />
+      <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
       <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
@@ -255,14 +255,14 @@ const styles = StyleSheet.create({
   topTitle: { color: '#F4F5F7', fontSize: 27, fontWeight: '700', letterSpacing: -0.7 },
   topIcons: { alignItems: 'center', flexDirection: 'row', gap: 14 },
   iconBtn: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
-  heading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 15, paddingBottom: 13 },
+  heading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 15, paddingBottom: 13, position: 'relative', zIndex: 30, elevation: 30 },
   eyebrow: { color: '#E2E8EE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
   infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
   sceneWrapper: { position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
   sceneArt: { position: 'relative', zIndex: 2 },
-  weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 13, zIndex: 6 },
+  weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 12, zIndex: 20, elevation: 20 },
   weatherInSceneText: { color: '#E9F5FB', fontSize: 11, fontWeight: '700' },
   skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 1, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
