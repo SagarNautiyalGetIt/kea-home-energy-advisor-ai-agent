@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { Card, FormField, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
 import { changeAccountPassword, requestPasswordReset } from '@/lib/account-api';
 import { apiBase, apiJson, jsonRequest } from '@/lib/backend-client';
+import { connectHomeAssistant, disconnectHomeAssistant, listHomeAssistantEntities, listHomeAssistantPowerEntities, loadHomeAssistant, saveEnergyMapping, savePowerMapping, syncHomeAssistant, type DeviceKind, type EnergyEntity, type HomeAssistantConnection, type PowerEntity, type PowerKind } from '@/lib/home-assistant';
 import { loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/settings-api';
 import { validateEmail, validateNewPassword, validateRequired } from '@/lib/validation';
 import { useToast } from '@/providers/toast';
@@ -19,7 +20,21 @@ type PasswordErrors = { current?: string; next?: string; confirm?: string };
 
 const defaults: Preferences = { accountRef: '', enabled: true, emailNotifications: true, smsNotifications: false, phoneNotifications: false, billReminders: true, tier1Pct: 15, tier2Pct: 40, tier3Pct: 75, minOvershootNzd: 20, offlineModelOptIn: false, email: null, phoneE164: null, quietHoursStart: 21, quietHoursEnd: 8, timezone: 'Pacific/Auckland', theme: 'dark' };
 const tierOptions = { email: [10, 15, 20, 30, 40], sms: [40, 50, 60, 70], phone: [70, 75, 80, 90, 100] } as const;
-type ScanResult = { devices_found?: number; devices?: { name?: string; kind?: string; note?: string }[]; error?: string | null };
+type ScanResult = { devices_found?: number; devices?: { name?: string; kind?: string; note?: string; address?: string | null; service?: string; could_connect_via?: string | null }[]; error?: string | null };
+const deviceKinds: { value: DeviceKind; label: string }[] = [
+  { value: 'ev_charger', label: 'EV charger' }, { value: 'space_heating', label: 'Heating' },
+  { value: 'water_heating', label: 'Hot water' }, { value: 'cooling', label: 'Cooling' },
+  { value: 'laundry', label: 'Laundry' }, { value: 'kitchen', label: 'Kitchen' },
+  { value: 'lighting', label: 'Lighting' }, { value: 'solar_generation', label: 'Solar' },
+  { value: 'battery_charge', label: 'Battery charge' }, { value: 'battery_discharge', label: 'Battery discharge' },
+  { value: 'other', label: 'Other device' },
+];
+const powerKinds: { value: PowerKind; label: string }[] = [
+  { value: 'solar_generation', label: 'Solar output' }, { value: 'home_load', label: 'Home load' },
+  { value: 'ev_charger', label: 'EV charger' }, { value: 'battery_charge', label: 'Battery charging' },
+  { value: 'battery_discharge', label: 'Battery supply' }, { value: 'grid_import', label: 'Grid import' },
+  { value: 'grid_export', label: 'Grid export' },
+];
 
 export default function SettingsScreen() {
   const { colors } = useAppTheme();
@@ -35,6 +50,14 @@ export default function SettingsScreen() {
   const [resetEmailError, setResetEmailError] = useState<string>();
   const [scanning, setScanning] = useState(false);
   const [scan, setScan] = useState<ScanResult | null>(null);
+  const [haUrl, setHaUrl] = useState('');
+  const [haToken, setHaToken] = useState('');
+  const [haConnection, setHaConnection] = useState<HomeAssistantConnection | null>(null);
+  const [haEntities, setHaEntities] = useState<EnergyEntity[]>([]);
+  const [haPowerEntities, setHaPowerEntities] = useState<PowerEntity[]>([]);
+  const [haSelectedEntity, setHaSelectedEntity] = useState<string | null>(null);
+  const [haSelectedPowerEntity, setHaSelectedPowerEntity] = useState<string | null>(null);
+  const [haBusy, setHaBusy] = useState(false);
   const [offlineDownloadMb, setOfflineDownloadMb] = useState<number | null>(null);
 
   useEffect(() => {
@@ -59,6 +82,21 @@ export default function SettingsScreen() {
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!session?.customerId) return;
+    let active = true;
+    void loadHomeAssistant(session.customerId).then(async (connection) => {
+      if (!active || !connection) return;
+      setHaConnection(connection);
+      setHaUrl(connection.url);
+      const entities = await listHomeAssistantEntities(session.customerId);
+      if (active) setHaEntities(entities);
+      const powerEntities = await listHomeAssistantPowerEntities(session.customerId);
+      if (active) setHaPowerEntities(powerEntities);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [session?.customerId]);
 
   const update = (patch: Partial<Preferences>) => {
     const next = { ...preferences, ...patch };
@@ -121,6 +159,48 @@ export default function SettingsScreen() {
     }
   };
 
+  const connectHub = async () => {
+    if (!session?.customerId) return;
+    setHaBusy(true);
+    try {
+      const { connection, entities, powerEntities } = await connectHomeAssistant(session.customerId, haUrl, haToken);
+      setHaConnection(connection); setHaEntities(entities); setHaPowerEntities(powerEntities); setHaToken('');
+      showToast(`${entities.length} energy and ${powerEntities.length} live power sensors found.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not connect to Home Assistant.', 'warning');
+    } finally { setHaBusy(false); }
+  };
+
+  const selectSensor = async (entity: EnergyEntity, deviceClass: DeviceKind) => {
+    if (!session?.customerId || !haConnection) return;
+    try {
+      const mappings = await saveEnergyMapping(session.customerId, entity, deviceClass);
+      setHaConnection({ ...haConnection, mappings });
+      setHaSelectedEntity(null);
+      showToast(`${entity.label} saved as ${deviceKinds.find((kind) => kind.value === deviceClass)?.label}.`, 'success');
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not save sensor.', 'warning'); }
+  };
+
+  const syncHub = async () => {
+    if (!session?.customerId) return;
+    setHaBusy(true);
+    try {
+      const result = await syncHomeAssistant(session.customerId);
+      showToast(`${result.saved} measured device readings saved for ${result.day}.`, 'success');
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Device readings could not be synced.', 'warning'); }
+    finally { setHaBusy(false); }
+  };
+
+  const selectPowerSensor = async (entity: PowerEntity, kind: PowerKind) => {
+    if (!session?.customerId || !haConnection) return;
+    try {
+      const powerMappings = await savePowerMapping(session.customerId, entity, kind);
+      setHaConnection({ ...haConnection, powerMappings });
+      setHaSelectedPowerEntity(null);
+      showToast(`${entity.label} saved for live Home animation.`, 'success');
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not save power sensor.', 'warning'); }
+  };
+
   const alertsOff = !preferences.enabled;
 
   return (
@@ -150,9 +230,36 @@ export default function SettingsScreen() {
         <Pressable disabled={scanning} onPress={() => void scanNetwork()} style={styles.scanButton}>{scanning ? <ActivityIndicator color="#000000" /> : <Ionicons color="#000000" name="wifi-outline" size={18} />}<Text style={styles.scanButtonText}>{scanning ? 'Scanning…' : 'Scan server network'}</Text></Pressable>
         {scan?.error ? <Text style={[styles.scanResult, { color: palette.red }]}>The scan couldn’t run here — {scan.error}</Text> : null}
         {scan && !scan.error && !scan.devices_found ? <Text style={[styles.scanResult, { color: colors.textMuted }]}>Nothing answered on the server’s network. Your phone may be on a different network.</Text> : null}
-        {scan?.devices?.map((device, index) => <View key={`${device.name}-${index}`} style={[styles.deviceRow, { borderTopColor: colors.border }]}><Text style={[styles.settingTitle, { color: colors.text }]}>{device.name ?? 'Smart device'}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{device.kind}{device.note ? ` · ${device.note}` : ''}</Text></View>)}
+        {scan?.devices?.map((device, index) => <View key={`${device.name}-${index}`} style={[styles.deviceRow, { borderTopColor: colors.border }]}><Text style={[styles.settingTitle, { color: colors.text }]}>{device.name ?? 'Smart device'}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{device.kind}{device.note ? ` · ${device.note}` : ''}</Text>{device.service === '_home-assistant._tcp.local.' && device.address && /^[a-zA-Z0-9.-]+$/.test(device.address) ? <Pressable accessibilityRole="button" onPress={() => setHaUrl(`http://${device.address}:8123`)}><Text style={[styles.settingDetail, { color: '#38BDF8' }]}>Use this Home Assistant address below</Text></Pressable> : null}</View>)}
         {scan && !scan.error ? <PrimaryButton label="Ask Sparky about usage and devices" onPress={() => router.push({ pathname: '/assistant', params: { question: 'What does my energy breakdown show, and what did the network scan find? Please keep measured usage separate from device names.' } })} /> : null}
-        <Text style={[styles.footnote, { color: colors.textMuted }]}>This scan stores nothing and does not read energy. Apple Home reading is not connected in this app yet.</Text>
+        <Text style={[styles.footnote, { color: colors.textMuted }]}>This scan stores nothing and does not read energy. Connect an energy-metering hub below for measured device use.</Text>
+      </Card>
+      <Card style={styles.connectedCard}>
+        <View style={styles.connectedTitle}><Ionicons color="#38BDF8" name="home-outline" size={22} /><Text style={[styles.settingTitle, { color: colors.text }]}>Home Assistant energy meters</Text></View>
+        <Text style={[styles.settingDetail, { color: colors.textMuted }]}>If you have a Home Assistant hub, connect it on the same network. Kea reads only sensors you choose. Your hub token stays on this device; only daily kWh is sent to the demo API.</Text>
+        <TextInput accessibilityLabel="Home Assistant URL" autoCapitalize="none" autoCorrect={false} keyboardType="url" onChangeText={setHaUrl} placeholder="http://homeassistant.local:8123" placeholderTextColor={colors.textMuted} style={[styles.haInput, { borderColor: colors.border, color: colors.text }]} value={haUrl} />
+        <TextInput accessibilityLabel="Home Assistant access token" autoCapitalize="none" autoCorrect={false} onChangeText={setHaToken} placeholder={haConnection ? 'Token saved on this device' : 'Long-lived access token'} placeholderTextColor={colors.textMuted} secureTextEntry style={[styles.haInput, { borderColor: colors.border, color: colors.text }]} value={haToken} />
+        <Pressable accessibilityRole="button" disabled={haBusy || !haUrl.trim() || !haToken.trim()} onPress={() => void connectHub()} style={[styles.haAction, (haBusy || !haUrl.trim() || !haToken.trim()) && styles.disabledChannel]}><Text style={styles.haActionText}>{haBusy ? 'Connecting…' : 'Connect and find energy sensors'}</Text></Pressable>
+        {haConnection ? <>
+          <Text style={[styles.settingDetail, { color: colors.textMuted }]}>{haEntities.length} energy sensors found · {haConnection.mappings.length} selected</Text>
+          {haEntities.map((entity) => {
+            const mapping = haConnection.mappings.find((item) => item.id === entity.id);
+            return <View key={entity.id} style={[styles.deviceRow, { borderTopColor: colors.border }]}>
+              <Pressable accessibilityRole="button" onPress={() => setHaSelectedEntity((current) => current === entity.id ? null : entity.id)}><Text style={[styles.settingTitle, { color: colors.text }]}>{entity.label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{mapping ? `Saved as ${deviceKinds.find((kind) => kind.value === mapping.deviceClass)?.label}` : 'Choose what this sensor measures'} · {entity.unit} · {entity.id}</Text></Pressable>
+              {haSelectedEntity === entity.id ? <ScrollView contentContainerStyle={styles.haKindList} horizontal showsHorizontalScrollIndicator={false}>{deviceKinds.map((kind) => <Pressable accessibilityRole="button" key={kind.value} onPress={() => void selectSensor(entity, kind.value)} style={[styles.haKind, mapping?.deviceClass === kind.value && styles.haKindSelected]}><Text style={styles.haKindText}>{kind.label}</Text></Pressable>)}</ScrollView> : null}
+            </View>;
+          })}
+          <Text style={[styles.settingDetail, { color: colors.textMuted }]}>Live power sensors ({haPowerEntities.length}). Map these separately to animate only fresh measured flow. No power history is stored.</Text>
+          {haPowerEntities.map((entity) => {
+            const mapping = haConnection.powerMappings.find((item) => item.id === entity.id);
+            return <View key={entity.id} style={[styles.deviceRow, { borderTopColor: colors.border }]}>
+              <Pressable accessibilityRole="button" onPress={() => setHaSelectedPowerEntity((current) => current === entity.id ? null : entity.id)}><Text style={[styles.settingTitle, { color: colors.text }]}>{entity.label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{mapping ? `Saved as ${powerKinds.find((kind) => kind.value === mapping.kind)?.label}` : 'Choose what this power sensor measures'} · {entity.unit} · {entity.id}</Text></Pressable>
+              {haSelectedPowerEntity === entity.id ? <ScrollView contentContainerStyle={styles.haKindList} horizontal showsHorizontalScrollIndicator={false}>{powerKinds.map((kind) => <Pressable accessibilityRole="button" key={kind.value} onPress={() => void selectPowerSensor(entity, kind.value)} style={[styles.haKind, mapping?.kind === kind.value && styles.haKindSelected]}><Text style={styles.haKindText}>{kind.label}</Text></Pressable>)}</ScrollView> : null}
+            </View>;
+          })}
+          <Pressable accessibilityRole="button" disabled={haBusy || !haConnection.mappings.length} onPress={() => void syncHub()} style={[styles.haAction, (haBusy || !haConnection.mappings.length) && styles.disabledChannel]}><Text style={styles.haActionText}>Sync yesterday’s measured energy</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { if (session?.customerId) void disconnectHomeAssistant(session.customerId).then(() => { setHaConnection(null); setHaEntities([]); setHaPowerEntities([]); setHaUrl(''); showToast('Home Assistant disconnected.', 'info'); }); }}><Text style={[styles.settingDetail, { color: colors.textMuted }]}>Disconnect Home Assistant</Text></Pressable>
+        </> : null}
       </Card>
 
       <SectionTitle>Account security</SectionTitle>
@@ -208,14 +315,14 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
   const minimum = opts[0] ?? 0;
   const maximum = opts[opts.length - 1] ?? 100;
   const span = Math.max(maximum - minimum, 1);
-  const valueToRatio = (v: number) => Math.min(1, Math.max(0, (v - minimum) / span));
+  const valueToRatio = useCallback((v: number) => Math.min(1, Math.max(0, (v - minimum) / span)), [minimum, span]);
   const ratioToValue = (r: number) => minimum + r * span;
   const nearestOption = (v: number) => opts.reduce((best, o) => (Math.abs(o - v) < Math.abs(best - v) ? o : best), opts[0] ?? v);
 
-  const position = useRef(new Animated.Value(valueToRatio(value))).current;
-  const thumbScale = useRef(new Animated.Value(1)).current;
-  const trackHeight = useRef(new Animated.Value(8)).current;
-  const tickOpacity = useRef(new Animated.Value(0)).current;
+  const [position] = useState(() => new Animated.Value(valueToRatio(value)));
+  const [thumbScale] = useState(() => new Animated.Value(1));
+  const [trackHeight] = useState(() => new Animated.Value(8));
+  const [tickOpacity] = useState(() => new Animated.Value(0));
   const [trackWidth, setTrackWidth] = useState(0);
   const [dragValue, setDragValue] = useState<number | null>(null);
   const trackRef = useRef<View>(null);
@@ -225,16 +332,19 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
   const grantRatioRef = useRef(0);
   const draggingRef = useRef(false);
   const onValueRef = useRef(onValue);
-  onValueRef.current = onValue;
   const disabledRef = useRef(disabled);
-  disabledRef.current = disabled;
+
+  useEffect(() => {
+    onValueRef.current = onValue;
+    disabledRef.current = disabled;
+  }, [onValue, disabled]);
 
   useEffect(() => {
     if (draggingRef.current) return;
     const target = valueToRatio(value);
     ratioRef.current = target;
     Animated.timing(position, { toValue: target, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [value]);
+  }, [value, valueToRatio, position]);
 
   const endAt = (r: number) => {
     const snapped = nearestOption(ratioToValue(r));
@@ -251,8 +361,9 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
     onValueRef.current(snapped);
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
+  const [panResponder, setPanResponder] = useState<ReturnType<typeof PanResponder.create> | null>(null);
+  useEffect(() => {
+    setPanResponder(PanResponder.create({
       onStartShouldSetPanResponder: () => !disabledRef.current,
       onMoveShouldSetPanResponder: () => !disabledRef.current,
       onPanResponderGrant: () => {
@@ -283,8 +394,11 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
       onPanResponderTerminate: () => {
         endAt(ratioRef.current);
       },
-    }),
-  ).current;
+    }));
+    // The responder is installed after render, when reading its refs is safe.
+    // Its callbacks use the refs' latest values while the gesture is active.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const w = event.nativeEvent.layout.width;
@@ -321,7 +435,7 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
         accessibilityValue={{ text: `${displayValue}% above normal` }}
         onAccessibilityAction={(event) => step(event.nativeEvent.actionName === 'increment' ? 1 : -1)}
         onLayout={handleLayout}
-        {...panResponder.panHandlers}
+        {...(panResponder?.panHandlers ?? {})}
         style={styles.sliderTouch}
       >
         <Animated.View style={[styles.sliderTrack, { height: trackHeight }]}>
@@ -369,6 +483,13 @@ const styles = StyleSheet.create({
   screenEnter: { flex: 1 }, settingsCard: { paddingVertical: 2 }, sectionDescription: { marginTop: -7, marginBottom: 10, fontSize: 11, lineHeight: 16 }, groupLabel: { paddingTop: 16, paddingBottom: 8, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }, settingRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, paddingVertical: 12 }, settingIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 }, settingCopy: { flex: 1 }, settingTitle: { fontSize: 13, fontWeight: '900' }, settingDetail: { marginTop: 3, fontSize: 10, lineHeight: 14 }, checkbox: { width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderRadius: 8 }, notificationNote: { paddingVertical: 12, fontSize: 10, lineHeight: 15 }, pressed: { opacity: 0.68 },
   thresholdBlock: { gap: 8, borderBottomWidth: 1, paddingVertical: 15 }, disabledChannel: { opacity: 0.48 }, thresholdHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, switchTrack: { width: 44, height: 26, justifyContent: 'center', borderRadius: 13, padding: 3 }, switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#777777' }, switchThumbOn: { alignSelf: 'flex-end', backgroundColor: '#FFFFFF' }, sliderArea: { marginTop: 8 }, sliderTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, marginHorizontal: 2 }, sliderWarningIcon: { marginRight: 6 }, sliderTopLabel: { fontSize: 14, fontWeight: '700' }, sliderTouch: { paddingVertical: 14, marginHorizontal: 2 }, sliderTrack: { position: 'relative' }, sliderBaseFill: { position: 'absolute', left: 0, top: 0, bottom: 0, right: 0, borderRadius: 99 }, sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 99, overflow: 'hidden' }, sliderThumb: { position: 'absolute', top: '50%', marginTop: -11, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 5 }, sliderTick: { position: 'absolute', top: '50%', marginTop: -4, width: 3, height: 8, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', marginLeft: -1.5 }, sliderLabels: { position: 'relative', height: 20, marginTop: 6, marginHorizontal: 2 }, sliderLabel: { position: 'absolute', width: 48, marginLeft: -24, textAlign: 'center', fontSize: 10, fontWeight: '800' }, thresholdValue: { fontSize: 11, fontWeight: '900' }, numberBox: { minWidth: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 11, paddingHorizontal: 9 }, numberInput: { minWidth: 32, paddingVertical: 9, fontSize: 13, fontWeight: '800', textAlign: 'center' }, quietInputs: { alignItems: 'center', gap: 5 }, hourBox: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 7 }, hourInput: { width: 26, paddingVertical: 7, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   saveButton: { alignSelf: 'flex-end', width: 190, marginVertical: 14 }, connectedCard: { gap: 13 }, connectedTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 }, scanButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 16 }, scanButtonText: { color: '#000000', fontSize: 12, fontWeight: '900' }, scanResult: { fontSize: 11, lineHeight: 17 }, deviceRow: { borderTopWidth: 1, paddingTop: 10 }, footnote: { fontSize: 9, lineHeight: 14 },
+  haInput: { borderRadius: 12, borderWidth: 1, fontSize: 13, minHeight: 44, paddingHorizontal: 12 },
+  haAction: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#38BDF8', borderRadius: 12, minHeight: 42, justifyContent: 'center', paddingHorizontal: 14 },
+  haActionText: { color: '#07151D', fontSize: 12, fontWeight: '800' },
+  haKindList: { gap: 6, paddingVertical: 9 },
+  haKind: { backgroundColor: '#20313B', borderColor: '#335568', borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  haKindSelected: { borderColor: '#38BDF8' },
+  haKindText: { color: '#E4F1F7', fontSize: 11, fontWeight: '700' },
   dataMode: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 14, padding: 14 }, dataIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#E7F8F1' }, dataCopy: { flex: 1 }, dataTitle: { fontSize: 12, fontWeight: '900' }, dataBody: { marginTop: 3, fontSize: 10, lineHeight: 14 }, activeBadge: { borderRadius: 8, backgroundColor: '#E7F8F1', paddingHorizontal: 7, paddingVertical: 4 }, activeText: { color: palette.green, fontSize: 8, fontWeight: '900' },
   modalText: { fontSize: 13, lineHeight: 21 }, modalHeading: { marginTop: 20, marginBottom: 10, fontSize: 16, fontWeight: '900' }, bullet: { flexDirection: 'row', gap: 8, marginVertical: 7 }, bulletText: { flex: 1, fontSize: 12, lineHeight: 18 },
   securityHero: { alignItems: 'center', paddingVertical: 10 }, securityIcon: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: '#0D0D0D' }, securityTitle: { marginTop: 15, fontSize: 17, fontWeight: '900' }, securityIntro: { marginTop: 6, fontSize: 12, lineHeight: 18, textAlign: 'center' }, securityActions: { marginTop: 10 }, securityNote: { marginTop: 14, fontSize: 10, lineHeight: 16 },

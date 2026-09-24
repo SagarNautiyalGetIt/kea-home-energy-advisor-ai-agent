@@ -35,6 +35,7 @@ def _to_model(row: HouseholdContextRow) -> HouseholdContext:
         works_from_home=row.works_from_home,
         has_electric_heating=row.has_electric_heating,
         hot_water_changed_since=row.hot_water_changed_since,
+        has_ev=row.has_ev,
         asked=list(row.asked or []),
         updated_at=row.updated_at,
     )
@@ -73,6 +74,7 @@ class DatabaseContextStore:
             row.works_from_home = context.works_from_home
             row.has_electric_heating = context.has_electric_heating
             row.hot_water_changed_since = context.hot_water_changed_since
+            row.has_ev = context.has_ev
             row.asked = list(context.asked)
             await session.commit()
         return context

@@ -423,3 +423,11 @@ def get_context_store():
     from app.clarify.store import build_context_store
 
     return build_context_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_observation_store():
+    """Daily connected-device readings, backed by the configured app store."""
+    from app.homelink.store import build_observation_store
+
+    return build_observation_store(settings.persist)

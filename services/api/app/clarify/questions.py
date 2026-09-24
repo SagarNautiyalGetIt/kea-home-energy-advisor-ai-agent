@@ -137,6 +137,7 @@ def _is_settled(hypothesis: Hypothesis, context: HouseholdContext) -> bool:
         Hypothesis.HOT_WATER_CHANGE: context.hot_water_changed_since is not None,
         Hypothesis.WORKING_FROM_HOME: context.works_from_home is not None,
         Hypothesis.ELECTRIC_HEATING: context.has_electric_heating is not None,
+        Hypothesis.EV_CHARGING: context.has_ev is not None,
     }[hypothesis]
 
 

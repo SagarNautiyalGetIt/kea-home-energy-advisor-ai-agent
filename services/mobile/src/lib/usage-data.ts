@@ -32,6 +32,7 @@ export type UsageViewData = {
   availableFrom: string | null;
   availableTo: string | null;
   isDemo: boolean;
+  bandDataSource: string | null;
 };
 
 export type UsageQuery = {
@@ -48,6 +49,7 @@ type HouseholdSummaryApi = {
   label: string;
   period: string;
   daily_kwh: number[];
+  daily_dates?: string[];
   daily_peak_kwh: (number | null)[];
   daily_off_peak_kwh: (number | null)[];
   daily_night_kwh: (number | null)[];
@@ -105,6 +107,7 @@ function validateHousehold(value: unknown): HouseholdSummaryApi {
   const row = value as Partial<HouseholdSummaryApi>;
   if (!row.customer_id || !row.period || !Array.isArray(row.daily_kwh)) throw new Error('Usage response is missing required fields.');
   row.daily_kwh.forEach((reading) => finiteNumber(reading, 'daily_kwh reading'));
+  if (row.daily_dates && (row.daily_dates.length !== row.daily_kwh.length || row.daily_dates.some((day) => !/^\d{4}-\d{2}-\d{2}$/.test(day)))) throw new Error('Usage response has invalid reading dates.');
   for (const field of ['daily_peak_kwh', 'daily_off_peak_kwh', 'daily_night_kwh'] as const) {
     if (!Array.isArray(row[field]) || row[field]?.length !== row.daily_kwh.length) throw new Error(`Usage response has an invalid ${field}.`);
     row[field]?.forEach((reading) => { if (reading !== null) finiteNumber(reading, `${field} reading`); });
@@ -122,6 +125,9 @@ function periodStart(label: string) {
 }
 
 function apiReadings(summary: HouseholdSummaryApi) {
+  if (summary.daily_dates?.length === summary.daily_kwh.length) {
+    return summary.daily_kwh.map((kwh, index) => ({ date: parseIsoDate(summary.daily_dates![index]!), kwh }));
+  }
   const start = periodStart(summary.period);
   if (!start) return [];
   return summary.daily_kwh.map((kwh, index) => ({ date: addDays(start, index), kwh }));
@@ -256,6 +262,7 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
     availableFrom: readings[0] ? toIsoDate(readings[0].date) : null,
     availableTo: readings.at(-1) ? toIsoDate(readings.at(-1)!.date) : null,
     isDemo: false,
+    bandDataSource: summary.band_data_source ?? null,
   };
 }
 
@@ -313,6 +320,7 @@ function loadDemoUsage(query: UsageQuery): UsageViewData {
     availableFrom: null,
     availableTo: null,
     isDemo: true,
+    bandDataSource: 'demo',
   };
 }
 

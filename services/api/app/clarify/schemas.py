@@ -46,6 +46,7 @@ class Gap(StrEnum):
     hedged guess."""
 
     WEEKDAY_SHIFT = "weekday_shift"
+    NIGHT_LOAD_PATTERN = "night_load_pattern"
     """Weekday usage rose relative to weekends — somebody is home during the day who was
     not before. Only detectable when the cycle start date is known."""
 
@@ -78,6 +79,7 @@ class Hypothesis(StrEnum):
     temperature response to fit, and knowing that stops us looking for one every cycle."""
 
     HOT_WATER_CHANGE = "hot_water_change"
+    EV_CHARGING = "ev_charging"
     """A cylinder thermostat turned up, or a fault. The classic invisible step — it is the
     largest load in most NZ homes and nobody looks at it."""
 
@@ -167,6 +169,7 @@ class HouseholdContext(BaseModel):
     works_from_home: bool | None = None
     has_electric_heating: bool | None = None
     hot_water_changed_since: dt.date | None = None
+    has_ev: bool | None = None
 
     #: Question ids already put to this household. A question asked and ignored is still
     #: asked — re-asking it next cycle is how an assistant becomes something people mute.

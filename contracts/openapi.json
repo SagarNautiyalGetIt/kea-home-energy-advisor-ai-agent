@@ -88,6 +88,56 @@
         }
       }
     },
+    "/api/auth/session": {
+      "get": {
+        "summary": "Demo Session",
+        "operationId": "demo_session_api_auth_session_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Demo Session Api Auth Session Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households": {
       "get": {
         "summary": "List Households",
@@ -646,7 +696,7 @@
     "/api/homelink/discover": {
       "post": {
         "summary": "Homelink Discover",
-        "description": "Scan the local network for smart devices that announce themselves.\n\nA POST rather than a GET despite reading nothing, because it is not free and not\ncacheable: it puts multicast traffic on the customer's network and takes seconds. A GET\ninvites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that\nruns on every page load is a scan running without anybody asking.\n\nOnly ever runs when somebody asks. Nothing is stored \u2014 the result goes back to the\ncaller and is dropped. See `app/homelink/discovery.py` on why that matters more here\nthan anywhere else in this service.",
+        "description": "Scan the local network for smart devices that announce themselves.\n\nA POST rather than a GET despite reading nothing, because it is not free and not\ncacheable: it puts multicast traffic on the API server's network and takes seconds. A GET\ninvites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that\nruns on every page load is a scan running without anybody asking.\n\nOnly ever runs when somebody asks. Nothing is stored \u2014 the result goes back to the\ncaller and is dropped. See `app/homelink/discovery.py` on why that matters more here\nthan anywhere else in this service.",
         "operationId": "homelink_discover_api_homelink_discover_post",
         "responses": {
           "200": {
@@ -657,6 +707,258 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Homelink Discover Api Homelink Discover Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/context/ev": {
+      "put": {
+        "summary": "Save Ev Ownership",
+        "description": "Restore a typed, on-device EV answer into this household's server context.",
+        "operationId": "save_ev_ownership_api_households__customer_id__context_ev_put",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvOwnershipAnswer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdContext"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/device-observations": {
+      "post": {
+        "summary": "Store Device Observations",
+        "description": "Demo-gated daily meter readings, never raw activity streams or hub credentials.",
+        "operationId": "store_device_observations_api_households__customer_id__device_observations_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Store Device Observations Api Households  Customer Id  Device Observations Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/appliances": {
+      "get": {
+        "summary": "Get Appliances",
+        "description": "Per-device summaries; no appliance is inferred from the whole-home meter.",
+        "operationId": "get_appliances_api_households__customer_id__appliances_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Appliances Api Households  Customer Id  Appliances Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/home-energy": {
+      "get": {
+        "summary": "Get Home Energy",
+        "description": "Dated household energy and connected devices, with no invented live flows.",
+        "operationId": "get_home_energy_api_households__customer_id__home_energy_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Home Energy Api Households  Customer Id  Home Energy Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1806,6 +2108,16 @@
         "title": "ClarifyingQuestion",
         "description": "One question, and the arithmetic that justifies asking it."
       },
+      "Confidence": {
+        "type": "string",
+        "enum": [
+          "measured",
+          "rated",
+          "inferred"
+        ],
+        "title": "Confidence",
+        "description": "How much this figure can carry, and therefore what may be said about it.\n\nThis is the field that makes the whole feature safe. A device that reports its own\nenergy meter is a measurement; a device that reports on/off and has a nameplate rating\nis an estimate; a device inferred from a schedule is a guess. Presenting all three as\n\"your heat pump used 4.2 kWh\" would put the product's central claim behind the weakest\nof them."
+      },
       "CustomerProfile": {
         "properties": {
           "customer_id": {
@@ -1952,6 +2264,114 @@
         ],
         "title": "DemoAccountCard",
         "description": "A sign-in the credentials panel can offer. Includes the password, which is only\nacceptable because every account behind it is synthetic \u2014 see app/auth.py."
+      },
+      "DeviceClass": {
+        "type": "string",
+        "enum": [
+          "space_heating",
+          "water_heating",
+          "cooling",
+          "laundry",
+          "kitchen",
+          "ev_charger",
+          "lighting",
+          "other",
+          "solar_generation",
+          "battery_charge",
+          "battery_discharge",
+          "grid_import",
+          "grid_export"
+        ],
+        "title": "DeviceClass",
+        "description": "What kind of load it is, in the only terms that matter for a power bill.\n\nDeliberately coarse. A vendor taxonomy has two hundred device types and this has\neight, because the question the product answers is \"where is the money going\" and a\nsmart bulb and a smart plug on a lamp are the same answer. Precision we cannot use is\nsurface area we have to maintain."
+      },
+      "DeviceObservation": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Device Id",
+            "description": "Stable per (provider, household). Never a serial."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "device_class": {
+            "$ref": "#/components/schemas/DeviceClass"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Label",
+            "description": "What the customer calls it \u2014 'Lounge heat pump'."
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "runtime_minutes": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1440.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Minutes",
+            "description": "Minutes the device was drawing power."
+          },
+          "energy_kwh": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Kwh",
+            "description": "Reported by the device's own meter, if it has one."
+          },
+          "rated_watts": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rated Watts",
+            "description": "Nameplate power. A maximum, not a draw."
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "always_on": {
+            "type": "boolean",
+            "title": "Always On",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "provider",
+          "device_class",
+          "label",
+          "day",
+          "confidence"
+        ],
+        "title": "DeviceObservation",
+        "description": "One device, one day. The atom of this package.\n\nA day rather than an event because of the minimisation rule in the module docstring,\nand because a bill is billed per day. Anything finer would be data we cannot use held\nat a resolution we cannot justify."
       },
       "EnergyBreakdown": {
         "properties": {
@@ -2108,6 +2528,19 @@
         ],
         "title": "EnergyCategory",
         "description": "One slice of the bill, split by behaviour rather than by appliance.\n\n`confidence` is the field that decides how this may be presented, and the frontend has\nto honour it as much as the assistant does. `measured` came off a meter. `fitted` came\noff this household's own regression and is an estimate \u2014 a chart that renders it\nidentically to a measured slice is a chart that overstates what is known. `residual` is\nwhat is left after the others, so it carries their error and must be labelled as\neverything else rather than as a finding."
+      },
+      "EvOwnershipAnswer": {
+        "properties": {
+          "has_ev": {
+            "type": "boolean",
+            "title": "Has Ev"
+          }
+        },
+        "type": "object",
+        "required": [
+          "has_ev"
+        ],
+        "title": "EvOwnershipAnswer"
       },
       "Fact": {
         "properties": {
@@ -2284,7 +2717,8 @@
           "base_load_step",
           "unexplained_remainder",
           "no_weather_fit",
-          "weekday_shift"
+          "weekday_shift",
+          "night_load_pattern"
         ],
         "title": "Gap",
         "description": "What we could not work out. One per question the catalogue can ask."
@@ -2413,6 +2847,17 @@
             ],
             "title": "Hot Water Changed Since"
           },
+          "has_ev": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Ev"
+          },
           "asked": {
             "items": {
               "type": "string"
@@ -2460,6 +2905,25 @@
             },
             "type": "array",
             "title": "Daily Kwh"
+          },
+          "daily_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Daily Dates"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
           },
           "daily_peak_kwh": {
             "items": {
@@ -2545,7 +3009,8 @@
           "more_occupants",
           "working_from_home",
           "electric_heating",
-          "hot_water_change"
+          "hot_water_change",
+          "ev_charging"
         ],
         "title": "Hypothesis",
         "description": "What a question is testing. One per thing a household can tell us that changes the\narithmetic."
@@ -2612,16 +3077,21 @@
           "scenario": {
             "type": "string",
             "title": "Scenario"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
           }
         },
         "type": "object",
         "required": [
           "customer_id",
           "display_name",
-          "scenario"
+          "scenario",
+          "access_token"
         ],
         "title": "LoginResponse",
-        "description": "Who signed in, and which household to show them.\n\nCarries no token: the prototype session is `localStorage['kea-demo-session']` and\nthere is nothing to sign. `customer_id` is the whole point \u2014 it is what every\nsubsequent request scopes to, and what made one login show fourteen different\ncustomers instead of the same one fourteen times."
+        "description": "Who signed in, and which household to show them.\n\nThe token is temporary and valid only for synthetic demo accounts. It authorizes\nnew household write paths, not real customer access."
       },
       "MobileCommitmentTerm": {
         "properties": {
@@ -2778,6 +3248,31 @@
         ],
         "title": "MobilePricingStyle"
       },
+      "ObservationBatch": {
+        "properties": {
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceObservation"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Observations"
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timezone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "observations",
+          "timezone"
+        ],
+        "title": "ObservationBatch"
+      },
       "OfflineAnswer": {
         "properties": {
           "intent": {
@@ -2913,6 +3408,19 @@
         ],
         "title": "OfflinePack",
         "description": "Everything a device needs to answer without a network.\n\nCarries no raw meter series, and that is deliberate rather than a size optimisation.\nA device holding `daily_kwh` is a device whose model can be asked to add it up, and\nthe first time someone wires the chat box straight to the readings \"to make offline\nsmarter\", the no-arithmetic guarantee is gone on the platform where it is hardest to\naudit."
+      },
+      "Provider": {
+        "type": "string",
+        "enum": [
+          "homekit",
+          "google_home",
+          "matter",
+          "home_assistant",
+          "smartthings",
+          "mock"
+        ],
+        "title": "Provider",
+        "description": "Where the data came from. Carried on every observation because the trust level and\nthe legal basis differ per provider, and a mixed-provider household is normal."
       },
       "QuestionResponse": {
         "properties": {

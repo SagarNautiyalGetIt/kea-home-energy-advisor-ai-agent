@@ -25,6 +25,7 @@ never be indistinguishable from the outside.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from dataclasses import dataclass
 from typing import Protocol
@@ -201,6 +202,8 @@ class UsageContext:
     hdd: list[float]
     normal_hdd: float
 
+    region: str | None = None
+
     account: AccountContext | None = None
     """The wide context — plan, bills, connection, account row, read quality.
 
@@ -275,6 +278,9 @@ class FixtureRepository:
             label=fixtures.label(customer_id),
             hdd=hdd,
             normal_hdd=normal,
+            region="Auckland",
+            period_start=dt.date(2026, 7, 1),
+            period_end=dt.date(2026, 7, 31),
         )
 
 
@@ -381,6 +387,9 @@ class DatabaseRepository:
             # is no NIWA baseline in the database to read (KEA-42 is still open). Taken
             # from the same constant the fixtures use so the two can never disagree.
             normal_hdd=NORMAL_HDD_PER_DAY,
+            region=customer.region,
+            period_start=daily[0][0].date(),
+            period_end=daily[-1][0].date(),
         )
 
 
@@ -594,6 +603,7 @@ class MartRepository:
             hdd=hdd,
             normal_hdd=normal,
             account=account_ctx,
+            region=getattr(account, "climate_region", None),
             icp_id=account.icp_id,
             period_start=in_month[0][0],
             period_end=in_month[-1][0],

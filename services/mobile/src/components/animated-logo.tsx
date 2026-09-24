@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { LinearGradient as Gradient } from 'expo-linear-gradient';
@@ -56,8 +56,8 @@ export function AnimatedLogo({
   color?: string;
   style?: ViewStyle;
 }) {
-  const spin = useRef(new Animated.Value(0)).current;
-  const flip = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
+  const [flip] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     // Outer arrows: continuous circular motion along their direction
@@ -115,11 +115,11 @@ export function ElectricText({
   mode?: 'reveal' | 'calm';
 }) {
   const calm = mode === 'calm';
-  const intro = useRef(new Animated.Value(calm ? 1 : 0)).current;
-  const introScale = useRef(new Animated.Value(calm ? 1 : 0.9)).current;
-  const flicker = useRef(new Animated.Value(1)).current;
-  const surge = useRef(new Animated.Value(0)).current;
-  const arcFlash = useRef(new Animated.Value(calm ? 0 : 1)).current;
+  const [intro] = useState(() => new Animated.Value(calm ? 1 : 0));
+  const [introScale] = useState(() => new Animated.Value(calm ? 1 : 0.9));
+  const [flicker] = useState(() => new Animated.Value(1));
+  const [surge] = useState(() => new Animated.Value(0));
+  const [arcFlash] = useState(() => new Animated.Value(calm ? 0 : 1));
 
   useEffect(() => {
     // Electric load-in: the text charges up with flickers instead of sitting pre-loaded
@@ -290,9 +290,9 @@ const SURGE_PATHS = [
 ];
 
 export function LogoReveal({ textStyle }: { textStyle?: TextStyle }) {
-  const intro = useRef(new Animated.Value(0)).current;
+  const [intro] = useState(() => new Animated.Value(0));
   const [settled, setSettled] = useState(false);
-  const particles = useRef(makeRevealParticles()).current;
+  const [particles] = useState(makeRevealParticles);
 
   useEffect(() => {
     const anim = Animated.timing(intro, {

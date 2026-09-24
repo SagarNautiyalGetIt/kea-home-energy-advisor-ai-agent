@@ -42,7 +42,14 @@ import logging
 
 from app.analytics.account import AccountContext
 from app.clarify import apply, from_drivers, questions
-from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
+from app.clarify.night import sustained_night_rise
+from app.clarify.schemas import (
+    ClarifyingQuestion,
+    Gap,
+    HouseholdContext,
+    Hypothesis,
+    QuestionResponse,
+)
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +76,26 @@ def question_for(
         # household that has told us they are struggling gets a person, not a
         # questionnaire.
         return None
+
+    # Ownership is useful context, never proof that the EV caused the rise. Only mart
+    # accounts with interval-derived night bands qualify; daily totals cannot supply it.
+    if household.has_ev is None and not household.has_answered("night_load_pattern:ev_charging"):
+        rise = (
+            sustained_night_rise(account.days) if account.quality.estimated_read_pct < 10 else None
+        )
+        if rise is not None and account.connection is not None:
+            return ClarifyingQuestion(
+                id="night_load_pattern:ev_charging",
+                gap=Gap.NIGHT_LOAD_PATTERN,
+                hypothesis=Hypothesis.EV_CHARGING,
+                prompt=(
+                    f"Your meter shows night use staying about {rise:.1f} kWh higher per night "
+                    "over the last five measured nights. Do you have an EV? If so, I can "
+                    "check whether charging is a possibility, but a charger reading or "
+                    "charging schedule is needed to confirm it."
+                ),
+                explains_nzd=0,
+            )
 
     if not account.has_bill_comparison:
         return None

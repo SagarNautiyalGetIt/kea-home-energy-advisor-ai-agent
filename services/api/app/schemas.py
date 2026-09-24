@@ -507,15 +507,14 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     """Who signed in, and which household to show them.
 
-    Carries no token: the prototype session is `localStorage['kea-demo-session']` and
-    there is nothing to sign. `customer_id` is the whole point — it is what every
-    subsequent request scopes to, and what made one login show fourteen different
-    customers instead of the same one fourteen times.
+    The token is temporary and valid only for synthetic demo accounts. It authorizes
+    new household write paths, not real customer access.
     """
 
     customer_id: str
     display_name: str
     scenario: str
+    access_token: str
 
 
 class DemoAccountCard(BaseModel):
@@ -718,6 +717,8 @@ class HouseholdSummary(BaseModel):
     label: str
     period: str
     daily_kwh: list[float]
+    daily_dates: list[dt.date] = Field(default_factory=list)
+    region: str | None = None
     daily_peak_kwh: list[float | None]
     daily_off_peak_kwh: list[float | None]
     daily_night_kwh: list[float | None]

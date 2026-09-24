@@ -10,6 +10,7 @@ import { Screen } from '@/components/screen';
 import { PageHeader, PrimaryButton } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
+import { loadConnectedAppliances, type ConnectedAppliances } from '@/lib/connected-appliances';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
@@ -125,9 +126,9 @@ function bandPresentation(key: UsageBand['key']) {
 
 function energyCategoryPresentation(key: string) {
   const normalized = key.toLowerCase();
-  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: palette.red };
+  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: '#38BDF8' };
   if (normalized.includes('always') || normalized.includes('base')) return { icon: 'pulse-outline' as const, color: '#38BDF8' };
-  return { icon: 'flash-outline' as const, color: palette.amber };
+  return { icon: 'flash-outline' as const, color: '#38BDF8' };
 }
 
 export default function UsageScreen() {
@@ -149,6 +150,7 @@ export default function UsageScreen() {
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
+  const [connectedAppliances, setConnectedAppliances] = useState<ConnectedAppliances | null>(null);
   const [, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
@@ -160,7 +162,6 @@ export default function UsageScreen() {
   const [hintTranslateX] = useState(() => new Animated.Value(0));
   const [hintOpacity] = useState(() => new Animated.Value(0));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
-  const [usageHeight, setUsageHeight] = useState(620);
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
   const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
@@ -205,7 +206,7 @@ export default function UsageScreen() {
         kwh: band.kwh ?? 0,
         costNzd: band.costNzd ?? 0,
         sharePct: data?.totalKwh ? (band.kwh ?? 0) / data.totalKwh * 100 : 0,
-        confidence: data?.isDemo ? 'estimated' : 'measured',
+        confidence: data?.isDemo || data?.bandDataSource !== 'measured' ? 'estimated' : 'measured',
         basis: band.window ?? 'Selected period',
         caveat: null,
       }));
@@ -225,6 +226,9 @@ export default function UsageScreen() {
     void loadEnergyBreakdown(session.customerId, controller.signal)
       .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result.available ? result : null); })
       .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+    void loadConnectedAppliances(session.customerId, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setConnectedAppliances(result); })
+      .catch(() => { if (!controller.signal.aborted) setConnectedAppliances(null); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
   const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
@@ -402,7 +406,6 @@ export default function UsageScreen() {
 
       {/* Header, controls, and chart */}
       <View
-        onLayout={(event) => setUsageHeight(event.nativeEvent.layout.height)}
         pointerEvents="box-none"
         style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
@@ -575,7 +578,6 @@ export default function UsageScreen() {
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
           <View style={styles.breakdownContent}>
             <View style={styles.breakdownList}>
-              {breakdownCategories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
                   <View style={styles.breakdownIcon}>
                     <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
@@ -586,7 +588,6 @@ export default function UsageScreen() {
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
-              ) : null}
               <View style={styles.breakdownRow}>
                 <View style={styles.breakdownIcon}>
                   <Ionicons color={colors.textMuted} name="pulse-outline" size={19} />
@@ -638,11 +639,12 @@ export default function UsageScreen() {
         title="Energy breakdown"
         visible={energyBreakdownOpen}
       >
-        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: colors.border }]}>
-          <View style={styles.energyBreakdownHeroIcon}><Ionicons color={palette.violet} name="pie-chart-outline" size={22} /></View>
+        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: '#38BDF8' }]}>
+          <View style={styles.energyBreakdownHeroIcon}><Ionicons color="#38BDF8" name="pie-chart-outline" size={22} /></View>
           <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
         </View>
         <View style={styles.energyBreakdownSheet}>
+          {!breakdownCategories.length ? <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No interval breakdown is available for this period yet.</Text> : null}
           {breakdownCategories.map((category) => {
             const presentation = energyCategoryPresentation(category.key);
             const estimated = category.confidence !== 'measured';
@@ -660,6 +662,13 @@ export default function UsageScreen() {
               </View>
             </View>;
           })}
+          <Text style={[styles.energyCategoryTitle, { color: colors.text, marginTop: 12 }]}>Connected appliance meters</Text>
+          <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{connectedAppliances?.periodStart && connectedAppliances.periodEnd ? `${connectedAppliances.periodStart} to ${connectedAppliances.periodEnd} · separate from the selected period above` : 'Only devices that report their own energy can appear here.'}</Text>
+          {connectedAppliances?.devices.length ? connectedAppliances.devices.map((device) => <View key={device.id} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.energyCategoryIcon, { backgroundColor: 'rgba(56, 189, 248, 0.16)' }]}><Ionicons color="#38BDF8" name="flash-outline" size={20} /></View>
+            <View style={styles.energyCategoryCopy}><Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{device.label}</Text><Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Measured · {device.daysObserved} days · {device.deviceClass.replace(/_/g, ' ')}</Text></View>
+            <View style={styles.breakdownValueWrap}><Text style={[styles.breakdownValue, { color: colors.text }]}>{device.kwh.toFixed(1)} kWh</Text><Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{device.sharePct === null ? 'Bill share unavailable' : `${device.sharePct.toFixed(1)}% of metered use`}</Text></View>
+          </View>) : <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No connected appliance meter has reported a complete day. Whole-home meter readings cannot identify a specific appliance.</Text>}
         </View>
       </ModalSheet>
       <ModalSheet
@@ -1000,7 +1009,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   energyBreakdownHero: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 18, padding: 13 },
-  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(168, 85, 247, 0.16)' },
+  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(56, 189, 248, 0.16)' },
   energyBreakdownHeroCopy: { flex: 1 },
   energyBreakdownHeroTitle: { fontSize: 15, fontWeight: '900' },
   energyBreakdownIntro: { marginTop: 3, fontSize: 11, lineHeight: 16 },

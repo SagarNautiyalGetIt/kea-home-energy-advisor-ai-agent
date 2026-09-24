@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
 import { ModalSheet } from '@/components/modal-sheet';
+import { MotionPressable } from '@/components/motion-pressable';
 import { Screen } from '@/components/screen';
 import SemiCircleGauge from '@/components/SemiCircleGauge';
 import { PrimaryButton } from '@/components/ui';
-import { dashboardNotifications, getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
+import { getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
@@ -24,7 +26,9 @@ export default function DashboardScreen() {
   const [dashboard, setDashboard] = useState<DashboardViewData | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 160], outputRange: [0, 0.6, 1], extrapolate: 'clamp' });
+  const gaugePercentage = dashboard?.overshootPct == null ? null : Math.min(Math.max(dashboard.overshootPct, 0), 100);
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
   const outlookTitle = dashboard?.warningTriggered
@@ -36,11 +40,18 @@ export default function DashboardScreen() {
     ? 'Comparison uses similar households because a personal bill history is not available.'
     : dashboard?.expectationBasis === 'own_same_period_last_year'
       ? 'Comparison uses the same billing period last year.'
-      : 'Comparison uses your recent billing cycles.';
-  const insightTitle = dashboard?.warningTriggered ? 'Running hotter than expected' : "Sparky's read";
-  const insightBody = dashboard?.warningTriggered
+      : dashboard?.expectationBasis === 'own_recent_cycles'
+        ? 'Comparison uses your recent billing cycles.'
+        : 'A bill comparison is not available yet.';
+  const insightTitle = dashboard?.warningTriggered == null ? 'Prediction unavailable' : dashboard.warningTriggered ? 'Running hotter than expected' : "Sparky's read";
+  const insightBody = dashboard?.warningTriggered == null
+    ? 'A bill projection needs more billing data. Your available meter readings still appear on the Usage page.'
+    : dashboard.warningTriggered
     ? dashboard.warningReasons[0] ?? 'Your projected total is pacing above expected. Shifting heavy loads off-peak can still pull it back before the cycle ends.'
     : 'You are tracking comfortably so far. This prediction blends your usage to date with typical patterns for the rest of the cycle, and the dial updates as new days land.';
+  const dashboardNotifications = dashboard?.warningTriggered
+    ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
+    : [];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,17 +70,26 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} scroll={false}>
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={styles.menuScrollContent}
         nestedScrollEnabled
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         style={styles.menuScroll}
       >
-        <DemoHomeView
-          onOpenInfo={() => setWelcomeOpen(true)}
-          onOpenNotifications={() => setNotificationsOpen(true)}
-          onOpenProfile={() => router.push('/profile')}
-        />
+        <View style={styles.homeHero}>
+          <DemoHomeView
+            customerId={session?.customerId ?? null}
+            onOpenInfo={() => setWelcomeOpen(true)}
+            onOpenNotifications={() => setNotificationsOpen(true)}
+            onOpenProfile={() => router.push('/profile')}
+          />
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: homeBlurOpacity }]}>
+            <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
+            <View pointerEvents="none" style={styles.homeBlurShade} />
+          </Animated.View>
+        </View>
 
         {/* Metrics */}
         {false ? <View style={styles.menuList}>
@@ -132,7 +152,7 @@ export default function DashboardScreen() {
           </View>
           </> : null}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* --- MODAL SHEET 1: Welcome to the Demo Home (Screenshot 2 exact match) --- */}
       <ModalSheet
@@ -142,6 +162,7 @@ export default function DashboardScreen() {
         visible={notificationsOpen}
       >
         <Text style={[styles.notificationIntro, { color: colors.textMuted }]}>Recent account updates</Text>
+        {!dashboardNotifications.length ? <Text style={[styles.notificationDetail, { color: colors.textMuted }]}>No account alerts right now.</Text> : null}
         <View style={styles.notificationList}>
           {dashboardNotifications.map((notification) => (
             <Pressable
@@ -174,7 +195,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.welcomeModal}>
           <Text style={[styles.welcomeSubtitle, { color: colors.textMuted }]}>
-            This scene uses current modelled Auckland weather to illustrate how solar, the Kea battery, your home, and an electric car might share power. Energy values are examples, not readings from your home.
+            The sky reflects modelled weather for your account’s region. Energy cards show dated meter or connected-device readings when available. Power routes appear only with live power sensors.
           </Text>
 
           <View style={styles.welcomeFeatures}>
@@ -182,7 +203,7 @@ export default function DashboardScreen() {
               <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(255, 214, 10, 0.16)' }]}>
                 <Ionicons color={palette.solar} name="sunny" size={24} />
               </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>Generate energy during the day</Text>
+              <Text style={[styles.featureText, { color: colors.text }]}>Solar generation appears when a solar meter reports it</Text>
             </View>
 
             <View style={styles.welcomeFeatureRow}>
@@ -190,7 +211,7 @@ export default function DashboardScreen() {
                 <Ionicons color={palette.battery} name="battery-charging" size={24} />
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
-                Store excess energy in the Kea battery for use after dark
+                Battery figures need a connected battery energy meter
               </Text>
             </View>
 
@@ -199,7 +220,7 @@ export default function DashboardScreen() {
                 <Ionicons color={palette.violet} name="car-sport" size={24} />
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
-                Charge electric vehicles with clean energy you generate
+                EV charging figures need a connected charger meter
               </Text>
             </View>
 
@@ -207,7 +228,7 @@ export default function DashboardScreen() {
               <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(255, 255, 255, 0.14)' }]}>
                 <Ionicons color="#FFFFFF" name="flash" size={24} />
               </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>Reduce grid usage and save money</Text>
+              <Text style={[styles.featureText, { color: colors.text }]}>Grid import is read from your household meter</Text>
             </View>
           </View>
         </View>
@@ -299,7 +320,7 @@ export default function DashboardScreen() {
 
 function DashboardRow({ icon, label, detail, onPress, index }: { icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; onPress: () => void; index: number }) {
   const { colors } = useAppTheme();
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.dashboardRow, pressed && styles.pressed]}><View style={styles.dashboardRowIcon}><Ionicons color={colors.textMuted} name={icon} size={19} /></View><View style={styles.dashboardRowCopy}><Text style={[styles.dashboardRowTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.dashboardRowDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={21} /></Pressable>;
+  return <MotionPressable accessibilityRole="button" onPress={onPress} style={styles.dashboardRow}><View style={styles.dashboardRowIcon}><Ionicons color={colors.textMuted} name={icon} size={19} /></View><View style={styles.dashboardRowCopy}><Text style={[styles.dashboardRowTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.dashboardRowDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={21} /></MotionPressable>;
 }
 
 function MetricCard({ color, icon, label, value }: { color: string; icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
@@ -321,6 +342,8 @@ const styles = StyleSheet.create({
   menuScrollContent: {
     paddingBottom: 40,
   },
+  homeHero: { position: 'relative' },
+  homeBlurShade: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0, backgroundColor: 'rgba(12,17,22,0.24)' },
   menuList: {
     marginTop: 8,
     marginHorizontal: 16,

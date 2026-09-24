@@ -283,6 +283,7 @@ async def build_context(customer_id: str) -> ToolContext:
     # the question could not be rebuilt.
     try:
         household = await get_context_store().get(customer_id)
+        ctx.has_ev = household.has_ev
         ctx.open_question = clarify_conversation.question_for(
             account, household, period=usage.window.period, hardship_detected=False
         )
@@ -613,8 +614,8 @@ async def answer_stream(
         log.error("agent unavailable customer=%s: %s", customer_id, exc)
         yield "error", {
             "message": (
-                "Sparky can't reach your account data right now, so there's nothing "
-                "reliable to tell you. Please try again shortly."
+                "Sparky's AI service is unavailable right now. Your usage pages are "
+                "still available; please try asking again shortly."
             ),
             "retryable": True,
         }
