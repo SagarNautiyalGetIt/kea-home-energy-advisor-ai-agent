@@ -29,9 +29,8 @@ export default function DashboardScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
-  const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 160], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
-  const homeHeroOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [1, 0.55, 0.18], extrapolate: 'clamp' });
-  const homeDarknessOpacity = scrollY.interpolate({ inputRange: [0, 60, 160], outputRange: [0, 0.65, 0.88], extrapolate: 'clamp' });
+  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, 90, 220], outputRange: [1, 0.55, 0.20], extrapolate: 'clamp' });
+  const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [0, 0.35, 0.65], extrapolate: 'clamp' });
   const isZara = session?.customerId === 'H-ZARA';
   const gaugePercentage = dashboard?.overshootPct == null || dashboard.overshootPct <= 0 ? 68 : Math.min(Math.max(dashboard.overshootPct, 0), 100);
   const projectedCost = dashboard?.projectedCycleCostNzd ?? (isZara ? 84.92 : null);
@@ -73,23 +72,23 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} scroll={false}>
-      {/* Fixed backdrop with hero and blur overlay, matching usage section */}
+      {/* Fixed backdrop with hero and scene blur overlay */}
       <View
         pointerEvents="box-none"
         style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
-        <Animated.View style={[styles.homeHero, { opacity: homeHeroOpacity }]}>
+        <View style={styles.homeHero}>
           <DemoHomeView
             customerId={session?.customerId ?? null}
             onOpenInfo={() => setWelcomeOpen(true)}
             onOpenNotifications={() => setNotificationsOpen(true)}
             onOpenProfile={() => router.push('/profile')}
+            sceneOpacity={homeSceneOpacity}
           />
+        </View>
+        <Animated.View pointerEvents="none" style={[styles.sceneBlurWrap, { opacity: homeBlurOpacity }]}>
+          <BlurView intensity={24} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
         </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: homeBlurOpacity }]}>
-          <BlurView intensity={58} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-        </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: homeDarknessOpacity }]} />
       </View>
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
@@ -302,9 +301,12 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#111111',
   },
-  backdropBlurShade: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+  sceneBlurWrap: {
+    position: 'absolute',
+    top: 108,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   listViewport: {
     position: 'absolute',

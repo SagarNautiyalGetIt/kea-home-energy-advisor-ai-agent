@@ -16,6 +16,7 @@ type Props = {
   onOpenInfo?: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  sceneOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value | number;
 };
 
 // Traced on Akash Nair's architectural image, in its 2048 × 1117.091 viewBox.
@@ -88,7 +89,7 @@ function reading(scene: HomeSceneData | null, live: LivePower, device: Device, c
   }
 }
 
-export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOpenProfile }: Props) {
+export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOpenProfile, sceneOpacity }: Props) {
   const { width } = useWindowDimensions();
   const [sceneState, setScene] = useState<HomeSceneData | null>(null);
   const scene = sceneState?.customerId === customerId ? sceneState : null;
@@ -209,14 +210,14 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="person-circle-outline" size={24} /></Pressable>
       </View>
     </View>
-    <View style={styles.skySection}>
-      <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={['#111111', 'rgba(17,17,17,0.82)', 'rgba(17,17,17,0.35)', 'rgba(17,17,17,0)']} locations={[0, 0.28, 0.65, 1]} pointerEvents="none" style={styles.topFade} />
-      <View style={styles.heading}>
-        <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
-        <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
-      </View>
+    <View style={styles.heading}>
+      <View><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
+      <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
+    </View>
+    <Animated.View style={{ opacity: sceneOpacity ?? 1 }}>
       <View style={styles.sceneCard}>
+        <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['#111111', 'rgba(17,17,17,0.72)', 'rgba(17,17,17,0.22)', 'rgba(17,17,17,0)']} locations={[0, 0.32, 0.68, 1]} pointerEvents="none" style={styles.topFade} />
         <View style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
         <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (frameWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
         {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
@@ -229,21 +230,21 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
               : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
           </Svg>
         </View>
+        <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
       </View>
-      <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={styles.bottomFade} />
-    </View>
-    <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
-    <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
-      {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
-        const metric = reading(scene, live, device, customerId);
-        return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => setSelected(device)} style={[styles.deviceChip, selected === device && { borderColor: POWER_COLOR }]}>
-          <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={styles.deviceName}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
-          <Text style={styles.deviceValue}>{metric.value}</Text><Text numberOfLines={1} style={styles.deviceDetail}>{metric.detail}</Text>
-        </Pressable>;
-      })}
-    </ScrollView>
-    {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={styles.retryText}>Home readings unavailable · Retry</Text></Pressable> : null}
-    <Text style={styles.demoNote}>{hasLiveSensors ? 'Flow pulses show mapped live sensors; source sharing is not inferred.' : routes.length > 0 ? 'Grid flow shows metered import. Live sensors will appear when connected.' : 'Power flow appears when a connected sensor reports live readings.'}</Text>
+      <Text style={styles.readingDate}>Meter: {dayLabel}{scene?.deviceDay ? ` · Devices: ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} · Daily energy</Text>
+      <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
+        {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
+          const metric = reading(scene, live, device, customerId);
+          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => setSelected(device)} style={[styles.deviceChip, selected === device && { borderColor: POWER_COLOR }]}>
+            <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={styles.deviceName}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
+            <Text style={styles.deviceValue}>{metric.value}</Text><Text numberOfLines={1} style={styles.deviceDetail}>{metric.detail}</Text>
+          </Pressable>;
+        })}
+      </ScrollView>
+      {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={styles.retryText}>Home readings unavailable · Retry</Text></Pressable> : null}
+      <Text style={styles.demoNote}>{hasLiveSensors ? 'Flow pulses show mapped live sensors; source sharing is not inferred.' : routes.length > 0 ? 'Grid flow shows metered import. Live sensors will appear when connected.' : 'Power flow appears when a connected sensor reports live readings.'}</Text>
+    </Animated.View>
   </View>;
 }
 
@@ -258,7 +259,6 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#E2E8EE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
   infoButton: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
-  skySection: { overflow: 'hidden', position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
   sceneArt: { position: 'relative', zIndex: 2 },
   weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', top: 13, zIndex: 4 },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 1, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
   skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2 },
-  topFade: { top: 0, height: 130, left: 0, position: 'absolute', right: 0, zIndex: 3 },
+  topFade: { top: 0, height: 85, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   bottomFade: { bottom: 0, height: 98, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#A8BBC6', fontSize: 10, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },
