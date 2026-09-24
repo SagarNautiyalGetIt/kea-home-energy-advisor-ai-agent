@@ -54,7 +54,7 @@ export default function SemiCircleGauge({ percentage, projectedCost }: SemiCircl
         <Circle cx={needle.x} cy={needle.y} fill="rgba(255, 69, 58, 0.24)" r={10} />
         <Circle cx={needle.x} cy={needle.y} fill="#FF453A" r={3.5} />
         <SvgText fill="#FF6961" fontSize="10" fontWeight="700" textAnchor="middle" x={activeLabel.x} y={activeLabel.y - 4}>{Math.round(target * 100)}%</SvgText>
-        <SvgText fill="#F2F2F7" fontSize="23" fontWeight="700" textAnchor="middle" x={centerX} y={81}>{projectedCost}</SvgText>
+        <SvgText fill="#D8D8D8" fontSize="23" fontWeight="700" textAnchor="middle" x={centerX} y={81}>{projectedCost}</SvgText>
         <SvgText fill="#8E8E93" fontSize="8" fontWeight="700" letterSpacing="0.8" textAnchor="middle" x={centerX} y={99}>HIGH BILL RISK</SvgText>
       </Svg>
     </View>

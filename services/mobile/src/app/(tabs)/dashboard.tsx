@@ -41,14 +41,16 @@ export default function DashboardScreen() {
     ? dashboard.expectationBasis === 'comparable_homes'
       ? 'Your projected bill is higher than comparable homes'
       : 'Your projected bill is higher than usual'
-    : 'Bill tracking';
-  const outlookExplanation = dashboard?.warningReasons[0]
-    ?? 'Your outlook is based on usage recorded so far in this billing cycle.';
+    : 'Bill prediction';
   const expectationNote = dashboard?.expectationBasis === 'comparable_homes'
     ? 'Comparison uses similar households because a personal bill history is not available.'
     : dashboard?.expectationBasis === 'own_same_period_last_year'
       ? 'Comparison uses the same billing period last year.'
       : 'Comparison uses your recent billing cycles.';
+  const insightTitle = dashboard?.warningTriggered ? 'Running hotter than expected' : "Sparky's read";
+  const insightBody = dashboard?.warningTriggered
+    ? dashboard.warningReasons[0] ?? 'Your projected total is pacing above expected. Shifting heavy loads off-peak can still pull it back before the cycle ends.'
+    : 'You are tracking comfortably so far. This prediction blends your usage to date with typical patterns for the rest of the cycle, and the dial updates as new days land.';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -147,12 +149,11 @@ export default function DashboardScreen() {
         <View style={styles.cardArea}>
           {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
           <View style={styles.dashboardList}>
-            <DashboardRow detail={dashboard?.warningTriggered ? 'Bill shock warning' : 'View your bill outlook'} icon="alert-circle-outline" label="Bill tracking" onPress={() => setBillShockOpen(true)} />
-            <DashboardRow detail="Your energy overview" icon="home-outline" label="Home" onPress={() => router.replace('/dashboard')} />
-            <DashboardRow detail="Track your usage" icon="analytics-outline" label="Usage" onPress={() => router.push('/usage')} />
-            <DashboardRow detail="Ask Kea Energy AI" icon="sparkles-outline" label="Sparky AI" onPress={() => router.push('/assistant')} />
-            <DashboardRow detail="View bills and payments" icon="receipt-outline" label="Billing" onPress={() => router.push('/billing')} />
-            <DashboardRow detail="Account, plans and settings" icon="grid-outline" label="More" onPress={() => router.push('/more')} />
+            <DashboardRow detail={dashboard?.warningTriggered ? 'Bill shock warning' : 'View your bill prediction'} icon="alert-circle-outline" label="Bill prediction" onPress={() => setBillShockOpen(true)} index={0} />
+            <DashboardRow detail="Track your usage" icon="analytics-outline" label="Usage" onPress={() => router.push('/usage')} index={1} />
+            <DashboardRow detail="Ask Kea Energy AI" icon="sparkles-outline" label="Sparky AI" onPress={() => router.push('/assistant')} index={2} />
+            <DashboardRow detail="View bills and payments" icon="receipt-outline" label="Billing" onPress={() => router.push('/billing')} index={3} />
+            <DashboardRow detail="Account, plans and settings" icon="grid-outline" label="More" onPress={() => router.push('/more')} index={4} />
           </View>
           {false ? <>
           <Pressable accessibilityLabel="Open bill shock warning" onPress={() => setBillShockOpen(true)} style={({ pressed }) => [styles.billShockCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
@@ -308,21 +309,31 @@ export default function DashboardScreen() {
           />
         }
         onClose={() => setBillShockOpen(false)}
-        title="Bill outlook"
+        title="Bill prediction"
         visible={billShockOpen}
       >
         <View style={styles.shockModal}>
-          <View style={styles.shockIcon}>
-            <Ionicons color="#FFFFFF" name="flash" size={31} />
+          <SemiCircleGauge percentage={gaugePercentage} projectedCost={money(dashboard?.projectedCycleCostNzd)} />
+          <View style={[styles.insightCard, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
+            <View style={styles.insightIcon}>
+              <Ionicons color="#FFFFFF" name="sparkles" size={17} />
+            </View>
+            <View style={styles.insightCopy}>
+              <Text style={[styles.insightTitle, { color: colors.text }]}>{insightTitle}</Text>
+              <Text style={[styles.insightBody, { color: colors.textMuted }]}>{insightBody}</Text>
+            </View>
           </View>
-          <Text style={[styles.shockTitle, { color: colors.text }]}>Projected cycle cost</Text>
-          <Text style={[styles.shockAmount, { color: colors.text }]}>
-            {money(dashboard?.projectedCycleCostNzd)}
-          </Text>
-          <Text style={[styles.shockBody, { color: colors.textMuted }]}>
-            {outlookExplanation}
-          </Text>
-          <Text style={[styles.shockBody, { color: colors.textMuted }]}>Expected cycle cost: {money(dashboard?.expectedCostNzd)}. {expectationNote}</Text>
+          <View style={styles.compareRow}>
+            <View style={[styles.compareChip, { backgroundColor: colors.input, borderColor: colors.border }]}>
+              <Text style={[styles.compareLabel, { color: colors.textMuted }]}>EXPECTED</Text>
+              <Text style={[styles.compareValue, { color: colors.text }]}>{money(dashboard?.expectedCostNzd)}</Text>
+            </View>
+            <View style={[styles.compareChip, { backgroundColor: colors.input, borderColor: colors.border }]}>
+              <Text style={[styles.compareLabel, { color: colors.textMuted }]}>PROJECTED</Text>
+              <Text style={[styles.compareValue, { color: dashboard?.warningTriggered ? palette.red : colors.text }]}>{money(dashboard?.projectedCycleCostNzd)}</Text>
+            </View>
+          </View>
+          <Text style={[styles.shockFootnote, { color: colors.textMuted }]}>{expectationNote}</Text>
         </View>
       </ModalSheet>
 
@@ -331,7 +342,7 @@ export default function DashboardScreen() {
   );
 }
 
-function DashboardRow({ icon, label, detail, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; onPress: () => void }) {
+function DashboardRow({ icon, label, detail, onPress, index }: { icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; onPress: () => void; index: number }) {
   const { colors } = useAppTheme();
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.dashboardRow, pressed && styles.pressed]}><View style={styles.dashboardRowIcon}><Ionicons color={colors.textMuted} name={icon} size={19} /></View><View style={styles.dashboardRowCopy}><Text style={[styles.dashboardRowTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.dashboardRowDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={21} /></Pressable>;
 }
@@ -512,6 +523,38 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: 'center',
   },
+  insightCard: {
+    alignSelf: 'stretch',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+    padding: 15,
+  },
+  insightIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderRadius: 13,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  insightCopy: { flex: 1 },
+  insightTitle: { fontSize: 14, fontWeight: '900', letterSpacing: -0.2 },
+  insightBody: { fontSize: 12.5, fontWeight: '500', lineHeight: 19, marginTop: 5 },
+  compareRow: { alignSelf: 'stretch', flexDirection: 'row', gap: 10, marginTop: 12 },
+  compareChip: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    flex: 1,
+    gap: 3,
+    paddingVertical: 11,
+  },
+  compareLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  compareValue: { fontSize: 16, fontWeight: '900', letterSpacing: -0.3 },
+  shockFootnote: { fontSize: 11, lineHeight: 16, marginTop: 12, textAlign: 'center' },
   notificationIntro: {
     marginBottom: 8,
     fontSize: 12,

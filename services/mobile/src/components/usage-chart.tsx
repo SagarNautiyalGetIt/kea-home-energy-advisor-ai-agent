@@ -243,11 +243,11 @@ export function UsageChart({
             animatedProps={compareAnimatedProps}
             d={compareLine}
             fill="none"
-            stroke="#164F69"
+            stroke="#FBBF24"
             strokeDasharray="5 6"
             strokeLinecap="round"
-            strokeOpacity={0.48}
-            strokeWidth={1.7}
+            strokeOpacity={0.9}
+            strokeWidth={2}
           />
         ) : null}
 
@@ -305,12 +305,15 @@ export function UsageChart({
         {activePoint && activeValue !== undefined && activeLabel ? (() => {
           const metric = valueText(activeValue, unit, max);
           const previousMetric = activePreviousValue !== undefined ? valueText(activePreviousValue, unit, max) : undefined;
-          const tooltipWidth = activePreviousValue !== undefined ? 176 : 152;
-          const tooltipHeight = activePreviousValue !== undefined ? 76 : 60;
-          const tooltipX = clamp(activePoint.x - tooltipWidth / 2, 8, plotWidth - tooltipWidth - 8);
-          const highestPoint = activeComparePoint ? Math.min(activePoint.y, activeComparePoint.y) : activePoint.y;
-          const tooltipY = clamp(highestPoint - tooltipHeight - 18, 8, Math.max(8, plotBottom - tooltipHeight - 10));
-          const tailX = clamp(activePoint.x, tooltipX + 18, tooltipX + tooltipWidth - 18);
+          // Compact chip, always floating above the dot (never on it), centered on it.
+          const tooltipWidth = activePreviousValue !== undefined ? 120 : 100;
+          const tooltipHeight = activePreviousValue !== undefined ? 60 : 44;
+          const tooltipX = clamp(
+            activePoint.x - tooltipWidth / 2,
+            4,
+            Math.max(4, plotWidth - tooltipWidth - 4),
+          );
+          const tooltipY = 8;
 
           return (
             <G pointerEvents="none">
@@ -321,8 +324,8 @@ export function UsageChart({
                 strokeWidth={1.4}
                 x1={activePoint.x}
                 x2={activePoint.x}
-                y1={activePoint.y + ACTIVE_RING_RADIUS}
-                y2={primaryY - 18}
+                y1={tooltipY + tooltipHeight + 9}
+                y2={activePoint.y - ACTIVE_RING_RADIUS}
               />
               {activeComparePoint ? (
                 <Circle
@@ -335,10 +338,10 @@ export function UsageChart({
                 />
               ) : null}
               <Rect
-                fill="#2C2C2E"
+                fill="#000000"
                 height={tooltipHeight}
-                rx={24}
-                stroke="#456476"
+                rx={12}
+                stroke="#A1A1AA"
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
                 width={tooltipWidth}
@@ -346,41 +349,41 @@ export function UsageChart({
                 y={tooltipY}
               />
               <Path
-                d={`M${tailX - 12} ${tooltipY + tooltipHeight - 2} L${tailX} ${tooltipY + tooltipHeight + 12} L${tailX + 12} ${tooltipY + tooltipHeight - 2} Z`}
-                fill="#2C2C2E"
-                stroke="#456476"
+                d={`M${activePoint.x - 7} ${tooltipY + tooltipHeight - 1} L${activePoint.x} ${tooltipY + tooltipHeight + 9} L${activePoint.x + 7} ${tooltipY + tooltipHeight - 1} Z`}
+                fill="#000000"
+                stroke="#A1A1AA"
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
               />
               <SvgText
                 fill="#C7D0D9"
-                fontSize={12}
+                fontSize={10}
                 fontWeight="800"
                 letterSpacing={0.7}
                 textAnchor="middle"
                 x={tooltipX + tooltipWidth / 2}
-                y={tooltipY + 24}
+                y={tooltipY + (previousMetric ? 15 : 16)}
               >
                 {activeLabel.toUpperCase()}
               </SvgText>
               <SvgText
                 fill="#F2F2F7"
-                fontSize={20}
+                fontSize={previousMetric ? 15 : 16}
                 fontWeight="900"
                 textAnchor="middle"
                 x={tooltipX + tooltipWidth / 2}
-                y={tooltipY + 48}
+                y={tooltipY + (previousMetric ? 33 : 36)}
               >
                 {metric}
               </SvgText>
               {previousMetric && activePreviousLabel ? (
                 <SvgText
                   fill={colors.textMuted}
-                  fontSize={11}
+                  fontSize={10}
                   fontWeight="700"
                   textAnchor="middle"
                   x={tooltipX + tooltipWidth / 2}
-                  y={tooltipY + 66}
+                  y={tooltipY + 50}
                 >
                   {`${activePreviousLabel}: ${previousMetric}`}
                 </SvgText>

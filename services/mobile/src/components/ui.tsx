@@ -22,7 +22,7 @@ export function PrimaryButton({ label, onPress, icon, disabled = false, loading 
   return (
     <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.buttonFrame, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
       {variant === 'primary' ? (
-        <View style={[styles.buttonFill, { backgroundColor: '#F2F2F7' }]}>{content}</View>
+        <View style={[styles.buttonFill, { backgroundColor: '#D8D8D8' }]}>{content}</View>
       ) : (
         <View style={[styles.buttonFill, { backgroundColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : colors.surface, borderColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : palette.violet, borderWidth: 1.5 }]}>{content}</View>
       )}
@@ -61,14 +61,17 @@ export function FormField({ label, value, onChangeText, placeholder, error, secu
   );
 }
 
-export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function PageHeader({ title, subtitle, action, hideMenuButton = false }: { title: string; subtitle?: string; action?: ReactNode; hideMenuButton?: boolean }) {
   const { colors } = useAppTheme();
   const router = useRouter();
+
   return (
     <View style={styles.header}>
-      <Pressable accessibilityLabel="Open tab switcher" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={({ pressed }) => [styles.tabSwitcher, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
-        <Ionicons color={colors.text} name="grid-outline" size={21} />
+      {hideMenuButton ? null : (
+      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}>
+        <Ionicons color={colors.text} name="home-outline" size={21} />
       </Pressable>
+      )}
       <View style={styles.headerCopy}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
@@ -124,7 +127,7 @@ const styles = StyleSheet.create({
   multilineInput: { minHeight: 88, textAlignVertical: 'top' },
   error: { color: palette.red, fontSize: 12, fontWeight: '600' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  tabSwitcher: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 13 },
+  homeButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   headerCopy: { flex: 1, alignItems: 'center' },
   title: { fontSize: 27, lineHeight: 34, fontWeight: '700', letterSpacing: -0.8, textAlign: 'center' },
   subtitle: { marginTop: 4, fontSize: 12, lineHeight: 18, textAlign: 'center' },
@@ -135,4 +138,8 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 13, fontWeight: '800' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
   sectionTitle: { fontSize: 19, fontWeight: '700', letterSpacing: -0.3 },
+  menuOverlay: { flex: 1 },
+  menuCard: { position: 'absolute', width: 230, borderWidth: 1, borderRadius: 16, paddingVertical: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  menuItemLabel: { flex: 1, fontSize: 15, fontWeight: '700' },
 });

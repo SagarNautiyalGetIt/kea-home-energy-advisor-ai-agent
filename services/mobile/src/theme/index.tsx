@@ -3,20 +3,19 @@ import { DarkTheme, type Theme } from 'expo-router';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export const palette = {
-  // Legacy names remain for compatibility, but general UI accents are now
-  // deliberately monochrome. Energy-series colours live in semantic tokens.
-  violet: '#FFFFFF',
-  violetDark: '#D1D1D6',
-  violetSoft: '#1C1C1E',
-  periwinkle: '#C7C7CC',
-  navy: '#FFFFFF',
+  // Tesla-inspired dark interface tokens.
+  violet: '#D8D8D8',
+  violetDark: '#8E8E8E',
+  violetSoft: '#1A1A1A',
+  periwinkle: '#8E8E8E',
+  navy: '#D8D8D8',
   green: '#30D158',
-  red: '#FF453A',
+  red: '#E82127',
   amber: '#FFD60A',
-  white: '#FFFFFF',
+  white: '#D8D8D8',
   solar: '#FFD60A',
-  grid: '#8E8E93',
-  home: '#0A84FF',
+  grid: '#707070',
+  home: '#3E6AE1',
   battery: '#30D158',
 } as const;
 
@@ -35,15 +34,15 @@ export type AppColors = {
 };
 
 const light: AppColors = {
-  background: '#000000',
-  surface: '#121212',
-  surfaceRaised: '#181818',
-  text: '#FFFFFF',
-  textMuted: '#C7C7CC',
-  border: '#454545',
-  input: '#0D0D0D',
+  background: '#111111',
+  surface: '#1A1A1A',
+  surfaceRaised: '#222222',
+  text: '#D8D8D8',
+  textMuted: '#8E8E8E',
+  border: '#222222',
+  input: '#1A1A1A',
   overlay: 'rgba(0, 0, 0, 0.78)',
-  tabBar: '#121214',
+  tabBar: '#1A1A1A',
 };
 
 const dark: AppColors = light;

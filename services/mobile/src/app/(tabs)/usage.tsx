@@ -2,12 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
-import { PageHeader, PrimaryButton, Segmented } from '@/components/ui';
+import { PageHeader, PrimaryButton } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
@@ -139,6 +139,9 @@ export default function UsageScreen() {
   const [comparisons, setComparisons] = useState<Record<Period, ComparisonSelection | null>>({ daily: null, weekly: null, monthly: null });
   const [date, setDate] = useState(() => toDateValue(new Date()));
   const [dateOpen, setDateOpen] = useState(false);
+  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+  const [periodMenuPosition, setPeriodMenuPosition] = useState({ top: 0, left: 0 });
+  const compareAnchorRef = useRef<View>(null);
   const [energyBreakdownOpen, setEnergyBreakdownOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareTarget, setCompareTarget] = useState<'first' | 'second'>('first');
@@ -192,6 +195,20 @@ export default function UsageScreen() {
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
+  const breakdownCategories = energyBreakdown?.categories.length
+    ? energyBreakdown.categories
+    : bands
+      .filter((band) => band.kwh !== null)
+      .map((band) => ({
+        key: band.key,
+        label: band.label,
+        kwh: band.kwh ?? 0,
+        costNzd: band.costNzd ?? 0,
+        sharePct: data?.totalKwh ? (band.kwh ?? 0) / data.totalKwh * 100 : 0,
+        confidence: data?.isDemo ? 'estimated' : 'measured',
+        basis: band.window ?? 'Selected period',
+        caveat: null,
+      }));
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
   useEffect(() => {
     if (canShowCost || unit !== 'cost') return;
@@ -345,6 +362,13 @@ export default function UsageScreen() {
   const changePeriod = (nextPeriod: Period) => {
     setChartActive(false);
     setPeriod(nextPeriod);
+    setPeriodMenuOpen(false);
+  };
+  const openPeriodMenu = () => {
+    compareAnchorRef.current?.measureInWindow((x, y, _width, height) => {
+      setPeriodMenuPosition({ top: y + height + 8, left: x });
+      setPeriodMenuOpen(true);
+    });
   };
 
   const openComparison = () => {
@@ -398,23 +422,25 @@ export default function UsageScreen() {
               title="Usage"
             />
 
-            <Segmented
-              activeBackgroundColor="#FFFFFF"
-              activeTextColor="#000000"
-              onChange={changePeriod}
-              options={periodOptions}
-              value={period}
-            />
+            <Modal animationType="fade" onRequestClose={() => setPeriodMenuOpen(false)} transparent visible={periodMenuOpen}>
+              <Pressable accessibilityLabel="Close usage period menu" onPress={() => setPeriodMenuOpen(false)} style={styles.periodMenuOverlay}>
+                <View style={[styles.periodMenu, { backgroundColor: colors.surface, borderColor: colors.border, top: periodMenuPosition.top, left: periodMenuPosition.left }]}>
+                  {periodOptions.map((item) => <Pressable key={item.value} onPress={() => changePeriod(item.value)} style={({ pressed }) => [styles.periodMenuItem, pressed && styles.pressed]}><Text style={[styles.periodMenuText, { color: colors.text }]}>{item.label}</Text></Pressable>)}
+                </View>
+              </Pressable>
+            </Modal>
 
-            <View style={styles.toolbarRow}>
-              <Pressable
+            <View style={styles.toolbarGrid}>
+              <View style={styles.toolbarLeftColumn}>
+                <Pressable
                 accessibilityLabel={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`}
                 onPress={compare ? openComparison : () => setDateOpen(true)}
                 style={({ pressed }) => [
                   styles.toolbarButton,
+                  styles.dateButton,
                   compare && styles.comparisonDateButton,
                   compare && period === 'weekly' && styles.weekComparisonDateButton,
-                  { backgroundColor: colors.input, borderColor: colors.input },
+                  { backgroundColor: 'transparent', borderColor: 'transparent' },
                   pressed && styles.pressed,
                 ]}
               >
@@ -423,31 +449,39 @@ export default function UsageScreen() {
                   {selectedPeriodLabel}
                 </Text>
                 <Ionicons color={colors.textMuted} name="chevron-down" size={14} />
-              </Pressable>
-
-              <View
-                style={[
-                  styles.toolbarButton,
-                  styles.compareButton,
-                  {
-                    backgroundColor: compare ? 'rgba(37,99,235,0.18)' : colors.input,
-                    borderColor: compare ? '#38BDF8' : colors.input,
-                  },
-                ]}
-              >
-                <Pressable
-                  accessibilityLabel="Choose periods to compare"
-                  onPress={openComparison}
-                  style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
-                >
-                  <Ionicons color={compare ? '#38BDF8' : '#FFFFFF'} name="git-compare-outline" size={19} />
-                  <Text style={[styles.toolbarButtonText, { color: compare ? '#38BDF8' : colors.text }]}>Compare</Text>
                 </Pressable>
-                {compare ? (
-                  <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
-                    <Ionicons color="#38BDF8" name="close" size={18} />
+              </View>
+
+              <View style={styles.toolbarRightColumn}>
+                <View
+                  ref={compareAnchorRef}
+                  style={[
+                    styles.toolbarButton,
+                    styles.compareButton,
+                    {
+                      backgroundColor: 'transparent',
+                      borderColor: compare ? '#38BDF8' : '#303030',
+                    },
+                  ]}
+                >
+                  <Pressable
+                    accessibilityLabel="Choose periods to compare"
+                    onPress={openComparison}
+                    style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
+                  >
+                    <Ionicons color={compare ? '#38BDF8' : '#FFFFFF'} name="git-compare-outline" size={19} />
+                    <Text style={[styles.toolbarButtonText, { color: compare ? '#38BDF8' : colors.text }]}>Compare</Text>
                   </Pressable>
-                ) : null}
+                  {compare ? (
+                    <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
+                      <Ionicons color="#38BDF8" name="close" size={18} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Pressable accessibilityLabel="Choose usage period" onPress={openPeriodMenu} style={({ pressed }) => [styles.periodDropdown, pressed && styles.pressed]}>
+                  <Text style={[styles.periodDropdownText, { color: colors.text }]}>{periodOptions.find((item) => item.value === period)?.label}</Text>
+                  <Ionicons color={colors.textMuted} name="chevron-down" size={18} />
+                </Pressable>
               </View>
             </View>
           </View>
@@ -541,14 +575,14 @@ export default function UsageScreen() {
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
           <View style={styles.breakdownContent}>
             <View style={styles.breakdownList}>
-              {energyBreakdown?.categories.length ? (
+              {breakdownCategories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
                   <View style={styles.breakdownIcon}>
                     <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
                   </View>
                   <View style={styles.breakdownCopy}>
                     <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
-                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown.period || 'Selected period'}</Text>
+                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown?.period || selectedPeriodLabel}</Text>
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
@@ -565,13 +599,7 @@ export default function UsageScreen() {
                   <Text style={[styles.breakdownValue, { color: colors.text }]}>
                     {formatAmount(data?.totalKwh ?? null, data?.totalCostNzd ?? null)}
                   </Text>
-                  <Text
-                    style={{
-                      color: (data?.trendPercent ?? 0) <= 0 ? palette.green : palette.red,
-                      fontSize: 12,
-                      fontWeight: '700',
-                    }}
-                  >
+                  <Text style={{ color: (data?.trendPercent ?? 0) <= 0 ? palette.green : palette.red, fontSize: 12, fontWeight: '700' }}>
                     {data?.trendPercent == null ? '—' : `${data.trendPercent > 0 ? '+' : ''}${data.trendPercent.toFixed(1)}%`}
                   </Text>
                 </View>
@@ -588,14 +616,10 @@ export default function UsageScreen() {
                     </View>
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
-                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>
-                        {band.window ?? 'No time window supplied'}
-                      </Text>
+                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{band.window ?? 'No time window supplied'}</Text>
                     </View>
                     <View style={styles.breakdownValueWrap}>
-                      <Text style={[styles.breakdownValue, { color: colors.text }]}>
-                        {formatAmount(band.kwh, band.costNzd)}
-                      </Text>
+                      <Text style={[styles.breakdownValue, { color: colors.text }]}>{formatAmount(band.kwh, band.costNzd)}</Text>
                       <Text style={[styles.breakdownShare, { color: '#A1A1AA' }]}>{share}</Text>
                     </View>
                   </View>
@@ -619,7 +643,7 @@ export default function UsageScreen() {
           <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
         </View>
         <View style={styles.energyBreakdownSheet}>
-          {energyBreakdown?.categories.map((category) => {
+          {breakdownCategories.map((category) => {
             const presentation = energyCategoryPresentation(category.key);
             const estimated = category.confidence !== 'measured';
             return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -745,6 +769,48 @@ const styles = StyleSheet.create({
   headerControls: {
     paddingHorizontal: 18,
   },
+  periodDropdownWrap: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+  },
+  periodDropdown: {
+    width: '100%',
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    backgroundColor: 'transparent',
+    borderColor: '#303030',
+  },
+  periodDropdownText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  periodMenuOverlay: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingTop: 104,
+    paddingRight: 18,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  periodMenu: {
+    position: 'absolute',
+    width: 100,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 4,
+  },
+  periodMenuItem: {
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  periodMenuText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   chartContainer: {
     width: '100%',
   },
@@ -759,6 +825,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     marginTop: 10,
+  },
+  toolbarGrid: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+  },
+  toolbarLeftColumn: {
+    flex: 1,
+    gap: 6,
+  },
+  toolbarRightColumn: {
+    width: '36%',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  dateButton: {
+    minHeight: 92,
   },
   toolbarButton: {
     minWidth: 0,
@@ -786,13 +870,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   compareButton: {
+    flex: 0,
+    width: '100%',
+    height: 36,
+    minHeight: 36,
     gap: 0,
     overflow: 'hidden',
     paddingHorizontal: 0,
+    borderRadius: 8,
   },
   compareMain: {
     minWidth: 0,
-    minHeight: 48,
+    minHeight: 34,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -937,13 +1026,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   breakdownTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
   breakdownDetail: {
     marginTop: 3,
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 18,
   },
   breakdownValueWrap: {
@@ -951,12 +1040,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   breakdownValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   breakdownShare: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   dateDialog: {

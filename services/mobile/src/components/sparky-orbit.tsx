@@ -27,7 +27,7 @@ function Orbit({ radius, angles, inner = false }: { radius: number; angles: read
       {angles.map((angle, index) => (
         <G key={angle}>
           <Path d={arcPath(radius, angle - 28, angle)} fill="none" opacity={inner ? 0.55 : 0.72} stroke="#D1D1D6" strokeLinecap="round" strokeWidth={1.8} />
-          <Path d={arcPath(radius, angle - 5, angle + 2)} fill="none" opacity={inner ? 0.82 : 1} stroke={index === 0 ? '#FFFFFF' : '#8E8E93'} strokeLinecap="round" strokeWidth={3.6} />
+          <Path d={arcPath(radius, angle - 5, angle + 2)} fill="none" opacity={inner ? 0.82 : 1} stroke={index === 0 ? '#D8D8D8' : '#8E8E93'} strokeLinecap="round" strokeWidth={3.6} />
         </G>
       ))}
     </Svg>
@@ -97,9 +97,9 @@ export function SparkyOrbit({ size = 168 }: { size?: number }) {
         <Svg height="100%" viewBox="0 0 100 100" width="100%">
           <Defs>
             <RadialGradient cx="50%" cy="50%" id="sparky-core" r="50%">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.42} />
-              <Stop offset="0.46" stopColor="#FFFFFF" stopOpacity={0.2} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+              <Stop offset="0" stopColor="#D8D8D8" stopOpacity={0.42} />
+              <Stop offset="0.46" stopColor="#D8D8D8" stopOpacity={0.2} />
+              <Stop offset="1" stopColor="#D8D8D8" stopOpacity={0} />
             </RadialGradient>
           </Defs>
           <Circle cx={CENTER} cy={CENTER} fill="url(#sparky-core)" r={10} />

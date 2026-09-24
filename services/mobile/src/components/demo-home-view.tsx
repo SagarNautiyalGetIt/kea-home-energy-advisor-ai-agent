@@ -12,6 +12,7 @@ import Svg, {
   Stop,
   Line,
 } from 'react-native-svg';
+import { AnimatedLogo } from './animated-logo';
 import { demoHomeScenarios, type DemoHomeScenario } from '@/data/mock';
 import { palette } from '@/theme';
 
@@ -40,7 +41,7 @@ export function DemoHomeView({
       <View style={StyleSheet.absoluteFill}>
         <LinearGradient
           colors={
-            ['#090A0C', '#050608', '#000000']
+            ['#111111', '#0E0E0E', '#111111']
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -51,7 +52,7 @@ export function DemoHomeView({
       {/* Top Bar: Title & Controls */}
       <View style={styles.topBar}>
         <View style={styles.logoContainer}>
-          <Ionicons color={palette.violet} name="flash" size={28} />
+          <AnimatedLogo size={36} />
           <Text style={styles.topTitle}>Kea Energy</Text>
         </View>
         <View style={styles.topIcons}>
@@ -62,7 +63,7 @@ export function DemoHomeView({
             onPress={onOpenNotifications}
             style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           >
-            <Ionicons color="#FFFFFF" name="notifications-outline" size={24} />
+            <Ionicons color="#D8D8D8" name="notifications-outline" size={24} />
           </Pressable>
           <Pressable
             accessibilityLabel="Profile"
@@ -71,7 +72,7 @@ export function DemoHomeView({
             onPress={onOpenProfile}
             style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           >
-            <Ionicons color="#FFFFFF" name="person-circle-outline" size={24} />
+            <Ionicons color="#D8D8D8" name="person-circle-outline" size={24} />
           </Pressable>
         </View>
       </View>
@@ -165,7 +166,7 @@ export function DemoHomeView({
 
             {/* Wall Connector inside Garage */}
             <Rect fill="#EAEAEA" height="12" rx="2" width="5" x="98" y="172" />
-            <Path d="M103,178 Q108,188 114,194" fill="none" stroke="#FFFFFF" strokeWidth="1.2" />
+            <Path d="M103,178 Q108,188 114,194" fill="none" stroke="#D8D8D8" strokeWidth="1.2" />
 
             {/* Red Model 3 / EV inside Garage (Quarter Rear Angle) */}
             <G id="carModel3">
@@ -242,19 +243,19 @@ export function DemoHomeView({
 
           {/* --- LEADER CALLOUT LINES --- */}
           {/* Solar Callout Line */}
-          <Line stroke="#FFFFFF" strokeWidth="0.85" x1="190" x2="190" y1="36" y2="80" />
+          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="190" x2="190" y1="36" y2="80" />
 
           {/* Model 3 Callout Line */}
-          <Line stroke="#FFFFFF" strokeWidth="0.85" x1="88" x2="88" y1="52" y2="188" />
+          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="88" x2="88" y1="52" y2="188" />
 
           {/* Home Callout Line */}
-          <Line stroke="#FFFFFF" strokeWidth="0.85" x1="285" x2="285" y1="52" y2="185" />
+          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="285" x2="285" y1="52" y2="185" />
 
           {/* Powerwall Callout Line */}
-          <Line stroke="#FFFFFF" strokeWidth="0.85" x1="170" x2="170" y1="266" y2="295" />
+          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="170" x2="170" y1="266" y2="295" />
 
           {/* Grid Callout Line */}
-          <Line stroke="#FFFFFF" strokeWidth="0.85" x1="288" x2="288" y1="268" y2="295" />
+          <Line stroke="#D8D8D8" strokeWidth="0.85" x1="288" x2="288" y1="268" y2="295" />
         </Svg>
 
         {/* --- CALLOUT TAGS (Crisp React Native Typography) --- */}
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topTitle: {
-    color: '#FFFFFF',
+    color: '#D8D8D8',
     fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: -0.5,
@@ -394,7 +395,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   calloutValue: {
-    color: '#FFFFFF',
+    color: '#D8D8D8',
     fontSize: 15.5,
     fontWeight: '700',
     letterSpacing: -0.2,
@@ -407,7 +408,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   calloutPercent: {
-    color: '#FFFFFF',
+    color: '#D8D8D8',
     fontSize: 14.5,
     fontWeight: '700',
   },
@@ -462,7 +463,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillTitle: {
-    color: '#FFFFFF',
+    color: '#D8D8D8',
     fontSize: 13.5,
     fontWeight: '700',
   },

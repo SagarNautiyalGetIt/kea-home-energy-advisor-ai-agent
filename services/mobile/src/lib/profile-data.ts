@@ -23,7 +23,6 @@ const profilePath = process.env.EXPO_PUBLIC_PROFILE_PATH?.trim() || '/api/househ
 export function emptyCustomerProfile(customerId = '', name = '', email = ''): CustomerProfile {
   return { customerId, name, address: '', phone: '', email };
 }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

@@ -6,9 +6,6 @@ billing, plans, profile, settings, support, notification, and payment flows.
 
 ## Run locally
 
-For the tested LAN/tunnel commands, Expo Go troubleshooting, and coding-harness fast
-path, see [`LAUNCH.md`](./LAUNCH.md).
-
 From the repository root:
 
 ```bash

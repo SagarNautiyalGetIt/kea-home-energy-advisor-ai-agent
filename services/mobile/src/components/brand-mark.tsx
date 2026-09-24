@@ -2,12 +2,12 @@ import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { palette } from '@/theme';
 
 export function BrandMark({ size = 44, light = false }: { size?: number; light?: boolean }) {
-  const color = light ? '#FFFFFF' : palette.periwinkle;
+  const color = light ? '#D8D8D8' : palette.periwinkle;
   return (
     <Svg accessibilityLabel="Kea Energy" width={size} height={size} viewBox="0 0 256 256">
       <Defs>
         <LinearGradient id="bolt" x1="102" y1="61" x2="158" y2="197" gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor="#FFFFFF" />
+          <Stop offset="0" stopColor="#D8D8D8" />
           <Stop offset="0.54" stopColor="#E5E5EA" />
           <Stop offset="1" stopColor="#AEAEB2" />
         </LinearGradient>

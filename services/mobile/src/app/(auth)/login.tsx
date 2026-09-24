@@ -100,6 +100,6 @@ const styles = StyleSheet.create({
   demoCopy: { flex: 1 },
   demoName: { fontSize: 13, fontWeight: '900' },
   demoScenario: { marginTop: 3, fontSize: 10, lineHeight: 15 },
-  demoUse: { color: '#000000', borderRadius: 9, backgroundColor: '#FFFFFF', paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, fontWeight: '900' },
+  demoUse: { color: '#000000', borderRadius: 9, backgroundColor: '#D8D8D8', paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, fontWeight: '900' },
   pressed: { opacity: 0.68 },
 });

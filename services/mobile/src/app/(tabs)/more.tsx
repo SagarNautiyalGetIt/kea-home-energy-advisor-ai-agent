@@ -55,15 +55,18 @@ export default function MoreScreen() {
   return (
     <Screen>
       <PageHeader title="More" subtitle="Your Kea Energy account" />
-      <Card style={styles.profileCard}>
-        <Image source={require('../../../assets/kea/kea-profile.png')} style={styles.avatar} />
-        <View style={styles.profileCopy}>
-          <Text style={[styles.name, { color: colors.text }]}>{session?.displayName}</Text>
-          <Text style={[styles.email, { color: colors.textMuted }]}>{session?.email} {session?.customerId ? `(${session.customerId})` : ''}</Text>
-        </View>
-      </Card>
+      <Pressable accessibilityLabel="Open profile" accessibilityRole="button" onPress={() => router.push('/profile')} style={({ pressed }) => [pressed && styles.pressed]}>
+        <Card style={styles.profileCard}>
+          <Image source={require('../../../assets/kea/kea-profile.png')} style={styles.avatar} />
+          <View style={styles.profileCopy}>
+            <Text style={[styles.name, { color: colors.text }]}>{session?.displayName}</Text>
+            <Text style={[styles.email, { color: colors.textMuted }]}>{session?.email} {session?.customerId ? `(${session.customerId})` : ''}</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name="chevron-forward" size={20} />
+        </Card>
+      </Pressable>
       <SectionTitle>Account</SectionTitle>
-      <Card style={styles.menuCard}>{menu.map((item, index) => <Pressable key={item.label} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }, pressed && styles.pressed]}><View style={[styles.rowIcon, { backgroundColor: colors.input }]}><Ionicons color={colors.text} name={item.icon} size={21} /></View><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>)}</Card>
+      <Card style={styles.menuCard}>{menu.map((item, index) => <Pressable onPress={() => router.push(item.route)} style={({ pressed }) => [styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }, pressed && styles.pressed]}><View style={[styles.rowIcon, { backgroundColor: colors.input }]}><Ionicons color={colors.text} name={item.icon} size={21} /></View><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>)}</Card>
       <Pressable onPress={() => void openDemoAccounts()} style={[styles.switchDemo, { backgroundColor: colors.input, borderColor: colors.border }]}><Ionicons color={colors.text} name="people-outline" size={21} /><Text style={[styles.switchDemoText, { color: colors.text }]}>Switch demo account</Text></Pressable>
       <Pressable onPress={() => setLogoutOpen(true)} style={[styles.logout, { backgroundColor: colors.surface, borderColor: colors.border }]}><Ionicons color={palette.red} name="log-out-outline" size={21} /><Text style={styles.logoutText}>Sign out</Text></Pressable>
       <Text style={[styles.version, { color: colors.textMuted }]}>Kea Energy mobile · Version 1.0.0</Text>
@@ -87,6 +90,7 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenEnter: { flex: 1 },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14 }, avatar: { width: 66, height: 66, borderRadius: 23 }, profileCopy: { flex: 1 }, name: { fontSize: 18, fontWeight: '900' }, email: { marginTop: 3, fontSize: 12 },
   menuCard: { paddingVertical: 1 }, row: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }, rowIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, rowCopy: { flex: 1 }, rowTitle: { fontSize: 14, fontWeight: '900' }, rowDetail: { marginTop: 3, fontSize: 11 }, pressed: { opacity: 0.65 },
   logout: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 12, borderWidth: 1, borderRadius: 17 }, logoutText: { color: palette.red, fontSize: 14, fontWeight: '900' }, version: { marginTop: 18, fontSize: 10, textAlign: 'center' }, modalText: { fontSize: 14, lineHeight: 21, textAlign: 'center', paddingVertical: 12 }, footerButtons: { flex: 1, flexDirection: 'row', gap: 10 }, footerButton: { flex: 1 },
