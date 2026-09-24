@@ -89,20 +89,6 @@ function reading(scene: HomeSceneData | null, live: LivePower, device: Device, c
   }
 }
 
-const SUNNY_DAY_WEATHER: AucklandWeather = {
-  observedAt: 1774400000000,
-  fetchedAt: 1774400000000,
-  temperatureC: 21,
-  isDay: true,
-  weatherCode: 0,
-  cloudCoverPercent: 8,
-  solarRadiationWm2: 720,
-  sunriseAt: 1774383800000,
-  sunsetAt: 1774423400000,
-  condition: 'clear',
-  description: 'Sunny',
-};
-
 export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOpenProfile, sceneOpacity }: Props) {
   const { width } = useWindowDimensions();
   const [sceneState, setScene] = useState<HomeSceneData | null>(null);
@@ -111,8 +97,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const live = liveState?.customerId === customerId ? liveState.power : {};
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [weatherState, setWeather] = useState<{ region: string; data: AucklandWeather } | null>(null);
-  // Daytime sunny weather preview mode (toggle to weatherState.data for live weather)
-  const weather: AucklandWeather = SUNNY_DAY_WEATHER ?? (weatherState && weatherState.region === scene?.region ? weatherState.data : null);
+  const weather = weatherState && weatherState.region === scene?.region ? weatherState.data : null;
   const [weatherError, setWeatherError] = useState(false);
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>('home');
