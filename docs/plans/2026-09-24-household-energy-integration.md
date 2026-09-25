@@ -29,6 +29,28 @@ State: Draft PR ready; production and native evidence pending
 | D2 | Regenerate shared OpenAPI, update startup sequence, and record source provenance | Contract matches routes; local motion reference is separately logged with attribution; no reference code or assets enter Kea | Done in code and Vault |
 | V1 | Verify integration and record limits | Backend tests, mobile typecheck/lint, contract tests, web/mobile bundles, and a rendered app pass where runnable; document device/account prerequisites | Done locally; physical devices and second machine pending |
 
+## Stable V2 follow-up — 25 Sep 2026
+
+**Problem.** Mobile screens can still leave charts or fields blank when a request fails or asks for a date the backend has not supplied. The Sparky stream uses the same answer pipeline as web, but the mobile client must render every supported response type and keep safety wording truthful. Recent presentation changes also need to preserve legibility and the app's shared visual language when the keyboard or Home sheet moves.
+
+**User outcomes.** A household can tell which figures are measured, which period they cover, and why a chart is unavailable. Sparky responds with an appropriately warm, concise tone without diagnosing a person or promising an action the service has not taken. Home and chat remain readable at compact heights, large text, and reduced motion.
+
+| ID | Priority | Task and acceptance | Evidence to record | State |
+| --- | --- | --- | --- | --- |
+| S1 | P0 | Trace every mobile chart/blank field from API response through selector to screen; remove fixed customer-looking fallback values. For missing data, show a labelled unavailable state and retry where a request failed. | Reproduction, API payload, selector tests, rendered screen | Done in code and rendered preview |
+| S2 | P0 | Serve household-scoped dated usage history where the repository actually has rows. Keep dates ascending and time-band values null unless measured; daily mode must not invent hourly readings. | Contract/API tests, generated OpenAPI, graph tests | Done in code; production auth pending |
+| S3 | P0 | Audit Sparky's shared web/mobile answer path: guardrails, emotion-sensitive tone, sources, chart frames, and support handoff. Render supported evidence on mobile and remove unverified operational promises. | Pipeline and stream tests, mobile UI check | Done in code; live model proof pending |
+| S4 | P0 | Preserve the attached keyboard and Home behaviour: compact 96px mascot/chip rail, tap-to-send, 5% scene opacity floor, unblurred heading/weather, and 140px sky fade behind the house. Remove any synthetic live flow or customer fixture inserted for a screenshot. | Lint/typecheck and rendered phone-size check | Done in code and rendered preview; native gesture proof pending |
+| S5 | P1 | Review spacing, color, charts, motion, and empty/error copy against the app's existing tokens across Home, Usage, Bill, and Sparky. Respect reduced-motion settings. | Screen audit with before/after notes | Done in code and rendered preview |
+| S6 | P0 | Update the existing Mobile V2 draft PR to **Stable v2 mobile**, run API/mobile/web checks and CI, and record remaining native, hardware, auth, and model-provider boundaries. | PR head/checks, plan, Vault handoff | Local checks done; CI and external acceptance pending |
+| S7 | P0 | Fit Home art, card rail, graph controls, bill chart, Help, and Sparky start/keyboard states to compact and large phones without clipping; isolate account-specific screen state on household switches. | Rendered 320×568, 320×700, 390×844, 430×932 checks; mobile lint/typecheck | Done in web preview; physical-phone proof pending |
+
+**Sequence.** Establish a reproducible API payload and screen state for S1/S3; fix selector and server contracts in S1/S2; preserve and verify layout in S4/S5; then run S6 gates. The source of truth is the selected household, so an unavailable result must never be filled by another account's fixture or a visual preview constant.
+
+**Release boundary.** No compatible household energy sensor is present, and the demo API has no production customer identity. Device telemetry and native Expo Go interactions need real-device evidence before the draft becomes merge-ready. A web-sized preview and exported bundles are useful checks, not substitutes for that evidence.
+
+**Implementation and review evidence.** The dated usage endpoint checks the selected demo token before returning history; tests cover no token, wrong household, missing dates, incomplete mart days, and supplier-estimated reads. Estimated intervals keep daily kWh visible with a quality label and withhold measured time bands. Weekly/monthly band totals require a complete selected period. Usage and Sparky remount on household switches so prior account data never appears on the next account's first frame. The default app path calls the API; the explicit local-preview path no longer invents fixed time-band percentages. In the rendered browser preview, compact Home (320×568), Usage (320×568 and 430×932), Sparky (320×700), Bill (320×568), and Help (320×568) fit without clipped primary controls. The web preview cannot prove native swipes or device permissions.
+
 ## Findings from initial trace
 
 - `DemoHomeView` calculates energy from weather with fixed battery, load, EV, and grid inputs. Weather affects appearance, not measured household electricity.
@@ -59,7 +81,7 @@ State: Draft PR ready; production and native evidence pending
 ## Local verification
 
 - Full backend suite passed after the prompt and API changes; focused household and device tests cover authorization, idempotent readings, EV memory, missing time bands, and the night-load threshold.
-- Mobile lint, strict TypeScript, and Expo Doctor (21/21 checks) passed. Eleven mobile tests passed, including 23-hour and 25-hour Auckland energy days, meter reset arithmetic, and incomplete-day rejection. SDK patch versions were aligned and legacy `expo-cli` and redundant React Native types were removed.
+- Mobile lint, strict TypeScript, and Expo Doctor (21/21 checks in the initial V2 pass) passed. The Stable v2 follow-up has 23 passing mobile tests, including 23-hour and 25-hour Auckland energy days, meter reset arithmetic, SSE/chart parsing, dated usage gaps, incomplete periods, and estimated-read labelling. SDK patch versions were aligned and legacy `expo-cli` and redundant React Native types were removed.
 - Android and iOS Expo exports completed; the web preview was inspected at desktop and phone widths. These bundle checks do not establish native runtime behavior.
 - The OpenAPI file was regenerated from the current routes and both mobile and web API types were regenerated. Web lint, type checking, and production build passed.
 - No Home Assistant hardware or production identity was available, so ingestion, native gestures, and real model narration still need device and provider acceptance evidence before merge.
@@ -109,3 +131,29 @@ State: Draft PR ready; production and native evidence pending
 - Elephant: The team repository's Definition of Done requires both native platforms, a second machine, and an approving review. Those cannot be supplied by a local web preview or Expo export.
 
 **Gate:** PASS to publish a draft PR with explicit limits and tests; BLOCKED to merge it as production-ready until production auth and native evidence exist.
+
+## Pre-mortem before pushing the Stable v2 follow-up
+
+**Failure statement:** It is 9 October 2026. The Stable v2 update was treated as production-ready, and one household saw another household's chat or historical usage while a customer received a false measured-energy or staff-handoff claim.
+
+### Tigers
+
+| Risk | Evidence | Disposition |
+| --- | --- | --- |
+| Historical usage leaks across households | Independent review found the new dated route initially had no token check | **Blocking before push:** require a matching demo token; cover missing and wrong tokens in API tests. Done. Production authorization remains a merge blocker. |
+| Account switching briefly shows the old household's data | Usage and Sparky previously reset state only after a passive effect ran | **Blocking before push:** remount both screens using the household ID as a key, abort old requests, and clear account-specific data. Done in code. |
+| A partial week or supplier-estimated interval is labelled measured | The selector summed every returned day; mart rows carry `estimated_count` | **Blocking before push:** require complete period coverage for time-band totals, carry daily quality, and withhold measured bands for estimated days. Covered by API and selector tests. |
+| The app promises that a staff member has received a hardship chat | The escalation recorder has no staff delivery channel, while old copy implied live handoff | **Blocking before push:** state that the concern is recorded and direct users to verified bill contact details. Backend, mobile, and web copy changed. |
+| Native gestures or safe areas differ from the browser preview | Browser checks and iOS/Android exports do not exercise an actual phone | **Track:** keep the PR draft; collect iOS and Android screenshots/recordings, sheet gesture, local-network permission, and second-machine evidence before review/merge. |
+
+### Paper Tigers
+
+- **The new chart fabricates a complete current week when only July demo rows exist** → dismissed: the live API and rendered Usage screen show an empty current period, the July availability range, and a user-triggered latest-period action; gap tests cover an incomplete week.
+- **The primary checkout and saved stash will be overwritten** → dismissed: all edits and exports are in the isolated worktree or external cache, and the primary repository was left untouched.
+
+### Elephants for Akash
+
+- Elephant: Chat and several older household reads still accept a body/path customer ID without production authorization. The new route is demo-token scoped, but this is not a complete production customer identity model.
+- Elephant: The repository Definition of Done requires a second machine, native iOS and Android evidence, green CI, and an approving review. Bundle exports and a browser viewport audit cannot satisfy that requirement.
+
+**Gate:** PASS for a demo-scoped draft PR after local checks and CI; BLOCKED for ready-for-review or merge until production identity and the repository's native/review evidence are supplied.

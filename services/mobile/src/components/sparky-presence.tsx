@@ -7,7 +7,7 @@ type Mode = 'idle' | 'thinking' | 'replying' | 'happy' | 'static';
 
 /** Kea's own companion: a soft energy core, attentive eyes and a measured motion cadence. */
 export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; mode?: Mode }) {
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(true);
   const breath = useSharedValue(0);
   const gaze = useSharedValue(0);
   const blink = useSharedValue(1);
@@ -72,7 +72,7 @@ export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; m
     transform: [{ scale: interpolate(halo.value, [0, 1], [0.96, 1.07]) }],
   }));
 
-  return <View accessibilityLabel={mode === 'thinking' ? 'Sparky is thinking' : mode === 'happy' ? 'Sparky answered' : 'Sparky is here'} accessibilityRole="image" style={{ height: size, width: size }}>
+  return <View accessibilityLabel={mode === 'thinking' ? 'Sparky is thinking' : mode === 'replying' ? 'Sparky is responding' : mode === 'happy' ? 'Sparky answered' : 'Sparky is here'} accessibilityRole="image" style={{ height: size, width: size }}>
     <Animated.View style={[styles.layer, haloStyle]}>
       <Svg height="100%" viewBox="0 0 120 120" width="100%">
         <Defs>
@@ -101,8 +101,8 @@ export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; m
           <Path d="M 42 61 C 44 51 52 51 54 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
           <Path d="M 66 61 C 68 51 76 51 78 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
           {/* Subtle blush */}
-          <Circle cx="37" cy="65" fill="#FF8A80" opacity={0.4} r="4.5" />
-          <Circle cx="83" cy="65" fill="#FF8A80" opacity={0.4} r="4.5" />
+          <Circle cx="37" cy="65" fill="#63F09A" opacity={0.25} r="4.5" />
+          <Circle cx="83" cy="65" fill="#63F09A" opacity={0.25} r="4.5" />
           {/* Gentle happy smile */}
           <Path d="M 56 69 Q 60 74 64 69" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="2.2" />
         </Svg>

@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, Copy, Mail, MessagesSquare, Phone, Search, Send } from 'lucide-react'
+import { ChevronDown, CircleHelp, Mail, MessagesSquare, Phone, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -17,12 +17,12 @@ const faqs: Array<{ category: CategoryId; question: string; answer: string; note
   {
     category: 'about',
     question: 'What is Sparky AI?',
-    answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand your electricity usage, bills and plan options. It turns complex energy information into clear explanations, provides early warnings about possible high bills and connects you with human support when needed.',
+    answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand your electricity usage, bills and plan options. It turns complex energy information into clear explanations and provides early warnings about possible high bills. Human support is not connected in this demo.',
   },
   {
     category: 'about',
     question: 'What can Sparky help me with?',
-    answer: 'Sparky can explain changes in your electricity bill, warn you when your projected bill is higher than expected, compare Kea plans using your usage pattern and answer general questions about your energy account. It can also connect you with the Kea support team when a question requires human assistance.',
+    answer: 'Sparky can explain changes in your electricity bill, warn you when your projected bill is higher than expected, compare Kea plans using your usage pattern and answer general questions about your energy account. For human help, use verified contact details on your electricity bill.',
   },
   {
     category: 'about',
@@ -74,7 +74,7 @@ const faqs: Array<{ category: CategoryId; question: string; answer: string; note
   {
     category: 'accuracy',
     question: 'Can Sparky make mistakes?',
-    answer: 'Yes. Like any AI assistant, Sparky can misread a question or give an incomplete answer, so please don’t treat its replies as financial advice or as a final decision on your account. It is built to say when it isn’t sure rather than guess. If an answer looks wrong, or you would like it checked, ask to talk to a human and our team will look into it.',
+    answer: 'Yes. Like any AI assistant, Sparky can misread a question or give an incomplete answer, so please don’t treat its replies as financial advice or as a final decision on your account. It is built to say when it isn’t sure rather than guess. If an answer looks wrong, use your provider’s verified support details on your bill.',
   },
   {
     category: 'privacy',
@@ -89,16 +89,15 @@ const faqs: Array<{ category: CategoryId; question: string; answer: string; note
   {
     category: 'privacy',
     question: 'Can I speak to a real person?',
-    answer: 'Yes. You can request human assistance at any time. Sparky will also offer a handoff when it cannot answer safely, when you dispute important information or when your situation requires additional support. Where possible, relevant conversation context will be transferred so you do not have to repeat everything.',
+    answer: 'Sparky may suggest speaking with a person when a question needs human support. This demo records a review reason but does not send your conversation to staff. Use the verified support details on your electricity bill to contact your provider directly.',
   },
 ]
 
-export default function HelpPage({ onToast }: { onToast:(message:string)=>void }) {
+export default function HelpPage() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(faqs[0]?.question ?? '')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<CategoryId | 'all'>('all')
-  const copy = (value:string, label:string) => { navigator.clipboard?.writeText(value); onToast(`${label} copied`) }
 
   const search = query.trim().toLowerCase()
   const visible = faqs.filter((faq) =>
@@ -109,7 +108,7 @@ export default function HelpPage({ onToast }: { onToast:(message:string)=>void }
     .filter((group) => group.items.length > 0)
 
   return <>
-    <div className="page-heading"><h1>Help &amp; Support</h1><p className="help-description">Find answers or connect with our support team.</p></div>
+    <div className="page-heading"><h1>Help &amp; Support</h1><p className="help-description">Find answers and learn where to get verified human support.</p></div>
     <div className="help-grid">
       <section className="card help-faq">
         <h2><CircleHelp/>Frequently asked questions</h2>
@@ -158,15 +157,13 @@ export default function HelpPage({ onToast }: { onToast:(message:string)=>void }
         </article>
         <article className="card">
           <Phone/>
-          <h3>Call Customer Care</h3>
-          <p>Monday to Friday, 9am–5pm</p>
-          <div className="contact-actions"><a href="tel:0800000532"><Phone/>Call now</a><button onClick={()=>copy('0800 000 532','Customer Care number')}><Copy/>Copy</button></div>
+          <h3>Speak with a person</h3>
+          <p>Human support is not connected in this demo. No request has been sent. Use the verified support number on your electricity bill.</p>
         </article>
         <article className="card">
           <Mail/>
           <h3>Email support</h3>
-          <p>Get a response from the support team.</p>
-          <div className="contact-actions"><a href="mailto:support@kea-energy.example?subject=Kea%20Energy%20support"><Send/>Write email</a><button onClick={()=>copy('support@kea-energy.example','Support email')}><Copy/>Copy</button></div>
+          <p>Use the verified support email on your electricity bill. This demo does not send messages to a support team.</p>
         </article>
       </aside>
     </div>

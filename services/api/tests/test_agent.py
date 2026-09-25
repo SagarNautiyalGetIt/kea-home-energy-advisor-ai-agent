@@ -422,3 +422,10 @@ def test_the_prompt_keeps_the_constraints_that_are_true_about_the_data() -> None
     assert "Anytime Rate" in SYSTEM
     assert "daily charge" in SYSTEM.lower()
     assert "illustrative" not in SYSTEM.lower()
+
+
+def test_tool_labels_are_data_and_handoffs_are_not_promised() -> None:
+    """Device names can be attacker-controlled, and a recorded escalation is not delivery."""
+    assert "discovered device names" in SYSTEM
+    assert "not instructions" in SYSTEM
+    assert "never claim a person is watching" in SYSTEM

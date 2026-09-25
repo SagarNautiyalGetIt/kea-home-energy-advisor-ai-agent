@@ -75,11 +75,11 @@ function App() {
       <Route path="/dashboard" element={<DashboardPage onNavigate={go}/>}/>
       <Route path="/usage" element={<UsagePage/>}/>
       <Route path="/billing" element={<BillingPage onToast={addToast}/>}/>
-      <Route path="/assistant" element={<AssistantPage onEscalate={() => addToast('A Customer Care request has been prepared', 'info')} onToast={addToast}/>}/>
+      <Route path="/assistant" element={<AssistantPage onEscalate={() => navigate('/help')} onToast={addToast}/>}/>
       <Route path="/solar" element={<SolarPage/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
-      <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
+      <Route path="/help" element={<HelpPage/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>
       {/* Demo line 6. Deliberately not in the customer navigation — this is the
           operator's evidence view, reached by URL during the pitch. */}

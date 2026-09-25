@@ -28,14 +28,15 @@ export default function DashboardScreen() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [listInForeground, setListInForeground] = useState(false);
+  const [protectedHeaderHeight, setProtectedHeaderHeight] = useState(160);
+  const [measuredHeroHeight, setMeasuredHeroHeight] = useState(0);
+  const homeHeroPeekHeight = Math.max(measuredHeroHeight + 8, Math.max(380, Math.min(500, screenHeight - 240)));
   const scrollY = useMemo(() => new Animated.Value(0), []);
-  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, 90, 220], outputRange: [1, 0.55, 0.05], extrapolate: 'clamp' });
+  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, homeHeroPeekHeight * 0.45, homeHeroPeekHeight * 0.95], outputRange: [1, 0.55, 0.05], extrapolate: 'clamp' });
   const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [0, 0.35, 0.65], extrapolate: 'clamp' });
-  const isZara = session?.customerId === 'H-ZARA';
   const gaugePercentage = dashboard?.overshootPct == null ? null : Math.min(Math.max(dashboard.overshootPct, 0), 100);
-  const projectedCost = dashboard?.projectedCycleCostNzd ?? (isZara ? 84.92 : null);
-  const expectedCost = dashboard?.expectedCostNzd ?? (isZara ? 86.64 : null);
-  const homeHeroPeekHeight = Math.max(380, Math.min(500, screenHeight - 240));
+  const projectedCost = dashboard?.projectedCycleCostNzd ?? null;
+  const expectedCost = dashboard?.expectedCostNzd ?? null;
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
   const expectationNote = dashboard?.expectationBasis === 'comparable_homes'
@@ -49,7 +50,7 @@ export default function DashboardScreen() {
   const insightBody = dashboard?.warningTriggered == null
     ? 'A bill projection needs more billing data. Your available meter readings still appear on the Usage page.'
     : dashboard.warningTriggered
-    ? dashboard.warningReasons[0] ?? 'Your projected total is pacing above expected. Shifting heavy loads off-peak can still pull it back before the cycle ends.'
+    ? dashboard.warningReasons[0] ?? 'Your projected total is above the expected amount. Ask Sparky to review your available readings.'
     : 'You are tracking comfortably so far. This prediction blends your usage to date with typical patterns for the rest of the cycle, and the dial updates as new days land.';
   const dashboardNotifications = dashboard?.warningTriggered
     ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
@@ -77,16 +78,20 @@ export default function DashboardScreen() {
         pointerEvents="box-none"
         style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
-        <View style={styles.homeHero}>
+        <View onLayout={(event) => {
+          const height = Math.ceil(event.nativeEvent.layout.height);
+          setMeasuredHeroHeight((current) => Math.abs(current - height) > 1 ? height : current);
+        }} style={styles.homeHero}>
           <DemoHomeView
             customerId={session?.customerId ?? null}
             onOpenInfo={() => setWelcomeOpen(true)}
             onOpenNotifications={() => setNotificationsOpen(true)}
             onOpenProfile={() => router.push('/profile')}
+            onProtectedHeaderHeightChange={setProtectedHeaderHeight}
             sceneOpacity={homeSceneOpacity}
           />
         </View>
-        <Animated.View pointerEvents="none" style={[styles.sceneBlurWrap, { opacity: homeBlurOpacity }]}>
+        <Animated.View pointerEvents="none" style={[styles.sceneBlurWrap, { opacity: homeBlurOpacity, top: Math.max(160, protectedHeaderHeight) }]}>
           <BlurView intensity={24} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
         </Animated.View>
       </View>
@@ -303,7 +308,6 @@ const styles = StyleSheet.create({
   },
   sceneBlurWrap: {
     position: 'absolute',
-    top: 160,
     left: 0,
     right: 0,
     bottom: 0,

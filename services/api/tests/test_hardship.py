@@ -16,7 +16,7 @@ from fakes import ScriptedProvider
 
 from app import hardship
 from app.hardship.signals import Signal, Source
-from app.pipeline import HANDOVER_TEXT, build_context
+from app.pipeline import CRISIS_HANDOVER_TEXT, HANDOVER_TEXT, build_context
 
 
 def tier_for(message: str, account=None) -> hardship.Tier:
@@ -228,8 +228,8 @@ def test_guidance_is_attached_for_every_tier() -> None:
     """
     for message, expected in [
         ("why is my bill high?", "answer normally"),
-        ("I lost my job last month", "watching this conversation"),
-        ("I can't afford this", "a person is taking this conversation"),
+        ("I lost my job last month", "flagged for review"),
+        ("I can't afford this", "this needs Customer Care"),
     ]:
         decision = hardship.decide(hardship.assess(message))
         assert expected in decision.guidance, (message, decision.tier)
@@ -255,6 +255,8 @@ async def test_a_tier_three_turn_spends_no_model_call(monkeypatch) -> None:
     assert result.tier == 3
     assert result.escalate is True
     assert result.text == HANDOVER_TEXT
+    assert "cannot contact Customer Care for you" in result.text
+    assert "will pick it up" not in result.text
     assert provider.calls == [], "the model must not be called on a tier-3 turn"
     assert result.hardship_evidence, "the agent picking this up needs the reason"
 
@@ -305,8 +307,49 @@ async def test_guidance_reaches_the_model_on_a_monitored_turn(monkeypatch) -> No
 
     assert result.tier == 2
     system = provider.calls[0]["system"]
-    assert "a Kea agent is watching" in system
+    assert "no Kea agent is watching live" in system
     assert "do not tell them their bill is fine" in system.lower()
+
+
+async def test_stream_uses_shared_emotional_guidance_without_claiming_a_handoff(
+    monkeypatch,
+) -> None:
+    """Mobile's SSE endpoint uses the same tone read as the web chat path."""
+    provider = ScriptedProvider()
+    monkeypatch.setattr("app.pipeline.get_provider", lambda: provider)
+
+    from app.pipeline import answer_stream
+
+    frames = [
+        (name, payload)
+        async for name, payload in answer_stream(
+            "H-JUL", "This is RIDICULOUS, nobody has helped me!! Why is my bill high?"
+        )
+    ]
+    done = dict(frames)["done"]
+    assert done["emotion"] == "frustration"
+    assert "TONE:" in provider.calls[0]["system"]
+    assert done["tier"] == 1
+    assert done["escalate_to_human"] is False
+
+
+async def test_crisis_stream_gives_immediate_help_without_falsely_claiming_delivery(
+    monkeypatch,
+) -> None:
+    provider = ScriptedProvider()
+    monkeypatch.setattr("app.pipeline.get_provider", lambda: provider)
+
+    from app.pipeline import answer_stream
+
+    frames = [
+        (name, payload)
+        async for name, payload in answer_stream("H-JUL", "I want to end my life")
+    ]
+    assert frames[0] == ("token", {"text": CRISIS_HANDOVER_TEXT})
+    assert "emergency services" in CRISIS_HANDOVER_TEXT
+    assert "has not contacted anyone" in CRISIS_HANDOVER_TEXT
+    assert dict(frames)["done"]["tier"] == 3
+    assert provider.calls == []
 
 
 async def test_context_free_assessment_needs_no_account() -> None:

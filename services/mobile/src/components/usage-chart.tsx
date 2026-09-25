@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import Animated, { cancelAnimation, Easing, useAnimatedProps, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { pathFor, pathLength } from '@/lib/usage-chart-geometry';
 import { useAppTheme } from '@/theme';
 
 const HEIGHT = 210;
@@ -22,7 +23,7 @@ function xForIndex(index: number, count: number, plotWidth: number, horizontalPa
 }
 
 function pointsFor(
-  values: readonly number[],
+  values: readonly (number | null)[],
   max: number,
   bottomPadding: number,
   width: number,
@@ -31,25 +32,10 @@ function pointsFor(
   const plotHeight = HEIGHT - PAD_TOP - bottomPadding;
   return values.map((value, index) => {
     const x = xForIndex(index, values.length, width, horizontalPadding);
+    if (value === null) return null;
     const y = HEIGHT - bottomPadding - (value / max) * plotHeight;
     return { x, y };
   });
-}
-
-function pathFor(points: readonly { x: number; y: number }[]) {
-  if (!points.length) return '';
-  return points.slice(1).reduce((path, point, index) => {
-    const previous = points[index] as { x: number; y: number };
-    const controlOffset = (point.x - previous.x) * 0.46;
-    return `${path} C${(previous.x + controlOffset).toFixed(1)} ${previous.y.toFixed(1)} ${(point.x - controlOffset).toFixed(1)} ${point.y.toFixed(1)} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-  }, `M${points[0]!.x.toFixed(1)} ${points[0]!.y.toFixed(1)}`);
-}
-
-function pathLength(points: readonly { x: number; y: number }[]) {
-  return Math.max(1, points.slice(1).reduce((total, point, index) => {
-    const previous = points[index];
-    return previous ? total + Math.hypot(point.x - previous.x, point.y - previous.y) : total;
-  }, 0));
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -78,7 +64,7 @@ export function UsageChart({
   active,
   onActivate,
 }: {
-  values: readonly number[];
+  values: readonly (number | null)[];
   labels: readonly string[];
   axisLabels?: readonly string[];
   secondaryLabels?: readonly string[];
@@ -86,7 +72,7 @@ export function UsageChart({
   tooltipLabels?: readonly string[];
   previousTooltipLabels?: readonly string[];
   timeBands?: readonly TimeBand[];
-  previous?: readonly number[];
+  previous?: readonly (number | null)[];
   unit?: ChartUnit;
   max?: number;
   xLabelInterval?: number;
@@ -111,7 +97,8 @@ export function UsageChart({
   const horizontalPadding = POINT_RADIUS + 1;
   const isCost = unit === 'cost';
   const minimumCeiling = isCost ? 0.1 : 1;
-  const max = Math.max(requestedMax ?? Math.max(...values, ...(previous ?? []), minimumCeiling) * 1.03, minimumCeiling);
+  const observedValues = [...values, ...(previous ?? [])].filter((value): value is number => value !== null);
+  const max = Math.max(requestedMax ?? Math.max(...observedValues, minimumCeiling) * 1.03, minimumCeiling);
 
   const timeBandRows = timeBands?.length ? Math.max(...timeBands.map((band) => band.row ?? 0)) + 1 : 0;
   const extraAxisRows = (secondaryLabels ? 1 : 0) + (tertiaryLabels ? 1 : 0);
@@ -130,16 +117,16 @@ export function UsageChart({
   const compareLine = useMemo(() => pathFor(comparePoints), [comparePoints]);
   const length = useMemo(() => pathLength(points), [points]);
   const baselineY = plotBottom;
-  const area = line && points.length
+  const area = line && points.length > 1 && points.every((point) => point !== null)
     ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${points[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
     : '';
-  const onlyPoint = points.length === 1 ? points[0] : undefined;
+  const onlyPoint = points.filter((point) => point !== null).length === 1;
 
   const visibleActiveIndex = active === false ? null : activeIndex;
-  const activePoint = visibleActiveIndex === null ? undefined : points[visibleActiveIndex];
-  const activeComparePoint = visibleActiveIndex === null ? undefined : comparePoints[visibleActiveIndex];
-  const activeValue = visibleActiveIndex === null ? undefined : values[visibleActiveIndex];
-  const activePreviousValue = visibleActiveIndex === null ? undefined : previous?.[visibleActiveIndex];
+  const activePoint = visibleActiveIndex === null ? undefined : points[visibleActiveIndex] ?? undefined;
+  const activeComparePoint = visibleActiveIndex === null ? undefined : comparePoints[visibleActiveIndex] ?? undefined;
+  const activeValue = visibleActiveIndex === null ? undefined : values[visibleActiveIndex] ?? undefined;
+  const activePreviousValue = visibleActiveIndex === null ? undefined : previous?.[visibleActiveIndex] ?? undefined;
   const activeLabel =
     visibleActiveIndex === null
       ? undefined
@@ -147,7 +134,7 @@ export function UsageChart({
   const activePreviousLabel =
     visibleActiveIndex === null ? undefined : previousTooltipLabels?.[visibleActiveIndex] ?? activeLabel;
   const displayLabels = axisLabels ?? labels;
-  const selectedAccessibility = activeLabel && activeValue !== undefined
+  const selectedAccessibility = activeLabel && typeof activeValue === 'number'
     ? `${accessibilityLabel}. Selected ${activeLabel}, ${valueText(activeValue, unit, max)}.`
     : accessibilityLabel;
 
@@ -157,6 +144,7 @@ export function UsageChart({
     let nearestIndex = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
     points.forEach((point, index) => {
+      if (!point) return;
       const distance = Math.abs(point.x - locationX);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -216,21 +204,21 @@ export function UsageChart({
       <Svg height={HEIGHT} viewBox={`0 0 ${chartWidth} ${HEIGHT}`} width="100%">
         <Defs>
           <LinearGradient id="usageAreaShade" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0%" stopColor="#0B4F6C" stopOpacity={0.58} />
-            <Stop offset="58%" stopColor="#083247" stopOpacity={0.30} />
-            <Stop offset="100%" stopColor="#083247" stopOpacity={0.04} />
+            <Stop offset="0%" stopColor="#38BDF8" stopOpacity={0.28} />
+            <Stop offset="58%" stopColor="#1678A6" stopOpacity={0.16} />
+            <Stop offset="100%" stopColor="#0B324A" stopOpacity={0.02} />
           </LinearGradient>
         </Defs>
 
-        {points.map((point, index) => (
+        {values.map((_, index) => (
           <Line
             key={`grid-${index}`}
             stroke="#3A3A3C"
             strokeDasharray="5 7"
             strokeOpacity={0.38}
             strokeWidth={1}
-            x1={point.x}
-            x2={point.x}
+            x1={xForIndex(index, values.length, plotWidth, horizontalPadding)}
+            x2={xForIndex(index, values.length, plotWidth, horizontalPadding)}
             y1={PAD_TOP + 2}
             y2={plotBottom + 2}
           />
@@ -251,23 +239,12 @@ export function UsageChart({
           />
         ) : null}
 
-        {onlyPoint ? (
-          <Line
-            stroke="#164F69"
-            strokeLinecap="round"
-            strokeOpacity={0.86}
-            strokeWidth={3.3}
-            x1={horizontalPadding}
-            x2={plotWidth - horizontalPadding}
-            y1={onlyPoint.y}
-            y2={onlyPoint.y}
-          />
-        ) : (
+        {onlyPoint ? null : (
           <AnimatedPath
             animatedProps={lineAnimatedProps}
             d={line}
             fill="none"
-            stroke="#164F69"
+            stroke="#38BDF8"
             strokeDasharray={`${length} ${length}`}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -276,6 +253,7 @@ export function UsageChart({
         )}
 
         {points.map((point, index) => {
+          if (!point) return null;
           const isSelected = visibleActiveIndex === index;
           return (
             <G key={`point-${index}`}>
@@ -293,7 +271,7 @@ export function UsageChart({
                 animatedProps={pointAnimatedProps}
                 cx={point.x}
                 cy={point.y}
-                fill={isSelected ? '#7DD3FC' : '#164F69'}
+                fill={isSelected ? '#7DD3FC' : '#38BDF8'}
                 r={isSelected ? 5.5 : POINT_RADIUS}
                 stroke="#0B0B0D"
                 strokeWidth={2.2}
@@ -302,12 +280,12 @@ export function UsageChart({
           );
         })}
 
-        {activePoint && activeValue !== undefined && activeLabel ? (() => {
+        {activePoint && typeof activeValue === 'number' && activeLabel ? (() => {
           const metric = valueText(activeValue, unit, max);
-          const previousMetric = activePreviousValue !== undefined ? valueText(activePreviousValue, unit, max) : undefined;
+          const previousMetric = typeof activePreviousValue === 'number' ? valueText(activePreviousValue, unit, max) : undefined;
           // Compact chip, always floating above the dot (never on it), centered on it.
-          const tooltipWidth = activePreviousValue !== undefined ? 120 : 100;
-          const tooltipHeight = activePreviousValue !== undefined ? 60 : 44;
+          const tooltipWidth = typeof activePreviousValue === 'number' ? 120 : 100;
+          const tooltipHeight = typeof activePreviousValue === 'number' ? 60 : 44;
           const tooltipX = clamp(
             activePoint.x - tooltipWidth / 2,
             4,

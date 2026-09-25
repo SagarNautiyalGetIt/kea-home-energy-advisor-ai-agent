@@ -41,6 +41,7 @@ from app.analytics import forecast as forecast_mod
 from app.analytics.annual_demand import from_context as annual_demand_from_context
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
+from app.analytics.usage_series import from_context as usage_series_from_context
 from app.bills import BillReadError, compare_to_kea, read_bill
 from app.clarify import apply, detect, questions
 from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
@@ -83,6 +84,7 @@ from app.schemas import (
     ForecastSummary,
     HouseholdBilling,
     HouseholdSummary,
+    HouseholdUsageSeries,
     LoginRequest,
     LoginResponse,
     SourceRef,
@@ -226,6 +228,7 @@ def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
             if isinstance(ctx.period_start, dt.date)
             else []
         ),
+        date_source="mart" if ctx.account and ctx.account.days else "demo",
         region=ctx.region,
         daily_peak_kwh=daily_peak,
         daily_off_peak_kwh=daily_off_peak,
@@ -307,6 +310,24 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/usage-series", response_model=HouseholdUsageSeries)
+async def get_household_usage_series(
+    customer_id: str,
+    start: dt.date,
+    end: dt.date,
+    authorization: Annotated[str | None, Header()] = None,
+) -> HouseholdUsageSeries:
+    """Return this household's dated usage without guessing missing days or bands."""
+    _demo_household_access(customer_id, authorization)
+    if end < start:
+        raise HTTPException(status_code=422, detail="end must be on or after start")
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return usage_series_from_context(customer_id, ctx, start, end)
 
 
 @router.get("/households/{customer_id}/plans", response_model=MobilePlansView)
@@ -927,16 +948,16 @@ class EvOwnershipAnswer(_VapiBaseModel):
     has_ev: bool
 
 
-def _demo_write_access(customer_id: str, authorization: str | None) -> None:
-    """Never allow synthetic demo credentials to become a production write mechanism."""
+def _demo_household_access(customer_id: str, authorization: str | None) -> None:
+    """Scope sensitive demo reads and writes; production needs real household auth."""
     if not settings.demo_logins:
-        raise HTTPException(status_code=503, detail="Device sync needs production household auth.")
+        raise HTTPException(status_code=503, detail="Household access needs production auth.")
     token = authorization.removeprefix("Bearer ") if authorization else ""
     owner = auth.demo_token_customer(token)
     if owner is None:
-        raise HTTPException(status_code=401, detail="Sign in again to sync device readings.")
+        raise HTTPException(status_code=401, detail="Sign in again to access this household.")
     if owner != customer_id:
-        raise HTTPException(status_code=403, detail="This account cannot sync that household.")
+        raise HTTPException(status_code=403, detail="This account cannot access that household.")
 
 
 @router.put("/households/{customer_id}/context/ev", response_model=HouseholdContext)
@@ -946,7 +967,7 @@ async def save_ev_ownership(
     authorization: Annotated[str | None, Header()] = None,
 ) -> HouseholdContext:
     """Restore a typed, on-device EV answer into this household's server context."""
-    _demo_write_access(customer_id, authorization)
+    _demo_household_access(customer_id, authorization)
     try:
         await get_repository().context(customer_id)
     except KeyError as exc:
@@ -970,7 +991,7 @@ async def store_device_observations(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, int]:
     """Demo-gated daily meter readings, never raw activity streams or hub credentials."""
-    _demo_write_access(customer_id, authorization)
+    _demo_household_access(customer_id, authorization)
     try:
         await get_repository().context(customer_id)
     except KeyError as exc:
@@ -1013,7 +1034,7 @@ async def get_appliances(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, object]:
     """Per-device summaries; no appliance is inferred from the whole-home meter."""
-    _demo_write_access(customer_id, authorization)
+    _demo_household_access(customer_id, authorization)
     try:
         ctx = await get_repository().context(customer_id)
     except KeyError as exc:
@@ -1056,18 +1077,26 @@ async def get_home_energy(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, object]:
     """Dated household energy and connected devices, with no invented live flows."""
-    _demo_write_access(customer_id, authorization)
+    _demo_household_access(customer_id, authorization)
     try:
         ctx = await get_repository().context(customer_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     summary = _summary(customer_id, ctx)
-    latest_day = summary.daily_dates[-1] if summary.daily_dates else None
-    latest_meter_kwh = summary.daily_kwh[-1] if summary.daily_kwh else None
-    day_record = next(
-        (day for day in (ctx.account.days if ctx.account else []) if day.date == latest_day),
-        None,
-    )
+    complete_days = [
+        day
+        for day in (ctx.account.days if ctx.account else [])
+        if day.is_complete
+        and (not isinstance(ctx.period_start, dt.date) or day.date >= ctx.period_start)
+        and (not isinstance(ctx.period_end, dt.date) or day.date <= ctx.period_end)
+    ]
+    day_record = max(complete_days, key=lambda day: day.date) if complete_days else None
+    if ctx.account and ctx.account.days:
+        latest_day = day_record.date if day_record else None
+        latest_meter_kwh = day_record.import_kwh if day_record else None
+    else:
+        latest_day = summary.daily_dates[-1] if summary.daily_dates else None
+        latest_meter_kwh = summary.daily_kwh[-1] if summary.daily_kwh else None
     recent_observations = await get_observation_store().list(customer_id)
     device_day = max((row.day for row in recent_observations), default=None)
     observations = [row for row in recent_observations if row.day == device_day]
@@ -1075,6 +1104,7 @@ async def get_home_energy(
         "customer_id": customer_id,
         "region": ctx.region,
         "day": latest_day,
+        "date_source": summary.date_source,
         "meter_import_kwh": latest_meter_kwh,
         "meter_export_kwh": day_record.export_kwh if day_record else None,
         "meter_source": get_repository().name,

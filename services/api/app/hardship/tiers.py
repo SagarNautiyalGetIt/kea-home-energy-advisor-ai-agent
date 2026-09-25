@@ -1,10 +1,11 @@
-"""Who handles this conversation: the assistant, a watched assistant, or a person.
+"""How the assistant handles a conversation that may need Customer Care.
 
     Tier 1  AUTONOMOUS   The assistant answers. Nobody is waiting on it.
-    Tier 2  MONITORED    The assistant answers, a Kea agent is watching live and can
-                         take the conversation at any point.
-    Tier 3  HUMAN_ONLY   A person handles it. The assistant acknowledges, says a person
-                         is coming, and stops.
+    Tier 2  MONITORED    The assistant answers and the concern is recorded for review.
+    Tier 3  HUMAN_ONLY   The assistant stops and directs the customer to Customer Care.
+
+The recorder stores escalation rows, but this service has no live staff queue or delivery
+receipt. A recorded escalation is not evidence that a person has seen the conversation.
 
 This file is **policy**, not scoring. It is meant to be read on its own by whoever is
 answerable for Consumer Care compliance, and changed by them rather than by whoever is
@@ -30,9 +31,8 @@ one cycle behind, "things are a bit tight at the moment". Sending all of those t
 person floods the queue and trains everyone to close them unread; sending none of them
 means the first human contact happens after the disconnection notice.
 
-So tier 2 answers the customer *and* raises a live flag. The cost of being wrong is an
-agent glancing at a conversation that turned out fine, which is the cheapest possible
-way to be wrong here.
+Tier 2 answers the customer and records a review reason. Staff contact requires a
+separate support channel until a real delivery integration exists.
 """
 
 from __future__ import annotations
@@ -42,11 +42,10 @@ from enum import IntEnum
 
 from app.hardship.signals import HardshipAssessment, Source
 
-#: Score at or above which a person watches. Set low on purpose — see the module note on
-#: why the middle band is wide.
+#: Score at or above which a review reason is recorded.
 MONITORED_THRESHOLD = 0.40
 
-#: Score at or above which only a person handles it.
+#: Score at or above which the assistant stops and asks for a person.
 HUMAN_ONLY_THRESHOLD = 0.75
 
 
@@ -80,29 +79,32 @@ class TierDecision:
     evidence: list[str]
     score: float
     notify_agent: bool
-    """Whether a Kea agent is told about this conversation now rather than after it."""
+    """Historical name: whether a reason is attached to the escalation record.
+
+    This does not deliver a notification to a person.
+    """
 
     @property
     def guidance(self) -> str:
         """What the assistant is told about its own position.
 
         Included in the model's context so its tone matches what is actually happening —
-        an assistant reassuring somebody that everything is fine while a hardship agent
-        is being paged reads as not listening.
+        an assistant reassuring somebody that everything is fine after a hardship
+        disclosure reads as not listening.
         """
         if self.tier is Tier.HUMAN_ONLY:
             return (
-                "HANDLING: a person is taking this conversation. Acknowledge them warmly "
-                "and briefly, tell them a member of the team is picking this up now, and "
-                "stop. Do not give financial advice, do not quote payment options, do not "
-                "argue about the bill, and do not ask them to explain their situation "
-                "again — they should not have to tell it twice. You may still answer a "
-                "plain factual question they already asked."
+                "HANDLING: this needs Customer Care. Acknowledge them warmly and briefly, "
+                "then direct them to their retailer's verified contact details on their "
+                "bill. Do not claim a person "
+                "is already watching, has received this chat, or will call them. Stop. Do "
+                "not give financial advice, quote payment options, or argue about the bill."
             )
         if self.tier is Tier.MONITORED:
             return (
-                "HANDLING: answer normally, but a Kea agent is watching this conversation "
-                "and may step in. This customer is showing signs of financial pressure. "
+                "HANDLING: answer normally. This turn is flagged for review in the record, "
+                "but no Kea agent is watching live or guaranteed to step in. This customer "
+                "is showing signs of financial pressure. "
                 "Be concrete and warm, avoid anything that reads as upselling, and do not "
                 "tell them their bill is fine or normal. If they say anything that "
                 "confirms difficulty paying, call handoff_to_human immediately."
@@ -180,13 +182,11 @@ def decide(
     #
     #    Ahead of the plain threshold below because the reason matters as much as the
     #    tier. The 0.5 weight clears `MONITORED_THRESHOLD` on its own, so without this
-    #    branch the same customer would be watched — correctly — under the label "mentioned
-    #    something that suggests financial pressure", and the agent picking it up would be
-    #    looking for money trouble instead of an unregistered medical dependency.
+    #    branch the same customer would be recorded under the label "mentioned something
+    #    that suggests financial pressure" instead of an unregistered medical dependency.
     #
-    #    It pages, unlike the register branch further down: the register is a state we
-    #    already knew and have presumably acted on, this is new information nobody has
-    #    recorded anywhere.
+    #    Record the disclosure for follow-up. This service has no live staff queue and
+    #    must not imply that somebody has been paged or is monitoring the conversation.
     if assessment.disclosed_medical_dependence and not assessment.on_care_register:
         return TierDecision(
             tier=Tier.MONITORED,
@@ -201,15 +201,14 @@ def decide(
         )
 
     if score >= MONITORED_THRESHOLD:
-        # Paged only when the customer SAID something. An account-derived signal on its
-        # own puts the conversation on a watchlist; it does not put a person on standby.
+        # Mark for follow-up only when the customer SAID something. An account-derived
+        # signal on its own does not imply a person is monitoring the conversation.
         #
         # This matters more here than it looks, because the product is bill-shock
         # prevention: a bill up 66% is the event it exists to catch, and Tama's account
         # trips `bill_shock` on a plain "why is my bill so high?" with no distress in it
-        # at all. Paging on that would page on a large share of the cohort, every cycle,
-        # and a queue that full is one nobody reads — which is how the real disclosure
-        # underneath gets missed.
+        # at all. Treating every bill increase as a staff request would hide the real
+        # disclosure underneath.
         #
         # Same distinction the care register already gets below, for the same reason.
         said_something = any(s.source is Source.LANGUAGE for s in assessment.signals)

@@ -11,6 +11,7 @@ export type HomeSceneData = {
   customerId: string;
   region: string | null;
   day: string | null;
+  dateSource: 'mart' | 'demo';
   deviceDay: string | null;
   meterImportKwh: number | null;
   meterExportKwh: number | null;
@@ -22,6 +23,7 @@ type RawHome = {
   customer_id?: unknown;
   region?: unknown;
   day?: unknown;
+  date_source?: unknown;
   device_day?: unknown;
   meter_import_kwh?: unknown;
   meter_export_kwh?: unknown;
@@ -48,6 +50,7 @@ export async function loadHomeScene(customerId: string, signal?: AbortSignal): P
     customerId,
     region: typeof body.region === 'string' && body.region.trim() ? body.region : null,
     day: typeof body.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : null,
+    dateSource: body.date_source === 'mart' ? 'mart' : 'demo',
     deviceDay: typeof body.device_day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.device_day) ? body.device_day : null,
     meterImportKwh: nullableNumber(body.meter_import_kwh),
     meterExportKwh: nullableNumber(body.meter_export_kwh),

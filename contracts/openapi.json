@@ -199,6 +199,82 @@
         }
       }
     },
+    "/api/households/{customer_id}/usage-series": {
+      "get": {
+        "summary": "Get Household Usage Series",
+        "description": "Return this household's dated usage without guessing missing days or bands.",
+        "operationId": "get_household_usage_series_api_households__customer_id__usage_series_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdUsageSeries"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/plans": {
       "get": {
         "summary": "Get Mobile Plans",
@@ -1982,6 +2058,7 @@
           "escalate_to_human": {
             "type": "boolean",
             "title": "Escalate To Human",
+            "description": "A support concern was recorded or direct contact advised; no staff delivery is implied.",
             "default": false
           },
           "escalation_reason": {
@@ -1994,7 +2071,7 @@
               }
             ],
             "title": "Escalation Reason",
-            "description": "Why, in the assistant's own words. Null unless `escalate_to_human`. The UI should show the handoff, not this string \u2014 it is for the transcript and the escalation row."
+            "description": "Why, in the assistant's own words. Null unless `escalate_to_human`. The The UI should explain how to contact verified support; this string is for the transcript and concern record."
           },
           "conversation_id": {
             "anyOf": [
@@ -2914,6 +2991,11 @@
             "type": "array",
             "title": "Daily Dates"
           },
+          "date_source": {
+            "type": "string",
+            "title": "Date Source",
+            "default": "demo"
+          },
           "region": {
             "anyOf": [
               {
@@ -3001,6 +3083,145 @@
         ],
         "title": "HouseholdSummary",
         "description": "Shape the frontend charts against. Fixture-backed until Day 2."
+      },
+      "HouseholdUsageSeries": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "daily_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Daily Dates"
+          },
+          "daily_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Daily Kwh"
+          },
+          "daily_quality": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "measured",
+                "estimated",
+                "demo"
+              ]
+            },
+            "type": "array",
+            "title": "Daily Quality"
+          },
+          "daily_peak_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Peak Kwh"
+          },
+          "daily_off_peak_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Off Peak Kwh"
+          },
+          "daily_night_kwh": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Daily Night Kwh"
+          },
+          "band_data_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Data Source"
+          },
+          "date_source": {
+            "type": "string",
+            "title": "Date Source"
+          },
+          "total_kwh": {
+            "type": "number",
+            "title": "Total Kwh"
+          },
+          "estimated_cost_nzd": {
+            "type": "number",
+            "title": "Estimated Cost Nzd"
+          },
+          "available_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available From"
+          },
+          "available_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "daily_dates",
+          "daily_kwh",
+          "daily_quality",
+          "daily_peak_kwh",
+          "daily_off_peak_kwh",
+          "daily_night_kwh",
+          "date_source",
+          "total_kwh",
+          "estimated_cost_nzd"
+        ],
+        "title": "HouseholdUsageSeries",
+        "description": "Dated usage for a requested range; never fills missing days or bands."
       },
       "Hypothesis": {
         "type": "string",

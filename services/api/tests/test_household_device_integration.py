@@ -79,6 +79,7 @@ def test_demo_token_scopes_device_sync_and_dated_home_readings(client):
 
     home = client.get("/api/households/H-JUL/home-energy", headers=headers)
     assert home.status_code == 200
+    assert home.json()["date_source"] == "demo"
     assert home.json()["device_day"] == nz_yesterday.isoformat()
     assert home.json()["device_observations"][0]["energy_kwh"] == 4.2
     assert home.json()["live_power_available"] is False

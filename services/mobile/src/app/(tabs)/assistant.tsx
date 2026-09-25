@@ -6,10 +6,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/screen';
 import { AssistantAnswer } from '@/components/assistant-answer';
+import { AssistantChart } from '@/components/assistant-chart';
 import { MotionPressable } from '@/components/motion-pressable';
 import { SparkyPresence } from '@/components/sparky-presence';
 import { IconButton, PageHeader } from '@/components/ui';
-import { streamAssistantReply, toolLabel } from '@/lib/assistant-api';
+import { sourceLabel, streamAssistantReply, type SourceRef } from '@/lib/assistant-api';
+import type { ChartEvent } from '@/lib/assistant-stream';
 import { rememberEvAnswer, restoreEvAnswer } from '@/lib/ev-memory';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
@@ -23,9 +25,11 @@ type Message = {
   streaming?: boolean;
   failed?: boolean;
   /** Live lookup labels while the answer is being written; cleared when it lands. */
-  activity?: string[];
-  /** Tool names behind the finished answer, for the transparency line. */
-  sources?: string[];
+  activity?: { name: string; ok?: boolean }[];
+  /** The full source status, including a lookup that could not return data. */
+  sources?: SourceRef[];
+  /** Null means the server sent a malformed chart; undefined means no chart was sent. */
+  chart?: ChartEvent | null;
   /** Tier 3 — this text is a handover written by Python, not an answer from the model. */
   handover?: boolean;
 };
@@ -39,6 +43,11 @@ const prompts = [
 const initialMessage: Message = { id: 1, role: 'assistant', text: 'Kia ora! I’m Sparky. What would you like to understand about your energy account?' };
 
 export default function AssistantScreen() {
+  const { session } = useAuth();
+  return <AssistantScreenForHousehold key={session?.customerId ?? 'signed-out'} />;
+}
+
+function AssistantScreenForHousehold() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const { showToast } = useToast();
@@ -48,6 +57,7 @@ export default function AssistantScreen() {
   const nextId = useRef(2);
   const chatVersion = useRef(0);
   const requestRef = useRef<{ abort: () => void } | null>(null);
+  const activeCustomerId = useRef(session?.customerId);
   // Threads the conversation server-side so a follow-up ("what about last month?") has
   // the turn before it to resolve against. Null until the first answer comes back.
   const conversationId = useRef<number | null>(null);
@@ -88,6 +98,19 @@ export default function AssistantScreen() {
     evRestore.current = session?.customerId ? restoreEvAnswer(session.customerId).catch(() => undefined) : Promise.resolve();
   }, [session?.customerId]);
 
+  useEffect(() => {
+    if (activeCustomerId.current === session?.customerId) return;
+    activeCustomerId.current = session?.customerId;
+    requestRef.current?.abort();
+    requestRef.current = null;
+    chatVersion.current += 1;
+    conversationId.current = null;
+    nextId.current = 2;
+    setMessages([initialMessage]);
+    setText('');
+    setBusy(false);
+  }, [session?.customerId]);
+
   const send = async (question: string) => {
     const clean = question.trim();
     if (!clean || busy) return;
@@ -99,42 +122,52 @@ export default function AssistantScreen() {
     setMessages((current) => [...current, user]);
     void Haptics.selectionAsync();
     let completed = false;
-    let shouldEscalate = false;
 
     const patch = (fn: (m: Message) => Message) =>
-      setMessages((current) => current.some((m) => m.id === replyId)
-        ? current.map((m) => (m.id === replyId ? fn(m) : m))
-        : [...current, fn({ id: replyId, role: 'assistant', text: '', streaming: true })]);
+      setMessages((current) => {
+        if (version !== chatVersion.current) return current;
+        return current.some((m) => m.id === replyId)
+          ? current.map((m) => (m.id === replyId ? fn(m) : m))
+          : [...current, fn({ id: replyId, role: 'assistant', text: '', streaming: true })];
+      });
 
     try {
       await evRestore.current;
+      if (version !== chatVersion.current) return;
       await new Promise<void>((resolve) => {
         const stream = streamAssistantReply(session?.customerId ?? '', clean, {
           onText: (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })),
           // That round turned out to be a lookup, so its text was a preamble.
           onReset: () => patch((m) => ({ ...m, text: '' })),
-          onTool: (name) => patch((m) => ({ ...m, activity: [...(m.activity ?? []), toolLabel(name)] })),
+          onTool: (name) => patch((m) => ({ ...m, activity: [...(m.activity ?? []), { name }] })),
+          onToolResult: (name, ok) => patch((m) => {
+            const activity = [...(m.activity ?? [])];
+            const pending = activity.findLastIndex((entry) => entry.name === name && entry.ok === undefined);
+            if (pending >= 0) activity[pending] = { name, ok };
+            return { ...m, activity };
+          }),
+          onChart: (chart) => patch((m) => ({ ...m, chart })),
           onDone: (result) => {
             completed = true;
+            if (version !== chatVersion.current) { resolve(); return; }
             conversationId.current = result.conversation_id;
             if (session?.customerId) void rememberEvAnswer(session.customerId).catch(() => undefined);
-            shouldEscalate = result.escalate_to_human;
             patch((m) => ({
               ...m,
               streaming: false,
               activity: undefined,
-              sources: result.sources?.filter((source) => source.ok).map((source) => source.tool),
-              escalate: shouldEscalate,
+              sources: result.sources,
+              escalate: result.tier === 3,
               // Tier 3 means the text above is a handover written by Python, not an
               // answer — the UI labels it so nobody reads it as advice.
               handover: result.tier === 3,
             }));
-            if (shouldEscalate) showToast('Customer Care hand-off ready', 'info');
+            if (result.tier === 3) showToast('Use verified support details on your bill', 'info');
             resolve();
           },
           onError: (failure) => {
             completed = true;
-            patch((m) => ({ ...m, text: failure, streaming: false, failed: true, activity: undefined }));
+            patch((m) => ({ ...m, text: failure, streaming: false, failed: true, activity: undefined, chart: undefined }));
             resolve();
           },
         }, conversationId.current);
@@ -187,8 +220,18 @@ export default function AssistantScreen() {
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />
                   : <Text style={[styles.bubbleText, { color: '#000000' }]}>{message.text}</Text>}
-                {message.sources?.length ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>Checked: {message.sources.map(toolLabel).join(' · ')}</Text> : null}
-                {message.escalate ? <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={styles.escalationAction}><Ionicons color="#000000" name="people-outline" size={17} /><Text style={styles.escalationText}>Contact Customer Care</Text></Pressable> : null}
+                {message.activity?.length ? <View style={styles.activity}>
+                  {message.activity.map((entry, index) => <Text key={`${entry.name}-${index}`} style={[styles.sourceLine, { color: entry.ok === false ? palette.amber : colors.textMuted }]}>
+                    {entry.ok === false ? 'Could not check' : entry.ok === true ? 'Checked' : 'Checking'}: {sourceLabel(entry.name)}
+                  </Text>)}
+                </View> : null}
+                {!message.streaming && !message.failed && message.chart !== undefined ? <AssistantChart spec={message.chart} /> : null}
+                {message.sources?.length && !message.handover ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>
+                  Checked: {message.sources.filter((source) => source.ok).map((source) => sourceLabel(source.tool)).join(' · ') || 'no source data available'}
+                  {message.sources.some((source) => !source.ok) ? `\nUnavailable: ${message.sources.filter((source) => !source.ok).map((source) => sourceLabel(source.tool)).join(' · ')}` : ''}
+                </Text> : null}
+                {message.handover ? <Text style={[styles.handoverLabel, { color: colors.textMuted }]}>This demo has not sent your chat to staff.</Text> : null}
+                {message.escalate ? <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={styles.escalationAction}><Ionicons color="#000000" name="people-outline" size={17} /><Text style={styles.escalationText}>See support guidance</Text></Pressable> : null}
                 {message.role === 'assistant' && !message.streaming ? <View style={styles.replyActions}>
                   <Pressable accessibilityLabel="Copy reply" hitSlop={8} onPress={() => void copyReply(message)} style={styles.replyAction}><Ionicons color={colors.text} name="copy-outline" size={15} /></Pressable>
                 </View> : null}
@@ -281,6 +324,8 @@ const styles = StyleSheet.create({
   startTitle: { marginTop: 10, fontSize: 25, lineHeight: 31, fontWeight: '800', textAlign: 'center', maxWidth: 320 },
   startSubtitle: { marginTop: 9, fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 320 },
   sourceLine: { marginTop: 8, fontSize: 10, lineHeight: 15 },
+  activity: { marginTop: 8 },
+  handoverLabel: { marginTop: 10, fontSize: 11, lineHeight: 16 },
   thread: { flexGrow: 1, paddingVertical: 16, gap: 13 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '90%' },
   userRow: { alignSelf: 'flex-end', justifyContent: 'flex-end' },

@@ -82,7 +82,7 @@ DEMO_ACCOUNTS: tuple[DemoAccount, ...] = (
         "hardship24",
         "H-DROP",
         "Usage Collapse Household",
-        "The hardship signal. Escalates to a human.",
+        "The hardship signal. Sparky recommends verified human support.",
     ),
     DemoAccount(
         "tariff@kea.example",
