@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { FALLBACK_DEMO_ACCOUNTS } from '@/lib/account-api';
 import { apiJson, jsonRequest, loadAccessToken, storeTokenPair } from '@/lib/backend-client';
 
 export type LocalSession = {
@@ -26,28 +25,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function authenticate(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
-  try {
-    const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: normalizedEmail, password }));
-    if (isRecord(body) && typeof body.customer_id === 'string' && body.customer_id.trim()) {
-      const token = typeof body.access_token === 'string' ? body.access_token : typeof body.token === 'string' ? body.token : null;
-      await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
-      return {
-        customerId: body.customer_id,
-        displayName: typeof body.display_name === 'string' && body.display_name.trim()
-          ? body.display_name
-          : displayNameFromEmail(email),
-      };
-    }
-  } catch (error) {
-    const fallback = FALLBACK_DEMO_ACCOUNTS.find((item) => item.email.toLowerCase() === normalizedEmail);
-    if (fallback) {
-      await storeTokenPair(null, null);
-      return {
-        customerId: fallback.customer_id,
-        displayName: fallback.display_name,
-      };
-    }
-    throw error;
+  // An unreachable API or rejected password must never turn into a local sign-in.
+  const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: normalizedEmail, password }));
+  if (isRecord(body) && typeof body.customer_id === 'string' && body.customer_id.trim()) {
+    const token = typeof body.access_token === 'string' ? body.access_token : typeof body.token === 'string' ? body.token : null;
+    await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
+    return {
+      customerId: body.customer_id,
+      displayName: typeof body.display_name === 'string' && body.display_name.trim()
+        ? body.display_name
+        : displayNameFromEmail(email),
+    };
   }
   throw new Error('Sign-in response did not include a customer ID.');
 }

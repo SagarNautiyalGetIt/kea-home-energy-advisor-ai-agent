@@ -2,6 +2,7 @@ import { CircleAlert, DollarSign, ShieldCheck, Triangle, Zap } from 'lucide-reac
 import { useEffect, useState } from 'react'
 import AreaChart from '../components/AreaChart'
 import Modal from '../components/Modal'
+import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import { profile } from '../data/mockData'
 import {
   basisNote,
@@ -126,6 +127,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
 
   return <>
     <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
+    <section aria-label="Kea Home energy preview">
+      <EnergyHomePanel />
+    </section>
     <div className="metric-row">
       {/* Every figure here comes from /api/households and /bill-shock. They used to be
           literals, which put an invented "Projected Monthly Bill" on the same screen as

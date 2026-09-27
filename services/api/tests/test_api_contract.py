@@ -124,7 +124,7 @@ def test_settings_reads_env_at_construction_not_import(monkeypatch):
     assert Settings().ollama_model == "gemma3:27b"
 
     monkeypatch.delenv("KEA_OLLAMA_MODEL", raising=False)
-    assert Settings().ollama_model == "gemma3:4b"
+    assert Settings().ollama_model == "qwen3:4b"
 
 
 def test_settings_default_survives_a_missing_env(monkeypatch):

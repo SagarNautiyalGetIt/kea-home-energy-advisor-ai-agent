@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { Card, FormField, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
 import { changeAccountPassword, requestPasswordReset } from '@/lib/account-api';
-import { apiBase, apiJson, jsonRequest } from '@/lib/backend-client';
+import { apiJson, jsonRequest } from '@/lib/backend-client';
 import { loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/settings-api';
 import { validateEmail, validateNewPassword, validateRequired } from '@/lib/validation';
 import { useToast } from '@/providers/toast';
@@ -20,6 +20,7 @@ type PasswordErrors = { current?: string; next?: string; confirm?: string };
 const defaults: Preferences = { accountRef: '', enabled: true, emailNotifications: true, smsNotifications: false, phoneNotifications: false, billReminders: true, tier1Pct: 15, tier2Pct: 40, tier3Pct: 75, minOvershootNzd: 20, offlineModelOptIn: false, email: null, phoneE164: null, quietHoursStart: 21, quietHoursEnd: 8, timezone: 'Pacific/Auckland', theme: 'dark' };
 const tierOptions = { email: [10, 15, 20, 30, 40], sms: [40, 50, 60, 70], phone: [70, 75, 80, 90, 100] } as const;
 type ScanResult = { devices_found?: number; devices?: { name?: string; kind?: string; note?: string }[]; error?: string | null };
+type ModelHealth = { provider: string; model: string; model_ready: boolean };
 
 export default function SettingsScreen() {
   const { colors } = useAppTheme();
@@ -35,7 +36,25 @@ export default function SettingsScreen() {
   const [resetEmailError, setResetEmailError] = useState<string>();
   const [scanning, setScanning] = useState(false);
   const [scan, setScan] = useState<ScanResult | null>(null);
-  const [offlineDownloadMb, setOfflineDownloadMb] = useState<number | null>(null);
+  const [modelHealth, setModelHealth] = useState<ModelHealth | null>(null);
+  const [modelCheck, setModelCheck] = useState<'checking' | 'complete' | 'error'>('checking');
+  const [modelCheckedAt, setModelCheckedAt] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveVersion = useRef(0);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const refreshModelStatus = useCallback(async () => {
+    setModelCheck('checking');
+    try {
+      const health = await apiJson<ModelHealth>('/api/health');
+      setModelHealth(health);
+      setModelCheckedAt(new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }));
+      setModelCheck('complete');
+    } catch {
+      setModelHealth(null);
+      setModelCheck('error');
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -51,21 +70,22 @@ export default function SettingsScreen() {
     return () => { active = false; };
   }, [session?.customerId]);
 
-  useEffect(() => {
-    let active = true;
-    void apiJson<{ download_mb?: number }[]>('/api/offline/models').then((models) => {
-      const sizes = models.map((model) => model.download_mb).filter((size): size is number => typeof size === 'number');
-      if (active && sizes.length) setOfflineDownloadMb(Math.min(...sizes));
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, []);
+  useEffect(() => { void refreshModelStatus(); }, [refreshModelStatus]);
 
   const update = (patch: Partial<Preferences>) => {
     const next = { ...preferences, ...patch };
     setPreferences(next);
     if (!session?.customerId) return;
-    void saveNotificationPreferences(session.customerId, next).catch((error: unknown) => {
+    const version = ++saveVersion.current;
+    setSaveState('saving');
+    const customerId = session.customerId;
+    saveQueue.current = saveQueue.current.catch(() => undefined).then(() => saveNotificationPreferences(customerId, next));
+    void saveQueue.current.then(() => {
+      if (version === saveVersion.current) setSaveState('saved');
+    }).catch((error: unknown) => {
+      if (version !== saveVersion.current) return;
       setPreferences(preferences);
+      setSaveState('error');
       showToast(error instanceof Error ? error.message : 'Notification preferences could not be saved.', 'warning');
     });
   };
@@ -126,6 +146,7 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <PageHeader title="Settings" subtitle="Manage your account preferences and privacy." />
+      {saveState !== 'idle' ? <Text accessibilityLiveRegion="polite" style={[styles.saveStatus, { color: saveState === 'error' ? palette.red : colors.textMuted }]}>{saveState === 'saving' ? 'Saving changes…' : saveState === 'saved' ? 'Changes saved' : 'Changes were not saved'}</Text> : null}
 
       <SectionTitle>Bill-shock alerts</SectionTitle>
       <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>You choose how far over your bill has to be tracking before we get in touch, and how.</Text>
@@ -137,22 +158,37 @@ export default function SettingsScreen() {
         <ThresholdChannel checked={preferences.phoneNotifications} colors={colors} dimmed={alertsOff} label="A call from Sparky" note="Sparky calls you. Off unless you turn it on." options={tierOptions.phone} onToggle={() => update({ phoneNotifications: !preferences.phoneNotifications })} onValue={(tier3Pct) => update({ tier3Pct })} value={preferences.tier3Pct} />
         <NumberSetting colors={colors} dimmed={alertsOff} detail="This is the dollar floor underneath every alert level above." label="Never alert me under" max={500} onValue={(minOvershootNzd) => update({ minOvershootNzd })} prefix="$" value={preferences.minOvershootNzd} />
         <View style={[styles.settingRow, { borderBottomColor: colors.border }, alertsOff && styles.disabledChannel]}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>Quiet hours</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>Texts and calls wait until morning. Emails still arrive.</Text></View><View style={styles.quietInputs}><HourInput colors={colors} dimmed={alertsOff} onValue={(quietHoursStart) => update({ quietHoursStart })} value={preferences.quietHoursStart ?? 21} /><Text style={{ color: colors.textMuted }}>to</Text><HourInput colors={colors} dimmed={alertsOff} onValue={(quietHoursEnd) => update({ quietHoursEnd })} value={preferences.quietHoursEnd ?? 8} /></View></View>
-        <NotificationChannel checked={preferences.offlineModelOptIn} colors={colors} detail={`Keep a small assistant on this device so Sparky can work without a connection.${offlineDownloadMb === null ? '' : ` About ${Math.round(offlineDownloadMb)} MB, downloaded over Wi-Fi only.`}`} icon="cloud-offline-outline" label="Answers without a connection" onPress={() => update({ offlineModelOptIn: !preferences.offlineModelOptIn })} />
-        <View style={styles.saveButton}><PrimaryButton label="Save alert settings" onPress={() => session?.customerId && void saveNotificationPreferences(session.customerId, preferences).then(() => showToast('Alert settings saved', 'success')).catch((error: unknown) => showToast(error instanceof Error ? error.message : 'Alert settings could not be saved.', 'warning'))} /></View>
         <NotificationChannel checked={preferences.billReminders} colors={colors} detail="Receive reminders before a bill is due." icon="calendar-outline" label="Bill reminders" onPress={() => update({ billReminders: !preferences.billReminders })} />
       </Card>
 
-      <SectionTitle>Connected home</SectionTitle>
-      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Find devices near the API server. Discovery alone cannot measure their power use.</Text>
+      <SectionTitle>Sparky AI</SectionTitle>
+      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>See which model is answering and manage your interest in offline help.</Text>
       <Card style={styles.connectedCard}>
-        <View style={styles.connectedTitle}><Ionicons color={colors.text} name="radio-outline" size={22} /><Text style={[styles.modalHeading, { color: colors.text }]}>Smart devices near the API server</Text></View>
-        <Text style={[styles.modalText, { color: colors.textMuted }]}>The scan runs where the Kea API is hosted ({apiBase()}), not on this phone. It can see device announcements only when that server shares your home network. Device power readings need a supported connection.</Text>
+        <View style={styles.connectedTitle}><Ionicons color={palette.green} name="sparkles-outline" size={22} /><Text style={[styles.cardHeading, { color: colors.text }]}>Assistant status</Text></View>
+        <View style={[styles.statusPanel, { backgroundColor: colors.input, borderColor: colors.border }]}>
+          <View style={[styles.statusDot, { backgroundColor: modelCheck === 'complete' && modelHealth?.model_ready ? palette.green : modelCheck === 'checking' ? palette.violet : palette.red }]} />
+          <View style={styles.settingCopy}>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>{modelCheck === 'checking' ? 'Checking Sparky…' : modelCheck === 'error' ? 'Cannot reach Sparky' : modelHealth?.model_ready ? 'Sparky is ready' : 'Model is not ready'}</Text>
+            <Text style={[styles.settingDetail, { color: colors.textMuted }]}>{modelHealth ? `${modelHealth.provider === 'ollama' ? 'Local server' : 'Kea server'} · ${modelHealth.model}` : 'Connect to the Kea service to check the model.'}{modelCheckedAt ? ` · Checked ${modelCheckedAt}` : ''}</Text>
+          </View>
+        </View>
+        <Pressable accessibilityLabel="Refresh Sparky model status" accessibilityRole="button" disabled={modelCheck === 'checking'} onPress={() => void refreshModelStatus()} style={[styles.secondaryButton, { borderColor: colors.border }]}><Ionicons color={colors.text} name="refresh-outline" size={17} /><Text style={[styles.secondaryButtonText, { color: colors.text }]}>Check again</Text></Pressable>
+        <View style={[styles.settingDivider, { borderTopColor: colors.border }]} />
+        <NotificationChannel checked={preferences.offlineModelOptIn} colors={colors} detail="Save your interest in offline answers. This build does not download or run a model on your phone yet." icon="cloud-offline-outline" label="Offline answers preference" onPress={() => update({ offlineModelOptIn: !preferences.offlineModelOptIn })} />
+        <Text style={[styles.footnote, { color: colors.textMuted }]}>The server can run a local Ollama model when configured. Offline answers on this phone remain unavailable until the model runtime and verified fact-pack sync are implemented.</Text>
+      </Card>
+      <SectionTitle>Connected home</SectionTitle>
+      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Discover what the Kea service can see on its network.</Text>
+      <Card style={styles.connectedCard}>
+        <View style={styles.connectedTitle}><Ionicons color={palette.green} name="home-outline" size={22} /><Text style={[styles.cardHeading, { color: colors.text }]}>Find nearby devices</Text></View>
+        <Text style={[styles.settingDetail, { color: colors.textMuted }]}>Kea checks the network used by its service, which may differ from your phone's Wi-Fi. Found devices are identified by name only; this does not connect them or measure their energy use.</Text>
+        <View style={[styles.statusPanel, { backgroundColor: colors.input, borderColor: colors.border }]}><Ionicons color={colors.textMuted} name="information-circle-outline" size={19} /><Text style={[styles.settingDetail, { color: colors.textMuted, flex: 1 }]}>To see home devices, the Kea service must be on the same network. A supported integration is needed for readings.</Text></View>
         <Pressable disabled={scanning} onPress={() => void scanNetwork()} style={styles.scanButton}>{scanning ? <ActivityIndicator color="#000000" /> : <Ionicons color="#000000" name="wifi-outline" size={18} />}<Text style={styles.scanButtonText}>{scanning ? 'Scanning…' : 'Scan server network'}</Text></Pressable>
         {scan?.error ? <Text style={[styles.scanResult, { color: palette.red }]}>The scan couldn’t run here — {scan.error}</Text> : null}
         {scan && !scan.error && !scan.devices_found ? <Text style={[styles.scanResult, { color: colors.textMuted }]}>Nothing answered on the server’s network. Your phone may be on a different network.</Text> : null}
-        {scan?.devices?.map((device, index) => <View key={`${device.name}-${index}`} style={[styles.deviceRow, { borderTopColor: colors.border }]}><Text style={[styles.settingTitle, { color: colors.text }]}>{device.name ?? 'Smart device'}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{device.kind}{device.note ? ` · ${device.note}` : ''}</Text></View>)}
+        {scan?.devices?.map((device, index) => <View key={`${device.name}-${index}`} style={[styles.deviceRow, { borderTopColor: colors.border }]}><View style={styles.connectedTitle}><Ionicons color={palette.green} name="hardware-chip-outline" size={17} /><Text style={[styles.settingTitle, { color: colors.text }]}>{device.name ?? 'Smart device'}</Text></View><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{device.kind}{device.note ? ` · ${device.note}` : ''} · Discovered, not connected</Text></View>)}
         {scan && !scan.error ? <PrimaryButton label="Ask Sparky about usage and devices" onPress={() => router.push({ pathname: '/assistant', params: { question: 'What does my energy breakdown show, and what did the network scan find? Please keep measured usage separate from device names.' } })} /> : null}
-        <Text style={[styles.footnote, { color: colors.textMuted }]}>This scan stores nothing and does not read energy. Apple Home reading is not connected in this app yet.</Text>
+        <Text style={[styles.footnote, { color: colors.textMuted }]}>This scan stores nothing. Apple Home readings are not connected in this app yet.</Text>
       </Card>
 
       <SectionTitle>Account security</SectionTitle>
@@ -368,7 +404,7 @@ function SettingLink({ colors, icon, label, detail, onPress }: { colors: ReturnT
 const styles = StyleSheet.create({
   screenEnter: { flex: 1 }, settingsCard: { paddingVertical: 2 }, sectionDescription: { marginTop: -7, marginBottom: 10, fontSize: 11, lineHeight: 16 }, groupLabel: { paddingTop: 16, paddingBottom: 8, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }, settingRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, paddingVertical: 12 }, settingIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 }, settingCopy: { flex: 1 }, settingTitle: { fontSize: 13, fontWeight: '900' }, settingDetail: { marginTop: 3, fontSize: 10, lineHeight: 14 }, checkbox: { width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderRadius: 8 }, notificationNote: { paddingVertical: 12, fontSize: 10, lineHeight: 15 }, pressed: { opacity: 0.68 },
   thresholdBlock: { gap: 8, borderBottomWidth: 1, paddingVertical: 15 }, disabledChannel: { opacity: 0.48 }, thresholdHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, switchTrack: { width: 44, height: 26, justifyContent: 'center', borderRadius: 13, padding: 3 }, switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#777777' }, switchThumbOn: { alignSelf: 'flex-end', backgroundColor: '#FFFFFF' }, sliderArea: { marginTop: 8 }, sliderTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, marginHorizontal: 2 }, sliderWarningIcon: { marginRight: 6 }, sliderTopLabel: { fontSize: 14, fontWeight: '700' }, sliderTouch: { paddingVertical: 14, marginHorizontal: 2 }, sliderTrack: { position: 'relative' }, sliderBaseFill: { position: 'absolute', left: 0, top: 0, bottom: 0, right: 0, borderRadius: 99 }, sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 99, overflow: 'hidden' }, sliderThumb: { position: 'absolute', top: '50%', marginTop: -11, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 5 }, sliderTick: { position: 'absolute', top: '50%', marginTop: -4, width: 3, height: 8, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', marginLeft: -1.5 }, sliderLabels: { position: 'relative', height: 20, marginTop: 6, marginHorizontal: 2 }, sliderLabel: { position: 'absolute', width: 48, marginLeft: -24, textAlign: 'center', fontSize: 10, fontWeight: '800' }, thresholdValue: { fontSize: 11, fontWeight: '900' }, numberBox: { minWidth: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 11, paddingHorizontal: 9 }, numberInput: { minWidth: 32, paddingVertical: 9, fontSize: 13, fontWeight: '800', textAlign: 'center' }, quietInputs: { alignItems: 'center', gap: 5 }, hourBox: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 7 }, hourInput: { width: 26, paddingVertical: 7, fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  saveButton: { alignSelf: 'flex-end', width: 190, marginVertical: 14 }, connectedCard: { gap: 13 }, connectedTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 }, scanButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 16 }, scanButtonText: { color: '#000000', fontSize: 12, fontWeight: '900' }, scanResult: { fontSize: 11, lineHeight: 17 }, deviceRow: { borderTopWidth: 1, paddingTop: 10 }, footnote: { fontSize: 9, lineHeight: 14 },
+  connectedCard: { gap: 13 }, connectedTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 }, cardHeading: { fontSize: 16, fontWeight: '900' }, statusPanel: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13, borderRadius: 13, borderWidth: 1 }, statusDot: { width: 10, height: 10, borderRadius: 5 }, secondaryButton: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1 }, secondaryButtonText: { fontSize: 11, fontWeight: '800' }, settingDivider: { borderTopWidth: 1 }, saveStatus: { marginTop: 8, marginBottom: 12, fontSize: 11, fontWeight: '700' }, scanButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 16 }, scanButtonText: { color: '#000000', fontSize: 12, fontWeight: '900' }, scanResult: { fontSize: 11, lineHeight: 17 }, deviceRow: { borderTopWidth: 1, paddingTop: 10 }, footnote: { fontSize: 9, lineHeight: 14 },
   dataMode: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 14, padding: 14 }, dataIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#E7F8F1' }, dataCopy: { flex: 1 }, dataTitle: { fontSize: 12, fontWeight: '900' }, dataBody: { marginTop: 3, fontSize: 10, lineHeight: 14 }, activeBadge: { borderRadius: 8, backgroundColor: '#E7F8F1', paddingHorizontal: 7, paddingVertical: 4 }, activeText: { color: palette.green, fontSize: 8, fontWeight: '900' },
   modalText: { fontSize: 13, lineHeight: 21 }, modalHeading: { marginTop: 20, marginBottom: 10, fontSize: 16, fontWeight: '900' }, bullet: { flexDirection: 'row', gap: 8, marginVertical: 7 }, bulletText: { flex: 1, fontSize: 12, lineHeight: 18 },
   securityHero: { alignItems: 'center', paddingVertical: 10 }, securityIcon: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: '#0D0D0D' }, securityTitle: { marginTop: 15, fontSize: 17, fontWeight: '900' }, securityIntro: { marginTop: 6, fontSize: 12, lineHeight: 18, textAlign: 'center' }, securityActions: { marginTop: 10 }, securityNote: { marginTop: 14, fontSize: 10, lineHeight: 16 },

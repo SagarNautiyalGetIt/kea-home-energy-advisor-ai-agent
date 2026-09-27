@@ -24,8 +24,9 @@ const PIPE_PATHS = {
   car: 'M1155 768 C1156 811 1155 850 1144 872 C1139 883 1131 891 1118 899 C1065 930 994 961 950 965 C920 969 906 956 902 939 C898 922 900 905 888 895 L883 892',
 } as const;
 
-const POWER_COLOR = '#83E2FF';
-const COLORS: Record<Source, string> = { solar: POWER_COLOR, battery: POWER_COLOR, grid: POWER_COLOR };
+// Match the source Kea Energy Home scene: solar green, battery blue, grid amber.
+const POWER_COLOR = '#63f09a';
+const COLORS: Record<Source, string> = { solar: '#63f09a', battery: '#5ab8ff', grid: '#ff9f43' };
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
@@ -172,8 +173,8 @@ export function DemoHomeView({ onOpenInfo, onOpenNotifications, onOpenProfile }:
           <Defs><RadialGradient id="homeGlow"><Stop offset="0" stopColor={selectedReading.color} stopOpacity="0.55" /><Stop offset="1" stopColor={selectedReading.color} stopOpacity="0" /></RadialGradient></Defs>
           {routes.filter((route) => route.kw > 0.05).map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
           {routes.filter((route) => route.kw > 0.05).map((route) => reduceMotion || Platform.OS === 'web'
-            ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
-            : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke="#D8F8FF" strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
+            ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke={COLORS[route.source]} strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
+            : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke={COLORS[route.source]} strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
           <Circle cx={1578} cy={613} fill="url(#homeGlow)" r={47} />
         </Svg>
       </View>

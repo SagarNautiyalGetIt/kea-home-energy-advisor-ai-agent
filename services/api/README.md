@@ -16,20 +16,19 @@ make api-dev       # http://localhost:8000/docs
 All targets also work from inside this directory as `make test`, `make dev` and so on.
 The root Makefile just delegates here.
 
-## The four layers
+## How Sparky answers
 
-The model owns exactly one of them.
+The current online agent selects **typed lookup tools** for usage, bill facts,
+forecasts, and support. Python computes the figures; Sparky writes the explanation
+and the response names its sources. Tool arguments and results can be recorded for
+review. See [ADR-0011](../../docs/adr/0011-agentic-tool-use.md) for the current
+design. The earlier narrate-only approach in ADR-0002 is historical.
 
-| Layer | Owner | Module | Responsibility |
-|---|---|---|---|
-| 0 | Python | `app/routing/intents.py` | Map free text to one of ~8 intents |
-| 1 | Python | `app/analytics/engine.py` | Compute typed facts from meter data |
-| 2 | **Model** | `app/narration/` | Turn those facts into 2–4 sentences |
-| 3 | Python | `app/verification/number_checker.py` | Reject any figure not traceable to layer 1 |
-
-The model never chooses what to compute and never sees a raw meter reading. It receives a
-`FactBundle` (`app/schemas.py`) and writes prose. Tool *selection* is the hardest task for
-a small local model, so we removed it — [ADR-0002](../../docs/adr/0002-narrate-only-architecture.md).
+To use the local model, set `KEA_PROVIDER=ollama` in `.env`, run
+`ollama pull qwen3:4b`, and start Ollama before the API. Then check
+`/api/health`: `model_ready` must be `true` and `model` must name the selected
+tool-capable model. A reachable Ollama daemon without that model is **not** ready.
+The phone's offline preference does not download or run a model on the device.
 
 ## Cross-team ownership inside this service
 

@@ -97,9 +97,7 @@ async def health() -> dict[str, object]:
         "provider": provider.name,
         "model": provider.model,
         "model_ready": await provider.health(),
-        # Which model, and why that one. On the M4 this should read gemma3:27b with
-        # `autodetect`; if it reads gemma3:4b on the demo machine something has gone
-        # wrong and it is better to find that out here than mid-answer.
+        # Which model is selected, and whether the operator chose it explicitly.
         "hardware": hardware.describe(),
         # Which recorder is live. Surfaced because the failure mode it prevents is
         # rehearsing all afternoon, then discovering the evidence tables are empty and
@@ -894,11 +892,10 @@ async def homelink_discover() -> dict[str, object]:
 
 @router.get("/offline/models", response_model=list[offline.OfflineModelOption])
 async def offline_models() -> list[offline.OfflineModelOption]:
-    """What can be downloaded to a device, and how big it is.
+    """Candidate device models for a future offline release, not live downloads.
 
-    Served rather than hard-coded in the app so the sign-up prompt quotes a size that
-    matches what will actually be downloaded. A customer agreeing to "about 530 MB" and
-    receiving 1.8 GB on a metered rural connection is a real cost we imposed on them.
+    The mobile app currently records interest only. Distribution sizes must be
+    verified against shipped artefacts before any download is offered.
     """
     return offline.OFFLINE_MODELS
 

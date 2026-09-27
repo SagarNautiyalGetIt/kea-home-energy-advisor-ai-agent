@@ -31,11 +31,11 @@ offline answer trustworthy rather than a downgrade with a disclaimer.
 
 ## What the customer is told, and when
 
-Nothing is downloaded to anybody's phone by default. A ~1 GB model on a metered
+Nothing is downloaded to anybody's phone in this build. A ~1 GB model on a metered
 connection, pushed to a customer who has perfect coverage, is a cost we have imposed on
-them for our convenience. The app asks once, at sign-up, and only records the answer —
-`AlertPreferences.offline_model_opt_in`. The server never pushes; the client fetches when
-the customer has said yes and is on wifi.
+them for our convenience. The app records interest through
+`AlertPreferences.offline_model_opt_in`; a future release must implement and verify
+the device runtime, dated fact-pack sync, and consent before offering downloads.
 
 The pack is **stamped and stale-able**. Every bundle carries the period it was computed
 for and the time it was built, and the client is required to show that date on any answer
@@ -81,7 +81,7 @@ PACK_FRESHNESS_DAYS = 35
 
 
 class OfflineModelOption(BaseModel):
-    """One downloadable on-device model.
+    """One candidate on-device model; this build does not distribute it.
 
     Sizes are the quantised download, not the parameter count, because that is the number
     the customer is agreeing to spend. Quoting "1B parameters" to somebody deciding
@@ -103,9 +103,8 @@ class OfflineModelOption(BaseModel):
 #: nobody can tell apart, and would exclude the mid-range Android hardware this feature
 #: exists for.
 #:
-#: Sizes below are the published quantised artefact sizes and must be re-checked against
-#: the distribution actually bundled — a figure quoted to a customer before a download is
-#: a figure that has to be right.
+#: Sizes below are candidate quantised artefact sizes, not a download offer. Verify
+#: against the shipped artefacts before showing a customer any download size.
 OFFLINE_MODELS: list[OfflineModelOption] = [
     OfflineModelOption(
         id="gemma3-1b-it-q4",
