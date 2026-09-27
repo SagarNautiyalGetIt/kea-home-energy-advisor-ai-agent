@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
 import Animated, { cancelAnimation, Easing, interpolate, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { useActiveAnimation } from '@/lib/use-active-animation';
 
 const CENTER = 50;
 
@@ -39,6 +40,7 @@ export function SparkyOrbit({ size = 168 }: { size?: number }) {
   const innerSpin = useSharedValue(0);
   const breath = useSharedValue(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const animationActive = useActiveAnimation();
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -47,7 +49,10 @@ export function SparkyOrbit({ size = 168 }: { size?: number }) {
   }, []);
 
   useEffect(() => {
-    if (reduceMotion) {
+    if (reduceMotion || !animationActive) {
+      cancelAnimation(outerSpin);
+      cancelAnimation(innerSpin);
+      cancelAnimation(breath);
       outerSpin.value = 0.08;
       innerSpin.value = 0.12;
       breath.value = 0.5;
@@ -66,7 +71,7 @@ export function SparkyOrbit({ size = 168 }: { size?: number }) {
       cancelAnimation(innerSpin);
       cancelAnimation(breath);
     };
-  }, [breath, innerSpin, outerSpin, reduceMotion]);
+  }, [animationActive, breath, innerSpin, outerSpin, reduceMotion]);
 
   const outerStyle = useAnimatedStyle(() => ({
     transform: [

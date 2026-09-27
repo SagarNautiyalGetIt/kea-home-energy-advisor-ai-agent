@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Animated, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import Animated, { cancelAnimation, Easing, useAnimatedProps, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 import { fetchAucklandWeather, WEATHER_REFRESH_MS, WEATHER_SOURCE_URL, type AucklandWeather } from '@/lib/auckland-weather';
 import { calculateEnergy, type EnergySnapshot } from '@/lib/home-energy';
+import { useActiveAnimation } from '@/lib/use-active-animation';
 import { AnimatedLogo } from './animated-logo';
 
 type Device = 'solar' | 'home' | 'car' | 'battery' | 'grid';
@@ -28,6 +30,12 @@ const PIPE_PATHS = {
 const POWER_COLOR = '#63f09a';
 const COLORS: Record<Source, string> = { solar: '#63f09a', battery: '#5ab8ff', grid: '#ff9f43' };
 const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+function FlowPath({ id, source, reverse, active, phase }: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; active: boolean; phase: SharedValue<number> }) {
+  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: reverse ? phase.value : -phase.value }));
+  const props = { d: PIPE_PATHS[id], fill: 'none' as const, stroke: COLORS[source], strokeDasharray: '18 44', strokeLinecap: 'round' as const, strokeWidth: 6 };
+  return active ? <AnimatedPath {...props} animatedProps={animatedProps} /> : <Path {...props} />;
+}
 
 function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
   if (!weather) return 'cloud-outline';
@@ -82,7 +90,9 @@ export function DemoHomeView({ onOpenInfo, onOpenNotifications, onOpenProfile }:
   const [weatherRefreshKey, setWeatherRefreshKey] = useState(0);
   const [selected, setSelected] = useState<Device>('solar');
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [phase] = useState(() => new Animated.Value(0));
+  const animationActive = useActiveAnimation();
+  const phase = useSharedValue(0);
+  const flowActive = animationActive && !reduceMotion && Platform.OS !== 'web';
   const sceneWidth = Math.max(width + 24, 420);
   const sceneHeight = sceneWidth * 1117.091 / 2048;
   const snapshot = useMemo(() => weather ? calculateEnergy({
@@ -125,21 +135,16 @@ export function DemoHomeView({ onOpenInfo, onOpenNotifications, onOpenProfile }:
     return () => subscription.remove();
   }, []);
   useEffect(() => {
-    if (reduceMotion) return;
-    const loop = Animated.loop(Animated.timing(phase, { toValue: 62, duration: 2200, useNativeDriver: false }));
-    phase.setValue(0);
-    loop.start();
-    return () => loop.stop();
-  }, [phase, reduceMotion]);
-
+    phase.value = 0;
+    if (flowActive) phase.value = withRepeat(withTiming(62, { duration: 2200, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(phase);
+  }, [flowActive, phase]);
   const routes: { id: keyof typeof PIPE_PATHS; kw: number; source: Source; reverse: boolean }[] = snapshot ? [
     { id: 'solar', kw: snapshot.solarKw, source: 'solar', reverse: false },
     { id: 'battery', kw: Math.max(snapshot.batteryChargeKw, snapshot.batteryDischargeKw), source: snapshot.batteryDischargeKw > 0.05 ? 'battery' : 'solar', reverse: snapshot.batteryDischargeKw > 0.05 },
     { id: 'grid', kw: Math.max(snapshot.gridImportKw, snapshot.gridExportKw), source: snapshot.gridImportKw > 0.05 ? 'grid' : 'solar', reverse: snapshot.gridImportKw > 0.05 },
     { id: 'car', kw: snapshot.evServedKw, source: dominantSource(snapshot, 'car'), reverse: false },
   ] : [];
-  const offset = phase.interpolate({ inputRange: [0, 62], outputRange: [0, -62] });
-  const reverseOffset = phase.interpolate({ inputRange: [0, 62], outputRange: [0, 62] });
   const selectedReading = reading(snapshot, selected);
   const updatedAt = weather ? new Date(weather.observedAt).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: 'Pacific/Auckland' }) : null;
 
@@ -172,9 +177,7 @@ export function DemoHomeView({ onOpenInfo, onOpenNotifications, onOpenProfile }:
         <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
           <Defs><RadialGradient id="homeGlow"><Stop offset="0" stopColor={selectedReading.color} stopOpacity="0.55" /><Stop offset="1" stopColor={selectedReading.color} stopOpacity="0" /></RadialGradient></Defs>
           {routes.filter((route) => route.kw > 0.05).map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
-          {routes.filter((route) => route.kw > 0.05).map((route) => reduceMotion || Platform.OS === 'web'
-            ? <Path key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke={COLORS[route.source]} strokeDasharray="18 44" strokeLinecap="round" strokeWidth={6} />
-            : <AnimatedPath key={route.id} d={PIPE_PATHS[route.id]} fill="none" stroke={COLORS[route.source]} strokeDasharray="18 44" strokeDashoffset={route.reverse ? reverseOffset : offset} strokeLinecap="round" strokeWidth={6} />)}
+          {routes.filter((route) => route.kw > 0.05).map((route) => <FlowPath key={route.id} id={route.id} source={route.source} reverse={route.reverse} active={flowActive} phase={phase} />)}
           <Circle cx={1578} cy={613} fill="url(#homeGlow)" r={47} />
         </Svg>
       </View>

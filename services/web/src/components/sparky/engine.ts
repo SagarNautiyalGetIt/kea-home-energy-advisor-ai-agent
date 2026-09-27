@@ -109,6 +109,7 @@ const REFERENCE_SIZE = 96;
 
 export interface FieldHandle {
   setState(state: SparkState): void;
+  setActive(active: boolean): void;
   destroy(): void;
 }
 
@@ -121,7 +122,7 @@ export function createField(
 ): FieldHandle {
   const colors: SparkPalette = { ...VIOLET, ...palette };
   const ctx = canvas.getContext('2d', { alpha: true });
-  if (!ctx) return { setState: () => {}, destroy: () => {} };
+  if (!ctx) return { setState: () => {}, setActive: () => {}, destroy: () => {} };
 
   // Backing store at device resolution, CSS box at logical size. Without this the ring
   // is visibly soft on any HiDPI screen.
@@ -147,6 +148,7 @@ export function createField(
   let state: SparkState = initial;
   let tuning = TUNINGS[state];
   let raf = 0;
+  let active = !reducedMotion;
   let last = performance.now();
   let clock = 0;
 
@@ -239,7 +241,7 @@ export function createField(
     last = now;
     clock += dt;
     render(0.5 + 0.5 * Math.sin((clock / tuning.breathPeriod) * Math.PI * 2));
-    raf = requestAnimationFrame(frame);
+    if (active) raf = requestAnimationFrame(frame);
   }
 
   if (reducedMotion) {
@@ -259,7 +261,19 @@ export function createField(
       // the change is a shift in tempo rather than a cut.
       if (reducedMotion) render(0.5);
     },
+    setActive(next: boolean) {
+      if (reducedMotion || next === active) return;
+      active = next;
+      if (active) {
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      } else {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    },
     destroy() {
+      active = false;
       cancelAnimationFrame(raf);
     },
   };
