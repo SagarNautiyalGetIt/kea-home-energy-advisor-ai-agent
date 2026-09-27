@@ -667,7 +667,7 @@
     "/api/offline/models": {
       "get": {
         "summary": "Offline Models",
-        "description": "What can be downloaded to a device, and how big it is.\n\nServed rather than hard-coded in the app so the sign-up prompt quotes a size that\nmatches what will actually be downloaded. A customer agreeing to \"about 530 MB\" and\nreceiving 1.8 GB on a metered rural connection is a real cost we imposed on them.",
+        "description": "Candidate device models for a future offline release, not live downloads.\n\nThe mobile app currently records interest only. Distribution sizes must be\nverified against shipped artefacts before any download is offered.",
         "operationId": "offline_models_api_offline_models_get",
         "responses": {
           "200": {
@@ -2850,7 +2850,7 @@
           "quantisation"
         ],
         "title": "OfflineModelOption",
-        "description": "One downloadable on-device model.\n\nSizes are the quantised download, not the parameter count, because that is the number\nthe customer is agreeing to spend. Quoting \"1B parameters\" to somebody deciding\nwhether to use their data is not an answer to the question they asked."
+        "description": "One candidate on-device model; this build does not distribute it.\n\nSizes are the quantised download, not the parameter count, because that is the number\nthe customer is agreeing to spend. Quoting \"1B parameters\" to somebody deciding\nwhether to use their data is not an answer to the question they asked."
       },
       "OfflinePack": {
         "properties": {
