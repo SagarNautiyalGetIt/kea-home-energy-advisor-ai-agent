@@ -1,25 +1,27 @@
 # Suburb Power Clash — implementation blueprint
 
-**Status:** proposed design, 28 September 2026. This document defines an implementation path; Clash is not an existing Kea feature. The first deliverable is a **synthetic-data preview**. Real household competition, carbon savings, rewards, and public leaderboards remain disabled until the release gates below are met.
+**Status:** proposed production design, revised 28 September 2026. An interactive **synthetic-data mobile preview** is being built separately. Real household competition, avoided-emissions claims, bill credits, and individual leaderboards remain disabled until the release gates below are met.
 
 ## What a player sees
 
-An optional monthly, suburb-versus-suburb league helps a household reduce its own measured electricity use. The opening screen shows its own progress, an aggregated suburb standing, a stylized territory map, and Sparky's evidence-grounded coaching. A flash challenge appears only when the server has a verified, time-bounded event. The interface must always distinguish **demo**, **provisional**, **verified**, and **unavailable** figures.
+An opted-in person competes **within their verified suburb** for a monthly rank. The score combines four separately evidenced contributions: energy conserved against their own baseline, avoided emissions associated with eligible EV charging, money saved through eligible off-peak use, and avoided emissions associated with verified solar generation. A top-three finish in each suburb is intended to earn an electricity-bill credit after month-end settlement. Credit amounts and programme terms are undecided. The opening screen shows the personal score breakdown, rank, consented suburb leaderboard, bill-credit status, and Sparky's grounded explanation. The interface distinguishes **demo**, **provisional**, **verified**, and **unavailable** figures.
 
-The game compares a household with its **own** weather-adjusted history. Existing peer benchmarks remain separate: they cannot be substituted for a personal baseline. A lower bill is also not a direct result of fewer kWh; tariff and fixed charges matter.
+Conservation compares a household with its **own** weather-adjusted history; peer benchmarks cannot substitute for that baseline. Off-peak money saved must use the household's actual tariff. EV and solar contributions need attributable generation or charger observations and a defensible avoided-emissions counterfactual. No category may double count the same kWh. Fairness for people without an EV or solar installation is an unresolved release decision, not something to hide with a default zero.
 
 ```mermaid
 flowchart LR
-  A[Meter intervals + quality] --> B[Eligibility and frozen baseline]
-  W[Observed weather] --> B
-  B --> C[Private household score]
-  G[Verified grid event / factor] --> C
-  C --> P[Personal API: own figures only]
-  C --> K[Consent + cohort size + privacy review]
-  K --> S[Delayed suburb aggregate]
-  S --> M[Map and suburb standings]
-  P --> U[Personal progress + Sparky]
-  R[Approved reward ledger] --> P
+  A[Measured meter + weather] --> B[Personal conservation baseline]
+  E[Attributed EV charging + comparator] --> C[EV avoided-emissions contribution]
+  T[Actual tariff + timed use] --> D[Off-peak savings contribution]
+  S[Verified solar generation/export] --> F[Solar avoided-emissions contribution]
+  B --> Q[Versioned eligibility + weighted score]
+  C --> Q
+  D --> Q
+  F --> Q
+  Q --> P[Private score and explanation]
+  Q --> K[Consent + suburb + privacy review]
+  K --> L[Month-end within-suburb ranking]
+  L --> R[Approved reward ledger + retailer settlement]
 ```
 
 ### Reality checks before implementation
@@ -30,8 +32,8 @@ flowchart LR
 | A low user will inevitably rebound unless given streaks and money | The original experiment found a boomerang effect and that approving feedback mitigated it. It does not validate these particular rewards. Give low users positive feedback without encouraging additional use. [Schultz et al.](https://doi.org/10.1111/j.1467-9280.2007.01917.x) |
 | NZ is 80–85% renewable; peak savings routinely avoid coal at 650 g/kWh | MBIE reports 88.5% renewable generation for 2025. Marginal generation varies; no fixed peak window or 650/50 g pair is justified. No UI claim that a saved kWh avoided a specified amount of carbon until a reviewed marginal-emissions method exists. [MBIE](https://www.mbie.govt.nz/building-and-energy/energy-and-natural-resources/energy-statistics-and-modelling/energy-publications-and-technical-papers/energy-in-new-zealand/energy-in-new-zealand-2026/renewables), [Electricity Authority](https://www.ea.govt.nz/news/eye-on-electricity/marginal-generators-and-prices-in-the-electricity-market/) |
 | Transpower intensity can calculate avoided emissions | Transpower EM6 reports average grid-mix intensity, useful as labelled context; it is not by itself a marginal avoided-emissions factor. Do not call savings an “offset”. [Transpower](https://www.transpower.co.nz/news/new-transpower-tool-unlocks-electricity-emissions-tracking-all) |
-| A pseudonym and map bin ensure privacy | A small cohort and repeated ranks can still reveal a household. Require consent, delayed aggregation, a minimum cohort, suppression, and a Privacy Impact Assessment (PIA). [Privacy Commissioner: disclosure](https://www.privacy.org.nz/privacy-principles/11/), [PIA guidance](https://www.privacy.org.nz/responsibilities/privacy-impact-assessments/) |
-| $50/$30/$15 bill credits, Free Power Sunday, hardware redemptions | These are **ideas**, not a funded or approved offer. Keep every value `null` and show no countdown to a payout until sponsor, retailer, legal, tax, terms, fulfilment, and relevant sales-promotion review are complete. [DIA guidance](https://www.dia.govt.nz/Gambling-Fact-Sheet-9---Sales-Promotions) |
+| A pseudonym makes within-suburb rankings safe | Even month-end ranks and repeat pseudonyms may identify a household in a small suburb. Require explicit disclosure consent, minimum cohort, access control, suppression, and a Privacy Impact Assessment (PIA). [Privacy Commissioner: disclosure](https://www.privacy.org.nz/privacy-principles/11/), [PIA guidance](https://www.privacy.org.nz/responsibilities/privacy-impact-assessments/) |
+| Top-three bill credits can be shown as an active offer | The proposed credits are **not** funded or approved. Keep every credit amount `null` and show no payout countdown until sponsor, retailer, legal, tax, terms, fulfilment, and relevant sales-promotion review are complete. [DIA guidance](https://www.dia.govt.nz/Gambling-Fact-Sheet-9---Sales-Promotions) |
 
 ## Release gates and ownership
 
@@ -39,39 +41,39 @@ flowchart LR
 |---|---|---|
 | Identity and household authority | Replace synthetic demo login in `services/api/app/auth.py` with production auth, expiring sessions, server-side household binding and authorization tests. Never accept a client-selected household ID for `/me`. | API/security |
 | Meter provenance | Every rewarded half-hour has a dated, measured import reading, source, completeness flag, and meter ownership. Reject estimates, generated demo profiles, missing intervals, and unverified solar/export or EV adjustments. | Data |
-| Geography and consent | Approved suburb assignment separate from public responses; explicit opt-in, withdrawal, erasure/retention rules, minimum cohort and PIA. Current `Customer.region` is too broad and has no verified suburb. | Privacy/product |
-| Fairness and safety | Independent review of baseline, cold-weather hardship, occupancy/holiday edge cases, solar and EV treatment, score manipulation, and appeal route. Low usage is a review signal, never evidence of a holiday. | Product/data |
-| Carbon and live events | Documented marginal methodology and licensed time-stamped data for avoided-emissions claims; signed/verified event source and audited start/end for flash challenges. Until then, both features are unavailable. | Energy/data |
-| Rewards | Written funding, eligibility, retailer settlement, legal terms and financial audit. Reward ledger reconciles exactly; no client calculation determines money. | Business/legal |
+| Geography and consent | Approved suburb assignment separate from public responses; explicit opt-in to a **within-suburb individual** leaderboard, withdrawal, erasure/retention rules, minimum cohort, member access controls, and PIA. Current `Customer.region` is too broad and has no verified suburb. | Privacy/product |
+| Fairness and safety | Independent review of weather baseline, cold-weather hardship, households without EV/solar, property ownership, score manipulation, and appeals. Low usage is a review signal, never evidence of a holiday. | Product/data |
+| EV, solar, tariff, and carbon | Charger ownership and eligible sessions, defensible EV travel comparator, measured solar generation/export, actual tariff/time windows, licensed time-stamped marginal factors, and explicit rules preventing double counting. Missing evidence makes that category unavailable, not zero. | Energy/data |
+| Rewards | Written funding, top-three eligibility, tie rule, retailer bill settlement, legal terms, tax and financial audit. Reward ledger reconciles exactly; no client calculation determines money. | Business/legal |
 | Device performance | 60 fps target measured on representative iOS and Android devices, including a low-end device, with reduced-motion and static-list fallback. No performance claim based on simulator or export alone. | Mobile/QA |
 
 ## Scoring contract
 
-These parameters are **proposed initial tuning**, not empirically proven weights. Store the score algorithm version and parameters with each monthly baseline snapshot; never silently recalculate published results under a new version.
+The mobile preview uses **illustrative** weights of 35% conservation, 20% EV, 25% off-peak savings, and 20% solar. It caps each category for a bounded 100-point example. These weights and caps are **not approved production rules**. Before a real score exists, agree on participation eligibility, treatment of homes without EV/solar, minimum verified coverage per category, normalization, double-count prevention, and an appeal path. Freeze the approved algorithm/version with each monthly snapshot; never silently recalculate published results.
 
 1. **Input:** a half-hourly import interval `E(h,t)` in kWh, source `measured`, timezone-aware timestamp, account/meter ownership, local `Pacific/Auckland` date, and `expected_intervals` for that local day (46/48/50 across daylight-saving changes). Deduplicate by meter and interval. No data from the contest month may train its baseline.
 2. **Freeze baseline at month start:** from the preceding 21 complete local days, take the median for each local wall-clock half-hour slot separately for weekdays and weekends. Require at least 12 weekday and 4 weekend observed examples for every normal slot. On a fall-back day, both occurrences of a repeated clock slot use that slot's frozen median; distinguish their readings by UTC offset. On a spring-forward day, skipped slots contribute neither baseline nor reading. Use the recorded `expected_intervals` to check the actual day; do not duplicate or invent readings. A household without enough history is `unqualified`; it never receives a guessed score.
 3. **Weather:** using at least 56 prior complete days from the same location and weather source, fit a reviewed, nonnegative daily temperature response `f(T) = max(0.1, α + βh·max(15−T,0) + βc·max(T−22,0))` with `βh, βc ≥ 0`. Record model version and fit diagnostics. For contest day `d`, `B(h,t) = max(0, median_slot(h,t) × clamp(f(Td)/f(Tref), 0.75, 1.25))`, where `Tref` is the median temperature of the baseline days with that day type. A weather observation can settle a provisional score after the day closes, but the fitted coefficients and slot medians remain frozen. A failed fit or missing temperature makes the score unavailable, not zero.
 4. **Quality:** a day qualifies for prize ranking only when every expected interval has a measured, nonnegative value and no disputed meter changes. An incomplete day can show a personal progress preview labelled `provisional`, but contributes nothing to the ranked month. Solar/export households require separately verified import, export, and on-site generation treatment; until then they remain preview-only. Safety review also covers heating hardship before any incentive to consume less.
-5. **Peak-weighted reduction:** `D(t) = B(t) − E(t)`; `w(t) = 3.5` only for a versioned, verified grid-event window, otherwise `1`. `Penergy = Σ[w(t)·D(t)] / Σ[w(t)·B(t)]`. The separate display field `energy_reduction_pct = 100 × ΣD(t)/ΣB(t)` is **unweighted** over qualified intervals. Include negative `D` so rebound is visible. If a denominator is zero, mark unqualified. “Peak” is not a permanent clock-time label or a proxy for coal.
-6. **Carbon term, only after gate:** with an approved *marginal* factor `c(t)` for every included interval, `Pcarbon = Σ[c(t)·D(t)] / Σ[c(t)·B(t)]`; factors must be nonnegative and denominators positive. `score = 100 × (0.7·Penergy + 0.3·Pcarbon)`; sort by unrounded decimal score, then stable participant ID. Until approval, return `score: null`, `carbon_avoided_kg: null`, and `energy_reduction_pct` as a clearly labelled preview. Never replace the missing carbon term with zero and call the mixed score final.
-7. **Monthly settlement:** aggregate only qualified days; require at least 80% of the month's expected intervals and at least 14 eligible local days, with no unresolved anomaly. The status stays `provisional` until source data and quality review close. The 0.15 kWh/day threshold is a configurable **anomaly flag** for human/self-service review; it never infers occupancy or automatically declares vacation. Exclude a flagged day from prizes until resolved, without publishing the flag.
+5. **Four separately auditable contributions:** `D(t) = B(t) − E(t)` and `energy_reduction_pct = 100 × ΣD(t)/ΣB(t)` over qualified intervals; include negative `D` in the displayed result. EV avoided emissions require eligible charger intervals and an approved comparison with a displaced transport mode, net of charge electricity. Off-peak savings require a counterfactual schedule priced with the **same actual tariff**, including time-varying rates; never equate lower kWh with a lower bill. Solar avoided emissions require separately measured generation, self-consumption/export treatment, and an approved *marginal* counterfactual. Assign each kWh to at most one credited category to prevent double counting. A missing input is `unavailable`, not zero.
+6. **Score and rank:** the preview uses `min(max(value / cap, 0), 1) × weight` for each sample category (conservation: 25% reduction cap/35 points; EV: 50 kg CO₂e/20; off-peak: NZ$40/25; solar: 50 kg CO₂e/20). Those caps exist only to demonstrate a weighted breakdown. A real formula needs the fairness and eligibility decisions above, documented units, versioned source data, uncertainty bounds, and Decimal arithmetic. Sort qualified players **inside one verified suburb** by unrounded settled score, with an approved tie rule and no client-selected household/suburb ID. No real individual rank or top-three reward appears before consent/privacy and scoring gates pass.
+7. **Monthly settlement:** aggregate only qualified days; require at least 80% of the month's expected intervals and at least 14 eligible local days, with no unresolved anomaly. The status stays `provisional` until data quality, consent, scoring and appeals close. The 0.15 kWh/day threshold is a configurable **anomaly flag** for review; it never infers occupancy or automatically declares a vacation. A funded, approved credit can be issued only after an auditable month-end top-three settlement and retailer reconciliation.
 
 All score inputs, revisions, consent, and decisions need an audit record. Use decimal arithmetic for energy and money, UTC in storage plus the NZ local date in settlement logic. A negative score stays negative; never turn increased usage into a positive badge. Show a source and quality label beside each figure.
 
 ## Mobile screen and interaction contract
 
-The proposed route is `services/mobile/src/app/(tabs)/clash.tsx`, registered in `(tabs)/_layout.tsx` behind an explicit server-controlled demo feature flag. Use the current dark theme from `src/theme/index.tsx`; the brief's forest-green replacement palette is not the app's design system. Reuse existing semantic accents and the Home flow green where it actually represents energy. Do not create a separate brand or imitate exact household locations.
+The proposed route is `services/mobile/src/app/(tabs)/clash.tsx`, registered in `(tabs)/_layout.tsx`. The synthetic preview can be visible as **DEMO**; switching to real data must use a separate server-controlled flag after the release gates. Use the charcoal and grey theme from `src/theme/index.tsx`. Avoid a green territory-map treatment; this game is about people in one suburb, not suburbs against one another.
 
 | Component | Inputs and behaviour | Empty / error / accessibility |
 |---|---|---|
-| `SuburbLeagueHeader` | `league: LeagueSummary`, `personal: PersonalMetrics`; month in NZ time, current aggregate standing, personal status. Reward countdown only when approved funded reward is active. | Demo/unavailable/provisional labels; absolute end time as text; no colour-only rank. |
-| `GamifiedTerritoryMap` | `districts: DistrictAggregate[]`, `selected_id`, `on_select`; static authored SVG paths for suburb-shaped **illustrations**, never geocoded homes. Pan/pinch through Gesture Handler and Reanimated shared values on UI thread; bounded scale 1–2.5, pan clamped to viewBox. | List of the same districts immediately below as a keyboard/screen-reader alternative; no participant pins or live occupancy pulse. Reduced motion yields static paths. |
-| `SuburbLeaderboard` | delayed suburb aggregate ranks and optional consented pseudonymous individual ranks from server; stable rank and tie rules. | Hide individual list unless PIA and `cohort_size ≥ 20`; suppress small cells and differencing across filters/time; no raw traces. |
-| `SparkyCompanionWidget` | status from explicit `unqualified / preview / improving / steady / review`, one short tip grounded in verified own data. | No “power vampire”, appliance diagnosis, carbon claim, or shame based on whole-home data. Static state and accessible text when animations off. |
-| `FlashChallengeBanner` | server-signed challenge ID, source, local start/end, expected action and opt-in state. | Absent when event source is unavailable; no fabricated “500 points” or assumed washer/dryer ownership. |
+| `SuburbLeagueHeader` | Current NZ month, own suburb, personal rank and score status. | Demo/unavailable/provisional labels; no colour-only rank or unapproved payout countdown. |
+| `ScoreBreakdown` | Conservation, EV, off-peak and solar values, each category's weight, points, evidence/quality and method. | Explain unavailable or ineligible categories; do not imply all households have EV or solar. Reduced motion keeps detail transitions static. |
+| `SuburbLeaderboard` | Month-end **individual** ranks within the same verified suburb, using consented pseudonyms and server-settled ties. | Hide until production auth, explicit disclosure consent and PIA approve cohort threshold, member access and suppression; no raw traces, addresses or live presence. |
+| `MonthlyRewardCard` | Top-three bill-credit rules and settlement status from an approved server ledger. | Concept-only until terms/funding/retailer settlement exist; never show a made-up dollar amount or earned credit. |
+| `SparkyCompanionWidget` | One short explanation grounded in the person's own verified category evidence. | No appliance diagnosis, unsupported carbon claim, shame or household comparison from whole-home data. |
 
-Keep SVG node/path counts bounded (initial target ≤12 districts and ≤24 decorative paths). Animate transforms and opacity via shared values, avoid per-frame React state or layout work, pause animations on blur/background, and respect OS reduced motion. Show a confirmation after opt-in, withdrawal, challenge settlement, and any later model/score revision; confirmations state source, time, and whether a result is provisional. Haptics are optional and must follow system preferences. The static map/list must remain usable when animation fails.
+Animate only small transform/opacity transitions through Reanimated and respect OS reduced motion; no continuous decorative loop is needed. Show a confirmation after consent, withdrawal, score revision and final reward settlement; include source, time and provisional/final state. Haptics should mark meaningful selections and confirmations and follow system settings. All content must remain usable without animation or location access.
 
 ## API and data model
 
@@ -79,10 +81,10 @@ The repository uses **FastAPI + Pydantic**, not Node/Fastify. `docs/api-standard
 
 | Prompt path | Repository-conformant path | Access |
 |---|---|---|
-| `GET /api/v1/clash/suburb/{suburb_id}` | `GET /api/clash/suburbs/{suburb_id}` | Only delayed, privacy-safe suburb aggregates. |
-| `GET /api/v1/clash/household/metrics` | `GET /api/clash/me/metrics` | Server-bound authenticated household only. |
-| `POST /api/v1/clash/challenges/{challenge_id}/opt-in` | `POST /api/clash/challenges/{challenge_id}/participations` | Creates one opt-in for current household; idempotency key. |
-| Additional consent action | `POST /api/clash/participations` and `DELETE /api/clash/participations/me` | Explicit join and withdrawal; withdrawal revokes future disclosure/rewards per terms. |
+| `GET /api/v1/clash/suburb/{suburb_id}` | `GET /api/clash/suburbs/{suburb_id}/leaderboard` | Authenticated, consented, month-end **individual** ranking only after PIA/access rules pass. Suburb ID must match the server-bound participant. |
+| `GET /api/v1/clash/household/metrics` | `GET /api/clash/me/metrics` | Server-bound authenticated household's four categories and personal status only. |
+| Additional consent action | `POST /api/clash/participations` and `DELETE /api/clash/participations/me` | Explicit join/disclosure consent and withdrawal; withdrawal revokes future disclosure/rewards per approved terms. |
+| Additional reward status | `GET /api/clash/me/rewards` | Own settled credits only, from approved auditable ledger; no client-calculated money. |
 
 Implement Pydantic response models first and generate `contracts/openapi.json` with `make api-spec`; `npm --prefix services/mobile run types` generates `src/api.d.ts`. Do not hand-edit either generated file. Extend API standards via an ADR for auth-related `401/403` and conflict `409` before introducing those statuses; retain FastAPI's current `{"detail": ...}` error envelope until a separate breaking-change ADR.
 
@@ -95,50 +97,38 @@ type PersonalMetrics = {
   status: EvidenceState;
   qualified_days: number;
   expected_days: number;
-  energy_reduction_pct: number | null;
+  conservation: { reduction_pct: number | null; conserved_kwh: number | null; status: EvidenceState };
+  ev: { avoided_kg_co2e: number | null; status: EvidenceState };
+  off_peak: { savings_nzd: string | null; status: EvidenceState };
+  solar: { avoided_kg_co2e: number | null; status: EvidenceState };
   score: number | null;
-  carbon_avoided_kg: number | null;
   rank: number | null;
   reward_credit_nzd: string | null; // decimal string; null until approved and earned
-  feathers_balance: number | null; // null until a funded, governed ledger exists
   source_as_of: string | null; // ISO-8601 with offset
   score_version: string | null;
   quality_reason: string | null;
 };
-type DistrictAggregate = {
-  suburb_id: string; label: string; month: string;
-  status: EvidenceState; rank: number | null;
-  participant_count_band: string | null; // broad band, not precise live occupancy
-  aggregate_reduction_pct: number | null;
-  carbon_avoided_kg: number | null;
+type SuburbLeaderboard = {
+  suburb_id: string; month: string; status: 'unavailable' | 'settled';
   published_at: string | null;
-};
-type LeagueSummary = {
-  month: string; ends_at: string; status: EvidenceState;
-  districts: DistrictAggregate[];
-  reward: { status: 'unavailable' | 'approved'; terms_url: string | null };
-};
-type Challenge = {
-  id: string; status: 'scheduled' | 'active' | 'closed' | 'cancelled';
-  source: string; starts_at: string; ends_at: string;
-  opt_in_status: 'not_joined' | 'joined' | 'settled' | 'ineligible';
-  points: number | null;
+  participants_band: string | null;
+  entries: { pseudonym: string; rank: number; score: number }[]; // empty until release gates pass
 };
 ```
 
-Use `200` for reads, `201` plus `Location` for a new participation, `204` for withdrawal, `404` for unknown resources, `422` for validation, `503` for a required upstream dependency. Auth and duplicate-join handling follow the ADR. Do not return raw meter traces, customer IDs, precise geo coordinates, or participant presence from public aggregate endpoints. Cache aggregates by version and publish with a delay of at least 24 hours; suppress every cohort below 20 and any combination of filters that could reconstruct a small cell. The PIA decides whether 20 and 24 hours are sufficient.
+Use `200` for reads, `201` plus `Location` for a new participation, `204` for withdrawal, `404` for unknown resources, `422` for validation, `503` for a required upstream dependency. Auth and duplicate-join handling follow the ADR. Do not return raw meter traces, customer IDs, addresses, coordinates, category traces of another user, or live participant presence. The individual leaderboard is **not public**: require authenticated membership, consent, a settled month, minimum cohort, rate limits and PIA-approved delay/suppression. A provisional target is at least 20 participants and 24-hour delay, subject to PIA review; repeated pseudonyms and cross-month differencing also need assessment.
 
-Proposed PostgreSQL `app` tables (new Alembic revision after current head): `clash_participation` (account binding, consent version/time, withdrawal), `clash_baseline_snapshot` (immutable month, algorithm/version, weather model, quality), `clash_score` (daily inputs and audit/version), `clash_challenge` plus `clash_challenge_participation` (signed source, state, idempotency), `clash_privacy_aggregate` (cohort, suppression, published time), and a separate `clash_reward_ledger` **only after** reward approval. Keep suburb mapping private and avoid address/ICP in response models or public aggregate tables. Define retention and deletion before real data is ingested.
+Proposed PostgreSQL `app` tables (new Alembic revision after current head): `clash_participation` (account binding, verified suburb, consent version/time and withdrawal), `clash_baseline_snapshot` (immutable month, algorithm/version, weather model and quality), `clash_category_evidence` (provenance and eligibility per category), `clash_score` (four contributions and audit/version), `clash_leaderboard_settlement` (month, suburb, tie, suppression and published time), and `clash_reward_ledger` **only after** reward approval. Keep suburb mapping private and avoid address/ICP in response models or public aggregate tables. Define retention and deletion before real data is ingested.
 
 ## File-by-file implementation order
 
 1. **Discovery and decisions:** review `services/api/app/auth.py`, `services/api/app/db/models.py`, `services/api/app/main.py`, `services/mobile/src/providers/auth.tsx`, existing Home and theme components, API standards, and existing security policy. Record production-auth, consent, geography, score, carbon, and reward decisions. No actual customer data in this phase.
-2. **Demo contract:** add Pydantic models and a fixture-only router at `services/api/app/clash/schemas.py` and `services/api/app/clash/routes.py`; register at `services/api/app/main.py` under `/api`. Add deterministic synthetic Grey Lynn, Ponsonby, and Mount Eden **district aggregates** in `services/api/app/clash/fixtures.py`, clearly marked `demo`; use `null` for carbon, score, money, and feathers. Never seed a real address. Add API tests for responses and prohibited fields.
+2. **Synthetic preview:** keep the initial mobile fixtures local to `services/mobile/src/lib/clash-preview.ts`, with obvious demo labels and no API mutation. The current preview illustrates category amounts, weighted points, within-suburb ranks and a planned top-three reward; none are customer data or settled credits. A future fixture-only API router at `services/api/app/clash/` may be added only if cross-client demo parity needs it, with `status: demo` and no identifying fields.
 3. **Contract generation:** run `make api-spec`, then `npm --prefix services/mobile run types`; commit generated `contracts/openapi.json` and `services/mobile/src/api.d.ts` together. Add API standards examples only after capturing them from the running API.
-4. **Mobile data layer:** add `services/mobile/src/features/clash/api.ts` and `types.ts` that consume generated types, parse evidence state, and handle loading/offline/error. Feature flag defaults off. No persisted public leaderboard cache beyond the approved retention window.
-5. **Mobile UI:** create `services/mobile/src/app/(tabs)/clash.tsx` and components `SuburbLeagueHeader.tsx`, `GamifiedTerritoryMap.tsx`, `SuburbLeaderboard.tsx`, `SparkyCompanionWidget.tsx`, `FlashChallengeBanner.tsx` under `services/mobile/src/features/clash/components/`; add the tab only with its flag. Reuse existing tokens and Sparky art; provide static list/reduced-motion path.
-6. **Math behind gates:** add `services/api/app/clash/baseline.py`, `scoring.py`, `eligibility.py`, and fixtures/tests for normal, cold snap, solar/export, missing interval, DST, 0.15 kWh anomaly, rebound, and withdrawal. Add migrations only when model and privacy decisions are approved. Demo scoring cannot unlock rewards.
-7. **Release features separately:** verified auth and consent → qualified data and geography → privacy-reviewed aggregate → validated grid events and carbon method → funded reward ledger. Each has an independent flag and rollback route. Do not turn all on with one switch.
+4. **Mobile data layer after gates:** add `services/mobile/src/features/clash/api.ts` and `types.ts` consuming generated contracts, parsing category-level evidence states and handling loading/offline/error. Feature flag for real data defaults off. Do not persist individual leaderboard data beyond approved retention.
+5. **Mobile UI:** `services/mobile/src/app/(tabs)/clash.tsx` composes `SuburbLeagueHeader`, `ScoreBreakdown`, `SuburbLeaderboard`, `MonthlyRewardCard`, and `SparkyCompanionWidget` under `services/mobile/src/features/clash/components/`. Reuse the current charcoal theme, Sparky art, accessible Pressables, optional location and reduced-motion behaviour. No territory map or flash challenge is needed for the within-suburb game.
+6. **Math behind gates:** add `services/api/app/clash/baseline.py`, `scoring.py`, `eligibility.py`, and tests for normal/cold days, no EV/solar, verified charger sessions, generation/export, actual tariff, double counting, missing interval, DST, anomaly, ties, appeal and withdrawal. Add migrations only after scoring/privacy decisions are approved. Demo scoring cannot unlock rewards.
+7. **Release in gates:** production auth and consent → qualified meter/EV/solar/tariff evidence and suburb mapping → reviewed fairness and carbon method → private settled individual leaderboard → funded bill-credit ledger. Each has its own flag and rollback route.
 
 ### Verification and definition of done
 
@@ -155,4 +145,4 @@ npm --prefix services/mobile run test
 git diff --check
 ```
 
-The demo is complete only when API tests prove no raw/identifying fields escape, missing evidence renders `unavailable`, generated contracts match the API, and iOS/Android static and animated states are visually inspected. A physical-device trace is needed before describing motion as 60 fps. Production is complete only after every release gate has an owner and recorded acceptance evidence; until then all money, carbon, and public individual rankings remain disabled.
+The local demo is complete only when fixture tests show bounded scoring and no customer data, permissions have a manual fallback, and iOS/Android visual states are inspected. A physical-device trace is needed before describing motion as 60 fps. Production is complete only after every release gate has an owner and recorded acceptance evidence; until then real money, avoided-emissions claims, and individual rankings remain disabled.
