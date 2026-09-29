@@ -5,8 +5,11 @@
  *
  * Every "Label: value" line is written as ONE text run, on purpose, and the page content
  * is left uncompressed. The e2e suite (qa/e2e/tests/billing.spec.ts) reads the raw file
- * back run by run and expects, among others, "KEA ENERGY INVOICE" as the first run and
- * "Invoice: …", "Total: …" and "Customer: …" whole.
+ * back run by run and expects the title as the first run and "Invoice: …", "Total: …" and
+ * "Customer: …" whole.
+ *
+ * The invoice is a synthetic example (#219): the title says DEMO INVOICE, the file is named
+ * kea-demo-invoice-…, and the orange note says no payment is due.
  */
 
 export interface InvoicePdfData {
@@ -262,13 +265,14 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   ops.push(`q 0 ${num(y(headerH))} ${PAGE_W} ${headerH} re W n /Sh1 sh Q`)
   ops.push(`${rgb('#E9ECF7')} RG 0.8 w 0 ${num(y(headerH))} m ${PAGE_W} ${num(y(headerH))} l S`)
   logo(MARGIN, 40, 60)
-  const title = 'KEA ENERGY INVOICE'
+  const title = 'KEA ENERGY DEMO INVOICE'
   text(title, 124, 70, { font: 'bold', size: 20 })
-  const pillX = 124 + textWidth(title, 'bold', 20) + 12
+  // The status pill leads the line under the title: beside the longer DEMO title it ran
+  // into the amount on the right.
   const pillW = textWidth(data.status, 'bold', 8.5) + 18
-  fill(roundedRect(pillX, 56, pillW, 18, 9), paid ? '#E3F6EC' : '#FFE6EB')
-  text(data.status, pillX + 9, 68.5, { font: 'bold', size: 8.5, color: paid ? '#1E9E5A' : '#E0445A' })
-  text(`Plan: ${data.planName}`, 124, 92, { color: MUTED })
+  fill(roundedRect(124, 79, pillW, 18, 9), paid ? '#E3F6EC' : '#FFE6EB')
+  text(data.status, 124 + 9, 91.5, { font: 'bold', size: 8.5, color: paid ? '#1E9E5A' : '#E0445A' })
+  text(`Plan: ${data.planName}`, 124 + pillW + 10, 92, { color: MUTED })
   text(paid ? 'AMOUNT PAID' : 'AMOUNT DUE', right, 60, { font: 'bold', size: 7.5, color: GREY_LABEL, spacing: 1.4, align: 'right' })
   text(data.amount, right, 94, { font: 'bold', size: 28, color: PURPLE, align: 'right' })
   text(paid ? 'Paid - thank you' : `Due ${data.due}`, right, 112, { size: 10, color: MUTED, align: 'right' })
@@ -319,16 +323,24 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   text(paid ? 'Paid in full' : `Amount due by ${data.due}`, MARGIN + 16, totalTop + 29)
   text(`Total: ${data.amount}`, right - 16, totalTop + 30, { font: 'bold', size: 15, color: PURPLE, align: 'right' })
 
-  // The same orange payment note the invoice card on the page carries.
+  // The orange note, as on the invoice card on the page: this is a demo, so it says no
+  // payment is due. It wraps, and the box grows with it.
   const noteTop = totalTop + 48 + 24
-  fill(roundedRect(MARGIN, noteTop, CONTENT_W, 40, 8), '#FFF5EC')
-  fill(`${MARGIN} ${num(y(noteTop + 40))} 3 40 re`, '#FE6601')
-  text('Payment:', MARGIN + 16, noteTop + 25, { font: 'bold', color: '#FE6601' })
-  const note = paid ? `Received with ${data.paymentMethod}.` : 'Pay securely using your saved card before the due date.'
-  text(note, MARGIN + 16 + textWidth('Payment: ', 'bold', 10.5), noteTop + 25, { color: '#5B6A8F' })
+  const noteIndent = 16 + textWidth('Demo: ', 'bold', 10.5)
+  const noteLines = wrap(
+    paid ? 'Payment simulated. No payment was taken.' : 'Synthetic example only. This is not a payment request or a customer account record.',
+    CONTENT_W - noteIndent - 16, 'regular', 10.5,
+  )
+  const noteH = 40 + (noteLines.length - 1) * 15
+  fill(roundedRect(MARGIN, noteTop, CONTENT_W, noteH, 8), '#FFF5EC')
+  fill(`${MARGIN} ${num(y(noteTop + noteH))} 3 ${noteH} re`, '#FE6601')
+  // The bar is decoration and keeps the bright orange; the label is text, so it takes the
+  // deeper #C24A00 that reads on the pale fill.
+  text('Demo:', MARGIN + 16, noteTop + 25, { font: 'bold', color: '#C24A00' })
+  noteLines.forEach((line, i) => text(line, MARGIN + noteIndent, noteTop + 25 + i * 15, { color: '#5B6A8F' }))
 
-  text('Cost basis: illustrative rate of 30c/kWh.', MARGIN, noteTop + 40 + 28, { size: 9.5, color: MUTED })
-  text('Thank you for choosing Kea Energy.', MARGIN, noteTop + 40 + 48, { font: 'bold', size: 11, color: PURPLE })
+  text('Cost basis: illustrative rate of 30c/kWh.', MARGIN, noteTop + noteH + 28, { size: 9.5, color: MUTED })
+  text('Thank you for choosing Kea Energy.', MARGIN, noteTop + noteH + 48, { font: 'bold', size: 11, color: PURPLE })
 
   // Footer.
   rule(790)
@@ -435,7 +447,7 @@ export async function downloadInvoicePdf(data: InvoicePdfData) {
   const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `kea-invoice-${data.number}.pdf`
+  link.download = `kea-demo-invoice-${data.number}.pdf`
   link.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
