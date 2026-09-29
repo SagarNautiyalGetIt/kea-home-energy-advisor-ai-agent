@@ -50,7 +50,15 @@
         }
       ],
       "expo-secure-store",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "llama.rn",
+        {
+          "enableEntitlements": false,
+          "enableOpenCLAndHexagon": false,
+          "forceCxx20": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

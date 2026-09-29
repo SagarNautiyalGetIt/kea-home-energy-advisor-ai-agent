@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -8,6 +9,7 @@ import { Card, FormField, PageHeader, PrimaryButton, SectionTitle } from '@/comp
 import { changeAccountPassword, requestPasswordReset } from '@/lib/account-api';
 import { apiJson, jsonRequest } from '@/lib/backend-client';
 import { connectHomeAssistant, disconnectHomeAssistant, listHomeAssistantEntities, listHomeAssistantPowerEntities, loadHomeAssistant, saveEnergyMapping, savePowerMapping, syncHomeAssistant, type DeviceKind, type EnergyEntity, type HomeAssistantConnection, type PowerEntity, type PowerKind } from '@/lib/home-assistant';
+import { cancelPhoneModelDownload, installPhoneModel, isPhoneModelEnabled, phoneModelStatus, removePhoneModel, setPhoneModelEnabled, type PhoneModelStatus } from '@/lib/local-sparky';
 import { loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/settings-api';
 import { validateEmail, validateNewPassword, validateRequired } from '@/lib/validation';
 import { useToast } from '@/providers/toast';
@@ -62,6 +64,8 @@ export default function SettingsScreen() {
   const [modelHealth, setModelHealth] = useState<ModelHealth | null>(null);
   const [modelCheck, setModelCheck] = useState<'checking' | 'complete' | 'error'>('checking');
   const [modelCheckedAt, setModelCheckedAt] = useState<string | null>(null);
+  const [phoneModel, setPhoneModel] = useState<PhoneModelStatus>({ phase: 'checking', detail: 'Checking this phone…' });
+  const [phoneModelEnabled, setPhoneModelEnabledState] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveVersion = useRef(0);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -96,6 +100,45 @@ export default function SettingsScreen() {
     const timer = setTimeout(() => { void refreshModelStatus(); }, 0);
     return () => clearTimeout(timer);
   }, [refreshModelStatus]);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([phoneModelStatus(), isPhoneModelEnabled()]).then(([status, enabled]) => {
+      if (!active) return;
+      setPhoneModel(status);
+      setPhoneModelEnabledState(enabled);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const togglePhoneModel = async () => {
+    const enabled = !phoneModelEnabled;
+    await setPhoneModelEnabled(enabled);
+    setPhoneModelEnabledState(enabled);
+    void Haptics.selectionAsync();
+  };
+
+  const installModel = async () => {
+    try {
+      const status = await installPhoneModel(setPhoneModel);
+      setPhoneModel(status);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('On-phone Sparky model verified', 'success');
+    } catch (error) {
+      setPhoneModel(await phoneModelStatus());
+      showToast(error instanceof Error ? error.message : 'Phone model could not be installed.', 'warning');
+    }
+  };
+
+  const removeModel = async () => {
+    try {
+      setPhoneModel(await removePhoneModel());
+      void Haptics.selectionAsync();
+      showToast('On-phone model removed', 'info');
+    } catch {
+      showToast('Could not remove the on-phone model.', 'warning');
+    }
+  };
 
   useEffect(() => {
     if (!session?.customerId) return;
@@ -244,9 +287,9 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionTitle>Sparky AI</SectionTitle>
-      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>See which model is answering and manage your interest in offline help.</Text>
+      <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Check both the Kea service and this phone before choosing how Sparky answers.</Text>
       <Card style={styles.connectedCard}>
-        <View style={styles.connectedTitle}><Ionicons color={palette.green} name="sparkles-outline" size={22} /><Text style={[styles.cardHeading, { color: colors.text }]}>Assistant status</Text></View>
+        <View style={styles.connectedTitle}><Ionicons color={palette.green} name="sparkles-outline" size={22} /><Text style={[styles.cardHeading, { color: colors.text }]}>Kea service</Text></View>
         <View style={[styles.statusPanel, { backgroundColor: colors.input, borderColor: colors.border }]}>
           <View style={[styles.statusDot, { backgroundColor: modelCheck === 'complete' && modelHealth?.model_ready ? palette.green : modelCheck === 'checking' ? palette.violet : palette.red }]} />
           <View style={styles.settingCopy}>
@@ -256,8 +299,19 @@ export default function SettingsScreen() {
         </View>
         <Pressable accessibilityLabel="Refresh Sparky model status" accessibilityRole="button" disabled={modelCheck === 'checking'} onPress={() => { setModelCheck('checking'); void refreshModelStatus(); }} style={[styles.secondaryButton, { borderColor: colors.border }]}><Ionicons color={colors.text} name="refresh-outline" size={17} /><Text style={[styles.secondaryButtonText, { color: colors.text }]}>Check again</Text></Pressable>
         <View style={[styles.settingDivider, { borderTopColor: colors.border }]} />
-        <NotificationChannel checked={preferences.offlineModelOptIn} colors={colors} detail="Save your interest in offline answers. This build does not download or run a model on your phone yet." icon="cloud-offline-outline" label="Offline answers preference" onPress={() => update({ offlineModelOptIn: !preferences.offlineModelOptIn })} />
-        <Text style={[styles.footnote, { color: colors.textMuted }]}>The server can run a local Ollama model when configured. Offline answers on this phone remain unavailable until the model runtime and verified fact-pack sync are implemented.</Text>
+        <View style={styles.connectedTitle}><Ionicons color={palette.violet} name="phone-portrait-outline" size={21} /><Text style={[styles.cardHeading, { color: colors.text }]}>On this phone</Text></View>
+        <View style={[styles.statusPanel, { backgroundColor: colors.input, borderColor: colors.border }]}>
+          <View style={[styles.statusDot, { backgroundColor: phoneModel.phase === 'installed' ? palette.green : phoneModel.phase === 'downloading' || phoneModel.phase === 'checking' ? palette.violet : palette.amber }]} />
+          <View style={styles.settingCopy}>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>{phoneModel.phase === 'installed' ? 'Model installed and verified' : phoneModel.phase === 'downloading' ? 'Model update in progress' : phoneModel.phase === 'update' ? 'Model update available' : phoneModel.phase === 'available' ? 'Ready to install' : 'On-phone model unavailable'}</Text>
+            <Text style={[styles.settingDetail, { color: colors.textMuted }]}>{phoneModel.detail}{phoneModel.progress !== undefined ? ` ${Math.round(phoneModel.progress * 100)}%` : ''}</Text>
+          </View>
+        </View>
+        {phoneModel.phase !== 'unsupported' ? <NotificationChannel checked={phoneModelEnabled} colors={colors} detail="Use the verified phone model for general energy guidance. Household answers still need the Kea service." icon="cloud-offline-outline" label="Use on-phone Sparky" onPress={() => void togglePhoneModel()} /> : null}
+        {phoneModelEnabled && (phoneModel.phase === 'available' || phoneModel.phase === 'update') ? <Pressable accessibilityRole="button" onPress={() => void installModel()} style={[styles.secondaryButton, { borderColor: colors.border }]}><Ionicons color={colors.text} name="download-outline" size={17} /><Text style={[styles.secondaryButtonText, { color: colors.text }]}>{phoneModel.phase === 'update' ? 'Update model on Wi-Fi' : 'Install model on Wi-Fi'}</Text></Pressable> : null}
+        {phoneModel.phase === 'downloading' ? <Pressable accessibilityRole="button" onPress={() => void cancelPhoneModelDownload()} style={[styles.secondaryButton, { borderColor: colors.border }]}><Text style={[styles.secondaryButtonText, { color: colors.text }]}>Cancel download</Text></Pressable> : null}
+        {phoneModel.phase === 'installed' || phoneModel.phase === 'error' ? <Pressable accessibilityRole="button" onPress={() => void removeModel()} style={[styles.secondaryButton, { borderColor: colors.border }]}><Text style={[styles.secondaryButtonText, { color: colors.text }]}>Remove phone model</Text></Pressable> : null}
+        <Text style={[styles.footnote, { color: colors.textMuted }]}>The local model is a 429 MB optional download. It can explain general energy topics after installation. Kea has not synced a verified household fact pack to this phone, so bills, meter readings and rewards still need the service.</Text>
       </Card>
       <SectionTitle>Connected home</SectionTitle>
       <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Discover what the Kea service can see on its network.</Text>

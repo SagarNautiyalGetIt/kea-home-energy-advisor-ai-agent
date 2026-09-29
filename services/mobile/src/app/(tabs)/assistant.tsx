@@ -13,6 +13,8 @@ import { IconButton, PageHeader } from '@/components/ui';
 import { sourceLabel, streamAssistantReply, type SourceRef } from '@/lib/assistant-api';
 import type { ChartEvent } from '@/lib/assistant-stream';
 import { rememberEvAnswer, restoreEvAnswer } from '@/lib/ev-memory';
+import { answerOnPhone, isPhoneModelEnabled, phoneModelStatus, stopPhoneAnswer } from '@/lib/local-sparky';
+import { canAnswerWithLocalModel, LOCAL_EVIDENCE_LIMIT } from '@/lib/local-sparky-policy';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
@@ -24,6 +26,7 @@ type Message = {
   escalate?: boolean;
   streaming?: boolean;
   failed?: boolean;
+  origin?: 'phone' | 'service';
   /** Live lookup labels while the answer is being written; cleared when it lands. */
   activity?: { name: string; ok?: boolean }[];
   /** The full source status, including a lookup that could not return data. */
@@ -134,7 +137,24 @@ function AssistantScreenForHousehold() {
     try {
       await evRestore.current;
       if (version !== chatVersion.current) return;
-      await new Promise<void>((resolve) => {
+      const phoneEnabled = await isPhoneModelEnabled();
+      const phoneReady = phoneEnabled && (await phoneModelStatus()).phase === 'installed';
+      let answeredOnPhone = false;
+      if (phoneReady && canAnswerWithLocalModel(clean)) {
+        try {
+          requestRef.current = { abort: () => { void stopPhoneAnswer(); } };
+          const answer = await answerOnPhone(clean, (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })));
+          if (version !== chatVersion.current) return;
+          patch((m) => ({ ...m, text: answer, streaming: false, origin: 'phone' }));
+          completed = true;
+          answeredOnPhone = true;
+        } catch {
+          patch((m) => ({ ...m, text: '' }));
+          // The Kea service remains the connected fallback when a device fails
+          // to load or run its local model.
+        }
+      }
+      if (!answeredOnPhone) await new Promise<void>((resolve) => {
         const stream = streamAssistantReply(session?.customerId ?? '', clean, {
           onText: (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })),
           // That round turned out to be a lookup, so its text was a preamble.
@@ -161,13 +181,14 @@ function AssistantScreenForHousehold() {
               // Tier 3 means the text above is a handover written by Python, not an
               // answer — the UI labels it so nobody reads it as advice.
               handover: result.tier === 3,
+              origin: 'service',
             }));
             if (result.tier === 3) showToast('Use verified support details on your bill', 'info');
             resolve();
           },
           onError: (failure) => {
             completed = true;
-            patch((m) => ({ ...m, text: failure, streaming: false, failed: true, activity: undefined, chart: undefined }));
+            patch((m) => ({ ...m, text: phoneReady ? `${failure}\n\n${LOCAL_EVIDENCE_LIMIT}` : failure, streaming: false, failed: true, activity: undefined, chart: undefined }));
             resolve();
           },
         }, conversationId.current);
@@ -220,6 +241,7 @@ function AssistantScreenForHousehold() {
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />
                   : <Text style={[styles.bubbleText, { color: '#000000' }]}>{message.text}</Text>}
+                {message.origin === 'phone' ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>On this phone · general guidance · no account data</Text> : null}
                 {message.activity?.length ? <View style={styles.activity}>
                   {message.activity.map((entry, index) => <Text key={`${entry.name}-${index}`} style={[styles.sourceLine, { color: entry.ok === false ? palette.amber : colors.textMuted }]}>
                     {entry.ok === false ? 'Could not check' : entry.ok === true ? 'Checked' : 'Checking'}: {sourceLabel(entry.name)}
