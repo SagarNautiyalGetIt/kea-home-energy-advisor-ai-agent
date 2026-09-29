@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, AppState, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import Reanimated, { cancelAnimation, Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
+import Reanimated, { cancelAnimation, Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
@@ -36,10 +36,38 @@ const POWER_COLOR = HIGHLIGHT_COLOR.home;
 const COLORS: Record<Source, string> = { solar: HIGHLIGHT_COLOR.solar, battery: HIGHLIGHT_COLOR.battery, grid: HIGHLIGHT_COLOR.grid, load: HIGHLIGHT_COLOR.car };
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
-function FlowPath({ id, source, reverse, active, phase }: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; active: boolean; phase: SharedValue<number> }) {
-  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: reverse ? phase.value : -phase.value }));
-  const props = { d: PIPE_PATHS[id], fill: 'none' as const, stroke: COLORS[source], strokeDasharray: '18 44', strokeLinecap: 'round' as const, strokeWidth: 6 };
-  return active ? <AnimatedPath {...props} animatedProps={animatedProps} /> : <Path {...props} />;
+function FlowPath({ id, source, reverse, watts, active }: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; watts: number; active: boolean }) {
+  const measureRef = useRef<Path>(null);
+  const [length, setLength] = useState(0);
+  const offset = useSharedValue(0);
+  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: offset.value }));
+
+  useEffect(() => {
+    // The SVG geometry is shared with Kea Energy Home. Measure the actual
+    // native path so the streak travels precisely one full route per cycle.
+    const measured = measureRef.current?.getTotalLength();
+    if (measured && Number.isFinite(measured)) setLength(measured);
+  }, [id]);
+
+  useEffect(() => {
+    cancelAnimation(offset);
+    offset.set(reverse ? -length : 0);
+    if (!active || length <= 0) return;
+    const seconds = Math.max(1.9, 3.2 - Math.min(watts / 1000, 6) * 0.17);
+    offset.set(withRepeat(withTiming(reverse ? 0 : -length, { duration: seconds * 1000, easing: ReanimatedEasing.linear }), -1, false));
+    return () => cancelAnimation(offset);
+  }, [active, length, offset, reverse, watts]);
+
+  const color = COLORS[source];
+  const streak = Math.min(23, length * 0.12);
+  const gap = length / 3 - streak;
+  return <>
+    <Path d={PIPE_PATHS[id]} fill="none" opacity={0} ref={measureRef} stroke={color} />
+    <Path d={PIPE_PATHS[id]} fill="none" opacity={0.68} stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={6} />
+    {active && length > 0
+      ? <AnimatedPath animatedProps={animatedProps} d={PIPE_PATHS[id]} fill="none" opacity={0.96} stroke={color} strokeDasharray={`${streak} ${gap}`} strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.4} />
+      : <Path d={PIPE_PATHS[id]} fill="none" opacity={0.43} stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.4} />}
+  </>;
 }
 
 function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
@@ -117,7 +145,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>('home');
   const [reduceMotion, setReduceMotion] = useState(true);
-  const phase = useSharedValue(0);
   const animationActive = useActiveAnimation();
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
@@ -193,21 +220,12 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   // Each lit segment corresponds to a fresh sensor for this household. The
   // animation does not infer source allocation between solar, battery and grid.
   const hasLiveSensors = Object.keys(live).length > 0;
-  const routes: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean }[] = [
-    ...(live.solar_generation !== undefined && live.solar_generation > 20 ? [{ id: 'solar' as const, source: 'solar' as const, reverse: false }] : []),
-    ...(live.battery_charge !== undefined && live.battery_charge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: false }] : []),
-    ...(live.battery_discharge !== undefined && live.battery_discharge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: true }] : []),
-    ...(live.grid_import !== undefined && live.grid_import > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: true }] : []),
-    ...(live.grid_export !== undefined && live.grid_export > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: false }] : []),
-    ...(live.ev_charger !== undefined && live.ev_charger > 20 ? [{ id: 'car' as const, source: 'load' as const, reverse: false }] : []),
+  const routes: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; watts: number }[] = [
+    ...(live.solar_generation !== undefined && live.solar_generation > 20 ? [{ id: 'solar' as const, source: 'solar' as const, reverse: false, watts: live.solar_generation }] : []),
+    ...(live.battery_discharge !== undefined && live.battery_discharge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: true, watts: live.battery_discharge }] : live.battery_charge !== undefined && live.battery_charge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: false, watts: live.battery_charge }] : []),
+    ...(live.grid_import !== undefined && live.grid_import > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: true, watts: live.grid_import }] : live.grid_export !== undefined && live.grid_export > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: false, watts: live.grid_export }] : []),
+    ...(live.ev_charger !== undefined && live.ev_charger > 20 ? [{ id: 'car' as const, source: 'load' as const, reverse: false, watts: live.ev_charger }] : []),
   ];
-  useEffect(() => {
-    cancelAnimation(phase);
-    phase.value = 0;
-    if (reduceMotion || !animationActive || Platform.OS === 'web' || routes.length === 0) return;
-    phase.value = withRepeat(withTiming(62, { duration: 2200, easing: ReanimatedEasing.linear }), -1, false);
-    return () => cancelAnimation(phase);
-  }, [phase, reduceMotion, animationActive, routes.length]);
   const dayLabel = scene?.day
     ? new Date(`${scene.day}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
@@ -250,8 +268,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
             <Image accessible={false} source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
             <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
               <VisualHighlight active={animationActive} reduceMotion={reduceMotion} selected={selected} />
-              {routes.map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
-              {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} phase={phase} {...route} />)}
+              {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} {...route} />)}
             </Svg>
           </View>
           <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
