@@ -1,18 +1,19 @@
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, usePathname } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { BottomNavigation } from '@/components/bottom-navigation';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
 export default function TabsLayout() {
   const { ready, session } = useAuth();
   const { colors } = useAppTheme();
+  const pathname = usePathname();
   if (!ready) return <View style={[styles.loading, { backgroundColor: colors.background }]}><ActivityIndicator color={palette.violet} size="large" /></View>;
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <Tabs screenOptions={{
+    <Tabs tabBar={() => pathname === '/dashboard' ? null : <BottomNavigation />} screenOptions={{
       headerShown: false,
-      tabBarStyle: { display: 'none' },
     }}>
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
       <Tabs.Screen name="usage" options={{ title: 'Usage' }} />

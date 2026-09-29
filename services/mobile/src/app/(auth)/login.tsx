@@ -98,8 +98,8 @@ const styles = StyleSheet.create({
   demoList: { gap: 9 },
   demoRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 12 },
   demoCopy: { flex: 1 },
-  demoName: { fontSize: 13, fontWeight: '900' },
-  demoScenario: { marginTop: 3, fontSize: 10, lineHeight: 15 },
-  demoUse: { color: '#000000', borderRadius: 9, backgroundColor: '#D8D8D8', paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, fontWeight: '900' },
+  demoName: { fontSize: 14, fontWeight: '900' },
+  demoScenario: { marginTop: 3, fontSize: 12, lineHeight: 18 },
+  demoUse: { color: '#000000', borderRadius: 9, backgroundColor: '#D8D8D8', paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: '900' },
   pressed: { opacity: 0.68 },
 });

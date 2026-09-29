@@ -1,18 +1,25 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { useState, type ReactNode } from 'react';
+import { GlassSegmented } from '@/components/glass-segment';
 import { palette, useAppTheme } from '@/theme';
-import { MotionPressable } from './motion-pressable';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { colors } = useAppTheme();
-  return <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>{children}</View>;
+  const { mode } = useAppTheme();
+  return (
+    <View style={[styles.card, style, { backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.56)', borderColor: mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.82)' }]}>
+      <BlurView intensity={mode === 'dark' ? 32 : 58} tint={mode === 'dark' ? 'dark' : 'light'} pointerEvents="none" style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.16)' }]} />
+      <View style={styles.cardContent}>{children}</View>
+    </View>
+  );
 }
 
 export function PrimaryButton({ label, onPress, icon, disabled = false, loading = false, variant = 'primary' }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean; loading?: boolean; variant?: 'primary' | 'secondary' | 'danger' | 'blue' }) {
   const { colors } = useAppTheme();
-  const foreground = variant === 'primary' ? '#000000' : palette.white;
+  const foreground = variant === 'primary' ? colors.onPrimary : colors.text;
   const content = (
     <View style={styles.buttonContent}>
       {loading ? <ActivityIndicator color={foreground} /> : icon ? <Ionicons name={icon} size={19} color={foreground} /> : null}
@@ -21,13 +28,13 @@ export function PrimaryButton({ label, onPress, icon, disabled = false, loading 
   );
 
   return (
-    <MotionPressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={[styles.buttonFrame, (disabled || loading) && styles.disabled]}>
+    <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.buttonFrame, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
       {variant === 'primary' ? (
-        <View style={[styles.buttonFill, { backgroundColor: '#D8D8D8' }]}>{content}</View>
+        <View style={[styles.buttonFill, { backgroundColor: colors.primary }]}>{content}</View>
       ) : (
-        <View style={[styles.buttonFill, { backgroundColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : colors.surface, borderColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : palette.violet, borderWidth: 1.5 }]}>{content}</View>
+        <View style={[styles.buttonFill, { backgroundColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : colors.surface, borderColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : colors.primary, borderWidth: 1.5 }]}>{content}</View>
       )}
-    </MotionPressable>
+    </Pressable>
   );
 }
 
@@ -57,7 +64,7 @@ export function FormField({ label, value, onChangeText, placeholder, error, secu
           </Pressable>
         ) : null}
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: palette.red }]}>{error}</Text> : null}
     </View>
   );
 }
@@ -69,9 +76,9 @@ export function PageHeader({ title, subtitle, action, hideMenuButton = false }: 
   return (
     <View style={styles.header}>
       {hideMenuButton ? null : (
-      <MotionPressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={styles.homeButton}>
+      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}>
         <Ionicons color={colors.text} name="home-outline" size={21} />
-      </MotionPressable>
+      </Pressable>
       )}
       <View style={styles.headerCopy}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -85,26 +92,18 @@ export function PageHeader({ title, subtitle, action, hideMenuButton = false }: 
 export function IconButton({ icon, label, onPress, selected = false }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; selected?: boolean }) {
   const { colors } = useAppTheme();
   return (
-    <MotionPressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={[styles.iconButton, { backgroundColor: selected ? palette.violet : colors.surface, borderColor: colors.border }]}>
-      <Ionicons color={selected ? '#000000' : palette.violet} name={icon} size={21} />
-    </MotionPressable>
+    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.iconButton, { backgroundColor: selected ? colors.primary : colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+      <Ionicons color={selected ? colors.onPrimary : colors.text} name={icon} size={21} />
+    </Pressable>
   );
 }
 
 export function Segmented<T extends string>({ value, options, onChange, activeBackgroundColor, activeTextColor }: { value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; activeBackgroundColor?: string; activeTextColor?: string }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: colors.input }]}>
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <MotionPressable accessibilityRole="button" key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, active && { backgroundColor: activeBackgroundColor ?? colors.surface }]}>
-            <Text style={[styles.segmentText, { color: active ? activeTextColor ?? palette.violet : colors.textMuted }]}>{option.label}</Text>
-          </MotionPressable>
-        );
-      })}
-    </View>
-  );
+  // The glass pill is now the active indicator across the app, so the legacy
+  // flat-background props are kept only for API compatibility.
+  void activeBackgroundColor;
+  void activeTextColor;
+  return <GlassSegmented accessibilityLabel="Options" height={38} onChange={onChange} options={options} value={value} />;
 }
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -113,7 +112,8 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 0, borderRadius: 18, padding: 18, shadowOpacity: 0, elevation: 0 },
+  card: { overflow: 'hidden', borderWidth: 1, borderRadius: 18, padding: 18, shadowOpacity: 0, elevation: 0 },
+  cardContent: { zIndex: 1 },
   buttonFrame: { minHeight: 54, borderRadius: 17, overflow: 'hidden' },
   buttonFill: { minHeight: 54, borderRadius: 17, justifyContent: 'center', paddingHorizontal: 20 },
   buttonContent: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9 },
@@ -134,9 +134,6 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 4, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   headerAction: { width: 42, alignItems: 'flex-end' },
   iconButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 15 },
-  segmented: { flexDirection: 'row', borderRadius: 14, padding: 4 },
-  segment: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
-  segmentText: { fontSize: 13, fontWeight: '800' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
   sectionTitle: { fontSize: 19, fontWeight: '700', letterSpacing: -0.3 },
   menuOverlay: { flex: 1 },

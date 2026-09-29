@@ -33,9 +33,19 @@ export type BillingCustomer = {
   currentPlan: string | null;
 };
 
+export type SavedPaymentMethod = {
+  id: string;
+  brand: string;
+  last4: string;
+  cardholder: string;
+  expiry: string;
+  isDefault: boolean;
+};
+
 export type BillingViewData = {
   customer: BillingCustomer;
   invoices: BillingInvoice[];
+  savedPaymentMethods?: SavedPaymentMethod[];
 };
 
 export type BillingLoadResult =
@@ -49,7 +59,47 @@ export function emptyBillingData(customerId: string): BillingViewData {
   return {
     customer: { name: null, id: customerId, address: null, currentPlan: null },
     invoices: [],
+    savedPaymentMethods: demoSavedPaymentMethods(customerId, null),
   };
+}
+
+const profileCustomerId = demoBillingData.customer.id;
+
+function demoBillingFallback(customerId: string, customerName?: string): BillingViewData {
+  const name = customerName?.trim() || 'Kea Energy customer';
+  return {
+    customer: {
+      ...demoBillingData.customer,
+      id: customerId,
+      name,
+    },
+    invoices: demoBillingData.invoices.map((invoice) => ({
+      ...invoice,
+      id: `${customerId}-demo-invoice`,
+      chargeLines: invoice.chargeLines.map((line) => ({ ...line })),
+    })),
+    savedPaymentMethods: demoSavedPaymentMethods(customerId, name),
+  };
+}
+
+const demoCardByCustomer: Record<string, Omit<SavedPaymentMethod, 'cardholder'>> = {
+  'H-JUL': { id: 'pm-july', brand: 'Visa', last4: '4242', expiry: '09/28', isDefault: true },
+  'H-COLD': { id: 'pm-cold', brand: 'Mastercard', last4: '5556', expiry: '03/29', isDefault: true },
+  'H-SPIKE': { id: 'pm-spike', brand: 'Visa', last4: '1881', expiry: '11/27', isDefault: true },
+  'H-DROP': { id: 'pm-drop', brand: 'Visa', last4: '9010', expiry: '06/28', isDefault: true },
+  'H-TARIFF': { id: 'pm-tariff', brand: 'Mastercard', last4: '5100', expiry: '02/29', isDefault: true },
+  'H-ZARA': { id: 'pm-zara', brand: 'Visa', last4: '2468', expiry: '08/28', isDefault: true },
+  'H-AROHA': { id: 'pm-aroha', brand: 'Visa', last4: '1357', expiry: '05/29', isDefault: true },
+  '110733ap': { id: 'pm-profile', brand: 'Visa', last4: '4242', expiry: '09/28', isDefault: true },
+  'DEMO-ACCT-221001': { id: 'pm-julia', brand: 'Visa', last4: '4242', expiry: '09/28', isDefault: true },
+  'DEMO-ACCT-222001': { id: 'pm-ana', brand: 'Mastercard', last4: '5556', expiry: '03/29', isDefault: true },
+  'DEMO-ACCT-223001': { id: 'pm-tama', brand: 'Visa', last4: '1881', expiry: '11/27', isDefault: true },
+  'DEMO-ACCT-224001': { id: 'pm-mere', brand: 'Visa', last4: '9010', expiry: '06/28', isDefault: true },
+};
+
+function demoSavedPaymentMethods(customerId: string, customerName: string | null): SavedPaymentMethod[] {
+  const card = demoCardByCustomer[customerId];
+  return card ? [{ ...card, cardholder: customerName ?? 'Kea Energy customer' }] : [];
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -127,6 +177,7 @@ function validateBillingResponse(value: unknown, customerId: string): BillingVie
         : nullableString(currentPlan, 'current plan'),
     },
     invoices: value.invoices.map(validateInvoice),
+    savedPaymentMethods: demoSavedPaymentMethods(customerId, nullableString(customer.name ?? customer.display_name, 'customer name')),
   };
 }
 
@@ -138,10 +189,10 @@ async function fetchBilling(customerId: string, signal: AbortSignal): Promise<Bi
   return validateBillingResponse(await response.json(), customerId);
 }
 
-export async function loadBillingData(customerId: string, signal: AbortSignal): Promise<BillingLoadResult> {
+export async function loadBillingData(customerId: string, signal: AbortSignal, customerName?: string): Promise<BillingLoadResult> {
   const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
   if (!useRealData) {
-    return { state: 'ready', data: demoBillingData };
+    return { state: 'ready', data: demoBillingFallback(customerId || profileCustomerId, customerName) };
   }
   if (!customerId) return { state: 'unavailable', data: emptyBillingData(customerId), message: 'A signed-in customer is required to load billing.' };
   try {

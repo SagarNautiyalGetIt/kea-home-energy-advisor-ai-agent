@@ -58,7 +58,8 @@
           "enableOpenCLAndHexagon": false,
           "forceCxx20": true
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

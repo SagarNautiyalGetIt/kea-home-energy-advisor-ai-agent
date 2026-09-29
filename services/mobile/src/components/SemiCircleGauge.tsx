@@ -1,121 +1,84 @@
-import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { useEffect, useState } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
-type SemiCircleGaugeProps = {
-  percentage: number | null;
-  projectedCost: string;
-};
+type SemiCircleGaugeProps = { percentage: number; projectedCost: string };
 
-const WIDTH = 286;
-const HEIGHT = 152;
-const CENTER_X = WIDTH / 2;
-const CENTER_Y = 133;
-const RADIUS_X = 113;
-const RADIUS_Y = 100;
+const width = 280;
+const height = 168;
+const centerX = width / 2;
+const centerY = 142;
+const rMid = 100;
+const band = 24;
+const SEGMENTS = 24;
+const STEP = 180 / SEGMENTS;
+const SEGW = 6.0;
 
-function arcPoint(progress: number) {
-  const angle = Math.PI * (1 - progress);
-  return {
-    x: CENTER_X + RADIUS_X * Math.cos(angle),
-    y: CENTER_Y - RADIUS_Y * Math.sin(angle),
-  };
+const GREEN = '#22C55E';
+const ORANGE = '#F97316';
+const RED = '#EF4444';
+const DIM = '#D1D5DB';
+
+function polar(r: number, deg: number) {
+  const rad = (deg * Math.PI) / 180;
+  return { x: centerX + r * Math.cos(rad), y: centerY - r * Math.sin(rad) };
 }
 
-function arcPath(start: number, end: number) {
-  const from = arcPoint(start);
-  const to = arcPoint(end);
-  return `M ${from.x} ${from.y} A ${RADIUS_X} ${RADIUS_Y} 0 ${end - start > 0.5 ? 1 : 0} 1 ${to.x} ${to.y}`;
+function barPath(i: number) {
+  const a0 = 180 - i * STEP;
+  const a1 = a0 - SEGW;
+  const p0 = polar(rMid, a0);
+  const p1 = polar(rMid, a1);
+  return (
+    `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} ` +
+    `A ${rMid} ${rMid} 0 0 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`
+  );
 }
 
+function zoneColor(i: number) {
+  if (i < SEGMENTS / 3) return GREEN;
+  if (i < (SEGMENTS / 3) * 2) return ORANGE;
+  return RED;
+}
+
+/** Semicircular risk gauge: three zone colours as broken bars. */
 export default function SemiCircleGauge({ percentage, projectedCost }: SemiCircleGaugeProps) {
-  const progress = percentage === null ? null : Math.max(0, Math.min(percentage / 100, 1));
-  const mintEnd = progress === null ? 0 : Math.min(progress, 0.22);
-  const blueStart = 0.245;
+  const [buildAnim] = useState(() => new Animated.Value(0));
+  const [build, setBuild] = useState(0);
+  const target = Math.min(Math.max(percentage, 0), 50) / 50;
+
+  useEffect(() => {
+    buildAnim.stopAnimation();
+    buildAnim.setValue(0);
+    const listener = buildAnim.addListener(({ value }) => setBuild(value));
+    Animated.timing(buildAnim, { toValue: 1, duration: 900, useNativeDriver: false }).start();
+    return () => buildAnim.removeListener(listener);
+  }, [buildAnim, target]);
+
+  const built = build * SEGMENTS;
+  const litCount = target * SEGMENTS;
 
   return (
     <View
-      accessibilityLabel={
-        percentage === null
-          ? `Projected bill ${projectedCost}; comparison unavailable`
-          : `Projected bill ${projectedCost}; ${Math.round(percentage)} percent above expected`
-      }
-      style={styles.container}
+      accessibilityLabel={`Projected bill risk: ${projectedCost}, ${Math.round(Math.min(Math.max(percentage, 0), 100))} percent above expected`}
+      style={styles.wrap}
     >
-      <Svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
-        <Defs>
-          <LinearGradient id="mint" x1="0" y1="1" x2="1" y2="0">
-            <Stop offset="0" stopColor="#7EE5BC" stopOpacity="0.65" />
-            <Stop offset="1" stopColor="#5AE8B2" />
-          </LinearGradient>
-          <LinearGradient id="blue" x1="0" y1="1" x2="1" y2="0">
-            <Stop offset="0" stopColor="#A8D8F5" />
-            <Stop offset="0.65" stopColor="#38BDF8" />
-            <Stop offset="1" stopColor="#268CEB" />
-          </LinearGradient>
-          <LinearGradient id="track" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#74808E" stopOpacity="0.45" />
-            <Stop offset="1" stopColor="#74808E" stopOpacity="0.72" />
-          </LinearGradient>
-        </Defs>
-        <Path
-          d={arcPath(0.015, 0.985)}
-          fill="none"
-          stroke="url(#track)"
-          strokeWidth={25}
-          strokeLinecap="round"
-        />
-        {mintEnd > 0.035 ? (
-          <Path
-            d={arcPath(0.015, mintEnd)}
-            fill="none"
-            stroke="url(#mint)"
-            strokeWidth={25}
-            strokeLinecap="round"
-          />
-        ) : null}
-        {progress !== null && progress > blueStart + 0.02 ? (
-          <Path
-            d={arcPath(blueStart, Math.min(progress, 0.985))}
-            fill="none"
-            stroke="url(#blue)"
-            strokeWidth={25}
-            strokeLinecap="round"
-          />
-        ) : null}
+      <Svg height={144} viewBox={`0 0 ${width} ${height}`} width={240}>
+        {Array.from({ length: SEGMENTS }, (_, i) => (
+          i < built ? (
+            <Path
+              d={barPath(i)}
+              fill="none"
+              key={i}
+              stroke={i < litCount ? zoneColor(i) : DIM}
+              strokeLinecap="butt"
+              strokeWidth={band}
+            />
+          ) : null
+        ))}
       </Svg>
-      <View pointerEvents="none" style={styles.label}>
-        <Text style={styles.cost}>{projectedCost}</Text>
-        <Text style={styles.caption}>PROJECTED BILL</Text>
-      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    height: HEIGHT,
-    justifyContent: 'flex-start',
-    width: WIDTH,
-  },
-  label: {
-    alignItems: 'center',
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  cost: {
-    color: '#F6FAFE',
-    fontSize: 29,
-    fontWeight: '700',
-    letterSpacing: -0.7,
-  },
-  caption: {
-    color: '#A8B8C8',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.7,
-    marginTop: 3,
-  },
-});
+const styles = StyleSheet.create({ wrap: { alignItems: 'center', alignSelf: 'stretch', height: 144, justifyContent: 'flex-end' } });
