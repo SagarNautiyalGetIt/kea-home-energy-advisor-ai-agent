@@ -124,6 +124,7 @@ html[data-theme='dark'] .energy-home-scene-shell {
 }
 
 .energy-home-topline { top: 24px; }
+
 .energy-home-bottomline { bottom: 24px; }
 
 .energy-home-weather {
@@ -145,8 +146,7 @@ html[data-theme='dark'] .energy-home-scene-shell {
   backdrop-filter: blur(8px);
 }
 
-.energy-home-weather > div,
-.energy-home-status > div {
+.energy-home-weather > div {
   display: flex;
   flex-direction: column;
 }
@@ -159,6 +159,7 @@ html[data-theme='dark'] .energy-home-scene-shell {
   display: flex;
   align-items: center;
   gap: 9px;
+  margin-left: auto;
   pointer-events: auto;
 }
 
@@ -189,6 +190,139 @@ html[data-theme='dark'] .energy-home-scene-shell {
   transform: none;
 }
 
+/* The two top corners are buttons dressed as the weather chip: the same white circle and
+   the same two lines of type. The summary chip reads circle then text, the bill-shock chip
+   text then circle, so the two corners turn towards the house rather than both pointing
+   right. Both reuse `.energy-home-weather` outright, which is what keeps them in step —
+   the small-screen sizing further down already covers them. Only the icons are tinted:
+   purple for the summary, and the red the bill-shock status dot uses for the warning. */
+.energy-home-summary,
+.energy-home-alert {
+  position: relative;
+}
+
+.energy-home-summary {
+  pointer-events: auto;
+}
+
+.energy-home-summary-trigger,
+.energy-home-alert-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.energy-home-summary-trigger { text-align: left; }
+.energy-home-alert-trigger { text-align: right; }
+
+.energy-home-summary-trigger svg {
+  color: #4318ff;
+}
+
+.energy-home-summary-trigger:hover .energy-home-weather-icon,
+.energy-home-summary-trigger:focus-visible .energy-home-weather-icon {
+  border-color: rgb(67 24 255 / 40%);
+  background: #fff;
+}
+
+/* The four summary tiles hang straight down from the chip, one under another. They carry
+   their own glass (the page styles them), so there is no frame around them here. */
+.energy-home-summary-detail {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 13px);
+  left: 0;
+  text-align: left;
+  text-shadow: none;
+  animation: energy-home-alert-in .18s ease-out;
+}
+
+.energy-home-alert-trigger svg {
+  color: #ef4444;
+}
+
+.energy-home-alert-trigger:hover .energy-home-weather-icon,
+.energy-home-alert-trigger:focus-visible .energy-home-weather-icon {
+  border-color: rgb(239 68 68 / 45%);
+  background: #fff;
+}
+
+/* A ring rather than a buzz: a short burst of shaking every few seconds, and only while
+   the assessment has triggered. It stops while the popover is open, because by then the
+   customer is reading it, and the reduced-motion rule at the end of this file stills it. */
+.energy-home-alert-trigger.is-ringing:not([aria-expanded='true']) svg {
+  transform-origin: 50% 55%;
+  animation: energy-home-alarm-ring 2.8s ease-in-out infinite;
+}
+
+@keyframes energy-home-alarm-ring {
+  0%, 21%, 100% { transform: rotate(0); }
+  3% { transform: rotate(-16deg); }
+  6% { transform: rotate(14deg); }
+  9% { transform: rotate(-12deg); }
+  12% { transform: rotate(9deg); }
+  15% { transform: rotate(-5deg); }
+  18% { transform: rotate(3deg); }
+}
+
+/* Hangs off the circle rather than centring on the chip, so it reads as having come out
+   of the icon that was clicked. Only the frame is styled here; the page supplies the
+   content and styles it. The glass matches the device chips on the house (same tint,
+   same edge), so the scene's dark surfaces read as one set. */
+.energy-home-alert-detail {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 13px);
+  right: 0;
+  width: min(390px, 72vw);
+  padding: 17px 19px;
+  border: 1px solid rgb(207 223 219 / 26%);
+  border-radius: 14px;
+  color: #eaf1f8;
+  background: rgb(19 32 31 / 84%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 24px 52px rgb(9 16 30 / 30%);
+  text-align: left;
+  text-shadow: none;
+  animation: energy-home-alert-in .18s ease-out;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+
+/* Darkens under the pointer exactly as the device chips do (their .84 → .97 fill and
+   brighter edge), which also makes it easier to read once the customer moves in to it. */
+.energy-home-alert-detail:hover {
+  border-color: rgb(207 223 219 / 85%);
+  background: rgb(19 32 31 / 97%);
+}
+
+.energy-home-alert-detail::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 15px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid rgb(207 223 219 / 26%);
+  border-left: 1px solid rgb(207 223 219 / 26%);
+  background: inherit;
+  /* Only the half that pokes out: the glass is translucent, so a whole square would show
+     as a darker diamond where it overlaps the popover. */
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  transform: rotate(45deg);
+  transition: border-color .18s ease;
+}
+
+.energy-home-alert-detail:hover::before {
+  border-color: rgb(207 223 219 / 85%);
+}
+
+@keyframes energy-home-alert-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .energy-home-mode {
   gap: 8px;
   padding: 9px 11px;
@@ -198,8 +332,7 @@ html[data-theme='dark'] .energy-home-scene-shell {
   text-shadow: 0 1px 3px #16323b;
 }
 
-.energy-home-mode-dot,
-.energy-home-status-led {
+.energy-home-mode-dot {
   width: 7px;
   height: 7px;
   flex: none;
@@ -208,23 +341,54 @@ html[data-theme='dark'] .energy-home-scene-shell {
   box-shadow: 0 0 8px var(--energy-home-lime);
 }
 
-.energy-home-status {
+/* The right-now status is the weather chip opposite, mirrored like the top pair: text
+   then circle. Its second line is the flow legend, so status and key are one corner
+   chip, like the other three, rather than two dark boxes. */
+.energy-home-now { text-align: right; }
+.energy-home-now > div { align-items: flex-end; }
+
+/* The icon is whichever source is topping the house up, in that source's colour — a shade
+   deeper than the routes' own, which are drawn for the dark chips and wash out on the
+   white circle. */
+.energy-home-now--solar .energy-home-weather-icon { color: #1fae5b; }
+.energy-home-now--battery .energy-home-weather-icon { color: #2b8fe0; }
+.energy-home-now--grid .energy-home-weather-icon { color: #f07f1a; }
+
+.energy-home-legend {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
-  border: 1px solid rgb(234 255 247 / 22%);
-  border-radius: 10px;
-  color: #f3faf2;
-  background: rgb(15 32 37 / 46%);
-  backdrop-filter: blur(8px);
+  gap: 10px;
 }
 
-.energy-home-status > div { gap: 2px; }
-.energy-home-status small { font: 600 8px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; }
-.energy-home-status strong { font-size: 12px; font-weight: 500; }
+.energy-home-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 
-.energy-home-scene .kea-energy-house-caption { bottom: 3%; }
+/* The swatches keep the routes' exact colours; the words stay in the chip's ink so they
+   read on the light sky. */
+.energy-home-legend i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.energy-home-legend-solar i { color: #63f09a; }
+.energy-home-legend-battery i { color: #5ab8ff; }
+.energy-home-legend-grid i { color: #ff9f43; }
+
+/* The status chip's "Illustrative flow" tag: small caps above the status, in a softer ink
+   than the status itself, so it qualifies the line under it without competing with it. */
+.energy-home-illustrative {
+  color: #3d4f75;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 
 /* Settings stays part of this feature, but the dialog is shown only on demand. */
 .energy-home-panel .settings-dialog {
@@ -304,9 +468,13 @@ html[data-theme='dark'] .energy-home-scene-shell {
   .energy-home-weather small { font-size: 9px; }
   .energy-home-actions { flex-direction: column; align-items: flex-end; gap: 6px; }
   .energy-home-direction { min-height: 30px; padding: 6px 8px; font-size: 9px; }
+  /* The scene is barely taller than the assessment on a phone, and it clips anything that
+     spills out of it, so the popover scrolls instead. */
+  .energy-home-alert-detail { width: min(300px, 80vw); max-height: 236px; padding: 12px 13px; overflow-y: auto; }
+  .energy-home-summary-detail { max-height: 236px; overflow-y: auto; }
   .energy-home-mode { padding: 6px 7px; font-size: 7px; }
-  .energy-home-status { padding: 6px 8px; }
-  .energy-home-status strong { font-size: 10px; }
+  .energy-home-legend { gap: 6px; }
+  .energy-home-illustrative { font-size: 8px; }
   .energy-home-scene > .kea-energy-house { top: 54%; width: 112%; }
   .energy-home-panel .dialog-content { padding: 22px; }
 }

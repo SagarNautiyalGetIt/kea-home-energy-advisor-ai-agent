@@ -405,6 +405,9 @@ export const getDemoAccounts = () => getJSON<DemoAccountCard[]>("/api/auth/demo-
 
 export const getHealth = () => getJSON<Health>("/api/health");
 export const getHouseholds = () => getJSON<HouseholdSummary[]>("/api/households");
+/** One account's household. Prefer this to picking an account out of `getHouseholds()`. */
+export const getHousehold = (customerId: string) =>
+  getJSON<HouseholdSummary>(`/api/households/${encodeURIComponent(customerId)}`);
 
 export interface AnnualDemandSummary {
   customer_id: string;

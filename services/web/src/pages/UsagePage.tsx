@@ -8,8 +8,12 @@ import ToggleButtons from '../components/ToggleButtons'
 import UsageGraph, { type UsageUnit } from '../components/UsageGraph'
 import UsageSummaryCard from '../components/UsageSummaryCard'
 import { dailyUsage, hourlyUsage, monthlyUsage } from '../data/mockData'
-import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import { loadSession } from '../lib/session'
+
+// The date picker and the refresh button are hidden for now rather than deleted; the
+// chart keeps using the default date. Set either to true to bring it back.
+const SHOW_DATE_PICKER = false
+const SHOW_REFRESH_BUTTON = false
 
 type BandKey = 'peak' | 'offPeak' | 'night'
 
@@ -124,11 +128,11 @@ export default function UsagePage() {
   return (
     <>
       <div className="page-heading usage-page-heading"><h1>Usage</h1><p>Track your electricity usage patterns over time.</p></div>
-      <EnergyHomePanel />
       <section className="usage-card card" aria-label="Electricity usage insights">
         <header className="usage-toolbar">
-          <TimeRangeSelector value={range} onChange={refresh} />
-          <div className="usage-toolbar-actions"><button className="refresh-usage" aria-label="Refresh usage" onClick={()=>refresh()}><RefreshCw/></button><label className="date-selector"><span>Date</span><input type="date" value={date} onChange={(event)=>{setDate(event.target.value);refresh()}}/></label><label className="compare-selector"><input type="checkbox" checked={compare} onChange={(event)=>setCompare(event.target.checked)}/><span>Compare previous</span></label><ToggleButtons
+          {/* The controls take the toolbar's left corner, Daily / Weekly / Monthly last, and
+              the chart's key sits in the right corner rather than under the chart. */}
+          <div className="usage-toolbar-actions">{SHOW_REFRESH_BUTTON&&<button className="refresh-usage" aria-label="Refresh usage" onClick={()=>refresh()}><RefreshCw/></button>}{SHOW_DATE_PICKER&&<label className="date-selector"><span>Date</span><input type="date" value={date} onChange={(event)=>{setDate(event.target.value);refresh()}}/></label>}<label className="compare-selector"><input type="checkbox" checked={compare} onChange={(event)=>setCompare(event.target.checked)}/><span>Compare previous</span></label><ToggleButtons
             className="unit-selector"
             ariaLabel="Graph metric"
             /* Dollars first, so the selected option is the one on the left. A toggle
@@ -137,7 +141,8 @@ export default function UsagePage() {
             options={[{ value: '$', label: '$' }, { value: 'kWh', label: 'kWh' }]}
             value={unit}
             onChange={setUnit}
-          /></div>
+          /><TimeRangeSelector value={range} onChange={refresh} /></div>
+          <div className="chart-legend usage-legend"><span><i className="legend-current"/>Current period</span>{compare&&<span><i className="legend-previous"/>Previous period</span>}</div>
         </header>
 
         {status==='loading'?<FeedbackState state="loading" title="Refreshing usage" message="Preparing the selected period…"/>:status==='error'?<FeedbackState state="error" message="Usage could not be displayed." onRetry={()=>refresh()}/>:status==='empty'?<FeedbackState state="empty" message="No readings are available for this period."/>:<><UsageGraph
@@ -151,6 +156,7 @@ export default function UsagePage() {
           unit={unit}
           ariaLabel={`${range} electricity usage in ${unit}`}
           comparisonValues={compare ? comparisonValues : undefined}
+          showLegend={false}
         />
 
         <div className="usage-summary-grid">

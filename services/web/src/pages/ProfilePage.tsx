@@ -4,6 +4,7 @@ import Modal from '../components/Modal'
 import { getCustomerProfile, type CustomerProfile } from '../lib/client'
 import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 import { loadSession } from '../lib/session'
+import { useViewportOffset } from '../lib/viewportOffset'
 
 /**
  * The customer's own details.
@@ -30,6 +31,8 @@ export default function ProfilePage({ onToast }: { onToast: (message: string, to
   const [session] = useState(loadSession)
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Sized like the dashboard's energy home: the same offset, the same height on the same window.
+  const cardRef = useViewportOffset<HTMLElement>('--profile-card-offset')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({ name: '', address: '', phone: '', email: '' })
 
@@ -73,14 +76,14 @@ export default function ProfilePage({ onToast }: { onToast: (message: string, to
 
   return <>
     <div className="page-heading"><h1>Profile</h1><p className="profile-description">Review and manage your customer contact details.</p></div>
-    <article className="profile-card card">
+    <article className="profile-card card" ref={cardRef}>
       <header>Your Profile</header>
       <div className="profile-mascot"><img src={CUSTOMER_PROFILE_PHOTO} alt={`${name ?? 'Customer'} profile`}/></div>
       {!profile ? <p className="settings-loading">Loading your details…</p> : <dl>
         <dt>Name:</dt><dd>{name ?? NOT_ON_FILE}</dd>
         <dt>Account no.:</dt><dd>{profile.account_number ?? profile.customer_id}</dd>
         <dt>Address:</dt><dd>{profile.address ?? NOT_ON_FILE}</dd>
-        <dt>Contact No.:</dt><dd>{profile.phone ?? NOT_ON_FILE}</dd>
+        <dt>Contact Number:</dt><dd>{profile.phone ?? NOT_ON_FILE}</dd>
         <dt>Email:</dt><dd>{profile.email ?? NOT_ON_FILE}</dd>
         <dt>Plan:</dt><dd>{profile.plan_name ?? NOT_ON_FILE}</dd>
         {profile.icp_number && <><dt>ICP:</dt><dd>{profile.icp_number}</dd></>}

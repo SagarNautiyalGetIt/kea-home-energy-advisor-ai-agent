@@ -2,16 +2,17 @@ import { CircleAlert, DollarSign, ShieldCheck, Triangle, Zap } from 'lucide-reac
 import { useEffect, useState } from 'react'
 import AreaChart from '../components/AreaChart'
 import Modal from '../components/Modal'
-import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import { profile } from '../data/mockData'
+import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import {
   basisNote,
   getBillShock,
-  getHouseholds,
+  getHousehold,
   type BillShockWarning,
   type HouseholdSummary,
 } from '../lib/client'
 import { loadSession } from '../lib/session'
+import { useViewportOffset } from '../lib/viewportOffset'
 import type { PageId } from '../types/navigation'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -74,6 +75,61 @@ function demoParams(): { household: string | null; day: number | undefined } {
   return { household: wanted, day: Number.isFinite(day) && day > 0 ? day : undefined }
 }
 
+// The energy home replaced this page's tiles, charts and bill-shock card. The tiles and
+// the card now open from the energy home's two top corners (`summaryTiles` and
+// `BillShockDetail` below). Only the two charts are left behind this flag: the team
+// decided the dashboard shows no charts, so they stay hidden rather than deleted.
+const SHOW_DASHBOARD_CHARTS = false
+
+const money = (n: number) => `${n.toFixed(2)} NZD`
+
+/**
+ * The bill-shock assessment, in whichever of its four states the API left it. It used to
+ * be a card at the end of the dashboard grid and now fills the popover under the energy
+ * home's warning chip; the copy, and the reasons behind it below, are unchanged.
+ */
+function BillShockDetail({ shock, offline, onNavigate }: { shock: BillShockWarning | null; offline: boolean; onNavigate: (page: PageId) => void }) {
+  return <div className="bill-shock-detail">
+    {/* Only shown as a warning when the assessment actually triggered. The previous version
+        was always on and claimed "29% higher than your usual range" — a fabricated figure,
+        and a claim we cannot make at all: there is no billing history behind this, so
+        "your usual" is unknowable. The comparison is against similar homes and the
+        wording now says so. #69's status dot is driven by that assessment rather than
+        being hardcoded to `alert`, which is what its own comment asked for. */}
+    {offline ? (
+      <><h3><CircleAlert/>Usage data unavailable</h3><p>Kea can&rsquo;t reach your meter data right now, so there is no projection to show. Nothing here is estimated in the meantime.</p></>
+    ) : shock?.triggered ? (
+      <><h3><span className="bill-status-dot bill-status-dot-alert" aria-hidden="true"/>Power Bill Shock Warning</h3>
+        <p>You are <strong>{shock.days_elapsed} of {shock.days_in_cycle} days</strong> into this cycle and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>. You would normally expect about {money(shock.expected_cost_nzd)} — that is <strong>{money(shock.overshoot_nzd)}</strong> more, or {shock.overshoot_pct.toFixed(0)}%.</p>
+        {shock.reasons.includes('higher_daily_use') && (
+          <p>Daily use is up {shock.recent_trend_pct.toFixed(0)}% since the start of the cycle.</p>
+        )}
+        {/* At day 31 of 31 there is nothing left to prevent, and the old copy said
+            "0 days left in this cycle — enough to change the outcome", which is both
+            self-contradicting and the exact thing the endpoint warns about: a warning
+            delivered on the last day is not a warning, it is a bill. The dashboard
+            lands here by default because no ?day= is set, so this is the sentence a
+            judge reads first. */}
+        {shock.days_remaining > 0 ? (
+          <p><strong>{shock.days_remaining} {shock.days_remaining === 1 ? 'day' : 'days'} left</strong> in this cycle — enough to change the outcome.</p>
+        ) : (
+          <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
+        )}
+        <div className="bill-shock-actions"><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
+        <small className="bill-shock-basis">{basisNote(shock.expectation_basis)}</small>
+      </>
+    ) : shock ? (
+      <><h3><span className="bill-status-dot bill-status-dot-normal" aria-hidden="true"/><ShieldCheck/>No bill shock expected</h3>
+        <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with the {money(shock.expected_cost_nzd)} you would normally expect.</p>
+        <div className="bill-shock-actions"><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
+        <small className="bill-shock-basis">{basisNote(shock.expectation_basis)}</small>
+      </>
+    ) : (
+      <><h3>Checking your usage…</h3><p>Sparky is looking at this cycle so far.</p></>
+    )}
+  </div>
+}
+
 export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const [selectedArticle, setSelectedArticle] = useState<(typeof articles)[number] | null>(null)
   const [household, setHousehold] = useState<HouseholdSummary | null>(null)
@@ -83,11 +139,17 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   useEffect(() => {
     let cancelled = false
     const { household: wanted, day } = demoParams()
-    getHouseholds()
-      .then(async (hs) => {
-        const chosen = hs.find((h) => h.customer_id === wanted) ?? hs[0]
-        if (!chosen) throw new Error('no households')
-        const warning = await getBillShock(chosen.customer_id, day)
+    // This account's own household, fetched by its id. The page used to list every
+    // household and pick this one out, which had two failures: any other account that
+    // could not be summarised took the whole list, and this page, down with it; and when
+    // this account was missing it fell back to the first household, showing another
+    // customer's figures under this customer's name. Now a missing account is "data
+    // unavailable", never someone else's data.
+    const load = wanted
+      ? Promise.all([getHousehold(wanted), getBillShock(wanted, day)])
+      : Promise.reject(new Error('no signed-in account'))
+    load
+      .then(([chosen, warning]) => {
         if (cancelled) return
         setHousehold(chosen)
         setShock(warning)
@@ -103,7 +165,6 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   const recent = daily.slice(-7)
   const latest = daily.length ? daily[daily.length - 1] : undefined
   const usageSoFar = shock?.usage_so_far_kwh ?? (daily.length ? daily.reduce((a, b) => a + b, 0) : undefined)
-  const money = (n: number) => `${n.toFixed(2)} NZD`
 
   /**
    * This household's own effective rate — what a unit has actually cost them this
@@ -125,21 +186,26 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
       : ANYTIME_RATE_NZD
   const toCost = (kwh: number) => kwh * effectiveRate
 
+  // The energy home is the page's opening shot, so it fills whatever is left of the
+  // window below the topbar and heading, and the news cards are found by scrolling.
+  const heroRef = useViewportOffset<HTMLDivElement>('--dashboard-hero-offset')
+
+  // The four tiles that used to head this page, now stacked under the energy home's
+  // top-left chip. Every figure here comes from /api/households and /bill-shock. They
+  // used to be literals, which put an invented "Projected Monthly Bill" on the same screen
+  // as a computed one — two numbers disagreeing in front of a judge. #69's refined visuals
+  // are kept; its hardcoded figures are not.
+  const summaryTiles = <div className="summary-tiles">
+    <article><i><Zap/></i><span>Usage so far<strong>{usageSoFar !== undefined ? `${usageSoFar.toFixed(1)} kWh` : '—'}</strong></span></article>
+    <article><i><DollarSign/></i><span>Latest day&rsquo;s cost<strong>{latest !== undefined ? money(toCost(latest)) : '—'}</strong></span></article>
+    <article><i><DollarSign/></i><span>Cost so far<strong>{shock ? money(shock.cost_so_far_nzd) : '—'}</strong></span></article>
+    <article><i><DollarSign/></i><span>Projected this cycle<strong>{shock ? money(shock.projected_cycle_cost_nzd) : '—'}</strong></span></article>
+  </div>
+
   return <>
     <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
-    <section aria-label="Kea Home energy preview">
-      <EnergyHomePanel />
-    </section>
-    <div className="metric-row">
-      {/* Every figure here comes from /api/households and /bill-shock. They used to be
-          literals, which put an invented "Projected Monthly Bill" on the same screen as
-          a computed one — two numbers disagreeing in front of a judge. #69's refined
-          visuals are kept; its hardcoded figures are not. */}
-      <article><i><Zap/></i><span>Usage so far<strong>{usageSoFar !== undefined ? `${usageSoFar.toFixed(1)} kWh` : '—'}</strong></span></article>
-      <article><i><DollarSign/></i><span>Latest day&rsquo;s cost<strong>{latest !== undefined ? money(toCost(latest)) : '—'}</strong></span></article>
-      <article><i><DollarSign/></i><span>Cost so far<strong>{shock ? money(shock.cost_so_far_nzd) : '—'}</strong></span></article>
-      <article><i><DollarSign/></i><span>Projected this cycle<strong>{shock ? money(shock.projected_cycle_cost_nzd) : '—'}</strong></span></article>
-    </div>
+    <div className="dashboard-hero" ref={heroRef}><EnergyHomePanel summary={summaryTiles} billShock={<BillShockDetail shock={shock} offline={offline} onNavigate={onNavigate}/>} billShockTriggered={!offline && shock?.triggered === true} /></div>
+    {SHOW_DASHBOARD_CHARTS && (<>
     <div className="dashboard-grid">
       <article className="card usage-summary">
         <header>
@@ -161,44 +227,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         </header>
         <AreaChart compact animate unit="$" values={(recent.length?recent:[0]).map(toCost)} labels={days.slice(0,recent.length||1)} max={toCost(Math.max(6,...recent))} showLegend={false} ariaLabel="Daily electricity cost over the last seven days of the cycle, in New Zealand dollars"/>
       </article>
-      {/* Only rendered when the assessment actually triggered. The previous version was
-          always on and claimed "29% higher than your usual range" — a fabricated figure,
-          and a claim we cannot make at all: there is no billing history behind this, so
-          "your usual" is unknowable. The comparison is against similar homes and the
-          wording now says so. #69's status dot is driven by that assessment rather than
-          being hardcoded to `alert`, which is what its own comment asked for. */}
-      {offline ? (
-        <article className="card shock-card shock-offline"><h3><CircleAlert/>Usage data unavailable</h3><p>Kea can&rsquo;t reach your meter data right now, so there is no projection to show. Nothing here is estimated in the meantime.</p></article>
-      ) : shock?.triggered ? (
-        <article className="card shock-card"><h3><span className="bill-status-dot bill-status-dot-alert" aria-hidden="true"/>Power Bill Shock Warning</h3>
-          <p>You are <strong>{shock.days_elapsed} of {shock.days_in_cycle} days</strong> into this cycle and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>. You would normally expect about {money(shock.expected_cost_nzd)} — that is <strong>{money(shock.overshoot_nzd)}</strong> more, or {shock.overshoot_pct.toFixed(0)}%.</p>
-          {shock.reasons.includes('higher_daily_use') && (
-            <p>Daily use is up {shock.recent_trend_pct.toFixed(0)}% since the start of the cycle.</p>
-          )}
-          {/* At day 31 of 31 there is nothing left to prevent, and the old copy said
-              "0 days left in this cycle — enough to change the outcome", which is both
-              self-contradicting and the exact thing the endpoint warns about: a warning
-              delivered on the last day is not a warning, it is a bill. The dashboard
-              lands here by default because no ?day= is set, so this is the sentence a
-              judge reads first. */}
-          {shock.days_remaining > 0 ? (
-            <p><strong>{shock.days_remaining} {shock.days_remaining === 1 ? 'day' : 'days'} left</strong> in this cycle — enough to change the outcome.</p>
-          ) : (
-            <p>This cycle has closed, so this is what the bill will reflect. The figures below are what drove it.</p>
-          )}
-          <div><button onClick={()=>onNavigate('usage')}>View Usage</button><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">{basisNote(shock.expectation_basis)}</small>
-        </article>
-      ) : shock ? (
-        <article className="card shock-card shock-ok"><h3><span className="bill-status-dot bill-status-dot-normal" aria-hidden="true"/><ShieldCheck/>No bill shock expected</h3>
-          <p>You are {shock.days_elapsed} of {shock.days_in_cycle} days in and on track for <strong>{money(shock.projected_cycle_cost_nzd)}</strong>, which is in line with the {money(shock.expected_cost_nzd)} you would normally expect.</p>
-          <div><button onClick={()=>onNavigate('assistant')}>Ask Sparky AI</button></div>
-          <small className="shock-basis">{basisNote(shock.expectation_basis)}</small>
-        </article>
-      ) : (
-        <article className="card shock-card shock-ok"><h3>Checking your usage…</h3><p>Sparky is looking at this cycle so far.</p></article>
-      )}
     </div>
+    </>)}
     <section className="article-grid" aria-label="Kea Energy news">{articles.map((article)=><article className="article-card" key={article.title}><div className="article-art"><img src={article.image} alt={article.imageAlt} loading="lazy" decoding="async"/></div><h3>{article.title}</h3><footer><small>{article.date}</small><button onClick={()=>setSelectedArticle(article)}>View</button></footer></article>)}</section>
     {selectedArticle&&<Modal title={selectedArticle.title} onClose={()=>setSelectedArticle(null)}><img className="article-modal-art" src={selectedArticle.image} alt={selectedArticle.imageAlt}/><p className="modal-meta">{selectedArticle.date}</p><p>{selectedArticle.body}</p></Modal>}
   </>
