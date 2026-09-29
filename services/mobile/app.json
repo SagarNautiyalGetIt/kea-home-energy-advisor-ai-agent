@@ -51,6 +51,14 @@
       ],
       "expo-secure-store",
       "expo-sharing",
+      [
+        "llama.rn",
+        {
+          "enableEntitlements": false,
+          "enableOpenCLAndHexagon": false,
+          "forceCxx20": true
+        }
+      ],
       "expo-video"
     ],
     "experiments": {

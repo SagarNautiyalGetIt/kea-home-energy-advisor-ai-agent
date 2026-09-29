@@ -10,6 +10,8 @@ import { SparkyIntro } from '@/components/sparky-intro';
 import { SparkyLogo, SparkyThinking } from '@/components/sparky-logo';
 import { IconButton, PageHeader } from '@/components/ui';
 import { streamAssistantReply, toolLabel } from '@/lib/assistant-api';
+import { answerOnPhone, isPhoneModelEnabled, phoneModelStatus, stopPhoneAnswer } from '@/lib/local-sparky';
+import { canAnswerWithLocalModel, LOCAL_EVIDENCE_LIMIT } from '@/lib/local-sparky-policy';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
@@ -21,6 +23,7 @@ type Message = {
   escalate?: boolean;
   streaming?: boolean;
   failed?: boolean;
+  origin?: 'phone' | 'service';
   /** Live lookup labels while the answer is being written; cleared when it lands. */
   activity?: string[];
   /** Tool names behind the finished answer, for the transparency line. */
@@ -80,7 +83,24 @@ export default function AssistantScreen() {
         : [...current, fn({ id: replyId, role: 'assistant', text: '', streaming: true })]);
 
     try {
-      await new Promise<void>((resolve) => {
+      const phoneEnabled = await isPhoneModelEnabled();
+      const phoneReady = phoneEnabled && (await phoneModelStatus()).phase === 'installed';
+      let answeredOnPhone = false;
+      if (phoneReady && canAnswerWithLocalModel(clean)) {
+        try {
+          requestRef.current = { abort: () => { void stopPhoneAnswer(); } };
+          const answer = await answerOnPhone(clean, (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })));
+          if (version !== chatVersion.current) return;
+          patch((m) => ({ ...m, text: answer, streaming: false, origin: 'phone' }));
+          completed = true;
+          answeredOnPhone = true;
+        } catch {
+          patch((m) => ({ ...m, text: '' }));
+          // The Kea service remains the connected fallback when a device fails
+          // to load or run its local model.
+        }
+      }
+      if (!answeredOnPhone) await new Promise<void>((resolve) => {
         const stream = streamAssistantReply(session?.customerId ?? '', clean, {
           onText: (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })),
           // That round turned out to be a lookup, so its text was a preamble.
@@ -99,13 +119,14 @@ export default function AssistantScreen() {
               // Tier 3 means the text above is a handover written by Python, not an
               // answer — the UI labels it so nobody reads it as advice.
               handover: result.tier === 3,
+              origin: 'service',
             }));
             if (shouldEscalate) showToast('Customer Care hand-off ready', 'info');
             resolve();
           },
           onError: (failure) => {
             completed = true;
-            patch((m) => ({ ...m, text: failure, streaming: false, failed: true, activity: undefined }));
+            patch((m) => ({ ...m, text: phoneReady ? `${failure}\n\n${LOCAL_EVIDENCE_LIMIT}` : failure, streaming: false, failed: true, activity: undefined }));
             resolve();
           },
         }, conversationId.current);
@@ -156,8 +177,13 @@ export default function AssistantScreen() {
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />
                   : <Text style={[styles.bubbleText, { color: '#000000' }]}>{message.text}</Text>}
+                {message.origin === 'phone' ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>On this phone · general guidance · no account data</Text> : null}
+                {message.activity?.length ? <View>
+                  {message.activity.map((entry, index) => <Text key={`${entry}-${index}`} style={[styles.sourceLine, { color: colors.textMuted }]}>Checking: {entry}</Text>)}
+                </View> : null}
                 {message.sources?.length ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>Checked: {message.sources.map(toolLabel).join(' · ')}</Text> : null}
-                {message.escalate ? <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={styles.escalationAction}><Ionicons color="#000000" name="people-outline" size={17} /><Text style={styles.escalationText}>Contact Customer Care</Text></Pressable> : null}
+                {message.handover ? <Text style={[styles.sourceLine, { color: colors.textMuted }]}>This demo has not sent your chat to staff.</Text> : null}
+                {message.escalate ? <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={styles.escalationAction}><Ionicons color="#000000" name="people-outline" size={17} /><Text style={styles.escalationText}>See support guidance</Text></Pressable> : null}
                 {message.role === 'assistant' && !message.streaming ? <View style={styles.replyActions}>
                   <Pressable accessibilityLabel="Copy reply" hitSlop={8} onPress={() => void copyReply(message)} style={styles.replyAction}><Ionicons color={colors.text} name="copy-outline" size={15} /></Pressable>
                 </View> : null}

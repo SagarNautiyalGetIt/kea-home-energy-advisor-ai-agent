@@ -38,7 +38,7 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
     ? [{ label: 'Bill prediction', detail: billPrediction.detail, path: '', icon: 'alert-circle-outline' as const, onPress: billPrediction.onPress, tint: colors.text }, ...navigationItems]
     : navigationItems;
 
-  return <View style={[styles.container, listMode && styles.listContainer, { borderColor: 'rgba(255,255,255,0.22)', paddingBottom: 0 }]}> 
+  return <View style={[styles.container, listMode && styles.listContainer, { borderColor: 'rgba(255,255,255,0.22)', paddingBottom: 0 }]}>
     {!listMode ? <BlurView intensity={72} tint="dark" pointerEvents="none" style={styles.glassBackground} /> : null}
     {!listMode ? <View pointerEvents="none" style={styles.glassTint} /> : null}
     {items.map((item) => <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
