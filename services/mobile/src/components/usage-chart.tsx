@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
-import Animated, { cancelAnimation, Easing, useAnimatedProps, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import { pathFor, pathLength } from '@/lib/usage-chart-geometry';
+import Animated, { cancelAnimation, Easing, useAnimatedProps, useReducedMotion, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useAppTheme } from '@/theme';
 
 const HEIGHT = 210;
 const PAD_TOP = 10;
-const POINT_RADIUS = 4.2;
+const POINT_RADIUS = 2.5;
 const ACTIVE_RING_RADIUS = 10;
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 type ChartUnit = 'kwh' | 'cost';
+type ChartType = 'line' | 'bar';
 type TimeBand = { label: string; startIndex: number; endIndex: number; row?: number };
 
 function xForIndex(index: number, count: number, plotWidth: number, horizontalPadding: number): number {
@@ -23,19 +24,30 @@ function xForIndex(index: number, count: number, plotWidth: number, horizontalPa
 }
 
 function pointsFor(
-  values: readonly (number | null)[],
+  values: readonly number[],
   max: number,
   bottomPadding: number,
   width: number,
-  horizontalPadding: number
+  horizontalPadding: number,
+  leadingInset = 0,
 ) {
   const plotHeight = HEIGHT - PAD_TOP - bottomPadding;
   return values.map((value, index) => {
-    const x = xForIndex(index, values.length, width, horizontalPadding);
-    if (value === null) return null;
+    const x = values.length <= 1
+      ? width / 2
+      : leadingInset + xForIndex(index, values.length, width - leadingInset, horizontalPadding);
     const y = HEIGHT - bottomPadding - (value / max) * plotHeight;
     return { x, y };
   });
+}
+
+function pathFor(points: readonly { x: number; y: number }[]) {
+  if (!points.length) return '';
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index] as { x: number; y: number };
+    const controlOffset = (point.x - previous.x) * 0.46;
+    return `${path} C${(previous.x + controlOffset).toFixed(1)} ${previous.y.toFixed(1)} ${(point.x - controlOffset).toFixed(1)} ${point.y.toFixed(1)} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+  }, `M${points[0]!.x.toFixed(1)} ${points[0]!.y.toFixed(1)}`);
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -45,6 +57,41 @@ function clamp(value: number, min: number, max: number) {
 function valueText(value: number, unit: ChartUnit, max: number) {
   if (unit === 'cost') return `$${value.toFixed(2)}`;
   return `${value.toFixed(max <= 2 ? 1 : 0)} kWh`;
+}
+
+function Bar({
+  x,
+  width,
+  baseline,
+  fullHeight,
+  radius,
+  fill,
+  fillOpacity,
+  progress,
+}: {
+  x: number;
+  width: number;
+  baseline: number;
+  fullHeight: number;
+  radius: number;
+  fill: string;
+  fillOpacity?: number;
+  progress: SharedValue<number>;
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const h = Math.max(0, fullHeight * progress.value);
+    return { y: baseline - h, height: h };
+  });
+  return (
+    <AnimatedRect
+      animatedProps={animatedProps}
+      fill={fill}
+      fillOpacity={fillOpacity}
+      rx={radius}
+      width={width}
+      x={x}
+    />
+  );
 }
 
 export function UsageChart({
@@ -58,13 +105,15 @@ export function UsageChart({
   timeBands,
   previous,
   unit = 'kwh',
+  chartType = 'line',
   max: requestedMax,
   xLabelInterval = 1,
   accessibilityLabel = 'Electricity usage chart',
   active,
   onActivate,
+  leadingDecorativeAnchor = false,
 }: {
-  values: readonly (number | null)[];
+  values: readonly number[];
   labels: readonly string[];
   axisLabels?: readonly string[];
   secondaryLabels?: readonly string[];
@@ -72,13 +121,16 @@ export function UsageChart({
   tooltipLabels?: readonly string[];
   previousTooltipLabels?: readonly string[];
   timeBands?: readonly TimeBand[];
-  previous?: readonly (number | null)[];
+  previous?: readonly number[];
   unit?: ChartUnit;
+  chartType?: ChartType;
   max?: number;
   xLabelInterval?: number;
   accessibilityLabel?: string;
   active?: boolean;
   onActivate?: () => void;
+  /** Adds a visual-only line anchor before the first real reading. */
+  leadingDecorativeAnchor?: boolean;
   highlightedIndices?: readonly number[];
 }) {
   const { colors } = useAppTheme();
@@ -88,17 +140,18 @@ export function UsageChart({
   const reduceMotion = useReducedMotion();
 
   const lineProgress = useSharedValue(0);
-  const areaProgress = useSharedValue(0);
-  const pointProgress = useSharedValue(0);
+  const barProgress = useSharedValue(0);
 
   const chartWidth = Math.max(1, Math.round(containerWidth || windowWidth || 360));
-  const rightAxisWidth = 38;
+  const rightAxisWidth = 26;
   const plotWidth = Math.max(1, chartWidth - rightAxisWidth);
-  const horizontalPadding = POINT_RADIUS + 1;
+  const isBar = chartType === 'bar';
+  const hasDecorativeLeadingAnchor = leadingDecorativeAnchor && !isBar && values.length > 1;
+  const leadingDataInset = hasDecorativeLeadingAnchor ? Math.min(12, Math.max(8, plotWidth / (values.length + 1))) : 0;
+  const horizontalPadding = isBar ? (values.length >= 20 ? 8 : 32) : 0;
   const isCost = unit === 'cost';
   const minimumCeiling = isCost ? 0.1 : 1;
-  const observedValues = [...values, ...(previous ?? [])].filter((value): value is number => value !== null);
-  const max = Math.max(requestedMax ?? Math.max(...observedValues, minimumCeiling) * 1.03, minimumCeiling);
+  const max = Math.max(requestedMax ?? Math.max(...values, ...(previous ?? []), minimumCeiling) * 1.03, minimumCeiling);
 
   const timeBandRows = timeBands?.length ? Math.max(...timeBands.map((band) => band.row ?? 0)) + 1 : 0;
   const extraAxisRows = (secondaryLabels ? 1 : 0) + (tertiaryLabels ? 1 : 0);
@@ -106,27 +159,39 @@ export function UsageChart({
   const plotBottom = HEIGHT - bottomPadding;
 
   const points = useMemo(
-    () => pointsFor(values, max, bottomPadding, plotWidth, horizontalPadding),
-    [bottomPadding, horizontalPadding, max, plotWidth, values]
+    () => pointsFor(values, max, bottomPadding, plotWidth, horizontalPadding, leadingDataInset),
+    [bottomPadding, horizontalPadding, leadingDataInset, max, plotWidth, values]
   );
   const comparePoints = useMemo(
-    () => (previous ? pointsFor(previous, max, bottomPadding, plotWidth, horizontalPadding) : []),
-    [bottomPadding, horizontalPadding, max, plotWidth, previous]
+    () => (previous ? pointsFor(previous, max, bottomPadding, plotWidth, horizontalPadding, leadingDataInset) : []),
+    [bottomPadding, horizontalPadding, leadingDataInset, max, plotWidth, previous]
   );
-  const line = useMemo(() => pathFor(points), [points]);
-  const compareLine = useMemo(() => pathFor(comparePoints), [comparePoints]);
-  const length = useMemo(() => pathLength(points), [points]);
+  const linePoints = useMemo(
+    () => hasDecorativeLeadingAnchor && points[0] ? [{ x: 0, y: points[0].y }, ...points] : points,
+    [hasDecorativeLeadingAnchor, points]
+  );
+  const compareLinePoints = useMemo(
+    () => hasDecorativeLeadingAnchor && comparePoints[0] ? [{ x: 0, y: comparePoints[0].y }, ...comparePoints] : comparePoints,
+    [comparePoints, hasDecorativeLeadingAnchor]
+  );
+  const line = useMemo(() => pathFor(linePoints), [linePoints]);
+  const compareLine = useMemo(() => pathFor(compareLinePoints), [compareLinePoints]);
   const baselineY = plotBottom;
-  const area = line && points.length > 1 && points.every((point) => point !== null)
-    ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${points[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
+  const area = line && points.length
+    ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${linePoints[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
     : '';
-  const onlyPoint = points.filter((point) => point !== null).length === 1;
+  const onlyPoint = points.length === 1 ? points[0] : undefined;
+  const hasCompare = comparePoints.length === values.length && comparePoints.length > 0;
+  const slotWidth = points.length > 1 ? points[1]!.x - points[0]!.x : plotWidth;
+  const singleBarWidth = Math.max(8, Math.min(30, slotWidth * 0.56));
+  const groupBarWidth = Math.max(5, Math.min(15, slotWidth * 0.27));
+  const barGap = 3;
 
   const visibleActiveIndex = active === false ? null : activeIndex;
-  const activePoint = visibleActiveIndex === null ? undefined : points[visibleActiveIndex] ?? undefined;
-  const activeComparePoint = visibleActiveIndex === null ? undefined : comparePoints[visibleActiveIndex] ?? undefined;
-  const activeValue = visibleActiveIndex === null ? undefined : values[visibleActiveIndex] ?? undefined;
-  const activePreviousValue = visibleActiveIndex === null ? undefined : previous?.[visibleActiveIndex] ?? undefined;
+  const activePoint = visibleActiveIndex === null ? undefined : points[visibleActiveIndex];
+  const activeComparePoint = visibleActiveIndex === null ? undefined : comparePoints[visibleActiveIndex];
+  const activeValue = visibleActiveIndex === null ? undefined : values[visibleActiveIndex];
+  const activePreviousValue = visibleActiveIndex === null ? undefined : previous?.[visibleActiveIndex];
   const activeLabel =
     visibleActiveIndex === null
       ? undefined
@@ -134,7 +199,7 @@ export function UsageChart({
   const activePreviousLabel =
     visibleActiveIndex === null ? undefined : previousTooltipLabels?.[visibleActiveIndex] ?? activeLabel;
   const displayLabels = axisLabels ?? labels;
-  const selectedAccessibility = activeLabel && typeof activeValue === 'number'
+  const selectedAccessibility = activeLabel && activeValue !== undefined
     ? `${accessibilityLabel}. Selected ${activeLabel}, ${valueText(activeValue, unit, max)}.`
     : accessibilityLabel;
 
@@ -144,7 +209,6 @@ export function UsageChart({
     let nearestIndex = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
     points.forEach((point, index) => {
-      if (!point) return;
       const distance = Math.abs(point.x - locationX);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -157,33 +221,30 @@ export function UsageChart({
 
   useEffect(() => {
     lineProgress.value = reduceMotion ? 1 : 0;
-    areaProgress.value = reduceMotion ? 1 : 0;
-    pointProgress.value = reduceMotion ? 1 : 0;
+    barProgress.value = reduceMotion ? 1 : 0;
 
     if (!reduceMotion) {
-      lineProgress.value = withTiming(1, { duration: 850, easing: Easing.bezier(0.22, 0.7, 0.25, 1) });
-      areaProgress.value = withDelay(150, withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }));
-      pointProgress.value = withDelay(520, withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) }));
+      lineProgress.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) });
+      barProgress.value = withDelay(120, withTiming(1, { duration: 650, easing: Easing.out(Easing.cubic) }));
     }
 
     return () => {
       cancelAnimation(lineProgress);
-      cancelAnimation(areaProgress);
-      cancelAnimation(pointProgress);
+      cancelAnimation(barProgress);
     };
-  }, [areaProgress, lineProgress, pointProgress, reduceMotion, values]);
+  }, [barProgress, lineProgress, reduceMotion, values]);
 
   const lineAnimatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: length * (1 - lineProgress.value),
+    opacity: lineProgress.value,
   }));
   const compareAnimatedProps = useAnimatedProps(() => ({
-    opacity: areaProgress.value * 0.72,
+    opacity: lineProgress.value * 0.72,
   }));
   const areaAnimatedProps = useAnimatedProps(() => ({
-    opacity: areaProgress.value,
+    opacity: lineProgress.value,
   }));
   const pointAnimatedProps = useAnimatedProps(() => ({
-    opacity: pointProgress.value,
+    opacity: lineProgress.value,
   }));
 
   const primaryY = timeBandRows
@@ -204,108 +265,166 @@ export function UsageChart({
       <Svg height={HEIGHT} viewBox={`0 0 ${chartWidth} ${HEIGHT}`} width="100%">
         <Defs>
           <LinearGradient id="usageAreaShade" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0%" stopColor="#38BDF8" stopOpacity={0.28} />
-            <Stop offset="58%" stopColor="#1678A6" stopOpacity={0.16} />
-            <Stop offset="100%" stopColor="#0B324A" stopOpacity={0.02} />
+            <Stop offset="0%" stopColor="#75914B" stopOpacity={0.58} />
+            <Stop offset="58%" stopColor="#C7F071" stopOpacity={0.30} />
+            <Stop offset="100%" stopColor="#C7F071" stopOpacity={0.04} />
           </LinearGradient>
         </Defs>
 
-        {values.map((_, index) => (
+        {!isBar && points.map((point, index) => (
           <Line
             key={`grid-${index}`}
             stroke="#3A3A3C"
             strokeDasharray="5 7"
             strokeOpacity={0.38}
             strokeWidth={1}
-            x1={xForIndex(index, values.length, plotWidth, horizontalPadding)}
-            x2={xForIndex(index, values.length, plotWidth, horizontalPadding)}
+            x1={point.x}
+            x2={point.x}
             y1={PAD_TOP + 2}
             y2={plotBottom + 2}
           />
         ))}
 
-        {area ? <AnimatedPath animatedProps={areaAnimatedProps} d={area} fill="url(#usageAreaShade)" /> : null}
+        {!isBar && area ? <AnimatedPath animatedProps={areaAnimatedProps} d={area} fill="url(#usageAreaShade)" /> : null}
 
-        {compareLine ? (
-          <AnimatedPath
-            animatedProps={compareAnimatedProps}
-            d={compareLine}
-            fill="none"
-            stroke="#FBBF24"
-            strokeDasharray="5 6"
-            strokeLinecap="round"
-            strokeOpacity={0.9}
-            strokeWidth={2}
-          />
-        ) : null}
+        {isBar ? (
+          points.map((point, index) => {
+            const mainFill = '#C7F071';
+            if (hasCompare) {
+              const comparePoint = comparePoints[index];
+              return (
+                <G key={`bar-${index}`}>
+                  {comparePoint ? (
+                    <Bar
+                      baseline={plotBottom}
+                      fill="#FBBF24"
+                      fillOpacity={0.85}
+                      fullHeight={Math.max(0, plotBottom - comparePoint.y)}
+                      progress={barProgress}
+                      radius={Math.min(5, groupBarWidth / 2)}
+                      width={groupBarWidth}
+                      x={point.x - groupBarWidth - barGap / 2}
+                    />
+                  ) : null}
+                  <Bar
+                    baseline={plotBottom}
+                    fill={mainFill}
+                    fullHeight={Math.max(0, plotBottom - point.y)}
+                    progress={barProgress}
+                    radius={Math.min(5, groupBarWidth / 2)}
+                    width={groupBarWidth}
+                    x={point.x + barGap / 2}
+                  />
+                </G>
+              );
+            }
+            return (
+              <Bar
+                key={`bar-${index}`}
+                baseline={plotBottom}
+                fill={mainFill}
+                fullHeight={Math.max(0, plotBottom - point.y)}
+                progress={barProgress}
+                radius={Math.min(6, singleBarWidth / 2)}
+                width={singleBarWidth}
+                x={point.x - singleBarWidth / 2}
+              />
+            );
+          })
+        ) : (
+          <>
+            {compareLine ? (
+              <AnimatedPath
+                animatedProps={compareAnimatedProps}
+                d={compareLine}
+                fill="none"
+                stroke="#FBBF24"
+                strokeLinecap="round"
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+            ) : null}
 
-        {onlyPoint ? null : (
-          <AnimatedPath
-            animatedProps={lineAnimatedProps}
-            d={line}
-            fill="none"
-            stroke="#38BDF8"
-            strokeDasharray={`${length} ${length}`}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={3.3}
-          />
+            {onlyPoint ? (
+              <Line
+                stroke="#C7F071"
+                strokeLinecap="round"
+                strokeOpacity={0.86}
+                strokeWidth={3.3}
+                x1={horizontalPadding}
+                x2={plotWidth - horizontalPadding}
+                y1={onlyPoint.y}
+                y2={onlyPoint.y}
+              />
+            ) : (
+              <AnimatedPath
+                animatedProps={lineAnimatedProps}
+                d={line}
+                fill="none"
+                stroke="#C7F071"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3.3}
+              />
+            )}
+
+            {points.map((point, index) => {
+              const isSelected = visibleActiveIndex === index;
+              return (
+                <G key={`point-${index}`}>
+                  {isSelected ? (
+                    <Circle
+                      cx={point.x}
+                      cy={point.y}
+                      fill="rgba(199,240,113,0.2)"
+                      r={ACTIVE_RING_RADIUS}
+                      stroke="#C7F071"
+                      strokeWidth={2}
+                    />
+                  ) : null}
+                  <AnimatedCircle
+                    animatedProps={pointAnimatedProps}
+                    cx={point.x}
+                    cy={point.y}
+                    fill="#C7F071"
+                    r={isSelected ? 3.5 : POINT_RADIUS}
+                    stroke="#FFFFFF"
+                    strokeWidth={1}
+                  />
+                </G>
+              );
+            })}
+          </>
         )}
 
-        {points.map((point, index) => {
-          if (!point) return null;
-          const isSelected = visibleActiveIndex === index;
-          return (
-            <G key={`point-${index}`}>
-              {isSelected ? (
-                <Circle
-                  cx={point.x}
-                  cy={point.y}
-                  fill="rgba(56,189,248,0.2)"
-                  r={ACTIVE_RING_RADIUS}
-                  stroke="#7DD3FC"
-                  strokeWidth={2}
-                />
-              ) : null}
-              <AnimatedCircle
-                animatedProps={pointAnimatedProps}
-                cx={point.x}
-                cy={point.y}
-                fill={isSelected ? '#7DD3FC' : '#38BDF8'}
-                r={isSelected ? 5.5 : POINT_RADIUS}
-                stroke="#0B0B0D"
-                strokeWidth={2.2}
-              />
-            </G>
-          );
-        })}
-
-        {activePoint && typeof activeValue === 'number' && activeLabel ? (() => {
+        {activePoint && activeValue !== undefined && activeLabel ? (() => {
           const metric = valueText(activeValue, unit, max);
-          const previousMetric = typeof activePreviousValue === 'number' ? valueText(activePreviousValue, unit, max) : undefined;
+          const previousMetric = activePreviousValue !== undefined ? valueText(activePreviousValue, unit, max) : undefined;
           // Compact chip, always floating above the dot (never on it), centered on it.
-          const tooltipWidth = typeof activePreviousValue === 'number' ? 120 : 100;
-          const tooltipHeight = typeof activePreviousValue === 'number' ? 60 : 44;
+          const tooltipWidth = activePreviousValue !== undefined ? 120 : 100;
+          const tooltipHeight = activePreviousValue !== undefined ? 60 : 44;
           const tooltipX = clamp(
             activePoint.x - tooltipWidth / 2,
             4,
             Math.max(4, plotWidth - tooltipWidth - 4),
           );
-          const tooltipY = 8;
+          const tooltipY = clamp(activePoint.y - tooltipHeight - 14, 4, Math.max(4, plotBottom - tooltipHeight - 4));
 
           return (
             <G pointerEvents="none">
-              <Line
-                stroke="#38BDF8"
-                strokeDasharray="4 5"
-                strokeOpacity={0.82}
-                strokeWidth={1.4}
-                x1={activePoint.x}
-                x2={activePoint.x}
-                y1={tooltipY + tooltipHeight + 9}
-                y2={activePoint.y - ACTIVE_RING_RADIUS}
-              />
-              {activeComparePoint ? (
+              {!isBar ? (
+                <Line
+                  stroke="#C7F071"
+                  strokeDasharray="4 5"
+                  strokeOpacity={0.82}
+                  strokeWidth={1.4}
+                  x1={activePoint.x}
+                  x2={activePoint.x}
+                  y1={activePoint.y + ACTIVE_RING_RADIUS}
+                  y2={primaryY - 18}
+                />
+              ) : null}
+              {!isBar && activeComparePoint ? (
                 <Circle
                   cx={activeComparePoint.x}
                   cy={activeComparePoint.y}
@@ -316,10 +435,10 @@ export function UsageChart({
                 />
               ) : null}
               <Rect
-                fill="#000000"
+                fill="#2C2C2E"
                 height={tooltipHeight}
                 rx={12}
-                stroke="#A1A1AA"
+                stroke="#456476"
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
                 width={tooltipWidth}
@@ -328,8 +447,8 @@ export function UsageChart({
               />
               <Path
                 d={`M${activePoint.x - 7} ${tooltipY + tooltipHeight - 1} L${activePoint.x} ${tooltipY + tooltipHeight + 9} L${activePoint.x + 7} ${tooltipY + tooltipHeight - 1} Z`}
-                fill="#000000"
-                stroke="#A1A1AA"
+                fill="#2C2C2E"
+                stroke="#456476"
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
               />
@@ -373,28 +492,22 @@ export function UsageChart({
         {displayLabels.map((label, index) => {
           if (!label) return null;
           if (index % xLabelInterval !== 0 && index !== displayLabels.length - 1) return null;
-          const x = xForIndex(index, displayLabels.length, plotWidth, horizontalPadding);
+          const x = leadingDataInset + xForIndex(index, displayLabels.length, plotWidth - leadingDataInset, horizontalPadding);
           const isHourlyAxis = displayLabels.length >= 20;
           const labelX = isHourlyAxis && index === 3 ? x + 4 : x;
-          const textAnchor = index === 0 ? 'start' : index === displayLabels.length - 1 ? 'end' : 'middle';
+          const textAnchor = isBar && !isHourlyAxis
+            ? 'middle'
+            : index === 0
+              ? 'start'
+              : index === displayLabels.length - 1
+                ? 'end'
+                : 'middle';
           const isSelected = visibleActiveIndex === index && displayLabels.length === values.length;
           return (
             <G key={`label-${label}-${index}`}>
-              {isSelected ? (
-                <Rect
-                  fill="rgba(56,189,248,0.18)"
-                  height={secondaryLabels ? 56 : 30}
-                  rx={18}
-                  stroke="#456476"
-                  strokeOpacity={0.9}
-                  width={46}
-                  x={x - 23}
-                  y={primaryY - 19}
-                />
-              ) : null}
               <SvgText
-                fill={isSelected ? '#7DD3FC' : '#A1A1AA'}
-                fontSize={isHourlyAxis ? 11 : 12}
+                fill={isSelected ? '#C7F071' : '#A1A1AA'}
+                fontSize={isHourlyAxis ? 9.5 : 12}
                 fontWeight="800"
                 textAnchor={textAnchor}
                 x={labelX}
@@ -404,7 +517,7 @@ export function UsageChart({
               </SvgText>
               {secondaryLabels?.[index] ? (
                 <SvgText
-                  fill={isSelected ? '#7DD3FC' : '#F2F2F7'}
+                  fill={isSelected ? '#C7F071' : '#F2F2F7'}
                   fontSize={13}
                   fontWeight="900"
                   textAnchor={textAnchor}

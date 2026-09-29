@@ -92,7 +92,11 @@ export async function loadPlans(customerId: string, signal?: AbortSignal): Promi
   if (!useRealData) {
     return normalizePlans(demoPlansData);
   }
-  return normalizePlans(await apiJson<unknown>(apiPath(plansPath, { customer_id: customerId }), { signal }));
+  try {
+    return normalizePlans(await apiJson<unknown>(apiPath(plansPath, { customer_id: customerId }), { signal }));
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function requestPlanSwitch(customerId: string, pricingStyle: string, term: string): Promise<void> {

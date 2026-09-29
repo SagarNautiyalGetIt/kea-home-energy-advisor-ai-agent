@@ -3,12 +3,15 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   CHANNEL_LABEL,
   TIER_OPTIONS,
+  formatMb,
   getAlertPreferences,
+  getOfflineModels,
   ladderError,
   saveAlertPreferences,
   thresholdInDollars,
   withThreshold,
   type AlertPreferences,
+  type OfflineModelOption,
   type Tier,
 } from '../lib/alerts'
 
@@ -72,6 +75,7 @@ type Props = {
 
 export default function BillShockThresholds({ customerId, expectedCostNzd = null, onToast }: Props) {
   const [prefs, setPrefs] = useState<AlertPreferences | null>(null)
+  const [models, setModels] = useState<OfflineModelOption[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -88,6 +92,11 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
         setSaved(loaded)
       })
       .catch((error: Error) => live && setLoadError(error.message))
+    // A failed catalogue fetch is not an error worth showing: it only affects one
+    // optional row, and the alert thresholds above it are the point of the screen.
+    getOfflineModels()
+      .then((options) => live && setModels(options))
+      .catch(() => undefined)
     return () => {
       live = false
     }
@@ -116,7 +125,7 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
     }
   }
 
-  // "Interest in offline Sparky" sits below the Save button, apart from the alert
+  // "Answers without a connection" sits below the Save button, apart from the alert
   // settings it has nothing to do with, so it saves the moment it is flipped, like the
   // other switches on this page.
   const saveOffline = async (on: boolean) => {
@@ -124,12 +133,18 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
     setPrefs((current) => current && { ...current, offline_model_opt_in: on })
     try {
       setSaved(await saveAlertPreferences(customerId, { ...saved, offline_model_opt_in: on }))
-      onToast(on ? 'Offline Sparky interest saved' : 'Offline Sparky interest removed')
+      onToast(on ? 'Offline answers on' : 'Offline answers off')
     } catch (error) {
       setPrefs((current) => current && { ...current, offline_model_opt_in: !on })
       onToast(`Could not save: ${(error as Error).message}`)
     }
   }
+
+  // Smallest first — the recommended option, and the one whose size sets the customer's
+  // expectation. Quoting the largest would be quoting a cost they did not agree to.
+  const smallestModel = models.length
+    ? models.reduce((a, b) => (a.download_mb <= b.download_mb ? a : b))
+    : null
 
   const masterSwitch = (
     <input
@@ -345,21 +360,23 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
         </button>
       </div>
 
-      <label className="setting-row setting-standalone offline-answers">
-        <WifiOff aria-hidden="true" />
-        <span>
-          <strong>Interest in offline Sparky</strong>
-          <small>
-            Save your preference for a future offline release. This build does not
-            download a model or answer without a connection.
-          </small>
-        </span>
-        <input
-          type="checkbox"
-          checked={prefs.offline_model_opt_in}
-          onChange={(event) => void saveOffline(event.target.checked)}
-        />
-      </label>
+      {smallestModel && (
+        <label className="setting-row setting-standalone offline-answers">
+          <WifiOff aria-hidden="true" />
+          <span>
+            <strong>Answers without a connection</strong>
+            <small>
+              Keep a small assistant on this device so Sparky still works when you have no
+              signal. About {formatMb(smallestModel.download_mb)}, downloaded over wifi only.
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            checked={prefs.offline_model_opt_in}
+            onChange={(event) => void saveOffline(event.target.checked)}
+          />
+        </label>
+      )}
     </div>
     </>
   )

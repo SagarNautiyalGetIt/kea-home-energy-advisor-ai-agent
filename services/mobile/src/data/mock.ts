@@ -7,6 +7,10 @@ export const hourlyUsage = [
 ]
 export const monthlyUsage = [24, 32, 34, 26]
 
+// Compatibility export for older dashboard bundles. The current home preview
+// derives its displayed values from the live modelled snapshot instead.
+export const demoHomeScenarios: readonly unknown[] = [{}]
+
 export const profile = {
   customerId: '110733ap',
   name: 'Adela Parkson',

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -26,7 +27,11 @@ export default function RootLayout() {
       <AppThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <Navigation />
+            <View style={styles.appRoot}>
+              <View style={styles.navigationLayer}>
+                <Navigation />
+              </View>
+            </View>
             {introVisible ? <AppIntro onDone={() => setIntroVisible(false)} /> : null}
           </ToastProvider>
         </AuthProvider>
@@ -34,3 +39,8 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  appRoot: { flex: 1 },
+  navigationLayer: { flex: 1 },
+});

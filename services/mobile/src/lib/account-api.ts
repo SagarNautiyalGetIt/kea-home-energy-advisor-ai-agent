@@ -29,12 +29,13 @@ export const FALLBACK_DEMO_ACCOUNTS: DemoAccount[] = [
 ];
 
 export async function loadDemoAccounts(): Promise<DemoAccount[]> {
+  const useRealData = process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'false';
   try {
     const value: unknown = await apiJson('/api/auth/demo-accounts');
     if (Array.isArray(value) && value.every(isDemoAccount)) return value;
+    if (useRealData) throw new Error('Demo accounts response was invalid.');
   } catch {
-    // If backend returns 503 (KEA_DEMO_LOGINS not enabled on server) or is unreachable,
-    // fallback to the official fixture credentials.
+    if (useRealData) throw new Error('Demo accounts are unavailable from the backend.');
   }
   return FALLBACK_DEMO_ACCOUNTS;
 }

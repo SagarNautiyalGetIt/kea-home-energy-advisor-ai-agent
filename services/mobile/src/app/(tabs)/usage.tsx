@@ -1,23 +1,35 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
+import { GlassSegmented } from '@/components/glass-segment';
 import { PageHeader, PrimaryButton } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
+import { UsageChartLoader } from '@/components/usage-chart-loader';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
-import { loadConnectedAppliances, type ConnectedAppliances } from '@/lib/connected-appliances';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
 type Period = UsagePeriod;
 type Unit = 'kwh' | 'cost';
+type ChartType = 'line' | 'bar';
 type ComparisonSelection = { first: string; second: string };
+
+function LineChartIcon({ color }: { color: string }) {
+  return (
+    <Svg height={18} viewBox="0 0 20 18" width={20}>
+      <SvgLine stroke={color} strokeLinecap="round" strokeWidth={1.7} x1="2" x2="2" y1="2" y2="16" />
+      <SvgLine stroke={color} strokeLinecap="round" strokeWidth={1.7} x1="2" x2="18" y1="16" y2="16" />
+      <SvgPath d="M4 12 L7.5 8.5 L10.5 11 L14 5.5 L17 7" fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} />
+    </Svg>
+  );
+}
 
 const periodOptions = [
   { value: 'daily' as const, label: 'Day' },
@@ -27,9 +39,9 @@ const periodOptions = [
 
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const unavailableBands: UsageBand[] = [
-  { key: 'peak', label: 'Peak usage', window: '7–11 AM · 5–9 PM', kwh: null, costNzd: null },
-  { key: 'offPeak', label: 'Off-peak usage', window: '11 AM–5 PM · 9–11 PM', kwh: null, costNzd: null },
-  { key: 'night', label: 'Night usage', window: '11 PM–7 AM', kwh: null, costNzd: null },
+  { key: 'peak', label: 'Peak usage', window: null, kwh: null, costNzd: null },
+  { key: 'offPeak', label: 'Off-peak usage', window: null, kwh: null, costNzd: null },
+  { key: 'night', label: 'Night usage', window: null, kwh: null, costNzd: null },
 ];
 
 function parseDate(value: string) {
@@ -45,6 +57,10 @@ function addDays(date: Date, days: number) {
   const shifted = new Date(date);
   shifted.setDate(shifted.getDate() + days);
   return shifted;
+}
+
+function startOfWeek(date: Date) {
+  return addDays(date, -((date.getDay() + 6) % 7));
 }
 
 function shortDate(date: Date) {
@@ -82,7 +98,7 @@ function shiftMonth(selected: string, amount: number) {
 }
 
 function previousPeriodDate(period: Period, selected: string) {
-  if (period === 'monthly') return shiftMonth(selected, -1);
+  if (period === 'monthly') return shiftMonth(selected, -4);
   return toDateValue(addDays(parseDate(selected), period === 'weekly' ? -7 : -1));
 }
 
@@ -122,28 +138,21 @@ function bandPresentation(key: UsageBand['key']) {
 
 function energyCategoryPresentation(key: string) {
   const normalized = key.toLowerCase();
-  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: '#38BDF8' };
+  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: palette.red };
   if (normalized.includes('always') || normalized.includes('base')) return { icon: 'pulse-outline' as const, color: '#38BDF8' };
-  return { icon: 'flash-outline' as const, color: '#38BDF8' };
+  return { icon: 'flash-outline' as const, color: palette.amber };
 }
 
 export default function UsageScreen() {
-  const { session } = useAuth();
-  return <UsageScreenForHousehold key={session?.customerId ?? 'signed-out'} />;
-}
-
-function UsageScreenForHousehold() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const { height: screenHeight } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
   const [unit, setUnit] = useState<Unit>('cost');
+  const [chartType, setChartType] = useState<ChartType>('line');
   const [comparisons, setComparisons] = useState<Record<Period, ComparisonSelection | null>>({ daily: null, weekly: null, monthly: null });
   const [date, setDate] = useState(() => toDateValue(new Date()));
   const [dateOpen, setDateOpen] = useState(false);
-  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
-  const [periodMenuPosition, setPeriodMenuPosition] = useState({ top: 0, left: 0 });
-  const compareAnchorRef = useRef<View>(null);
   const [energyBreakdownOpen, setEnergyBreakdownOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareTarget, setCompareTarget] = useState<'first' | 'second'>('first');
@@ -151,8 +160,7 @@ function UsageScreenForHousehold() {
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
-  const [connectedAppliances, setConnectedAppliances] = useState<ConnectedAppliances | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -160,8 +168,6 @@ function UsageScreenForHousehold() {
   const [graphTranslateX] = useState(() => new Animated.Value(0));
   const [graphOpacity] = useState(() => new Animated.Value(1));
   const [graphScale] = useState(() => new Animated.Value(1));
-  const [hintTranslateX] = useState(() => new Animated.Value(0));
-  const [hintOpacity] = useState(() => new Animated.Value(0));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
@@ -171,19 +177,22 @@ function UsageScreenForHousehold() {
 
   const comparison = comparisons[period];
   const compare = comparison !== null;
-  const dateSourceLabel = data?.dateSource === 'demo' ? 'Demo scenario · sample dates' : data?.dateSource === 'preview' ? 'Local preview' : data?.hasEstimatedReadings ? 'Meter data · some estimated reads' : 'Metered daily totals';
-  const coverageLabel = data?.observedDays != null && data.expectedDays != null && data.observedDays < data.expectedDays && data.observedDays > 0
-    ? ` · ${data.observedDays} of ${data.expectedDays} days available` : '';
-  const canShowCost = !data || data.totalCostNzd !== null;
+  const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
   const unitOptions: readonly Unit[] = canShowCost ? ['cost', 'kwh'] : ['kwh'];
   const displayUnit: Unit = canShowCost ? unit : 'kwh';
   const chartValues = useMemo(() => {
     if (!data) return [];
-    return data.points.map((point) => displayUnit === 'cost' ? point.costNzd : point.kwh);
+    const values = displayUnit === 'cost'
+      ? data.points.every((point) => point.costNzd !== null) ? data.points.map((point) => point.costNzd as number) : []
+      : data.points.map((point) => point.kwh);
+    return values;
   }, [data, displayUnit]);
   const chartPrevious = useMemo(() => {
     if (!data?.comparisonPoints) return undefined;
-    return data.comparisonPoints.map((point) => displayUnit === 'cost' ? point.costNzd : point.kwh);
+    const values = displayUnit === 'cost'
+      ? data.comparisonPoints.every((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd as number) : []
+      : data.comparisonPoints.map((point) => point.kwh);
+    return values;
   }, [data, displayUnit]);
   const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
   const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
@@ -194,20 +203,6 @@ function UsageScreenForHousehold() {
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
-  const breakdownCategories = energyBreakdown?.categories.length
-    ? energyBreakdown.categories
-    : bands
-      .filter((band) => band.kwh !== null)
-      .map((band) => ({
-        key: band.key,
-        label: band.label,
-        kwh: band.kwh ?? 0,
-        costNzd: band.costNzd ?? 0,
-        sharePct: data?.totalKwh ? (band.kwh ?? 0) / data.totalKwh * 100 : 0,
-        confidence: data?.isDemo || data?.bandDataSource !== 'measured' ? 'estimated' : 'measured',
-        basis: band.window ?? 'Selected period',
-        caveat: null,
-      }));
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
   useEffect(() => {
     if (canShowCost || unit !== 'cost') return;
@@ -217,25 +212,17 @@ function UsageScreenForHousehold() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
-      void Promise.resolve().then(() => {
-        if (!controller.signal.aborted) {
-          setEnergyBreakdown(null);
-          setConnectedAppliances(null);
-        }
-      });
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+      void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
       return () => controller.abort();
     }
     void loadEnergyBreakdown(session.customerId, controller.signal)
       .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result.available ? result : null); })
       .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
-    void loadConnectedAppliances(session.customerId, controller.signal)
-      .then((result) => { if (!controller.signal.aborted) setConnectedAppliances(result); })
-      .catch(() => { if (!controller.signal.aborted) setConnectedAppliances(null); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
-  const formatAmount = (kwh: number | null, costNzd: number | null) => displayUnit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
-  const totalDisplay = displayUnit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
+  const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
+  const totalDisplay = unit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
 
 
   const refresh = () => {
@@ -251,14 +238,24 @@ function UsageScreenForHousehold() {
       if (controller.signal.aborted) return;
       setLoading(true);
       setLoadError(null);
-      setData(null);
       try {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
         if (!controller.signal.aborted) {
           setData(result);
+          // Move a date outside the fixture range to available data. Weekly charts
+          // deliberately settle on the latest complete Monday-Sunday week, so their
+          // X axis is never cut short at the final reading (for example, Friday).
+          const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
+          if (!comparison && !result.isDemo && needsAvailableRange && result.availableTo) {
+            const latest = parseDate(result.availableTo);
+            const fallbackDate = period === 'weekly'
+              ? toDateValue(addDays(startOfWeek(latest), -1))
+              : result.availableTo;
+            if (fallbackDate !== date) setDate(fallbackDate);
+          }
         }
       } catch (error: unknown) {
-        if (!controller.signal.aborted) setLoadError(error instanceof TypeError ? 'Kea API is unreachable. Check that your phone and API are on the same network.' : error instanceof Error ? error.message : 'Usage could not be loaded.');
+        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Usage could not be loaded.');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -267,26 +264,12 @@ function UsageScreenForHousehold() {
     return () => controller.abort();
   }, [comparison, date, period, reloadToken, session?.customerId]);
 
-  useFocusEffect(useCallback(() => {
-    setAnimationRun((run) => run + 1);
-    hintTranslateX.setValue(0);
-    hintOpacity.setValue(0);
-    const hintAnimation = Animated.sequence([
-      Animated.timing(hintOpacity, { duration: 220, toValue: 1, useNativeDriver: true }),
-      Animated.sequence([
-        Animated.timing(hintTranslateX, { duration: 360, toValue: -13, useNativeDriver: true }),
-        Animated.timing(hintTranslateX, { duration: 720, toValue: 13, useNativeDriver: true }),
-        Animated.timing(hintTranslateX, { duration: 360, toValue: 0, useNativeDriver: true }),
-      ]),
-      Animated.delay(650),
-      Animated.timing(hintOpacity, { duration: 300, toValue: 0, useNativeDriver: true }),
-    ]);
-    hintAnimation.start();
-    return () => hintAnimation.stop();
-  }, [hintOpacity, hintTranslateX]));
-
   const shiftGraph = useCallback((direction: 'previous' | 'next') => {
     if (swipeInProgress) return;
+    if (period === 'weekly' && !comparison && data?.availableFrom && data.availableTo) {
+      const targetWeek = weekDates(shiftPeriodDate(period, date, direction === 'previous' ? -1 : 1));
+      if (toDateValue(targetWeek[6]!) < data.availableFrom || toDateValue(targetWeek[0]!) > data.availableTo) return;
+    }
     setSwipeInProgress(true);
     setChartActive(false);
     const amount = direction === 'previous' ? -1 : 1;
@@ -321,7 +304,7 @@ function UsageScreenForHousehold() {
         ]).start(() => setSwipeInProgress(false));
       });
     });
-  }, [comparison, graphOpacity, graphScale, graphTranslateX, period, setAnimationRun, setChartActive, setComparisons, setDate, setSwipeInProgress, swipeInProgress]);
+  }, [comparison, data?.availableFrom, data?.availableTo, date, graphOpacity, graphScale, graphTranslateX, period, setAnimationRun, setChartActive, setComparisons, setDate, setSwipeInProgress, swipeInProgress]);
 
   const chartPanResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.15,
@@ -358,13 +341,6 @@ function UsageScreenForHousehold() {
   const changePeriod = (nextPeriod: Period) => {
     setChartActive(false);
     setPeriod(nextPeriod);
-    setPeriodMenuOpen(false);
-  };
-  const openPeriodMenu = () => {
-    compareAnchorRef.current?.measureInWindow((x, y, _width, height) => {
-      setPeriodMenuPosition({ top: y + height + 8, left: x });
-      setPeriodMenuOpen(true);
-    });
   };
 
   const openComparison = () => {
@@ -394,6 +370,7 @@ function UsageScreenForHousehold() {
 
   return (
     <Screen contentStyle={styles.screenRoot} onTouchStart={() => setChartActive(false)} scroll={false}>
+      <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
@@ -417,25 +394,21 @@ function UsageScreenForHousehold() {
               title="Usage"
             />
 
-            <Modal animationType="fade" onRequestClose={() => setPeriodMenuOpen(false)} transparent visible={periodMenuOpen}>
-              <Pressable accessibilityLabel="Close usage period menu" onPress={() => setPeriodMenuOpen(false)} style={styles.periodMenuOverlay}>
-                <View style={[styles.periodMenu, { backgroundColor: colors.surface, borderColor: colors.border, top: periodMenuPosition.top, left: periodMenuPosition.left }]}>
-                  {periodOptions.map((item) => <Pressable key={item.value} onPress={() => changePeriod(item.value)} style={({ pressed }) => [styles.periodMenuItem, pressed && styles.pressed]}><Text style={[styles.periodMenuText, { color: colors.text }]}>{item.label}</Text></Pressable>)}
-                </View>
-              </Pressable>
-            </Modal>
+            <GlassSegmented
+              appearance="usage"
+              onChange={changePeriod}
+              options={periodOptions}
+              value={period}
+            />
 
-            <View style={styles.toolbarGrid}>
-              <View style={styles.toolbarLeftColumn}>
-                <Pressable
+            <View style={styles.toolbarRow}>
+              <Pressable
                 accessibilityLabel={`Choose ${period === 'daily' ? 'date' : period === 'weekly' ? 'week' : 'month'}`}
                 onPress={compare ? openComparison : () => setDateOpen(true)}
                 style={({ pressed }) => [
                   styles.toolbarButton,
-                  styles.dateButton,
                   compare && styles.comparisonDateButton,
                   compare && period === 'weekly' && styles.weekComparisonDateButton,
-                  { backgroundColor: 'transparent', borderColor: 'transparent' },
                   pressed && styles.pressed,
                 ]}
               >
@@ -444,82 +417,86 @@ function UsageScreenForHousehold() {
                   {selectedPeriodLabel}
                 </Text>
                 <Ionicons color={colors.textMuted} name="chevron-down" size={14} />
-                </Pressable>
-              </View>
+              </Pressable>
 
-              <View style={styles.toolbarRightColumn}>
-                <View
-                  ref={compareAnchorRef}
-                  style={[
-                    styles.toolbarButton,
-                    styles.compareButton,
-                    {
-                      backgroundColor: 'transparent',
-                      borderColor: compare ? '#38BDF8' : '#303030',
-                    },
-                  ]}
+              <View
+                style={[
+                  styles.toolbarButton,
+                  styles.compareButton,
+                ]}
+              >
+                <Pressable
+                  accessibilityLabel="Choose periods to compare"
+                  onPress={openComparison}
+                  style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
                 >
-                  <Pressable
-                    accessibilityLabel="Choose periods to compare"
-                    onPress={openComparison}
-                    style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
-                  >
-                    <Ionicons color={compare ? '#38BDF8' : '#FFFFFF'} name="git-compare-outline" size={19} />
-                    <Text style={[styles.toolbarButtonText, { color: compare ? '#38BDF8' : colors.text }]}>Compare</Text>
-                  </Pressable>
-                  {compare ? (
-                    <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
-                      <Ionicons color="#38BDF8" name="close" size={18} />
-                    </Pressable>
-                  ) : null}
-                </View>
-                <Pressable accessibilityLabel="Choose usage period" onPress={openPeriodMenu} style={({ pressed }) => [styles.periodDropdown, pressed && styles.pressed]}>
-                  <Text style={[styles.periodDropdownText, { color: colors.text }]}>{periodOptions.find((item) => item.value === period)?.label}</Text>
-                  <Ionicons color={colors.textMuted} name="chevron-down" size={18} />
+                  <Ionicons color="#FFFFFF" name="git-compare-outline" size={19} />
+                  <Text style={[styles.toolbarButtonText, { color: '#FFFFFF' }]}>Compare</Text>
                 </Pressable>
+                {compare ? (
+                  <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
+                    <Ionicons color="#FFFFFF" name="close" size={18} />
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           </View>
 
+          {loading && !data ? (
+            <UsageChartLoader />
+          ) : (
+          <>
           {/* Chart Header & Unit Toggle (Outside of PanResponder for instant, 100% reliable tapping) */}
           <View style={styles.chartHeaderCard}>
             <View style={styles.chartHeader}>
-              <View style={styles.totalWrap}>
+              <View>
                 <Text style={[styles.total, { color: colors.text }]}>
                   {totalDisplay} <Text style={styles.suffix}>{suffix}</Text>
                 </Text>
-                {data ? <Text numberOfLines={2} style={[styles.dateSource, { color: colors.textMuted }]}>{dateSourceLabel}{coverageLabel}</Text> : null}
               </View>
-              <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
-                {unitOptions.map((item) => (
-                  <Pressable
-                    hitSlop={8}
-                    key={item}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      setUnit(item);
-                    }}
-                    style={[styles.unitOption, unit === item && { backgroundColor: '#FFFFFF' }]}
-                  >
-                    <Text style={[styles.unitText, { color: unit === item ? '#000000' : colors.textMuted }]}>
-                      {item === 'kwh' ? 'kWh' : '$'}
-                    </Text>
-                  </Pressable>
-                ))}
+              <View style={styles.headerToggles}>
+                <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
+                  {(['line', 'bar'] as const).map((item) => (
+                    <Pressable
+                      accessibilityLabel={item === 'line' ? 'Line chart' : 'Bar chart'}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: chartType === item }}
+                      hitSlop={8}
+                      key={item}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        setChartType(item);
+                      }}
+                      style={[styles.unitOption, chartType === item && { backgroundColor: '#FFFFFF' }]}
+                    >
+                      {item === 'line' ? (
+                        <LineChartIcon color={chartType === item ? '#000000' : colors.textMuted} />
+                      ) : (
+                        <Ionicons color={chartType === item ? '#000000' : colors.textMuted} name="bar-chart-outline" size={16} />
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
+                  {unitOptions.map((item) => (
+                    <Pressable
+                      hitSlop={8}
+                      key={item}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        setUnit(item);
+                      }}
+                      style={[styles.unitOption, unit === item && { backgroundColor: '#FFFFFF' }]}
+                    >
+                      <Text style={[styles.unitText, { color: unit === item ? '#000000' : colors.textMuted }]}>
+                        {item === 'kwh' ? 'kWh' : '$'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             </View>
 
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.swipeHint,
-                { backgroundColor: colors.input, opacity: hintOpacity, transform: [{ translateX: hintTranslateX }] },
-              ]}
-            >
-              <Ionicons color="#38BDF8" name="chevron-back" size={14} />
-              <Text style={[styles.swipeHintText, { color: colors.textMuted }]}>Swipe for previous or next</Text>
-              <Ionicons color="#38BDF8" name="chevron-forward" size={14} />
-            </Animated.View>
           </View>
 
           {/* Interactive Graph Area with Swipe PanResponder */}
@@ -528,28 +505,38 @@ function UsageScreenForHousehold() {
             style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}
           >
             <View style={styles.fullWidthChartWrap}>
-              {loadError || data?.totalKwh == null || !chartValues.some((value) => value !== null) ? <View style={[styles.chartStatus, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                {loading ? <ActivityIndicator color="#38BDF8" /> : <Ionicons color={loadError ? palette.red : '#38BDF8'} name={loadError ? 'warning-outline' : 'analytics-outline'} size={24} />}
-                <Text style={[styles.chartStatusTitle, { color: colors.text }]}>{loading ? 'Loading your meter readings' : loadError ? 'Usage could not be loaded' : 'No readings for this period'}</Text>
-                <Text style={[styles.chartStatusDetail, { color: colors.textMuted }]}>{loading ? 'Checking the selected period.' : loadError ?? (data?.availableFrom && data.availableTo ? `${data.dateSource === 'demo' ? 'Demo dates' : 'Available readings'}: ${data.availableFrom} to ${data.availableTo}.` : 'Meter readings are not available for this account yet.')}</Text>
-                {loadError ? <Pressable accessibilityRole="button" onPress={refresh} style={styles.chartRetry}><Ionicons color="#38BDF8" name="refresh-outline" size={16} /><Text style={styles.chartRetryText}>Try again</Text></Pressable> : null}
-                {!loadError && !comparison && data?.availableTo && data.availableTo !== date ? <Pressable accessibilityRole="button" onPress={() => setDate(data.availableTo!)} style={styles.chartRetry}><Ionicons color="#38BDF8" name="calendar-outline" size={16} /><Text style={styles.chartRetryText}>Show latest readings</Text></Pressable> : null}
-              </View> : <UsageChart
-                accessibilityLabel={`${period} electricity usage in ${displayUnit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
+              <UsageChart
+                accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
                 active={chartActive}
-                key={`${period}-${displayUnit}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
+                chartType={chartType}
+                leadingDecorativeAnchor
+                key={`${period}-${unit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
                 axisLabels={chartAxisLabels}
                 labels={chartLabels}
                 onActivate={() => setChartActive(true)}
                 previous={chartPrevious}
                 previousTooltipLabels={previousTooltipLabels}
                 tooltipLabels={tooltipLabels}
-                unit={displayUnit}
+                unit={unit}
                 values={chartValues}
                 xLabelInterval={1}
-              />}
+              />
+              {compare ? (
+                <View style={styles.chartLegend}>
+                  <View style={styles.chartLegendItem}>
+                    <View style={[styles.chartLegendDot, { backgroundColor: '#C7F071' }]} />
+                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
+                  </View>
+                  <View style={styles.chartLegendItem}>
+                    <View style={[styles.chartLegendDot, { backgroundColor: '#FBBF24' }]} />
+                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
           </Animated.View>
+          </>
+          )}
         </Animated.View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
           <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
@@ -577,16 +564,18 @@ function UsageScreenForHousehold() {
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
           <View style={styles.breakdownContent}>
             <View style={styles.breakdownList}>
+              {energyBreakdown?.categories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
                   <View style={styles.breakdownIcon}>
                     <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
                   </View>
                   <View style={styles.breakdownCopy}>
                     <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
-                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown?.period || selectedPeriodLabel}</Text>
+                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown.period || 'Selected period'}</Text>
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
+              ) : null}
               <View style={styles.breakdownRow}>
                 <View style={styles.breakdownIcon}>
                   <Ionicons color={colors.textMuted} name="pulse-outline" size={19} />
@@ -599,27 +588,37 @@ function UsageScreenForHousehold() {
                   <Text style={[styles.breakdownValue, { color: colors.text }]}>
                     {formatAmount(data?.totalKwh ?? null, data?.totalCostNzd ?? null)}
                   </Text>
-                  <Text style={{ color: (data?.trendPercent ?? 0) <= 0 ? palette.green : palette.red, fontSize: 12, fontWeight: '700' }}>
+                  <Text
+                    style={{
+                      color: (data?.trendPercent ?? 0) <= 0 ? palette.green : palette.red,
+                      fontSize: 12,
+                      fontWeight: '700',
+                    }}
+                  >
                     {data?.trendPercent == null ? '—' : `${data.trendPercent > 0 ? '+' : ''}${data.trendPercent.toFixed(1)}%`}
                   </Text>
                 </View>
               </View>
 
-              {bands.map((band) => {
+              {bands.map((band, index) => {
                 const presentation = bandPresentation(band.key);
                 const share =
                   band.kwh !== null && data?.totalKwh ? `${Math.round((band.kwh / data.totalKwh) * 100)}%` : '—';
                 return (
-                  <View key={band.key} style={styles.breakdownRow}>
+                  <View key={band.key} style={[styles.breakdownRow, index === bands.length - 1 && styles.breakdownRowLast]}>
                     <View style={styles.breakdownIcon}>
-                      <Ionicons color={colors.textMuted} name={presentation.icon} size={19} />
+                      <Ionicons color={presentation.color} name={presentation.icon} size={21} />
                     </View>
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
-                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{band.window ?? 'No time window supplied'}</Text>
+                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>
+                        {band.window ?? 'No time window supplied'}
+                      </Text>
                     </View>
                     <View style={styles.breakdownValueWrap}>
-                      <Text style={[styles.breakdownValue, { color: colors.text }]}>{formatAmount(band.kwh, band.costNzd)}</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.text }]}>
+                        {formatAmount(band.kwh, band.costNzd)}
+                      </Text>
                       <Text style={[styles.breakdownShare, { color: '#A1A1AA' }]}>{share}</Text>
                     </View>
                   </View>
@@ -638,18 +637,17 @@ function UsageScreenForHousehold() {
         title="Energy breakdown"
         visible={energyBreakdownOpen}
       >
-        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: '#38BDF8' }]}>
-          <View style={styles.energyBreakdownHeroIcon}><Ionicons color="#38BDF8" name="pie-chart-outline" size={22} /></View>
+        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: colors.border }]}>
+          <View style={styles.energyBreakdownHeroIcon}><Ionicons color={palette.violet} name="pie-chart-outline" size={22} /></View>
           <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
         </View>
         <View style={styles.energyBreakdownSheet}>
-          {!breakdownCategories.length ? <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No interval breakdown is available for this period yet.</Text> : null}
-          {breakdownCategories.map((category) => {
+          {energyBreakdown?.categories.map((category) => {
             const presentation = energyCategoryPresentation(category.key);
             const estimated = category.confidence !== 'measured';
             return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}><Ionicons color={presentation.color} name={presentation.icon} size={20} /></View>
-              <View style={styles.energyCategoryCopy}>
+              <View style={[styles.energyCategoryCopy, styles.energyCategoryCopyCompact]}>
                 <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.label}</Text>
                 <View style={[styles.confidenceBadge, { backgroundColor: estimated ? 'rgba(255, 214, 10, 0.14)' : 'rgba(48, 209, 88, 0.14)' }]}><Text style={[styles.confidenceBadgeText, { color: estimated ? palette.amber : palette.green }]}>{estimated ? 'ESTIMATED' : 'MEASURED'}</Text></View>
                 <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{category.confidence === 'measured' ? category.basis : `Estimated · ${category.basis}`}</Text>
@@ -661,13 +659,6 @@ function UsageScreenForHousehold() {
               </View>
             </View>;
           })}
-          <Text style={[styles.energyCategoryTitle, { color: colors.text, marginTop: 12 }]}>Connected appliance meters</Text>
-          <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{connectedAppliances?.periodStart && connectedAppliances.periodEnd ? `${connectedAppliances.periodStart} to ${connectedAppliances.periodEnd} · separate from the selected period above` : 'Only devices that report their own energy can appear here.'}</Text>
-          {connectedAppliances?.devices.length ? connectedAppliances.devices.map((device) => <View key={device.id} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.energyCategoryIcon, { backgroundColor: 'rgba(56, 189, 248, 0.16)' }]}><Ionicons color="#38BDF8" name="flash-outline" size={20} /></View>
-            <View style={styles.energyCategoryCopy}><Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{device.label}</Text><Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Measured · {device.daysObserved} days · {device.deviceClass.replace(/_/g, ' ')}</Text></View>
-            <View style={styles.breakdownValueWrap}><Text style={[styles.breakdownValue, { color: colors.text }]}>{device.kwh.toFixed(1)} kWh</Text><Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{device.sharePct === null ? 'Bill share unavailable' : `${device.sharePct.toFixed(1)}% of metered use`}</Text></View>
-          </View>) : <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No connected appliance meter has reported a complete day. Whole-home meter readings cannot identify a specific appliance.</Text>}
         </View>
       </ModalSheet>
       <ModalSheet
@@ -741,11 +732,13 @@ function UsageScreenForHousehold() {
           />
         </View>
       </ModalSheet>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEnter: { flex: 1 },
   screenRoot: {
     flex: 1,
     paddingHorizontal: 0,
@@ -777,48 +770,6 @@ const styles = StyleSheet.create({
   headerControls: {
     paddingHorizontal: 18,
   },
-  periodDropdownWrap: {
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  periodDropdown: {
-    width: '100%',
-    height: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    backgroundColor: 'transparent',
-    borderColor: '#303030',
-  },
-  periodDropdownText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  periodMenuOverlay: {
-    flex: 1,
-    alignItems: 'flex-end',
-    paddingTop: 104,
-    paddingRight: 18,
-    backgroundColor: 'rgba(0,0,0,0.24)',
-  },
-  periodMenu: {
-    position: 'absolute',
-    width: 100,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 4,
-  },
-  periodMenuItem: {
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-  },
-  periodMenuText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
   chartContainer: {
     width: '100%',
   },
@@ -834,42 +785,27 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 10,
   },
-  toolbarGrid: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 10,
-  },
-  toolbarLeftColumn: {
-    flex: 1,
-    gap: 6,
-  },
-  toolbarRightColumn: {
-    width: '36%',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  dateButton: {
-    minHeight: 92,
-  },
   toolbarButton: {
+    backgroundColor: '#111512',
+    borderWidth: 1,
+    borderColor: '#202822',
     minWidth: 0,
-    minHeight: 50,
+    minHeight: 44,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 16,
+    overflow: 'hidden',
+    borderRadius: 999,
   },
   comparisonDateButton: {
     gap: 3,
     paddingHorizontal: 4,
   },
   weekComparisonDateButton: {
-    minHeight: 72,
+    minHeight: 56,
   },
   toolbarButtonText: {
     flexShrink: 1,
@@ -878,18 +814,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   compareButton: {
-    flex: 0,
-    width: '100%',
-    height: 36,
-    minHeight: 36,
+    backgroundColor: '#111512',
     gap: 0,
     overflow: 'hidden',
     paddingHorizontal: 0,
-    borderRadius: 8,
   },
   compareMain: {
     minWidth: 0,
-    minHeight: 34,
+    minHeight: 44,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -909,7 +841,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   chartHeaderCard: {
-    marginTop: 28,
+    marginTop: 36,
     paddingBottom: 4,
     zIndex: 10,
   },
@@ -920,7 +852,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 18,
   },
-  totalWrap: { flex: 1, minWidth: 0, paddingRight: 8 },
   totalLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -931,7 +862,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -1.1,
   },
-  dateSource: { marginTop: 3, fontSize: 10, fontWeight: '700' },
   suffix: {
     fontSize: 9,
     color: '#FFFFFF',
@@ -955,9 +885,13 @@ const styles = StyleSheet.create({
   },
   unitToggle: {
     flexDirection: 'row',
-    flexShrink: 0,
     padding: 3,
     borderRadius: 12,
+  },
+  headerToggles: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   unitOption: {
     width: 38,
@@ -980,20 +914,28 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
   },
-  chartStatus: {
-    minHeight: 210,
-    marginHorizontal: 18,
-    borderWidth: 1,
-    borderRadius: 18,
-    alignItems: 'center',
+  chartLegend: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    padding: 20,
+    gap: 18,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
-  chartStatusTitle: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  chartStatusDetail: { fontSize: 11, lineHeight: 17, textAlign: 'center' },
-  chartRetry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
-  chartRetryText: { color: '#38BDF8', fontSize: 11, fontWeight: '800' },
+  chartLegendItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  chartLegendDot: {
+    borderRadius: 2,
+    height: 10,
+    width: 10,
+  },
+  chartLegendText: {
+    color: '#A1A1AA',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   listViewport: {
     position: 'absolute',
     top: 0,
@@ -1013,19 +955,21 @@ const styles = StyleSheet.create({
   },
   breakdownList: {
     marginTop: 22,
-    paddingHorizontal: 0,
-    paddingVertical: 10,
+    marginHorizontal: 8,
   },
   breakdownRow: {
-    minHeight: 62,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  breakdownRowLast: {
+    borderBottomWidth: 0,
   },
   energyBreakdownHero: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 18, padding: 13 },
-  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(56, 189, 248, 0.16)' },
+  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(168, 85, 247, 0.16)' },
   energyBreakdownHeroCopy: { flex: 1 },
   energyBreakdownHeroTitle: { fontSize: 15, fontWeight: '900' },
   energyBreakdownIntro: { marginTop: 3, fontSize: 11, lineHeight: 16 },
@@ -1033,6 +977,7 @@ const styles = StyleSheet.create({
   energyCategoryCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 17, padding: 12 },
   energyCategoryIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
   energyCategoryCopy: { flex: 1, minWidth: 0 },
+  energyCategoryCopyCompact: { height: 34, overflow: 'hidden' },
   energyCategoryTitle: { fontSize: 13, fontWeight: '800' },
   energyCategoryCaveat: { marginTop: 4, fontSize: 10, lineHeight: 14 },
   confidenceBadge: { alignSelf: 'flex-start', marginTop: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
@@ -1048,6 +993,7 @@ const styles = StyleSheet.create({
   breakdownCopy: {
     minWidth: 0,
     flex: 1,
+    marginLeft: -10,
   },
   breakdownTitle: {
     fontSize: 16,
@@ -1064,12 +1010,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   breakdownValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   breakdownShare: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   dateDialog: {
