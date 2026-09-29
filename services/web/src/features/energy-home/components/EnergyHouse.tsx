@@ -218,14 +218,11 @@ export default function EnergyHouse({ snapshot, onDeviceSelect, activeDevice = n
           <DeviceChip device="home" x={1532} y={494} width={170} title="HOME" snapshot={snapshot} selected={activeDevice === 'home'} onSelect={onDeviceSelect} />
           <DeviceChip device="car" x={724} y={988} width={172} title="EV" snapshot={snapshot} selected={activeDevice === 'car'} onSelect={onDeviceSelect} />
           <DeviceChip device="battery" x={1146} y={868} width={222} title="KEA BATTERY" snapshot={snapshot} selected={activeDevice === 'battery'} onSelect={onDeviceSelect} />
-          <DeviceChip device="grid" x={1730} y={466} width={178} title="GRID" snapshot={snapshot} selected={activeDevice === 'grid'} onSelect={onDeviceSelect} />
+          {/* Below the transformer rather than above it: the space above belongs to the
+              bill-shock popover that opens from the scene's top-right corner. */}
+          <DeviceChip device="grid" x={1746} y={770} width={178} title="GRID" snapshot={snapshot} selected={activeDevice === 'grid'} onSelect={onDeviceSelect} />
         </g>
       </svg>
-      <figcaption className="kea-energy-house-caption" aria-label="Energy flow colours: solar green, battery blue, grid orange">
-        <span className="kea-flow-key kea-flow-key--solar"><i />Solar</span>
-        <span className="kea-flow-key kea-flow-key--battery"><i />Battery</span>
-        <span className="kea-flow-key kea-flow-key--grid"><i />Grid</span>
-      </figcaption>
     </figure>
   )
 }

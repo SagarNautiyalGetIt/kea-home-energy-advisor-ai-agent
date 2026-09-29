@@ -1020,9 +1020,11 @@ html[data-theme=dark] .brand:not(.brand-compact) .brand-name{background:linear-g
 
 /* Logout confirmation — roomier card, smaller buttons matching the sidebar Logout */
 .logout-modal{width:min(400px,calc(100% - 32px));display:flex;flex-direction:column;justify-content:center;padding:54px 36px;border-radius:24px;box-shadow:0 28px 70px rgb(26 36 87 / 28%)}
+/* The two corner glows keep their colour and strength but reach about a quarter less far
+   into the card (62% → 46%, 58% → 43%), so they frame it rather than fill it. */
 .logout-confirmation-modal{background:
-  radial-gradient(circle at 0 100%,rgb(91 115 235 / 26%),transparent 62%),
-  radial-gradient(circle at 100% 0,rgb(91 115 235 / 22%),transparent 58%),
+  radial-gradient(circle at 0 100%,rgb(91 115 235 / 26%),transparent 46%),
+  radial-gradient(circle at 100% 0,rgb(91 115 235 / 22%),transparent 43%),
   linear-gradient(145deg,#f9faff 0%,#fff 50%,#fafbff 100%)}
 .logout-icon{width:80px;height:80px;margin:0 auto;padding:20px;border-radius:50%;color:#4b31ff;background:#f6f7fd}
 .logout-icon svg{width:40px;height:40px}
@@ -1221,11 +1223,11 @@ html[data-theme=dark] .plan-rate-table>div:not(:first-child):hover{background:#1
    heading's text (24px icon + 14px gap) instead of sitting outside it. */
 .setting-row{padding-left:38px}
 /* Preference toggles read better than native checkboxes in a settings list */
-.setting-row input{appearance:none;-webkit-appearance:none;position:relative;width:46px;height:26px;min-width:46px;border:0;border-radius:999px;background:#dfe3f0;cursor:pointer;transition:background .3s ease}
-.setting-row input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgb(45 62 123 / 22%);transition:transform .3s ease}
-.setting-row input:checked{background:linear-gradient(135deg,var(--purple2),var(--purple))}
-.setting-row input:checked::after{transform:translateX(20px)}
-.setting-row input:focus-visible{outline:2px solid #4318ff;outline-offset:3px}
+.setting-row input,.bill-shock-title>input{appearance:none;-webkit-appearance:none;position:relative;width:46px;height:26px;min-width:46px;border:0;border-radius:999px;background:#dfe3f0;cursor:pointer;transition:background .3s ease}
+.setting-row input::after,.bill-shock-title>input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgb(45 62 123 / 22%);transition:transform .3s ease}
+.setting-row input:checked,.bill-shock-title>input:checked{background:linear-gradient(135deg,var(--purple2),var(--purple))}
+.setting-row input:checked::after,.bill-shock-title>input:checked::after{transform:translateX(20px)}
+.setting-row input:focus-visible,.bill-shock-title>input:focus-visible{outline:2px solid #4318ff;outline-offset:3px}
 .setting-row:hover strong{color:var(--purple)}
 /* The two account rows are links, so they need hover feedback */
 .settings-link{border-radius:14px;padding-left:10px;padding-right:10px;transition:background .3s ease}
@@ -1303,7 +1305,9 @@ html[data-theme=dark] .settings-link:hover{background:#141a30}
 .threshold-choice input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;white-space:nowrap;clip-path:inset(50%)}
 .threshold-choice:hover{border-color:#c3ccec;color:#2f3e65}
 .threshold-choice.selected{border-color:var(--purple);color:var(--purple);background:#f3f0ff;box-shadow:0 1px 6px rgb(74 37 255 / 14%)}
-.threshold-choice:focus-within{outline:2px solid var(--purple);outline-offset:2px}
+/* Keyboard focus only. `:focus-within` also matched after a mouse click, because clicking
+   the label focuses its hidden radio, so the picked step grew a second ring. */
+.threshold-choice:has(input:focus-visible){outline:2px solid var(--purple);outline-offset:2px}
 .threshold-ladder:disabled .threshold-choice{cursor:not-allowed}
 .threshold-value{margin:0;color:#2f3e65;font-size:14px}
 .threshold-value span{color:#647191}
@@ -1641,7 +1645,19 @@ html:not([data-theme=dark]) .topbar-cluster{
   -webkit-backdrop-filter:blur(22px) saturate(130%);
   backdrop-filter:blur(22px) saturate(130%);
 }
-html:not([data-theme=dark]) .search-box{background:rgb(244 247 252 / 72%)}
+/* Cool on the left, warm on the right: the same sweep as the page behind the top bar,
+   which turns peach towards the top-right corner, so the field sits in it rather than
+   reading as a flat blue stripe. Light theme only; dark keeps its own fill. */
+html:not([data-theme=dark]) .search-box{background:linear-gradient(90deg,rgb(242 245 252 / 88%),rgb(253 242 236 / 88%))}
+/* No focus ring inside the search field. The global input ring drew a purple box inside
+   the rounded field; focus already shows as the caret and the Quick navigation panel that
+   opens under it. */
+.search-box input:focus-visible{outline:none}
+/* The profile menu hangs off the whole top-bar pill rather than the avatar inside it, so
+   its right edge lines up with the pill's and it sits a clear 10px below the pill instead
+   of touching it (the avatar ends inside the pill's padding, which swallowed the gap). */
+.topbar-cluster{position:relative}
+.topbar-cluster .profile-control{position:static}
 html:not([data-theme=dark]) .mobile-nav{
   background:rgb(255 255 255 / 84%);
   -webkit-backdrop-filter:blur(20px) saturate(120%);
@@ -1718,3 +1734,391 @@ html[data-theme=dark] :where(.page-heading p,.billing-heading p,.assistant-headi
     backdrop-filter:none;
   }
 }
+
+/* Dashboard opening shot.
+   The energy home fills whatever is left of the window under the topbar and the page
+   heading, so the news cards below it are only reached by scrolling. The offset is set
+   on the wrapper by DashboardPage, which measures it. This raises the FLOOR rather than
+   fixing the height: the panel keeps its own 2.32/1 aspect ratio, so on a short or very
+   wide window the scene grows past the fold instead of being squashed and cropping the
+   house. Phones keep the designed ratio — a portrait viewport would stretch the scene
+   into a strip of sky with a small house adrift in it. */
+@media (min-width:761px){
+  .dashboard-hero .energy-home-scene{
+    min-height:calc(100svh - var(--dashboard-hero-offset,180px) - var(--space-3));
+  }
+}
+
+/* The bill-shock assessment inside the energy home's dark popover. Same content as the
+   old dashboard card, set light-on-dark: the status dot keeps its own colours and pulse,
+   and the buttons are the news cards' buttons (see the shared rule below). */
+.bill-shock-detail h3{display:flex;align-items:center;gap:9px;margin:0 0 10px;color:#fff;font-size:15px;font-weight:700}
+.bill-shock-detail h3 svg{width:16px;height:16px;flex:0 0 16px;color:#8fe3b8}
+.bill-shock-detail p{margin:0;color:rgb(234 241 248 / 76%);font-size:13px;line-height:1.6}
+.bill-shock-detail p+p{margin-top:8px}
+.bill-shock-detail p strong{color:#fff;font-weight:700}
+.bill-shock-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:16px}
+.bill-shock-actions button{min-height:40px;padding:8px 18px;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.bill-shock-basis{display:block;margin-top:12px;color:#d9c28f;font-size:11px;line-height:1.5}
+@media(max-width:680px){.bill-shock-actions button{min-height:44px}}
+
+/* One button for the news cards and the bill-shock popover: white with a purple ring at
+   rest, the purple gradient on hover. The 1.5px border stays in both states — purple at
+   rest, transparent over the gradient on hover, with the gradient painted under it
+   (background-origin, set after the shorthand that resets it) — so the filled button is
+   exactly the size of the ringed one. The generic gradient-button rule's inset hover
+   outline is dropped here: it drew a second ring 1.5px inside the edge, which is what
+   made the hovered button look smaller. Keyboard focus keeps a ring, outside the button. */
+.article-card footer button,.bill-shock-actions button{border:1.5px solid #4318ff;border-radius:999px;color:#4318ff;background:#fff;box-shadow:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.article-card footer button:hover,.article-card footer button:focus-visible,
+.bill-shock-actions button:hover,.bill-shock-actions button:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}
+.article-card footer button:hover,.bill-shock-actions button:hover{outline:none}
+.article-card footer button:focus-visible,.bill-shock-actions button:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+
+/* The four summary tiles under the energy home's top-left chip, one under another, in the
+   device chips' glass (same tint, edge and hover darkening) so they read as part of the
+   scene rather than white page cards pasted onto it. They are as wide as the longest
+   label needs and no wider. */
+.summary-tiles{display:grid;gap:8px;width:max-content;max-width:72vw;font-family:'Geist','Inter',system-ui,sans-serif}
+.summary-tiles article{display:flex;align-items:center;gap:12px;padding:11px 18px 11px 12px;border:1px solid rgb(207 223 219 / 26%);border-radius:12px;background:rgb(19 32 31 / 84%);backdrop-filter:blur(8px);box-shadow:0 12px 28px rgb(9 16 30 / 16%);transition:background-color .18s ease,border-color .18s ease}
+.summary-tiles article:hover{border-color:rgb(207 223 219 / 85%);background:rgb(19 32 31 / 97%)}
+.summary-tiles i{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:50%;color:#b9aaff;background:rgb(255 255 255 / 8%);font-style:normal}
+.summary-tiles i svg{width:17px;height:17px}
+.summary-tiles span{display:flex;flex-direction:column;gap:3px;color:#b7cbc5;font-size:12px;font-weight:500}
+.summary-tiles strong{color:#f6faf7;font-size:17px;font-weight:600;letter-spacing:-.01em}
+@media(max-width:620px){.summary-tiles article{padding:9px 11px}.summary-tiles strong{font-size:15px}}
+
+/* Logout confirmation, light theme: both buttons behave like the news cards' View
+   button. They rest as the outlined Cancel and fill with the purple gradient on hover.
+   The 1.5px border stays in both states — purple at rest, transparent over the gradient
+   on hover, with the gradient painted under it — so neither button changes size; the
+   generic gradient-button rule's inset hover outline is dropped. Keyboard focus keeps a
+   ring, outside the button. */
+html:not([data-theme=dark]) .logout-modal.logout-confirmation-modal button{border:1.5px solid var(--purple);color:var(--purple);background:#fff;box-shadow:none}
+html:not([data-theme=dark]) .logout-modal.logout-confirmation-modal button:hover,
+html:not([data-theme=dark]) .logout-modal.logout-confirmation-modal button:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .logout-modal.logout-confirmation-modal button:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+
+/* Sidebar lockup, mirrored: logo on the left, "KEA" beside it on the right, "ENERGY"
+   under both. The block starts where the nav tabs' icons start (the same inset as the
+   tab buttons' left padding), so logo and tabs share one left edge. The name is right-
+   aligned within itself, and ENERGY, its widest line, sets its width; the logo sits at
+   the block's left edge, which leaves it just clear of "KEA". The name keeps its original
+   gradient (deep at the top left, light at the bottom right). The collapsed sidebar is
+   unaffected: it drops the name and centres the logo. */
+.brand:not(.brand-compact){--brand-inset:30px;justify-content:flex-start;padding-left:var(--brand-inset)}
+@media(min-width:761px){.brand:not(.brand-compact){--brand-inset:clamp(22px,2.3vw,30px)}}
+.sidebar.mobile-open .brand:not(.brand-compact){--brand-inset:24px}
+.brand:not(.brand-compact) .brand-orbit{left:var(--brand-inset);right:auto}
+.brand:not(.brand-compact) .brand-name{align-items:flex-end;text-align:right}
+
+/* Profile, sized like the dashboard's energy home: the full width of the page, starting
+   straight under the heading, and on desktop the same floor height, taken from the same
+   measured offset (`useViewportOffset`), so the two boxes match on the same window. A
+   floor rather than a fixed height, as on the dashboard: on a short window the card grows
+   past the fold rather than clipping its details. */
+.profile-card{width:100%;max-width:none;margin:0}
+@media(min-width:761px){.profile-card{min-height:calc(100svh - var(--profile-card-offset,180px) - var(--space-3))}}
+/* Edit profile sits in its own row at the foot of the card, centred across the whole
+   card, as the action for everything above it. No margins of its own: the details' padding
+   above and the card's below already space it, and extra would push the card taller than
+   the dashboard's. */
+.profile-card .primary-small{grid-column:1/-1;grid-row:5;justify-self:center;align-self:end;margin:0 auto}
+
+/* Usage toolbar: the controls in the left corner with Daily / Weekly / Monthly last, the
+   chart's key (Current / Previous period) in the right corner. The key is the chart
+   legend's own markup, right-aligned and a touch larger to hold the corner. */
+/* The key's right edge lines up with the graph's: its plot ends 16px in from the right
+   (UsageGraph's `margin.right`). The controls keep no inset, so their left edge lines up
+   with the summary cards along the bottom. */
+.usage-card .usage-toolbar{padding-right:16px}
+.usage-toolbar .usage-toolbar-actions{justify-content:flex-start}
+.usage-toolbar .usage-legend{justify-content:flex-end;margin:0;font-size:12px}
+@media(max-width:680px){.usage-toolbar-actions .time-range-selector{grid-column:1/-1}}
+
+/* Billing summary buttons, styles swapped: Pay bill now rests outlined and fills with the
+   gradient on hover (as Manage did), and Manage rests filled and turns white with a purple
+   ring on hover (as Pay bill did). Both keep a real 1.5px border throughout, with the
+   gradient painted under it, so neither changes size; the generic gradient-button rule's
+   inset hover outline is dropped. Keyboard focus keeps a ring, outside the button. */
+.billing-summary-grid .balance-card>button{border:1.5px solid var(--purple);color:var(--purple);background:#fff;box-shadow:none;transform:none}
+.billing-summary-grid .balance-card>button:not(:disabled):hover,
+.billing-summary-grid .balance-card>button:not(:disabled):focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:var(--shadow-button);transform:translateY(-1px);outline:none}
+.billing-summary-grid .payment-method>button{border:1.5px solid transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:var(--shadow-button);transform:none}
+.billing-summary-grid .payment-method>button:not(:disabled):hover,
+.billing-summary-grid .payment-method>button:not(:disabled):focus-visible{border-color:#4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:none;outline:none}
+.billing-summary-grid .balance-card>button:not(:disabled):focus-visible,.billing-summary-grid .payment-method>button:not(:disabled):focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+/* Dark theme: the outlined style moves to Pay bill with the swap, and Manage keeps its
+   gradient rather than the outlined dark variant it used to have. */
+html[data-theme=dark] .billing-summary-grid .balance-card>button{color:#c9c0ff;background:transparent;border-color:#6a5cd6}
+html[data-theme=dark] .billing-summary-grid .payment-method>button{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box}
+
+/* The Billing page's orange payment note hugs its sentence instead of stretching across
+   the whole column, with a little room past the last word. It still wraps on narrow
+   screens rather than overflowing. */
+.invoice-note{justify-self:start;width:fit-content;max-width:100%;padding-right:32px}
+
+/* Billing: the bill sits above Current balance and Payment method now, so the pair takes
+   the gap on its top edge as well. Its bottom margin collapses with Invoice history's. */
+.invoice + .billing-summary-grid{margin-top:var(--space-3)}
+
+/* Invoice preview's Download PDF, rest and hover swapped: it rests white with a purple ring
+   (the old hover) and fills with the gradient on hover (the old rest). Only this button;
+   every other .primary-action keeps the shared style. The ring is a real 1.5px border in
+   both states, with the gradient painted under it on hover, so the size never changes. */
+.primary-action.invoice-download-action{border:1.5px solid #4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:none;outline:none}
+.primary-action.invoice-download-action:hover,.primary-action.invoice-download-action:focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:var(--shadow-button);transform:translateY(-1px);outline:none}
+.primary-action.invoice-download-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+/* With Print hidden, Download PDF is the preview's only action, so it sits centred under
+   the invoice (as the payment confirmation's footer already does) rather than alone at
+   the right edge. */
+.app-modal:has(.invoice-download-action)>footer{justify-content:center}
+
+/* Pay invoice confirmation, light theme, dressed like the Logout confirmation. The credit
+   card icon (the same one Invoice history's pay action now shows) sits on the Logout
+   icon's pale round (same size and tint; the icon keeps its own colour). Cancel is Logout's button, resting
+   outlined and filling with the gradient on hover; Pay, on its right, is the same button
+   with rest and hover swapped, so the action is filled at rest. Both keep a real 1.5px
+   border in both states so neither changes size. The modal itself stays white. */
+html:not([data-theme=dark]) .app-modal .payment-confirm>svg{box-sizing:border-box;width:80px;height:80px;padding:20px;border-radius:50%;background:#f6f7fd}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer{gap:14px}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer button{flex:0 1 auto;min-width:140px;min-height:46px;padding:10px 28px;border:1.5px solid var(--purple);border-radius:999px;color:var(--purple);background:#fff;box-shadow:none;font-size:15px;font-weight:700;transform:none;outline:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer button:hover,
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer button:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer button:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer .primary-action{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%)}
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer .primary-action:hover,
+html:not([data-theme=dark]) .app-modal:has(.payment-confirm)>footer .primary-action:focus-visible{color:var(--purple);border-color:var(--purple);background:#fff;box-shadow:none;transform:translateY(-1px)}
+
+/* Pay invoice confirmation text: the question reads as the modal's headline and the note
+   under it as its description, at the Logout confirmation's description size, instead of
+   two small lines of body copy. The amount stays the heaviest word. */
+.payment-confirm p{max-width:32ch;margin:24px 0 10px;color:var(--ink);font-size:20px;font-weight:600;line-height:1.4;letter-spacing:-.01em}
+.payment-confirm strong{font-weight:800}
+.payment-confirm small{max-width:40ch;color:#68779f;font-size:15px;line-height:1.55}
+
+/* Help & Support. Above the 900px breakpoint (where the page stacks), the contact column
+   is narrower (.7fr → .44fr) so Ask Sparky, Call and Email read as side cards rather than
+   a second main column; the FAQ gains the width. */
+@media(min-width:901px){.help-grid{grid-template-columns:minmax(0,1.5fr) minmax(240px,.44fr)}}
+/* More room between the text and the edge: the FAQ card 22px → 32px, the contact cards
+   18px → 26px. */
+.help-faq{padding:32px}
+.help-actions article{padding:26px}
+/* Phones keep the original, tighter padding; the extra room is for wide screens. */
+@media(max-width:680px){.help-faq{padding:22px}.help-actions article{padding:18px}}
+/* The FAQ search is as long as the row of topic chips under it rather than the whole card:
+   the tools column shrinks to its widest line (the chips) and the search fills that. On a
+   narrow card the chips wrap and both take the full width again. */
+.help-faq .faq-tools{width:fit-content;max-width:100%}
+/* Help & Support type, one step up throughout (1–2px each), still below the page title
+   scale: card title 18 → 20, search 14 → 15, chips 12.5 → 13.5, group labels 11 → 12,
+   questions 14 → 15, answers 13 → 14; contact cards: titles 15 → 16.5, text and buttons
+   12 → 13. */
+/* The FAQ card's title matches the contact cards' titles beside it (Ask Sparky AI, Call
+   Customer Care, Email support): the same 25px icon in the same purple, and the same
+   16.5px title, so the page's card headings read as one set. */
+.help-faq>h2{gap:10px;font-size:16.5px}
+.help-faq>h2 svg{width:25px;height:25px;flex:0 0 25px;color:#5a43e8}
+.help-faq .faq-search input{font-size:15px}
+.help-faq .faq-chips button{font-size:13.5px}
+.help-faq .faq-chips button span{font-size:12px}
+.help-faq .faq-group h3{font-size:12px}
+.help-faq article>button{font-size:15px}
+.help-faq article>p{font-size:14px}
+.help-actions h3{font-size:16.5px}
+.help-actions p{font-size:13px}
+.help-actions .contact-actions a,.help-actions .contact-actions button{font-size:13px}
+
+/* Help & Support buttons, light theme. Every button rests grey, as the topic chips do (a
+   1.5px grey edge, grey text and icon on white), and hovers as Ask Sparky did (a purple
+   edge, purple text and icon, a soft purple glow, a 1px lift). Ask Sparky, Call now and
+   Write email lose their gradient fill; the Copy buttons go from half grey (edge only) to
+   fully grey. The border stays 1.5px throughout, so no button changes size, and the inset
+   hover outline of the generic gradient-button rule is dropped. The active topic chip keeps
+   its gradient: it marks the selection, not a hover. Keyboard focus keeps a ring, outside. */
+html:not([data-theme=dark]) .help-actions .contact-actions a,
+html:not([data-theme=dark]) .help-actions .contact-actions button{border:1.5px solid #e6e9f5;color:#5b6a8f;background:#fff;box-shadow:none;transform:none;outline:none}
+html:not([data-theme=dark]) .help-actions .contact-actions a:hover,
+html:not([data-theme=dark]) .help-actions .contact-actions button:hover,
+html:not([data-theme=dark]) .help-actions .contact-actions a:focus-visible,
+html:not([data-theme=dark]) .help-actions .contact-actions button:focus-visible,
+html:not([data-theme=dark]) .help-faq .faq-chips button:not(.active):hover,
+html:not([data-theme=dark]) .help-faq .faq-chips button:not(.active):focus-visible{border-color:#4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .help-actions .contact-actions a:focus-visible,
+html:not([data-theme=dark]) .help-actions .contact-actions button:focus-visible,
+html:not([data-theme=dark]) .help-faq .faq-chips button:not(.active):focus-visible,
+html:not([data-theme=dark]) .help-faq .faq-chips button.active:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+
+/* Collapsed sidebar's pointer tooltip (AppShell's `navTip`): small and plain, like the
+   browser's own title tooltip, placed at the pointer by the component. */
+.nav-tooltip{position:fixed;z-index:60;padding:4px 9px;border:1px solid #d9dce6;border-radius:6px;color:#263574;background:#fff;box-shadow:0 4px 12px rgb(31 42 85 / 14%);font-size:12px;font-weight:500;line-height:1.3;white-space:nowrap;pointer-events:none}
+html[data-theme=dark] .nav-tooltip{color:#eef1ff;background:#1a2039;border-color:#303953}
+
+/* Settings > Appearance, light theme: the selected option wears what the other option shows
+   on hover (white, a purple edge, purple text and icon, a soft purple glow) instead of a
+   solid gradient. Hovering the selected one only deepens the glow and lifts it 1px. Dark
+   theme keeps its own styling (there the selected option is Dark). */
+html:not([data-theme=dark]) .settings-list .theme-options button.active{color:#4318ff;border-color:#4318ff;background:#fff;box-shadow:0 7px 18px rgb(67 24 255 / 12%)}
+html:not([data-theme=dark]) .settings-list .theme-options button.active:hover,
+html:not([data-theme=dark]) .settings-list .theme-options button.active:focus-visible{box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px)}
+
+/* Settings > Bill-shock alerts. The master switch sits beside the section heading, since
+   it governs the whole section, and shares the settings switch's look. Under it, the
+   three settings it governs (Alert messages, Never alert me under, Quiet hours) are
+   titled in the brand blue. The channels (Email, Text message, A call from Sparky) belong
+   to Alert messages, so they sit indented beneath it (its title starts at 38px; they start
+   24px further in), each switch right after its name. "Interest in offline Sparky" is
+   not an alert setting and sits apart, below the Save button. */
+.bill-shock-title{align-items:center}
+.bill-shock-title>input{margin-left:auto}
+html[data-theme=dark] .bill-shock-title>input:not(:checked){background:#38415c}
+.threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong{color:var(--purple)}
+.threshold-ladder .threshold-group-head{border-top:0}
+.threshold-ladder .threshold-channels{margin-left:62px}
+.threshold-ladder .threshold-head{justify-content:flex-start}
+.threshold-editor>.offline-answers{margin-top:20px}
+@media(max-width:680px){.threshold-ladder .threshold-channels{margin-left:16px}}
+
+/* Settings > Bill-shock alerts, continued. The channels keep their indent but lose the
+   lavender wash and the left rule, which read as a panel inside a panel. */
+.threshold-ladder .threshold-channels{padding-left:0;border-left:0;background:none}
+/* The dollar floor is a white field. It had picked up the grey fill of the settings
+   switch, whose rule styles every input in a settings row. */
+html:not([data-theme=dark]) .threshold-editor .threshold-money-input input{background:#fff}
+/* Save alert settings, rest and hover swapped: it rests white with a purple ring (the old
+   hover) and fills with the gradient on hover (the old rest). The ring is a real 1.5px
+   border in both states, so the button keeps its size, and the generic inset hover
+   outline is dropped. Disabled, it stays flat and does not react. */
+html:not([data-theme=dark]) .threshold-actions .primary-action{border:1.5px solid #4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%)}
+html:not([data-theme=dark]) .threshold-actions .primary-action:not(:disabled):hover,
+html:not([data-theme=dark]) .threshold-actions .primary-action:not(:disabled):focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:var(--shadow-button);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .threshold-actions .primary-action:not(:disabled):focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+html:not([data-theme=dark]) .threshold-actions .primary-action:disabled{box-shadow:none}
+
+/* Settings section headings (Appearance, Bill-shock alerts and the rest), one step up:
+   title 18 → 21px and semibold, text 13 → 14px, so they stand clear of the settings inside
+   a section (Alert messages, Never alert me under, Quiet hours). */
+.settings-section-title h2{font-size:21px;font-weight:600}
+.settings-section-title p{font-size:14px}
+/* Bill reminders and Interest in offline Sparky stand on their own: neither is part of
+   the bill-shock settings above them. Each is drawn like a section heading (its own icon,
+   a section-sized title, the switch at the right edge), and the title keeps its colour on
+   hover instead of turning blue. */
+.setting-row.setting-standalone{padding-left:0;justify-content:flex-start;gap:14px}
+.setting-standalone>svg{width:24px;height:24px;flex:0 0 24px;align-self:flex-start;color:#5c43e7}
+.setting-standalone>input{margin-left:auto}
+.setting-standalone strong,.setting-standalone:hover strong{color:#2f3e65;font-size:21px;font-weight:600}
+.setting-standalone small{margin-top:4px;color:#7885a4;font-size:14px}
+html[data-theme=dark] .setting-standalone strong,html[data-theme=dark] .setting-standalone:hover strong{color:#eef1ff}
+
+/* Settings > Bill-shock alerts: Email, Text message and A call from Sparky sit on one very
+   light blue-grey panel (the #f7f8fd the account links use on hover), so they read as one
+   group. Its left edge lines up with the Alert messages text above it and with Never alert
+   me under and Quiet hours below it. The white percentage buttons stand out on the tint.
+   Dark mode gets a faint lift instead, which also replaces the old lavender gradient that
+   the dark rule was still drawing there. On a phone the panel runs full width. */
+.threshold-ladder .threshold-channels{margin:2px 0 10px 38px;padding:4px 20px;border-radius:16px;background:#f7f8fd}
+.threshold-ladder .threshold-channels .threshold-row{padding-right:0}
+html:not([data-theme=dark]) .threshold-ladder .threshold-channels .threshold-row{border-top-color:#e6e9f3}
+html[data-theme=dark] .threshold-ladder .threshold-channels{background:rgb(255 255 255 / 4%)}
+@media(max-width:680px){.threshold-ladder .threshold-channels{margin-left:0;padding:4px 14px}}
+
+/* Settings > Bill-shock alerts: the dividers inside the section span the Alert messages
+   text to the right edge, the same width as the channel panel, instead of the full width of
+   the rules between sections. Each row's 38px indent becomes a margin, so its text stays
+   put and its top border starts there too. Alert messages gets its divider back, under the
+   section heading, and one more sits between Quiet hours and Save alert settings. */
+.threshold-ladder>.setting-row{margin-left:38px;padding-left:0}
+.threshold-ladder .threshold-group-head{border-top:1px solid #ebedf4}
+.threshold-editor>.threshold-actions{margin-left:38px;border-top:1px solid #ebedf4}
+html[data-theme=dark] .threshold-ladder>.setting-row,
+html[data-theme=dark] .threshold-editor>.threshold-actions{border-top-color:#303953}
+
+/* Settings > Connected home and Account security, drawn like Bill-shock alerts: each setting
+   inside a section starts on the section heading's text (38px in), its title is purple with
+   the small grey line under it, and the dividers between settings run from that 38px line to
+   the right edge, including one under the section heading.
+   Connected home: the scanner was a card inside the section with its own radar icon, which
+   repeated the section's. It becomes a plain setting row: title and description on the left,
+   Scan my network on the right (like the $ field under Never alert me under), and the fine
+   print below. Whatever a scan turns up sits in the same pale panel as the alert channels. */
+.settings-list .device-scan.card{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center;margin:8px 0 0 38px;padding:14px 0 0;border:0;border-top:1px solid #ebedf4;border-radius:0;background:none;box-shadow:none}
+.settings-list .device-scan>*{grid-column:1/-1}
+.settings-list .device-scan>h2,.settings-list .device-scan>.device-scan-lede{grid-column:1}
+.settings-list .device-scan>button.primary{grid-column:2;grid-row:1/span 2}
+.settings-list .device-scan>h2{display:block;margin:0;color:var(--purple);font-size:inherit;font-weight:700;letter-spacing:normal;line-height:inherit}
+.settings-list .device-scan>h2>svg{display:none}
+.settings-list .device-scan-lede{max-width:none;margin:0;color:#7f8baa;font-size:11px;line-height:1.6}
+.settings-list .device-scan-footnote{max-width:none;margin:14px 0 0;color:#8490ac}
+.settings-list .device-scan-empty{max-width:none;margin:14px 0 0;padding:14px 20px;border-radius:16px;background:#f7f8fd}
+.settings-list .device-list{margin:14px 0 0;padding:4px 20px;border-radius:16px;background:#f7f8fd}
+.settings-list .device-list li:first-child{border-top:0}
+.settings-list .device-scan-next{max-width:none;margin:12px 0 0}
+html[data-theme=dark] .settings-list .device-scan.card{border-top-color:#303953}
+html[data-theme=dark] .settings-list :is(.device-scan-empty,.device-list){background:rgb(255 255 255 / 4%)}
+/* Scan my network rests white with a purple ring and fills with the gradient on hover, the
+   same swap as Save alert settings, and the same height. */
+.settings-list .device-scan button.primary{min-height:46px;padding:0 24px;font-weight:700}
+html:not([data-theme=dark]) .settings-list .device-scan button.primary{border:1.5px solid #4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transition:color .3s ease,background .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) .settings-list .device-scan button.primary:not(:disabled):hover,
+html:not([data-theme=dark]) .settings-list .device-scan button.primary:not(:disabled):focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:var(--shadow-button);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .settings-list .device-scan button.primary:not(:disabled):focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+html:not([data-theme=dark]) .settings-list .device-scan button.primary:disabled{box-shadow:none}
+@media(max-width:680px){
+  .settings-list .device-scan.card{display:block}
+  .settings-list .device-scan>button.primary{margin-top:12px}
+}
+/* Account security: Privacy and data and Password and security are setting rows too, so
+   they lose the hover wash (a rounded fill under a divider bent the line at its ends). The
+   chevron still slides and turns purple on hover, and keyboard focus gets a ring. */
+.settings-list .settings-link{width:calc(100% - 38px);margin-left:38px;padding:14px 0;border-top:1px solid #ebedf4;border-bottom:0;border-radius:0}
+.settings-list .settings-section-title+.settings-link{margin-top:8px}
+.settings-list .settings-link strong{color:var(--purple)}
+.settings-list .settings-link small{margin-top:0;color:#7f8baa;font-size:11px}
+.settings-list .settings-link:hover,.settings-list .settings-link:focus-visible{background:none}
+.settings-list .settings-link:focus-visible{outline:2px solid #4318ff;outline-offset:2px}
+html[data-theme=dark] .settings-list .settings-link{border-top-color:#303953}
+
+/* Settings: the titles of the settings inside a section (Alert messages, Never alert me under,
+   Quiet hours, Smart devices on your network, Privacy and data, Password and security) in the
+   Help FAQ labels' orange, instead of purple. It is the deep #c24a00, about 4.9:1 on white, so
+   it passes WCAG AA; the brighter #fe6601 is about 3:1 and does not. On dark it lightens to
+   the #ffa766 the FAQ labels use there. Delete this block to go back to purple. */
+.threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
+.settings-list .device-scan>h2,
+.settings-list .settings-link strong{color:#c24a00}
+html[data-theme=dark] .threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
+html[data-theme=dark] .settings-list .device-scan>h2,
+html[data-theme=dark] .settings-list .settings-link strong{color:#ffa766}
+
+/* Confirmation modals (Reset password, Pay invoice): the icon's round badge is the svg's own
+   background, and an svg clips its drawing to its content box with the corners rounded to
+   match. At 80px with 20px padding that clip is a 40px circle, which cut the corners off the
+   padlock's body and the card. The badge is still drawn; only the clip goes. */
+.payment-confirm>svg{overflow:visible}
+
+/* Settings > Privacy information, laid out like the Reset password and Pay invoice
+   confirmations: the shield in the same round badge, the one-line summary centred under it,
+   then Your rights, each right ticked instead of dotted, on the modal itself (no panel): the
+   block is as wide as its longest line and centred, and the text inside it stays left-aligned. Done is centred at the bottom in the confirmation buttons'
+   pill, resting white with a purple ring and filling with the gradient on hover.
+   Scoped to .privacy-info because the Plans page's terms use .terms-content as well. */
+.privacy-info{display:flex;flex-direction:column;align-items:center;padding:var(--space-2) 0 4px}
+.privacy-info>svg{box-sizing:border-box;flex:0 0 auto;width:80px;height:80px;padding:20px;overflow:visible;border-radius:50%;color:var(--purple);background:#f6f7fd}
+.terms-content.privacy-info>p{max-width:40ch;margin:20px 0 0;padding:0;border:0;color:var(--ink);font-size:16px;font-weight:500;line-height:1.55;text-align:center}
+.privacy-rights{align-self:center;max-width:100%;margin-top:22px}
+.terms-content .privacy-rights h3{margin:0 0 6px;color:#c24a00;font-size:15px;font-weight:700}
+.terms-content .privacy-rights li{display:flex;align-items:flex-start;gap:10px;margin:10px 0 0;padding:0;color:#536184;font-size:14px;line-height:1.5}
+.terms-content .privacy-rights li::before{content:none}
+.privacy-rights li>svg{flex:0 0 18px;width:18px;height:18px;margin-top:1px;color:var(--purple)}
+.app-modal:has(.privacy-info)>footer{justify-content:center}
+.app-modal:has(.privacy-info)>footer .primary-action{min-width:140px;min-height:46px;padding:10px 28px;border-radius:999px;font-size:15px;font-weight:700}
+html:not([data-theme=dark]) .app-modal:has(.privacy-info)>footer .primary-action{border:1.5px solid var(--purple);color:var(--purple);background:#fff;box-shadow:none;outline:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) .app-modal:has(.privacy-info)>footer .primary-action:hover,
+html:not([data-theme=dark]) .app-modal:has(.privacy-info)>footer .primary-action:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}
+html:not([data-theme=dark]) .app-modal:has(.privacy-info)>footer .primary-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+html[data-theme=dark] .privacy-info>svg{background:#241f4d}
+html[data-theme=dark] .terms-content.privacy-info>p{color:#eef1ff}
+html[data-theme=dark] .terms-content .privacy-rights h3{color:#ffa766}
+html[data-theme=dark] .terms-content .privacy-rights li{color:#c3cdea}
