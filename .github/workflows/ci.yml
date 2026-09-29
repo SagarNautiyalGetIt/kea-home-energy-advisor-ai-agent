@@ -188,7 +188,7 @@ jobs:
       - run: make ci-story-guard
 
   data-dbt:
-    name: data (dbt parse + serving publication on Postgres 16)
+    name: data (dbt parse + backtest tests + serving publication on Postgres 16)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -203,6 +203,10 @@ jobs:
           git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
           git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
       - run: make ci-dbt-parse
+      # The 43 kNN leakage tests need numpy, which only the dbt image built by the
+      # step above carries; the `data` job's `make test` skips them. This step
+      # fails on any skip, so it cannot pass by testing nothing.
+      - run: make ci-backtest-tests
       - run: make ci-serving-db
 
   data-dags:
