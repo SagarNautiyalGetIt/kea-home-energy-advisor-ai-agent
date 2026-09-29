@@ -79,7 +79,7 @@ function App() {
       <Route path="/solar" element={<SolarPage/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
-      <Route path="/help" element={<HelpPage/>}/>
+      <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>
       {/* Demo line 6. Deliberately not in the customer navigation — this is the
           operator's evidence view, reached by URL during the pitch. */}
