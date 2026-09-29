@@ -12,6 +12,7 @@ the wrong file.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import re
@@ -29,6 +30,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as _VapiBaseModel
+from pydantic import Field
 
 from app import auth, hardware, offline, voice
 from app.account.mobile_plans import MobilePlansView, mobile_plans
@@ -39,6 +41,7 @@ from app.analytics import forecast as forecast_mod
 from app.analytics.annual_demand import from_context as annual_demand_from_context
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
+from app.analytics.usage_series import from_context as usage_series_from_context
 from app.bills import BillReadError, compare_to_kea, read_bill
 from app.clarify import apply, detect, questions
 from app.clarify.schemas import ClarifyingQuestion, HouseholdContext, QuestionResponse
@@ -46,12 +49,15 @@ from app.config import (
     get_change_store,
     get_context_store,
     get_dispatcher,
+    get_observation_store,
     get_preferences_store,
     get_provider,
     get_recorder,
     get_repository,
     settings,
 )
+from app.homelink.insights import summarise as summarise_devices
+from app.homelink.schemas import DeviceObservation, Provider
 from app.narration.prompts import SYSTEM
 from app.pipeline import (
     DAYS_IN_JULY,
@@ -78,6 +84,7 @@ from app.schemas import (
     ForecastSummary,
     HouseholdBilling,
     HouseholdSummary,
+    HouseholdUsageSeries,
     LoginRequest,
     LoginResponse,
     SourceRef,
@@ -97,9 +104,7 @@ async def health() -> dict[str, object]:
         "provider": provider.name,
         "model": provider.model,
         "model_ready": await provider.health(),
-        # Which model, and why that one. On the M4 this should read gemma3:27b with
-        # `autodetect`; if it reads gemma3:4b on the demo machine something has gone
-        # wrong and it is better to find that out here than mid-answer.
+        # Which model is selected, and whether the operator chose it explicitly.
         "hardware": hardware.describe(),
         # Which recorder is live. Surfaced because the failure mode it prevents is
         # rehearsing all afternoon, then discovering the evidence tables are empty and
@@ -202,19 +207,27 @@ def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
             else None
         )
     else:
-        # The fixture repository has daily totals but no interval rows. Its database
-        # seeder uses this documented 48-interval presentation profile, so preserve that
-        # same explicitly illustrative split instead of returning empty cards.
-        peak_share, off_peak_share, night_share = 0.485352, 0.278749, 0.235899
-        daily_peak = [round(value * peak_share, 4) for value in w.daily_kwh]
-        daily_off_peak = [round(value * off_peak_share, 4) for value in w.daily_kwh]
-        daily_night = [round(value * night_share, 4) for value in w.daily_kwh]
-        band_source = "illustrative_fixture_profile"
+        # Daily totals cannot be split into time bands. The fixture repository has no
+        # interval rows, so the app must show these as unavailable rather than as a
+        # plausible-looking fixed percentage of the customer's actual total.
+        daily_peak = [None] * len(w.daily_kwh)
+        daily_off_peak = [None] * len(w.daily_kwh)
+        daily_night = [None] * len(w.daily_kwh)
+        band_source = None
     return HouseholdSummary(
         customer_id=customer_id,
         label=ctx.label,
         period=w.period,
         daily_kwh=w.daily_kwh,
+        daily_dates=(
+            [day.date for day in days]
+            if len(days) == len(w.daily_kwh)
+            else [ctx.period_start + dt.timedelta(days=index) for index in range(len(w.daily_kwh))]
+            if isinstance(ctx.period_start, dt.date)
+            else []
+        ),
+        date_source="mart" if ctx.account and ctx.account.days else "demo",
+        region=ctx.region,
         daily_peak_kwh=daily_peak,
         daily_off_peak_kwh=daily_off_peak,
         daily_night_kwh=daily_night,
@@ -249,6 +262,7 @@ async def login(req: LoginRequest) -> LoginResponse:
         customer_id=account.customer_id,
         display_name=account.display_name,
         scenario=account.scenario,
+        access_token=auth.issue_demo_token(account.customer_id),
     )
 
 
@@ -268,6 +282,19 @@ async def demo_accounts() -> list[DemoAccountCard]:
     return [DemoAccountCard(**vars(a)) for a in auth.DEMO_ACCOUNTS]
 
 
+@router.get("/auth/session")
+async def demo_session(
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, str]:
+    if not settings.demo_logins:
+        raise HTTPException(status_code=503, detail="Demo sessions are disabled.")
+    token = authorization.removeprefix("Bearer ") if authorization else ""
+    customer_id = auth.demo_token_customer(token)
+    if customer_id is None:
+        raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
+    return {"customer_id": customer_id}
+
+
 @router.get("/households", response_model=list[HouseholdSummary])
 async def list_households() -> list[HouseholdSummary]:
     repo = get_repository()
@@ -281,6 +308,24 @@ async def get_household(customer_id: str) -> HouseholdSummary:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _summary(customer_id, ctx)
+
+
+@router.get("/households/{customer_id}/usage-series", response_model=HouseholdUsageSeries)
+async def get_household_usage_series(
+    customer_id: str,
+    start: dt.date,
+    end: dt.date,
+    authorization: Annotated[str | None, Header()] = None,
+) -> HouseholdUsageSeries:
+    """Return this household's dated usage without guessing missing days or bands."""
+    _demo_household_access(customer_id, authorization)
+    if end < start:
+        raise HTTPException(status_code=422, detail="end must be on or after start")
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return usage_series_from_context(customer_id, ctx, start, end)
 
 
 @router.get("/households/{customer_id}/plans", response_model=MobilePlansView)
@@ -879,7 +924,7 @@ async def homelink_discover() -> dict[str, object]:
     """Scan the local network for smart devices that announce themselves.
 
     A POST rather than a GET despite reading nothing, because it is not free and not
-    cacheable: it puts multicast traffic on the customer's network and takes seconds. A GET
+    cacheable: it puts multicast traffic on the API server's network and takes seconds. A GET
     invites a browser, a proxy or a dashboard poll to repeat it, and a discovery scan that
     runs on every page load is a scan running without anybody asking.
 
@@ -892,13 +937,188 @@ async def homelink_discover() -> dict[str, object]:
     return discovery.summarise(await discovery.discover())
 
 
+class ObservationBatch(_VapiBaseModel):
+    observations: list[DeviceObservation] = Field(min_length=1, max_length=60)
+    timezone: str = Field(min_length=1, max_length=64)
+
+
+class EvOwnershipAnswer(_VapiBaseModel):
+    has_ev: bool
+
+
+def _demo_household_access(customer_id: str, authorization: str | None) -> None:
+    """Scope sensitive demo reads and writes; production needs real household auth."""
+    if not settings.demo_logins:
+        raise HTTPException(status_code=503, detail="Household access needs production auth.")
+    token = authorization.removeprefix("Bearer ") if authorization else ""
+    owner = auth.demo_token_customer(token)
+    if owner is None:
+        raise HTTPException(status_code=401, detail="Sign in again to access this household.")
+    if owner != customer_id:
+        raise HTTPException(status_code=403, detail="This account cannot access that household.")
+
+
+@router.put("/households/{customer_id}/context/ev", response_model=HouseholdContext)
+async def save_ev_ownership(
+    customer_id: str,
+    answer: EvOwnershipAnswer,
+    authorization: Annotated[str | None, Header()] = None,
+) -> HouseholdContext:
+    """Restore a typed, on-device EV answer into this household's server context."""
+    _demo_household_access(customer_id, authorization)
+    try:
+        await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    current = await get_context_store().get(customer_id)
+    question_id = "night_load_pattern:ev_charging"
+    updated = current.model_copy(
+        update={
+            "has_ev": answer.has_ev,
+            "asked": list(dict.fromkeys([*current.asked, question_id])),
+            "updated_at": dt.datetime.now(dt.UTC),
+        }
+    )
+    return await get_context_store().put(updated)
+
+
+@router.post("/households/{customer_id}/device-observations")
+async def store_device_observations(
+    customer_id: str,
+    batch: ObservationBatch,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, int]:
+    """Demo-gated daily meter readings, never raw activity streams or hub credentials."""
+    _demo_household_access(customer_id, authorization)
+    try:
+        await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        today = dt.datetime.now(ZoneInfo(batch.timezone)).date()
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="A valid home timezone is required.") from exc
+    for row in batch.observations:
+        if (
+            row.confidence.value != "measured"
+            or row.energy_kwh is None
+            or row.rated_watts is not None
+            or row.runtime_minutes is not None
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Home Assistant sync requires measured device-meter kWh, "
+                    "with no inferred values."
+                ),
+            )
+    if any(
+        row.provider is not Provider.HOME_ASSISTANT or row.day >= today
+        for row in batch.observations
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Sync complete past days from a Home Assistant energy sensor only.",
+        )
+    saved = await get_observation_store().put(customer_id, batch.observations)
+    return {"saved": saved}
+
+
+@router.get("/households/{customer_id}/appliances")
+async def get_appliances(
+    customer_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, object]:
+    """Per-device summaries; no appliance is inferred from the whole-home meter."""
+    _demo_household_access(customer_id, authorization)
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    rows = await get_observation_store().list(customer_id)
+    if not rows:
+        return {
+            "available": False,
+            "reason": "No connected energy meter has reported a complete day.",
+            "devices": [],
+        }
+    latest = max(row.day for row in rows)
+    start = latest - dt.timedelta(days=29)
+    period_rows = [row for row in rows if start <= row.day <= latest]
+    bill_days = [
+        day for day in (ctx.account.days if ctx.account else []) if start <= day.date <= latest
+    ]
+    bill_total = (
+        sum(day.import_kwh for day in bill_days)
+        if len(bill_days) == (latest - start).days + 1
+        else None
+    )
+    devices = summarise_devices(
+        period_rows,
+        unit_price_nzd=ctx.window.unit_price_nzd,
+        total_bill_kwh=bill_total,
+    )
+    return {
+        "available": True,
+        "period_start": min(row.day for row in period_rows),
+        "period_end": latest,
+        "source": "connected device energy sensor, aggregated by day",
+        "devices": [device.model_dump(mode="json") for device in devices],
+    }
+
+
+@router.get("/households/{customer_id}/home-energy")
+async def get_home_energy(
+    customer_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, object]:
+    """Dated household energy and connected devices, with no invented live flows."""
+    _demo_household_access(customer_id, authorization)
+    try:
+        ctx = await get_repository().context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    summary = _summary(customer_id, ctx)
+    complete_days = [
+        day
+        for day in (ctx.account.days if ctx.account else [])
+        if day.is_complete
+        and (not isinstance(ctx.period_start, dt.date) or day.date >= ctx.period_start)
+        and (not isinstance(ctx.period_end, dt.date) or day.date <= ctx.period_end)
+    ]
+    day_record = max(complete_days, key=lambda day: day.date) if complete_days else None
+    if ctx.account and ctx.account.days:
+        latest_day = day_record.date if day_record else None
+        latest_meter_kwh = day_record.import_kwh if day_record else None
+    else:
+        latest_day = summary.daily_dates[-1] if summary.daily_dates else None
+        latest_meter_kwh = summary.daily_kwh[-1] if summary.daily_kwh else None
+    recent_observations = await get_observation_store().list(customer_id)
+    device_day = max((row.day for row in recent_observations), default=None)
+    observations = [row for row in recent_observations if row.day == device_day]
+    return {
+        "customer_id": customer_id,
+        "region": ctx.region,
+        "day": latest_day,
+        "date_source": summary.date_source,
+        "meter_import_kwh": latest_meter_kwh,
+        "meter_export_kwh": day_record.export_kwh if day_record else None,
+        "meter_source": get_repository().name,
+        "device_day": device_day,
+        "device_observations": [row.model_dump(mode="json") for row in observations],
+        "live_power_available": False,
+        "live_power_reason": "A daily meter reading cannot show current power direction.",
+    }
+
+
 @router.get("/offline/models", response_model=list[offline.OfflineModelOption])
 async def offline_models() -> list[offline.OfflineModelOption]:
-    """What can be downloaded to a device, and how big it is.
+    """Candidate device models for a future offline release, not live downloads.
 
-    Served rather than hard-coded in the app so the sign-up prompt quotes a size that
-    matches what will actually be downloaded. A customer agreeing to "about 530 MB" and
-    receiving 1.8 GB on a metered rural connection is a real cost we imposed on them.
+    The mobile app currently records interest only. Distribution sizes must be
+    verified against shipped artefacts before any download is offered.
     """
     return offline.OFFLINE_MODELS
 
@@ -942,8 +1162,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         raise HTTPException(
             status_code=503,
             detail=(
-                "Sparky can't reach your account data right now, so there's nothing "
-                "reliable to tell you. Please try again shortly."
+                "Sparky's AI service is unavailable right now. Your usage pages are "
+                "still available; please try asking again shortly."
             ),
         ) from exc
 

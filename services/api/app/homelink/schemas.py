@@ -47,6 +47,7 @@ class Provider(StrEnum):
     GOOGLE_HOME = "google_home"
     #: Matter over a local controller (Home Assistant, a hub). Local, open, no vendor.
     MATTER = "matter"
+    HOME_ASSISTANT = "home_assistant"
     #: Samsung SmartThings. Cloud OAuth.
     SMARTTHINGS = "smartthings"
     #: Development and the demo. Never reachable in a deployment — see the registry.
@@ -81,6 +82,11 @@ class DeviceClass(StrEnum):
 
     LIGHTING = "lighting"
     OTHER = "other"
+    SOLAR_GENERATION = "solar_generation"
+    BATTERY_CHARGE = "battery_charge"
+    BATTERY_DISCHARGE = "battery_discharge"
+    GRID_IMPORT = "grid_import"
+    GRID_EXPORT = "grid_export"
 
 
 class Confidence(StrEnum):
@@ -112,10 +118,16 @@ class DeviceObservation(BaseModel):
     at a resolution we cannot justify.
     """
 
-    device_id: str = Field(description="Stable per (provider, household). Never a serial.")
+    device_id: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Stable per (provider, household). Never a serial.",
+    )
     provider: Provider
     device_class: DeviceClass
-    label: str = Field(description="What the customer calls it — 'Lounge heat pump'.")
+    label: str = Field(
+        min_length=1, max_length=128, description="What the customer calls it — 'Lounge heat pump'."
+    )
     day: dt.date
 
     runtime_minutes: float | None = Field(

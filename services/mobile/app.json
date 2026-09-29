@@ -13,6 +13,10 @@
       "bundleIdentifier": "nz.co.keaenergy.mobile"
     },
     "android": {
+      "blockedPermissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#F4F7FF",
         "foregroundImage": "./assets/kea/kea-profile.png"
@@ -36,6 +40,15 @@
         }
       ],
       "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Kea Energy to use your approximate location once to suggest an Auckland demo area. Kea does not save or send your coordinates.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
       "expo-secure-store",
       "expo-sharing"
     ],

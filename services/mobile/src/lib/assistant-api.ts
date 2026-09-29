@@ -1,4 +1,5 @@
 import { apiBase, apiJson, apiPath, jsonRequest } from '@/lib/backend-client';
+import { parseChartEvent, parseSseFrames, type ChartEvent } from '@/lib/assistant-stream';
 
 /**
  * The assistant's wire protocol, mirrored from `services/api/app/pipeline.py`.
@@ -37,13 +38,15 @@ export type AssistantDone = {
   latency_ms: number;
   tokens: number;
   /**
-   * Who handled this turn: 1 the assistant alone, 2 the assistant with a Kea agent
-   * watching, 3 a person only. Decided in Python on every channel — see
-   * `services/api/app/hardship/`. Tier 3 means the text above is a handover, not an
-   * answer, and the UI should present it that way.
+   * Handling tier: 1 assistant answer, 2 concern recorded for review, 3 stop and
+   * direct the customer to Customer Care. No tier implies a staff member has received
+   * this chat. Decided by the same API pipeline as web and voice.
    */
   tier?: number;
   tier_reason?: string | null;
+  /** Read by the shared API tone layer; never use this to diagnose the customer in UI. */
+  emotion?: string | null;
+  emotion_intensity?: string | null;
 };
 
 export type AssistantHandlers = {
@@ -59,6 +62,8 @@ export type AssistantHandlers = {
   onReset?: () => void;
   onTool?: (name: string) => void;
   onToolResult?: (name: string, ok: boolean) => void;
+  /** Server-selected picture built from the same recorded lookup as the answer. */
+  onChart?: (chart: ChartEvent | null) => void;
   onDone?: (event: AssistantDone) => void;
   /** No answer was produced. Show the message; never substitute one. */
   onError?: (message: string) => void;
@@ -74,13 +79,32 @@ const TOOL_LABELS: Record<string, string> = {
   get_plan_options: 'Checking your plan against the alternatives',
   project_this_bill: 'Projecting the rest of your cycle',
   get_energy_breakdown: 'Checking your energy breakdown',
+  get_connected_device_energy: 'Checking connected device measurements',
   discover_smart_devices: 'Looking for smart devices',
+  search_help_topics: 'Checking Kea help information',
   answer_clarifying_question: 'Saving your answer',
-  handoff_to_human: 'Bringing in a person',
+  handoff_to_human: 'Checking whether human support is needed',
 };
 
 export const toolLabel = (name: string): string =>
   TOOL_LABELS[name] ?? name.replace(/_/g, ' ');
+
+const SOURCE_LABELS: Record<string, string> = {
+  get_account_summary: 'account',
+  get_daily_usage: 'daily meter readings',
+  get_bill_comparison: 'bills',
+  get_hourly_profile: 'hourly meter readings',
+  compare_to_similar_homes: 'similar homes in this data set',
+  get_plan_options: 'plan prices',
+  project_this_bill: 'bill projection',
+  get_energy_breakdown: 'energy breakdown',
+  get_connected_device_energy: 'connected device measurements',
+  discover_smart_devices: 'network device names',
+  search_help_topics: 'Kea help information',
+};
+
+/** Short noun labels fit under a chat answer without implying every source is a meter. */
+export const sourceLabel = (name: string): string => SOURCE_LABELS[name] ?? name.replace(/_/g, ' ');
 
 /** Returned by `streamAssistantReply` so a caller can cancel — the RN AbortController. */
 export type AssistantStream = { cancel: () => void };
@@ -103,38 +127,45 @@ export function streamAssistantReply(
   let finished = false;
 
   const drain = (buffer: string) => {
-    const boundary = buffer.lastIndexOf('\n\n');
-    if (boundary < 0 || boundary + 2 <= consumed) return;
-
-    const complete = buffer.slice(consumed, boundary);
-    consumed = boundary + 2;
-
-    for (const frame of complete.split('\n\n')) {
-      let event = '';
-      let data = '';
-      for (const line of frame.split(/\r?\n/)) {
-        if (line.startsWith('event:')) event = line.slice(6).trim();
-        else if (line.startsWith('data:')) data += line.slice(5).trim();
-      }
-      if (!event || !data) continue;
-
-      let payload: any;
-      try {
-        payload = JSON.parse(data);
-      } catch {
-        continue;
-      }
-
+    if (finished) return;
+    const parsed = parseSseFrames(buffer, consumed);
+    consumed = parsed.offset;
+    for (const { event, payload: raw } of parsed.frames) {
+      if (finished) break;
+      if (!raw || typeof raw !== 'object') continue;
+      const payload = raw as Record<string, any>;
       switch (event) {
-        case 'token': handlers.onText(payload.text); break;
+        case 'token':
+          if (typeof payload.text === 'string') handlers.onText(payload.text);
+          break;
         case 'reset': handlers.onReset?.(); break;
-        case 'tool': handlers.onTool?.(payload.name); break;
-        case 'result': handlers.onToolResult?.(payload.name, payload.ok); break;
+        case 'tool':
+          if (typeof payload.name === 'string') handlers.onTool?.(payload.name);
+          break;
+        case 'result':
+          if (typeof payload.name === 'string' && typeof payload.ok === 'boolean') {
+            handlers.onToolResult?.(payload.name, payload.ok);
+          }
+          break;
+        case 'chart': handlers.onChart?.(parseChartEvent(payload)); break;
         case 'done':
-          if (!finished) { finished = true; handlers.onDone?.(payload as AssistantDone); }
+          if (!finished) {
+            finished = true;
+            const validSources = Array.isArray(payload.sources) && payload.sources.every((source: unknown) =>
+              source !== null && typeof source === 'object' &&
+              typeof (source as SourceRef).tool === 'string' &&
+              typeof (source as SourceRef).ok === 'boolean');
+            if (validSources && typeof payload.escalate_to_human === 'boolean' &&
+                typeof payload.tier === 'number') handlers.onDone?.(payload as AssistantDone);
+            else handlers.onError?.('Sparky returned an incomplete answer. Please try again.');
+          }
           break;
         case 'error':
-          if (!finished) { finished = true; handlers.onError?.(payload.message); }
+          if (!finished) {
+            finished = true;
+            handlers.onError?.(typeof payload.message === 'string'
+              ? payload.message : 'Sparky could not answer right now. Please try again.');
+          }
           break;
       }
     }

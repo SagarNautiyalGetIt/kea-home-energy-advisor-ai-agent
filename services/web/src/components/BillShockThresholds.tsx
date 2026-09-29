@@ -3,15 +3,12 @@ import { useEffect, useState } from 'react'
 import {
   CHANNEL_LABEL,
   TIER_OPTIONS,
-  formatMb,
   getAlertPreferences,
-  getOfflineModels,
   ladderError,
   saveAlertPreferences,
   thresholdInDollars,
   withThreshold,
   type AlertPreferences,
-  type OfflineModelOption,
   type Tier,
 } from '../lib/alerts'
 
@@ -54,7 +51,6 @@ type Props = {
 
 export default function BillShockThresholds({ customerId, expectedCostNzd = null, onToast }: Props) {
   const [prefs, setPrefs] = useState<AlertPreferences | null>(null)
-  const [models, setModels] = useState<OfflineModelOption[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -64,11 +60,6 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
     getAlertPreferences(customerId)
       .then((loaded) => live && setPrefs(loaded))
       .catch((error: Error) => live && setLoadError(error.message))
-    // A failed catalogue fetch is not an error worth showing: it only affects one
-    // optional row, and the alert thresholds above it are the point of the screen.
-    getOfflineModels()
-      .then((options) => live && setModels(options))
-      .catch(() => undefined)
     return () => {
       live = false
     }
@@ -94,12 +85,6 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
       setSaving(false)
     }
   }
-
-  // Smallest first — the recommended option, and the one whose size sets the customer's
-  // expectation. Quoting the largest would be quoting a cost they did not agree to.
-  const smallestModel = models.length
-    ? models.reduce((a, b) => (a.download_mb <= b.download_mb ? a : b))
-    : null
 
   if (loadError) {
     return (
@@ -288,13 +273,12 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
         </div>
       </fieldset>
 
-      {smallestModel && (
         <label className="setting-row">
           <span>
-            <strong>Answers without a connection</strong>
+            <strong>Interest in offline Sparky</strong>
             <small>
-              Keep a small assistant on this device so Sparky still works when you have no
-              signal. About {formatMb(smallestModel.download_mb)}, downloaded over wifi only.
+              Save your preference for a future offline release. This build does not
+              download a model or answer without a connection.
             </small>
           </span>
           <input
@@ -305,7 +289,6 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
             }
           />
         </label>
-      )}
 
       <div className="threshold-actions">
         <button

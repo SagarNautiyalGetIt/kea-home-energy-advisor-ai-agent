@@ -4,7 +4,7 @@ export type HelpFaq = { category: HelpCategory; question: string; answer: string
 
 /** Official Help content, kept separate from preview account fixtures. */
 export const helpFaqs: HelpFaq[] = [
-  { category: 'about', question: 'What is Sparky AI?', answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand electricity usage, bills and plan options. It provides early high-bill warnings and can connect you with human support when needed.' },
+  { category: 'about', question: 'What is Sparky AI?', answer: 'Sparky is Kea Energy’s digital AI assistant that helps you understand electricity usage, bills and plan options. It provides early high-bill warnings. Human support is not connected in this demo.' },
   { category: 'about', question: 'What can Sparky help me with?', answer: 'Sparky can explain bill changes, warn about projected high bills, compare Kea plans using your usage pattern and answer general questions about your energy account.' },
   { category: 'about', question: 'How does Sparky work?', answer: 'Sparky requests information from approved account, usage and pricing services. Those services perform the calculations while Sparky explains the results. It is not allowed to create bill amounts, projections or savings figures.' },
   { category: 'about', question: 'What information does Sparky use?', answer: 'Depending on your question, Sparky may use usage, billing history, current plan, alert preferences and information you choose to upload. It uses only information needed for your request.' },
@@ -18,5 +18,5 @@ export const helpFaqs: HelpFaq[] = [
   { category: 'accuracy', question: 'Can Sparky make mistakes?', answer: 'Yes. Sparky can misread a question or give an incomplete answer, so do not treat replies as financial advice or a final account decision. It should say when it is not sure rather than guess.' },
   { category: 'privacy', question: 'How does Kea protect my information?', answer: 'Kea uses authentication, encryption and access controls to protect customer information. The system is designed to use only data needed for each request and prevent access to another person’s account.' },
   { category: 'privacy', question: 'Are my conversations with Sparky stored?', answer: 'Conversations may be stored securely for a limited period to provide the service, maintain an audit record, investigate problems and improve safety and quality.' },
-  { category: 'privacy', question: 'Can I speak to a real person?', answer: 'Yes. You can request human assistance at any time. Sparky also offers a handoff when it cannot answer safely, when important information is disputed or when more support is needed.' },
+  { category: 'privacy', question: 'Can I speak to a real person?', answer: 'Sparky may recommend human help, but this demo does not send your chat to staff. Use the verified support details on your electricity bill to contact your provider.' },
 ];

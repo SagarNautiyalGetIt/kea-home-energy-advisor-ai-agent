@@ -149,7 +149,7 @@ SERVICE_TYPES: tuple[ServiceType, ...] = (
     ServiceType(
         "_home-assistant._tcp.local.",
         "Home Assistant",
-        Provider.MATTER,
+        Provider.HOME_ASSISTANT,
         note=(
             "The single most valuable thing to find. Home Assistant already normalises "
             "every device in the house and keeps long-term per-device energy statistics, "
@@ -566,6 +566,7 @@ def summarise(result: DiscoveryResult) -> dict[str, object]:
             {
                 "name": d.name,
                 "kind": d.label,
+                "service": d.service,
                 "could_connect_via": d.provider,
                 "note": d.note,
                 "address": d.host,

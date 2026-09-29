@@ -5,7 +5,7 @@
 <h1 align="center">Kea Energy · Home Energy Advisor</h1>
 
 <p align="center">
-  Understand electricity use, explain bill changes, and ask Sparky for answers grounded in household data.
+  See how a home uses energy. Understand the bill. Ask Sparky what changed.
 </p>
 
 <p align="center">
@@ -13,18 +13,20 @@
 </p>
 
 <p align="center">
-  <a href="#see-the-product">See the product</a> ·
+  <a href="#the-experience">See the product</a> ·
+  <a href="#meet-sparky">Meet Sparky</a> ·
+  <a href="#power-clash">Power Clash</a> ·
   <a href="#run-the-demo">Run the demo</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#find-your-way-around">Explore the repo</a>
+  <a href="#how-it-works">How it works</a>
 </p>
 
-## What this project does
+## One home, one clear story
 
-Kea is a customer portal and mobile prototype for understanding power use and
-preventing bill shock. Customers can inspect usage and bills, compare plans, and
-ask Sparky why a cost changed. The assistant can retrieve household-scoped facts
-through typed tools and records the lookups behind its answer.
+Kea brings a home energy view, usage history, bills, and an AI assistant into a
+web portal and mobile prototype. It helps a customer see where power is going,
+compare periods and bills, and understand a possible bill shock before the cycle
+closes. Sparky can explain the result and bring in a person when the question
+needs human care.
 
 > **Prototype boundary:** The included accounts are synthetic. Demo dollar figures
 > use illustrative rates; they are not a live Kea Energy tariff. Recorded sources
@@ -32,23 +34,66 @@ through typed tools and records the lookups behind its answer.
 > correctly. Real customer use still needs production identity and household
 > authorization.
 
-## See the product
+## The experience
 
-![Plans screen in the Kea customer portal demo, showing three pricing styles](docs/sprints/sprint-3/plans-1.png)
+<p align="center">
+  <img src="services/web/public/assets/energy-home/kea-home.webp" alt="Kea Home illustration with rooftop solar, battery, electric car, and grid connection" width="900">
+</p>
 
-*Plans view from the demo. The pictured prices and recommendation are
-illustrative.*
+<p align="center"><sub>The Kea Home scene uses green for solar, blue for battery supply, and amber for grid import.</sub></p>
 
-| Explore | What you can see |
-| --- | --- |
-| **Usage and bills** | Household usage, estimated costs, and bill-change explanations. |
-| **Sparky** | Questions answered through household-scoped lookups, with named sources. |
-| **Plans and support** | Plan information and a route to human help when the data cannot answer. |
-| **Mobile** | An Expo app with usage, billing, plans, and an illustrative Kea Home scene. |
+![Kea Home energy sources and Sparky AI overview](docs/assets/kea-flow-map.svg)
 
-The Kea Home scene visualizes a possible home energy system. Its energy flows
-are examples, not measurements from a customer's solar panels, battery, or EV.
-See the [mobile guide](services/mobile/README.md) for current integration limits.
+The **web dashboard** uses the energy-flow component from
+[Kea Energy Home](https://github.com/nair-akash/kea-energy-home): the same
+house illustration, conduit paths, GSAP motion, and source colours. The mobile
+scene follows the same paths and colours. Weather is modelled live when
+available; displayed kW and device flows are an **illustrative simulation**, not
+readings from a connected meter, inverter, battery, or EV.
+
+| Experience | Web | Mobile |
+| --- | --- | --- |
+| **Home energy** | Animated Kea Home beside household usage, projected cost, and bill-risk status. | Kea Home preview with solar-green, battery-blue, and grid-amber flows. |
+| **Usage comparison** | Daily, weekly, and monthly views with a previous-period comparison. | Select two dates, weeks, or months; inspect usage or cost side by side. |
+| **Bills** | A labelled demo billing preview; Sparky compares backend bill facts when a prior bill exists. | Account invoice details, a current-versus-prior total when both exist, and a shareable invoice view. |
+| **Bill-shock alerts** | A visible forecast and reason; set email, text, and optional call thresholds. | Forecast and the same alert preferences in Settings. |
+| **Sparky AI** | Chat, named sources, bill upload, and voice when the server reports voice ready. | Chat and a dedicated status card showing the active model and whether it is ready. |
+| **Connected home** | Device discovery and energy-breakdown context. | A network scan that separates discovery from actual power readings. |
+| **Power Clash** | Design blueprint for a monthly suburb league. | Interactive dark demo with a score arena, four weighted categories, sample ranks, and next steps. No real rewards are active. |
+
+### Meet Sparky
+
+<p align="center"><img src="services/web/public/assets/assistant/ai-logo.svg" alt="Sparky AI companion mark" width="100"></p>
+
+Sparky can look up the signed-in demo household's usage, bills, forecast,
+comparisons, and support options through typed tools. Answers surface named
+sources, and the tool calls are recorded for review when persistence is on.
+For a large predicted bill difference, customers can opt in to an automated
+**Sparky call** with their own threshold and quiet hours. Email and text have
+separate thresholds; actual delivery depends on the configured gateways.
+
+The server can use a local Ollama model when a **tool-capable** model is
+installed and selected. Mobile Settings shows the active model and a refreshable
+readiness result. The offline phone-model switch currently **records interest
+only**: this build has no on-device model download or offline answering runtime.
+See [mobile setup](services/mobile/README.md) and the
+[provider configuration](services/api/README.md) before demonstrating AI live.
+
+### Power Clash
+
+![Illustrative Power Clash screen with four energy score pillars and a sample suburb ranking](docs/assets/power-clash-preview.svg)
+
+The mobile **Power Clash** preview turns useful energy choices into a monthly
+within-suburb challenge. Its four sample categories are energy conserved against
+the home's own baseline, EV charging emissions avoided, off-peak money saved,
+and solar emissions avoided. The interactive score arena and leaderboard are
+synthetic; users can switch demo suburbs and inspect how each category works.
+Sparky and Usage link back to actions a household can actually take.
+
+The proposed top three bill credits are **not active**. Real rankings would need
+verified meter, charger, solar, and tariff data; fair eligibility for households
+without EVs or solar; consent; and funded retailer settlement. See the
+[Power Clash blueprint](docs/design/suburb-power-clash.md) for those gates.
 
 ## Run the demo
 
@@ -76,9 +121,13 @@ make web-dev   # http://localhost:5173
 
 Open <http://localhost:5173> and sign in with the synthetic July account
 (`july@kea.example` / `julyhouse24`). Sparky requires a configured model that
-supports tool calls; check <http://localhost:8000/api/health> for provider
-readiness. `make help` lists the other commands; `make check` runs the root
-API, web, and attribution checks.
+supports tool calls; check `model_ready` at
+<http://localhost:8000/api/health> before asking a question. For a local
+provider, set `KEA_PROVIDER=ollama`, run `ollama pull qwen3:4b`, and use the
+tool-capable default `qwen3:4b` (or set `KEA_OLLAMA_MODEL` explicitly). A
+running Ollama server alone does
+not count as ready. `make help` lists the other commands; `make check` runs the
+root API, web, and attribution checks.
 
 For the iOS/Android client, use the [mobile setup guide](services/mobile/README.md).
 
@@ -86,22 +135,23 @@ For the iOS/Android client, use the [mobile setup guide](services/mobile/README.
 
 ```mermaid
 flowchart TD
-    A["Web · Mobile · optional voice"] --> B["FastAPI pipeline"]
-    B --> C["Household context<br/>bound by the server"]
-    C --> D["Sparky agent"]
-    D -->|chooses a lookup| E["Typed tools<br/>usage · bills · plans · support"]
-    E --> F["Household data and computed facts"]
-    F --> E
-    E -->|result| D
-    E --> G["Recorded tool calls<br/>arguments and results"]
-    D --> H["Answer with named sources"]
+    A["Web dashboard · mobile app · optional voice"] --> B["FastAPI"]
+    B --> C["Household-scoped usage and bills"]
+    C --> D["Computed forecast and bill comparison"]
+    C --> E["Sparky's typed lookup tools"]
+    D --> E
+    E --> F["Tool-capable AI model"]
+    F --> G["Answer with named sources"]
+    E --> H["Recorded lookups for review"]
+    D --> I["Customer-set alert thresholds"]
+    I --> J["Email · text · opt-in Sparky call"]
 ```
 
-Python scopes retrieval to the requested household and computes facts such as
-bill projections. The model chooses which tools to call and writes the reply;
-the tool-call recorder keeps the arguments and results for later review. The
-offline path uses precomputed fact bundles because it cannot call tools. Read
-[ADR-0011](docs/adr/0011-agentic-tool-use.md) for the design and its tradeoffs.
+Python computes the figures and exposes household-scoped facts through tools.
+The model selects tools and writes the reply; it does not get to invent a
+meter reading. The recorder keeps tool arguments and results for review. Read
+[ADR-0011](docs/adr/0011-agentic-tool-use.md) for the design, and
+[SECURITY.md](SECURITY.md) for the synthetic-data boundary and release gates.
 
 ## Find your way around
 
@@ -117,5 +167,4 @@ offline path uses precomputed fact bundles because it cannot call tools. Read
 
 New contributors: start with [your team's page](docs/teams/README.md), then
 read [CONTRIBUTING.md](CONTRIBUTING.md). For deeper context, see the
-[architecture decisions](docs/adr/), [API contract](contracts/openapi.json),
-and [security guidance](SECURITY.md).
+[architecture decisions](docs/adr/) and [API contract](contracts/openapi.json).

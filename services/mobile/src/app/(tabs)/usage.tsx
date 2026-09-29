@@ -10,6 +10,7 @@ import { Screen } from '@/components/screen';
 import { PageHeader, PrimaryButton } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
+import { loadConnectedAppliances, type ConnectedAppliances } from '@/lib/connected-appliances';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
@@ -26,9 +27,9 @@ const periodOptions = [
 
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const unavailableBands: UsageBand[] = [
-  { key: 'peak', label: 'Peak usage', window: null, kwh: null, costNzd: null },
-  { key: 'offPeak', label: 'Off-peak usage', window: null, kwh: null, costNzd: null },
-  { key: 'night', label: 'Night usage', window: null, kwh: null, costNzd: null },
+  { key: 'peak', label: 'Peak usage', window: '7–11 AM · 5–9 PM', kwh: null, costNzd: null },
+  { key: 'offPeak', label: 'Off-peak usage', window: '11 AM–5 PM · 9–11 PM', kwh: null, costNzd: null },
+  { key: 'night', label: 'Night usage', window: '11 PM–7 AM', kwh: null, costNzd: null },
 ];
 
 function parseDate(value: string) {
@@ -44,10 +45,6 @@ function addDays(date: Date, days: number) {
   const shifted = new Date(date);
   shifted.setDate(shifted.getDate() + days);
   return shifted;
-}
-
-function startOfWeek(date: Date) {
-  return addDays(date, -((date.getDay() + 6) % 7));
 }
 
 function shortDate(date: Date) {
@@ -125,12 +122,17 @@ function bandPresentation(key: UsageBand['key']) {
 
 function energyCategoryPresentation(key: string) {
   const normalized = key.toLowerCase();
-  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: palette.red };
+  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: '#38BDF8' };
   if (normalized.includes('always') || normalized.includes('base')) return { icon: 'pulse-outline' as const, color: '#38BDF8' };
-  return { icon: 'flash-outline' as const, color: palette.amber };
+  return { icon: 'flash-outline' as const, color: '#38BDF8' };
 }
 
 export default function UsageScreen() {
+  const { session } = useAuth();
+  return <UsageScreenForHousehold key={session?.customerId ?? 'signed-out'} />;
+}
+
+function UsageScreenForHousehold() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const { height: screenHeight } = useWindowDimensions();
@@ -149,8 +151,9 @@ export default function UsageScreen() {
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
-  const [, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [connectedAppliances, setConnectedAppliances] = useState<ConnectedAppliances | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
   const [chartActive, setChartActive] = useState(false);
@@ -160,7 +163,6 @@ export default function UsageScreen() {
   const [hintTranslateX] = useState(() => new Animated.Value(0));
   const [hintOpacity] = useState(() => new Animated.Value(0));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
-  const [usageHeight, setUsageHeight] = useState(620);
   const [listInForeground, setListInForeground] = useState(false);
   const scrollY = useMemo(() => new Animated.Value(0), []);
   const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
@@ -169,22 +171,19 @@ export default function UsageScreen() {
 
   const comparison = comparisons[period];
   const compare = comparison !== null;
-  const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
+  const dateSourceLabel = data?.dateSource === 'demo' ? 'Demo scenario · sample dates' : data?.dateSource === 'preview' ? 'Local preview' : data?.hasEstimatedReadings ? 'Meter data · some estimated reads' : 'Metered daily totals';
+  const coverageLabel = data?.observedDays != null && data.expectedDays != null && data.observedDays < data.expectedDays && data.observedDays > 0
+    ? ` · ${data.observedDays} of ${data.expectedDays} days available` : '';
+  const canShowCost = !data || data.totalCostNzd !== null;
   const unitOptions: readonly Unit[] = canShowCost ? ['cost', 'kwh'] : ['kwh'];
   const displayUnit: Unit = canShowCost ? unit : 'kwh';
   const chartValues = useMemo(() => {
     if (!data) return [];
-    const values = displayUnit === 'cost'
-      ? data.points.every((point) => point.costNzd !== null) ? data.points.map((point) => point.costNzd as number) : []
-      : data.points.map((point) => point.kwh);
-    return values;
+    return data.points.map((point) => displayUnit === 'cost' ? point.costNzd : point.kwh);
   }, [data, displayUnit]);
   const chartPrevious = useMemo(() => {
     if (!data?.comparisonPoints) return undefined;
-    const values = displayUnit === 'cost'
-      ? data.comparisonPoints.every((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd as number) : []
-      : data.comparisonPoints.map((point) => point.kwh);
-    return values;
+    return data.comparisonPoints.map((point) => displayUnit === 'cost' ? point.costNzd : point.kwh);
   }, [data, displayUnit]);
   const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
   const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
@@ -205,7 +204,7 @@ export default function UsageScreen() {
         kwh: band.kwh ?? 0,
         costNzd: band.costNzd ?? 0,
         sharePct: data?.totalKwh ? (band.kwh ?? 0) / data.totalKwh * 100 : 0,
-        confidence: data?.isDemo ? 'estimated' : 'measured',
+        confidence: data?.isDemo || data?.bandDataSource !== 'measured' ? 'estimated' : 'measured',
         basis: band.window ?? 'Selected period',
         caveat: null,
       }));
@@ -219,16 +218,24 @@ export default function UsageScreen() {
   useEffect(() => {
     const controller = new AbortController();
     if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
-      void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+      void Promise.resolve().then(() => {
+        if (!controller.signal.aborted) {
+          setEnergyBreakdown(null);
+          setConnectedAppliances(null);
+        }
+      });
       return () => controller.abort();
     }
     void loadEnergyBreakdown(session.customerId, controller.signal)
       .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result.available ? result : null); })
       .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+    void loadConnectedAppliances(session.customerId, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setConnectedAppliances(result); })
+      .catch(() => { if (!controller.signal.aborted) setConnectedAppliances(null); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
-  const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
-  const totalDisplay = unit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
+  const formatAmount = (kwh: number | null, costNzd: number | null) => displayUnit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
+  const totalDisplay = displayUnit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
 
 
   const refresh = () => {
@@ -249,20 +256,9 @@ export default function UsageScreen() {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
         if (!controller.signal.aborted) {
           setData(result);
-          // Move a date outside the fixture range to available data. Weekly charts
-          // deliberately settle on the latest complete Monday-Sunday week, so their
-          // X axis is never cut short at the final reading (for example, Friday).
-          const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
-          if (!comparison && !result.isDemo && needsAvailableRange && result.availableTo) {
-            const latest = parseDate(result.availableTo);
-            const fallbackDate = period === 'weekly'
-              ? toDateValue(addDays(startOfWeek(latest), -1))
-              : result.availableTo;
-            if (fallbackDate !== date) setDate(fallbackDate);
-          }
         }
       } catch (error: unknown) {
-        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Usage could not be loaded.');
+        if (!controller.signal.aborted) setLoadError(error instanceof TypeError ? 'Kea API is unreachable. Check that your phone and API are on the same network.' : error instanceof Error ? error.message : 'Usage could not be loaded.');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -402,7 +398,6 @@ export default function UsageScreen() {
 
       {/* Header, controls, and chart */}
       <View
-        onLayout={(event) => setUsageHeight(event.nativeEvent.layout.height)}
         pointerEvents="box-none"
         style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
@@ -489,10 +484,11 @@ export default function UsageScreen() {
           {/* Chart Header & Unit Toggle (Outside of PanResponder for instant, 100% reliable tapping) */}
           <View style={styles.chartHeaderCard}>
             <View style={styles.chartHeader}>
-              <View>
+              <View style={styles.totalWrap}>
                 <Text style={[styles.total, { color: colors.text }]}>
                   {totalDisplay} <Text style={styles.suffix}>{suffix}</Text>
                 </Text>
+                {data ? <Text numberOfLines={2} style={[styles.dateSource, { color: colors.textMuted }]}>{dateSourceLabel}{coverageLabel}</Text> : null}
               </View>
               <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
                 {unitOptions.map((item) => (
@@ -532,20 +528,26 @@ export default function UsageScreen() {
             style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}
           >
             <View style={styles.fullWidthChartWrap}>
-              <UsageChart
-                accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
+              {loadError || data?.totalKwh == null || !chartValues.some((value) => value !== null) ? <View style={[styles.chartStatus, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                {loading ? <ActivityIndicator color="#38BDF8" /> : <Ionicons color={loadError ? palette.red : '#38BDF8'} name={loadError ? 'warning-outline' : 'analytics-outline'} size={24} />}
+                <Text style={[styles.chartStatusTitle, { color: colors.text }]}>{loading ? 'Loading your meter readings' : loadError ? 'Usage could not be loaded' : 'No readings for this period'}</Text>
+                <Text style={[styles.chartStatusDetail, { color: colors.textMuted }]}>{loading ? 'Checking the selected period.' : loadError ?? (data?.availableFrom && data.availableTo ? `${data.dateSource === 'demo' ? 'Demo dates' : 'Available readings'}: ${data.availableFrom} to ${data.availableTo}.` : 'Meter readings are not available for this account yet.')}</Text>
+                {loadError ? <Pressable accessibilityRole="button" onPress={refresh} style={styles.chartRetry}><Ionicons color="#38BDF8" name="refresh-outline" size={16} /><Text style={styles.chartRetryText}>Try again</Text></Pressable> : null}
+                {!loadError && !comparison && data?.availableTo && data.availableTo !== date ? <Pressable accessibilityRole="button" onPress={() => setDate(data.availableTo!)} style={styles.chartRetry}><Ionicons color="#38BDF8" name="calendar-outline" size={16} /><Text style={styles.chartRetryText}>Show latest readings</Text></Pressable> : null}
+              </View> : <UsageChart
+                accessibilityLabel={`${period} electricity usage in ${displayUnit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
                 active={chartActive}
-                key={`${period}-${unit}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
+                key={`${period}-${displayUnit}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
                 axisLabels={chartAxisLabels}
                 labels={chartLabels}
                 onActivate={() => setChartActive(true)}
                 previous={chartPrevious}
                 previousTooltipLabels={previousTooltipLabels}
                 tooltipLabels={tooltipLabels}
-                unit={unit}
+                unit={displayUnit}
                 values={chartValues}
                 xLabelInterval={1}
-              />
+              />}
             </View>
           </Animated.View>
         </Animated.View>
@@ -575,7 +577,6 @@ export default function UsageScreen() {
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
           <View style={styles.breakdownContent}>
             <View style={styles.breakdownList}>
-              {breakdownCategories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
                   <View style={styles.breakdownIcon}>
                     <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
@@ -586,7 +587,6 @@ export default function UsageScreen() {
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
-              ) : null}
               <View style={styles.breakdownRow}>
                 <View style={styles.breakdownIcon}>
                   <Ionicons color={colors.textMuted} name="pulse-outline" size={19} />
@@ -638,17 +638,18 @@ export default function UsageScreen() {
         title="Energy breakdown"
         visible={energyBreakdownOpen}
       >
-        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: colors.border }]}>
-          <View style={styles.energyBreakdownHeroIcon}><Ionicons color={palette.violet} name="pie-chart-outline" size={22} /></View>
+        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: '#38BDF8' }]}>
+          <View style={styles.energyBreakdownHeroIcon}><Ionicons color="#38BDF8" name="pie-chart-outline" size={22} /></View>
           <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
         </View>
         <View style={styles.energyBreakdownSheet}>
+          {!breakdownCategories.length ? <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No interval breakdown is available for this period yet.</Text> : null}
           {breakdownCategories.map((category) => {
             const presentation = energyCategoryPresentation(category.key);
             const estimated = category.confidence !== 'measured';
             return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}><Ionicons color={presentation.color} name={presentation.icon} size={20} /></View>
-              <View style={[styles.energyCategoryCopy, styles.energyCategoryCopyCompact]}>
+              <View style={styles.energyCategoryCopy}>
                 <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.label}</Text>
                 <View style={[styles.confidenceBadge, { backgroundColor: estimated ? 'rgba(255, 214, 10, 0.14)' : 'rgba(48, 209, 88, 0.14)' }]}><Text style={[styles.confidenceBadgeText, { color: estimated ? palette.amber : palette.green }]}>{estimated ? 'ESTIMATED' : 'MEASURED'}</Text></View>
                 <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{category.confidence === 'measured' ? category.basis : `Estimated · ${category.basis}`}</Text>
@@ -660,6 +661,13 @@ export default function UsageScreen() {
               </View>
             </View>;
           })}
+          <Text style={[styles.energyCategoryTitle, { color: colors.text, marginTop: 12 }]}>Connected appliance meters</Text>
+          <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{connectedAppliances?.periodStart && connectedAppliances.periodEnd ? `${connectedAppliances.periodStart} to ${connectedAppliances.periodEnd} · separate from the selected period above` : 'Only devices that report their own energy can appear here.'}</Text>
+          {connectedAppliances?.devices.length ? connectedAppliances.devices.map((device) => <View key={device.id} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.energyCategoryIcon, { backgroundColor: 'rgba(56, 189, 248, 0.16)' }]}><Ionicons color="#38BDF8" name="flash-outline" size={20} /></View>
+            <View style={styles.energyCategoryCopy}><Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{device.label}</Text><Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Measured · {device.daysObserved} days · {device.deviceClass.replace(/_/g, ' ')}</Text></View>
+            <View style={styles.breakdownValueWrap}><Text style={[styles.breakdownValue, { color: colors.text }]}>{device.kwh.toFixed(1)} kWh</Text><Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{device.sharePct === null ? 'Bill share unavailable' : `${device.sharePct.toFixed(1)}% of metered use`}</Text></View>
+          </View>) : <Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>No connected appliance meter has reported a complete day. Whole-home meter readings cannot identify a specific appliance.</Text>}
         </View>
       </ModalSheet>
       <ModalSheet
@@ -912,6 +920,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 18,
   },
+  totalWrap: { flex: 1, minWidth: 0, paddingRight: 8 },
   totalLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -922,6 +931,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -1.1,
   },
+  dateSource: { marginTop: 3, fontSize: 10, fontWeight: '700' },
   suffix: {
     fontSize: 9,
     color: '#FFFFFF',
@@ -945,6 +955,7 @@ const styles = StyleSheet.create({
   },
   unitToggle: {
     flexDirection: 'row',
+    flexShrink: 0,
     padding: 3,
     borderRadius: 12,
   },
@@ -969,6 +980,20 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
   },
+  chartStatus: {
+    minHeight: 210,
+    marginHorizontal: 18,
+    borderWidth: 1,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 20,
+  },
+  chartStatusTitle: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  chartStatusDetail: { fontSize: 11, lineHeight: 17, textAlign: 'center' },
+  chartRetry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
+  chartRetryText: { color: '#38BDF8', fontSize: 11, fontWeight: '800' },
   listViewport: {
     position: 'absolute',
     top: 0,
@@ -1000,7 +1025,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   energyBreakdownHero: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 18, padding: 13 },
-  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(168, 85, 247, 0.16)' },
+  energyBreakdownHeroIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: 'rgba(56, 189, 248, 0.16)' },
   energyBreakdownHeroCopy: { flex: 1 },
   energyBreakdownHeroTitle: { fontSize: 15, fontWeight: '900' },
   energyBreakdownIntro: { marginTop: 3, fontSize: 11, lineHeight: 16 },
@@ -1008,7 +1033,6 @@ const styles = StyleSheet.create({
   energyCategoryCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 17, padding: 12 },
   energyCategoryIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
   energyCategoryCopy: { flex: 1, minWidth: 0 },
-  energyCategoryCopyCompact: { height: 34, overflow: 'hidden' },
   energyCategoryTitle: { fontSize: 13, fontWeight: '800' },
   energyCategoryCaveat: { marginTop: 4, fontSize: 10, lineHeight: 14 },
   confidenceBadge: { alignSelf: 'flex-start', marginTop: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },

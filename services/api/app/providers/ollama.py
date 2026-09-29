@@ -14,8 +14,8 @@ system prompt alone. That produces a fluent reply with no data behind it, which 
 worst possible failure for this application, so `supports_tools` is checked before the
 agent will use a local model and the answer is refused rather than faked.
 
-`hardware.select_ollama_model()` still picks a gemma3 by size for `narrate()`. Set
-KEA_OLLAMA_MODEL to a tool-capable model if you want the agent to run locally.
+The default is the measured, tool-capable qwen3:4b. A KEA_OLLAMA_MODEL override
+must also support tools; readiness stays false otherwise.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ class OllamaProvider:
 
     def __init__(
         self,
-        model: str = "gemma3:4b",
+        model: str = "qwen3:4b",
         base_url: str = "http://localhost:11434",
         timeout: float = 120.0,
     ) -> None:
@@ -259,10 +259,22 @@ class OllamaProvider:
         )
 
     async def health(self) -> bool:
+        # A running Ollama daemon is not enough: the selected model must be installed
+        # and able to use tools, or Sparky cannot ground its answer in household data.
+        if not self.supports_tools:
+            return False
         try:
             r = await self._http().get(f"{self.base_url}/api/tags", timeout=5.0)
-            return r.status_code == 200
-        except httpx.HTTPError:
+            if r.status_code != 200:
+                return False
+            models = r.json().get("models", [])
+            selected = self.model if ":" in self.model else f"{self.model}:latest"
+            return any(
+                isinstance(model, dict)
+                and (model.get("name") == selected or model.get("model") == selected)
+                for model in models
+            )
+        except (httpx.HTTPError, ValueError, AttributeError):
             return False
 
     async def warm(self) -> None:

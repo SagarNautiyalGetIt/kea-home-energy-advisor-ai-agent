@@ -1,0 +1,45 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAppTheme } from '@/theme';
+
+export function NextMoveCard() {
+  const { colors } = useAppTheme();
+  const router = useRouter();
+  const open = (route: '/usage' | '/assistant') => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync().catch(() => undefined);
+    router.push(route);
+  };
+  return (
+    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View style={styles.heading}>
+        <Ionicons color={colors.text} name="compass-outline" size={21} />
+        <Text style={[styles.title, { color: colors.text }]}>Make your next move</Text>
+      </View>
+      <Text style={[styles.body, { color: colors.textMuted }]}>The aim is to make informed, efficient choices—not to use the least energy at any cost. Review your own usage, then ask Sparky for an idea that fits your situation.</Text>
+      <View style={styles.actions}>
+        <Pressable accessibilityRole="button" onPress={() => open('/usage')} style={({ pressed }) => [styles.button, { backgroundColor: colors.text }, pressed && styles.pressed]}>
+          <Text style={[styles.primaryText, { color: colors.background }]}>View usage</Text>
+          <Ionicons color={colors.background} name="arrow-forward" size={16} />
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => open('/assistant')} style={({ pressed }) => [styles.button, styles.secondary, { borderColor: colors.border }, pressed && styles.pressed]}>
+          <Text style={[styles.secondaryText, { color: colors.text }]}>Ask Sparky</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { borderRadius: 22, padding: 18 },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  title: { fontSize: 17, fontWeight: '800' },
+  body: { fontSize: 11, lineHeight: 17, marginTop: 10 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 15 },
+  button: { minHeight: 42, borderRadius: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  secondary: { borderWidth: 1 },
+  primaryText: { fontSize: 11, fontWeight: '800' },
+  secondaryText: { fontSize: 11, fontWeight: '800' },
+  pressed: { opacity: 0.7 },
+});

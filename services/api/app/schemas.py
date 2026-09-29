@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -448,13 +448,19 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Every lookup behind this answer, in the order it was made.",
     )
-    escalate_to_human: bool = False
+    escalate_to_human: bool = Field(
+        default=False,
+        description=(
+            "A support concern was recorded or direct contact advised; "
+            "no staff delivery is implied."
+        ),
+    )
     escalation_reason: str | None = Field(
         default=None,
         description=(
             "Why, in the assistant's own words. Null unless `escalate_to_human`. The "
-            "UI should show the handoff, not this string — it is for the transcript and "
-            "the escalation row."
+            "The UI should explain how to contact verified support; this string is "
+            "for the transcript and concern record."
         ),
     )
     conversation_id: int | None = Field(
@@ -507,15 +513,14 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     """Who signed in, and which household to show them.
 
-    Carries no token: the prototype session is `localStorage['kea-demo-session']` and
-    there is nothing to sign. `customer_id` is the whole point — it is what every
-    subsequent request scopes to, and what made one login show fourteen different
-    customers instead of the same one fourteen times.
+    The token is temporary and valid only for synthetic demo accounts. It authorizes
+    new household write paths, not real customer access.
     """
 
     customer_id: str
     display_name: str
     scenario: str
+    access_token: str
 
 
 class DemoAccountCard(BaseModel):
@@ -718,12 +723,33 @@ class HouseholdSummary(BaseModel):
     label: str
     period: str
     daily_kwh: list[float]
+    daily_dates: list[dt.date] = Field(default_factory=list)
+    date_source: str = "demo"
+    region: str | None = None
     daily_peak_kwh: list[float | None]
     daily_off_peak_kwh: list[float | None]
     daily_night_kwh: list[float | None]
     band_data_source: str | None = None
     total_kwh: float
     estimated_cost_nzd: float
+
+
+class HouseholdUsageSeries(BaseModel):
+    """Dated usage for a requested range; never fills missing days or bands."""
+
+    customer_id: str
+    daily_dates: list[dt.date]
+    daily_kwh: list[float]
+    daily_quality: list[Literal["measured", "estimated", "demo"]]
+    daily_peak_kwh: list[float | None]
+    daily_off_peak_kwh: list[float | None]
+    daily_night_kwh: list[float | None]
+    band_data_source: str | None = None
+    date_source: str
+    total_kwh: float
+    estimated_cost_nzd: float
+    available_from: dt.date | None = None
+    available_to: dt.date | None = None
 
 
 class AnnualDemandSummary(BaseModel):

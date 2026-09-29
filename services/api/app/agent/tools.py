@@ -130,6 +130,8 @@ class ToolContext:
     answer. The pipeline writes it to the household context after the turn — the tool
     itself does no I/O, so a tool call cannot half-commit a fact about somebody's home."""
 
+    has_ev: bool | None = None
+
 
 # ---------------------------------------------------------------------------
 # The catalogue
@@ -307,6 +309,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "temperature, not a heat pump. Each slice carries a confidence that decides "
             "how you word it. Also use it for 'how do I use less', because it says which "
             "part of their bill is actually movable."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_connected_device_energy",
+        "description": (
+            "Measured daily energy from devices the household has connected. Call this "
+            "alongside get_energy_breakdown when asked about appliances, EV charging, "
+            "or the network scan. Returns available:false when no device meter has "
+            "reported. Device names from discovery never appear here."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -701,6 +713,14 @@ def get_account_summary(ctx: ToolContext) -> dict[str, Any]:
                 "and answer what they actually asked."
             ),
         }
+
+    if ctx.has_ev is not None:
+        summary["customer_confirmed_ev_ownership"] = ctx.has_ev
+        summary["ev_ownership_limit"] = (
+            "Ownership is customer-reported. It does not prove that any measured night "
+            "rise came from EV charging; only a charger meter or confirmed matching "
+            "charging schedule can do that."
+        )
 
     summary["tariff_note"] = tariff_note(ctx)
     return summary
@@ -1260,7 +1280,7 @@ def project_this_bill(ctx: ToolContext, as_at_day: int | None = None) -> dict[st
 
 
 async def discover_smart_devices(ctx: ToolContext) -> dict[str, Any]:
-    """What is on the customer's network, by listening to what it already broadcasts.
+    """What is on the API server's network, by listening to what it broadcasts.
 
     The one tool here that reads something other than the customer's account, and the
     guardrail is in the shape of the result rather than in the prompt: there is no energy
@@ -1295,6 +1315,8 @@ async def discover_smart_devices(ctx: ToolContext) -> dict[str, Any]:
             scan_was_shallow=payload["scan_was_shallow"],
         )
 
+    # A successful tool result must not carry an error key, even when its value is None.
+    payload.pop("error")
     return {
         "available": True,
         **payload,
@@ -1313,7 +1335,7 @@ async def discover_smart_devices(ctx: ToolContext) -> dict[str, Any]:
             "`scan_was_shallow` is true, say the scan was quick and may have missed "
             "devices that were asleep."
         ),
-        "source": "mDNS announcements on the local network, app/homelink/discovery.py",
+        "source": "mDNS announcements on the API server's local network, app/homelink/discovery.py",
     }
 
 
@@ -1382,6 +1404,38 @@ def get_energy_breakdown(ctx: ToolContext) -> dict[str, Any]:
             "app/analytics/disaggregation.py"
         ),
         "tariff_note": tariff_note(ctx),
+    }
+
+
+async def get_connected_device_energy(ctx: ToolContext) -> dict[str, Any]:
+    from app.config import get_observation_store
+    from app.homelink.insights import appliance_caveats, summarise
+
+    rows = await get_observation_store().list(ctx.customer_id)
+    if not rows:
+        return _unavailable("no connected device energy sensor has reported for this household")
+    latest = max(row.day for row in rows)
+    since = latest - dt.timedelta(days=29)
+    observations = [row for row in rows if since <= row.day <= latest]
+    days = [day for day in ctx.account.days if since <= day.date <= latest]
+    bill_kwh = sum(day.import_kwh for day in days) if len(days) == 30 else None
+    summaries = summarise(
+        observations,
+        unit_price_nzd=ctx.usage.window.unit_price_nzd,
+        total_bill_kwh=bill_kwh,
+    )
+    return {
+        "available": True,
+        "period_start": since.isoformat(),
+        "period_end": latest.isoformat(),
+        "devices": [summary.model_dump(mode="json") for summary in summaries],
+        "caveats": appliance_caveats(summaries),
+        "source": "connected device energy sensors, aggregated to complete days",
+        "guidance": (
+            "Quote measured device kWh only for MEASURED devices. RATED is a nameplate "
+            "estimate and must be called an estimate. INFERRED carries no energy claim. "
+            "These devices are only a partial view of household electricity."
+        ),
     }
 
 
@@ -1896,6 +1950,7 @@ _ASYNC = {
     # Not a write, but it does I/O off the machine and takes seconds rather than
     # milliseconds, so it belongs on the async side of the dispatcher.
     "discover_smart_devices": discover_smart_devices,
+    "get_connected_device_energy": get_connected_device_energy,
 }
 
 

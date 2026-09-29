@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import gsap from 'gsap'
 import { Cloud, CloudRain, Compass, Moon, Sun } from 'lucide-react'
 import EnergyHouse, { type EnergyDevice } from './components/EnergyHouse'
 import SettingsDialog from './components/SettingsDialog'
@@ -49,11 +50,36 @@ function WeatherIcon({ weather, night }: { weather: WeatherSnapshot; night: bool
  * animation, settings, and accessible device controls remain functional.
  */
 export default function EnergyHomePanel() {
+  const sceneRef = useRef<HTMLDivElement>(null)
+  const sceneInView = useRef(true)
   const [preferences, setPreferences] = useState<Preferences>(loadPreferences)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<EnergyDevice>('solar')
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null)
   const [clock, setClock] = useState(() => new Date())
+
+  const syncSceneAnimation = useCallback(() => {
+    const scene = sceneRef.current
+    if (!scene) return
+    const active = sceneInView.current && !document.hidden
+    gsap.getTweensOf(scene.querySelectorAll('*')).forEach((tween) => tween.paused(!active))
+  }, [])
+
+  useEffect(() => {
+    const scene = sceneRef.current
+    if (!scene) return
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+      sceneInView.current = entries[0]?.isIntersecting ?? false
+      syncSceneAnimation()
+    }, { rootMargin: '120px' })
+    observer?.observe(scene)
+    document.addEventListener('visibilitychange', syncSceneAnimation)
+    syncSceneAnimation()
+    return () => {
+      observer?.disconnect()
+      document.removeEventListener('visibilitychange', syncSceneAnimation)
+    }
+  }, [syncSceneAnimation])
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60_000)
@@ -99,6 +125,9 @@ export default function EnergyHomePanel() {
     homeDemandKw: HOME_DEMAND_KW,
   }), [preferences.reservePercent])
 
+  // Weather and flow changes can create fresh GSAP tweens while the scene is hidden.
+  useEffect(syncSceneAnimation, [energy, sceneWeather, selectedDevice, syncSceneAnimation])
+
   const status = energy.gridImportKw > 0.05
     ? 'Grid assisting'
     : energy.batteryDischargeKw > 0.05
@@ -113,7 +142,7 @@ export default function EnergyHomePanel() {
   return (
     <div className="energy-home-panel">
       <section className="energy-home-scene-shell" aria-label="Interactive home energy and weather visualisation">
-        <div className={`energy-home-scene energy-home-scene--${sceneWeather.condition} ${night ? 'energy-home-scene--night' : 'energy-home-scene--day'}`}>
+        <div ref={sceneRef} className={`energy-home-scene energy-home-scene--${sceneWeather.condition} ${night ? 'energy-home-scene--night' : 'energy-home-scene--day'}`}>
           <WeatherSky
             weather={sceneWeather}
             time={clock}

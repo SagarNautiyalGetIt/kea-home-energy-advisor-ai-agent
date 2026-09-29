@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { useState, type ReactNode } from 'react';
 import { palette, useAppTheme } from '@/theme';
+import { MotionPressable } from './motion-pressable';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { colors } = useAppTheme();
@@ -20,13 +21,13 @@ export function PrimaryButton({ label, onPress, icon, disabled = false, loading 
   );
 
   return (
-    <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.buttonFrame, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
+    <MotionPressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={[styles.buttonFrame, (disabled || loading) && styles.disabled]}>
       {variant === 'primary' ? (
         <View style={[styles.buttonFill, { backgroundColor: '#D8D8D8' }]}>{content}</View>
       ) : (
         <View style={[styles.buttonFill, { backgroundColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : colors.surface, borderColor: variant === 'danger' ? palette.red : variant === 'blue' ? '#0A84FF' : palette.violet, borderWidth: 1.5 }]}>{content}</View>
       )}
-    </Pressable>
+    </MotionPressable>
   );
 }
 
@@ -68,9 +69,9 @@ export function PageHeader({ title, subtitle, action, hideMenuButton = false }: 
   return (
     <View style={styles.header}>
       {hideMenuButton ? null : (
-      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}>
+      <MotionPressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={styles.homeButton}>
         <Ionicons color={colors.text} name="home-outline" size={21} />
-      </Pressable>
+      </MotionPressable>
       )}
       <View style={styles.headerCopy}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -84,9 +85,9 @@ export function PageHeader({ title, subtitle, action, hideMenuButton = false }: 
 export function IconButton({ icon, label, onPress, selected = false }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; selected?: boolean }) {
   const { colors } = useAppTheme();
   return (
-    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.iconButton, { backgroundColor: selected ? palette.violet : colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+    <MotionPressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={[styles.iconButton, { backgroundColor: selected ? palette.violet : colors.surface, borderColor: colors.border }]}>
       <Ionicons color={selected ? '#000000' : palette.violet} name={icon} size={21} />
-    </Pressable>
+    </MotionPressable>
   );
 }
 
@@ -97,9 +98,9 @@ export function Segmented<T extends string>({ value, options, onChange, activeBa
       {options.map((option) => {
         const active = option.value === value;
         return (
-          <Pressable key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, active && { backgroundColor: activeBackgroundColor ?? colors.surface }]}>
+          <MotionPressable accessibilityRole="button" key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, active && { backgroundColor: activeBackgroundColor ?? colors.surface }]}>
             <Text style={[styles.segmentText, { color: active ? activeTextColor ?? palette.violet : colors.textMuted }]}>{option.label}</Text>
-          </Pressable>
+          </MotionPressable>
         );
       })}
     </View>

@@ -151,9 +151,15 @@ def _spoken(text: str) -> list[str]:
 #: cannot honour or reassurance it cannot support, and both are worse than one plain
 #: sentence. See `app/hardship/tiers.py`.
 HANDOVER_TEXT = (
-    "Thank you for telling me — that sounds really hard, and you should be talking to a "
-    "person rather than to me. I've passed this to our customer care team and someone "
-    "will pick it up shortly. You won't have to explain it again."
+    "Thank you for telling me. A person is better placed to help with this. This app "
+    "cannot contact Customer Care for you. Please use your electricity retailer's "
+    "verified contact details on your bill."
+)
+
+CRISIS_HANDOVER_TEXT = (
+    "I'm sorry you're facing this. Please contact emergency services now if you might "
+    "harm yourself or are in immediate danger. This app has not contacted anyone for "
+    "you. For account help, use your retailer's verified contact details on your bill."
 )
 
 
@@ -170,16 +176,14 @@ class Answer:
     latency_ms: int = 0
 
     tier: int = 1
-    """Who handled this turn: 1 autonomous, 2 monitored, 3 human only.
+    """Handling tier: 1 assistant, 2 recorded review, 3 direct to Customer Care.
 
-    On the response rather than behind its own endpoint because the UI has to show the
-    handover next to the message that caused it, and a second request could assess a
-    different turn."""
+    On the response so the UI can show the contact action beside the relevant message.
+    This tier does not establish that a human has received the chat."""
 
     tier_reason: str | None = None
     hardship_evidence: list[str] = field(default_factory=list)
-    """Why, in the assessor's words. Shown to the agent picking the conversation up —
-    "flagged: 0.8" is not a handover."""
+    """Why, in the assessor's words. Stored for review if support later accesses it."""
 
     emotion: str | None = None
     """How the customer sounded, if anything was read. Never a tier input — see
@@ -283,6 +287,7 @@ async def build_context(customer_id: str) -> ToolContext:
     # the question could not be rebuilt.
     try:
         household = await get_context_store().get(customer_id)
+        ctx.has_ev = household.has_ev
         ctx.open_question = clarify_conversation.question_for(
             account, household, period=usage.window.period, hardship_detected=False
         )
@@ -409,6 +414,7 @@ async def answer(
             ctx, message, tiering, channel=channel, conversation_id=conversation_id,
             latency_ms=int((time.perf_counter() - started) * 1000),
             emotion=emotion,
+            crisis=assessment.crisis,
         )
 
     result: AgentResult | None = None
@@ -472,19 +478,20 @@ async def _handover(
     conversation_id: int | None,
     latency_ms: int,
     emotion: hardship.EmotionalRead | None = None,
+    crisis: bool = False,
 ) -> Answer:
-    """Tier 3: a person takes it, and the model is not asked to write anything.
+    """Tier 3: direct to a person without claiming the chat was delivered.
 
     Recorded like any other turn so the conversation is in the evidence tables with its
-    reason attached — a handover that leaves no row is one nobody can audit, and this is
-    the class of turn most likely to be audited.
+    reason attached. A database row is not a staff notification or a delivery receipt.
     """
     log.info(
         "hardship handover channel=%s customer=%s score=%.2f reason=%s tone=%s",
         channel, ctx.customer_id, tiering.score, tiering.reason,
         emotion.primary.value if emotion and emotion.primary else "-",
     )
-    result = AgentResult(text=HANDOVER_TEXT, escalate=True, escalation_reason=tiering.reason)
+    text = CRISIS_HANDOVER_TEXT if crisis else HANDOVER_TEXT
+    result = AgentResult(text=text, escalate=True, escalation_reason=tiering.reason)
     recorded_id = await _record(
         ctx, result, message,
         channel=channel, conversation_id=conversation_id,
@@ -492,16 +499,15 @@ async def _handover(
     )
     return Answer(
         customer_id=ctx.customer_id,
-        text=HANDOVER_TEXT,
+        text=text,
         escalate=True,
         escalation_reason=tiering.reason,
         conversation_id=recorded_id,
         latency_ms=latency_ms,
         tier=int(tiering.tier),
         tier_reason=tiering.reason,
-        # The emotional read is recorded on a handover even though no model runs. The
-        # agent picking this up is about to speak to somebody, and knowing they wrote it
-        # in capitals is worth more here than anywhere else in the product.
+        # The emotional read is recorded even though no model runs. If support later
+        # reviews the turn, the exact language is more useful than a score.
         hardship_evidence=tiering.evidence + (emotion.reasons() if emotion else []),
         emotion=emotion.primary.value if emotion and emotion.primary else None,
         emotion_intensity=(
@@ -562,6 +568,7 @@ async def answer_stream(
             ctx, message, tiering, channel=channel, conversation_id=conversation_id,
             latency_ms=int((time.perf_counter() - started) * 1000),
             emotion=emotion,
+            crisis=assessment.crisis,
         )
         yield "token", {"text": handover.text}
         yield "done", {
@@ -613,8 +620,8 @@ async def answer_stream(
         log.error("agent unavailable customer=%s: %s", customer_id, exc)
         yield "error", {
             "message": (
-                "Sparky can't reach your account data right now, so there's nothing "
-                "reliable to tell you. Please try again shortly."
+                "Sparky's AI service is unavailable right now. Your usage pages are "
+                "still available; please try asking again shortly."
             ),
             "retryable": True,
         }

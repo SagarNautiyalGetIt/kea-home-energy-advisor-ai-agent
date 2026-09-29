@@ -57,7 +57,18 @@ export function SparkySparks({
 
     const field = createField(canvas, state, size, colors, reduced);
     fieldRef.current = field;
+    let inView = true;
+    const updateActivity = () => field.setActive(inView && !document.hidden);
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+      inView = entries[0]?.isIntersecting ?? false;
+      updateActivity();
+    });
+    observer?.observe(canvas);
+    document.addEventListener('visibilitychange', updateActivity);
+    updateActivity();
     return () => {
+      observer?.disconnect();
+      document.removeEventListener('visibilitychange', updateActivity);
       field.destroy();
       fieldRef.current = null;
     };

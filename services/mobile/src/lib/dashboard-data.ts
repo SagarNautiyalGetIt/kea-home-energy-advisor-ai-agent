@@ -1,13 +1,13 @@
-import { dashboardToday, notifications } from '@/data/mock';
+import { dashboardToday } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
-
-export const dashboardNotifications = notifications;
 
 type HouseholdSummaryApi = {
   customer_id: string;
   label: string;
   period: string;
   daily_kwh: number[];
+  daily_dates?: string[];
+  region?: string | null;
   total_kwh: number;
   estimated_cost_nzd: number;
 };
@@ -53,6 +53,15 @@ export type DashboardViewData = {
 
 const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const billReasonCopy: Record<string, string> = {
+  above_expectation: 'Your projected bill is above the expected amount.',
+  colder_than_normal: 'Colder weather may be adding to your electricity use.',
+  higher_daily_use: 'Your recent daily use is higher than usual.',
+};
+
+function readableBillReason(reason: string) {
+  return billReasonCopy[reason] ?? 'Your projected bill may be higher than expected.';
+}
 
 function finite(value: unknown, field: string) {
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Dashboard response has an invalid ${field}.`);
@@ -64,6 +73,7 @@ function validateHousehold(value: unknown, customerId: string): HouseholdSummary
   const row = value as Partial<HouseholdSummaryApi>;
   if (row.customer_id !== customerId || !row.period || !Array.isArray(row.daily_kwh)) throw new Error('Dashboard household response is incomplete.');
   row.daily_kwh.forEach((reading) => finite(reading, 'daily reading'));
+  if (row.daily_dates && (row.daily_dates.length !== row.daily_kwh.length || row.daily_dates.some((day) => !/^\d{4}-\d{2}-\d{2}$/.test(day)))) throw new Error('Dashboard response has invalid reading dates.');
   finite(row.total_kwh, 'total usage');
   finite(row.estimated_cost_nzd, 'estimated cost');
   return row as HouseholdSummaryApi;
@@ -113,22 +123,26 @@ async function getJson(path: string, signal?: AbortSignal) {
 
 async function loadApiDashboard(customerId: string, signal?: AbortSignal): Promise<DashboardViewData> {
   const path = `/api/households/${encodeURIComponent(customerId)}`;
-  const [householdValue, shockValue] = await Promise.all([getJson(path, signal), getJson(`${path}/bill-shock`, signal)]);
+  const [householdValue, shockValue] = await Promise.all([getJson(path, signal), getJson(`${path}/bill-shock`, signal).catch(() => null)]);
   const household = validateHousehold(householdValue, customerId);
-  const shock = validateShock(shockValue);
-  const elapsed = Math.min(Math.max(Math.trunc(shock.days_elapsed), 0), household.daily_kwh.length);
-  const readings = household.daily_kwh.slice(0, elapsed);
+  const shock = shockValue === null ? null : validateShock(shockValue);
+  const readings = household.daily_kwh;
   const weeklyValuesKwh = readings.slice(-7);
-  const weeklyOffset = elapsed - weeklyValuesKwh.length;
-  const rows = dateRows(household.period, weeklyValuesKwh.length, weeklyOffset);
+  const weeklyOffset = readings.length - weeklyValuesKwh.length;
+  const explicitDates = household.daily_dates?.slice(-weeklyValuesKwh.length);
+  const rows = explicitDates?.length === weeklyValuesKwh.length ? {
+    labels: explicitDates.map((day) => dayLabels[new Date(`${day}T12:00:00`).getDay()] ?? ''),
+    days: explicitDates.map((day) => String(Number(day.slice(8, 10)))),
+    months: explicitDates.map((day) => monthLabels[Number(day.slice(5, 7)) - 1] ?? ''),
+  } : dateRows(household.period, weeklyValuesKwh.length, weeklyOffset);
   const latestKwh = readings.at(-1) ?? null;
-  const effectiveRate = shock.usage_so_far_kwh > 0 ? shock.cost_so_far_nzd / shock.usage_so_far_kwh : null;
+  const effectiveRate = household.total_kwh > 0 ? household.estimated_cost_nzd / household.total_kwh : null;
 
   return {
     latestDayCostNzd: latestKwh !== null && effectiveRate !== null ? latestKwh * effectiveRate : null,
-    usageSoFarKwh: shock.usage_so_far_kwh,
-    costSoFarNzd: shock.cost_so_far_nzd,
-    projectedCycleCostNzd: shock.projected_cycle_cost_nzd,
+    usageSoFarKwh: shock?.usage_so_far_kwh ?? household.total_kwh,
+    costSoFarNzd: shock?.cost_so_far_nzd ?? household.estimated_cost_nzd,
+    projectedCycleCostNzd: shock?.projected_cycle_cost_nzd ?? null,
     todayKwh: latestKwh,
     todayValuesKwh: [],
     todayTooltipLabels: [],
@@ -137,14 +151,14 @@ async function loadApiDashboard(customerId: string, signal?: AbortSignal): Promi
     weeklyLabels: rows.labels,
     weeklyDayLabels: rows.days,
     weeklyMonthLabels: rows.months,
-    trendPercent: shock.recent_trend_pct,
-    overshootNzd: shock.overshoot_nzd,
-    overshootPct: shock.overshoot_pct,
-    expectedCostNzd: shock.expected_cost_nzd,
-    expectationBasis: shock.expectation_basis,
-    warningReasons: shock.reasons ?? [],
-    warningCaveats: shock.caveats ?? [],
-    warningTriggered: shock.triggered,
+    trendPercent: shock?.recent_trend_pct ?? null,
+    overshootNzd: shock?.overshoot_nzd ?? null,
+    overshootPct: shock?.overshoot_pct ?? null,
+    expectedCostNzd: shock?.expected_cost_nzd ?? null,
+    expectationBasis: shock?.expectation_basis ?? null,
+    warningReasons: shock?.reasons?.map(readableBillReason) ?? [],
+    warningCaveats: shock?.caveats ?? [],
+    warningTriggered: shock?.triggered ?? null,
     isDemo: false,
   };
 }

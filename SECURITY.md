@@ -47,16 +47,29 @@ Dependabot alerts are enabled. Security updates get priority over feature cards.
 
 ## 4. PII in the product itself
 
-The AI pipeline is designed so the language model never sees personal data:
+The current app is a **synthetic-data prototype**. It has demo login labels,
+but no production session or household-authorization boundary. Do not connect
+real customer data or expose the API as a production customer service until
+authentication, authorization, login rate limits, and data-deletion handling
+are implemented and independently reviewed.
 
-- The model receives a `FactBundle` (`app/schemas.py`), which by design carries
-  no raw meter readings and no PII — only computed, typed facts.
-- Raw readings stay in Python (`app/analytics/`) and in the database.
+The AI pipeline limits what the model receives:
+
+- The offline design uses a `FactBundle` (`app/schemas.py`) of computed facts.
+- The online agent uses typed tools to retrieve household-scoped facts. This
+  scope is bound to a demo customer ID, not a production identity claim.
+- Raw readings are handled in Python (`app/analytics/`) and the database; do
+  not send raw meter series or personal identifiers to a model provider.
 - Conversation turns are persisted for the evidence trail. Treat the `turn`,
   `conversation`, and `escalation` tables as sensitive if ever populated with
   real data.
 
-See [ADR-0002](docs/adr/0002-narrate-only-architecture.md).
+The mobile client does not grant local sign-in when the API rejects credentials
+or is unreachable. API responses set `nosniff`, frame denial, and a restrictive
+API content policy; HTTPS responses also set HSTS. Local demo passwords in
+`app/auth.py` are public synthetic test credentials, not production secrets.
+
+See [ADR-0011](docs/adr/0011-agentic-tool-use.md) for the online agent design.
 
 ---
 

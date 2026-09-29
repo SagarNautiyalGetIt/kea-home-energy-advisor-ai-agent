@@ -89,14 +89,14 @@ class Settings:
     #: silent model downgrade looks like an answer and reads as the product getting worse.
     provider: str = field(default_factory=lambda: _env("KEA_PROVIDER", "gcp"))
 
-    #: Sized to the machine — see `app.hardware`. On the 48 GB M4 this is `gemma3:27b`,
-    #: on the 16 GB M5 `gemma3:12b`, and `gemma3:4b` everywhere else including CI.
+    #: The tested, tool-capable local default is qwen3:4b on every machine.
+    #: A deliberate KEA_OLLAMA_MODEL override can select another compatible model.
     #: Only consulted when `ollama` appears in the provider chain.
     #:
     #: `select_ollama_model()` reads KEA_OLLAMA_MODEL itself and returns it unchanged
     #: when set, so an explicit choice still wins and the bake-off is unaffected. The
-    #: env var is deliberately NOT the `_env` default here: doing that would make the
-    #: hardware probe run on every Settings construction, including in tests.
+    #: env var is deliberately NOT the `_env` default here so that one selector owns
+    #: the override and the value health reports is the value the provider uses.
     ollama_model: str = field(default_factory=lambda: select_ollama_model())
     ollama_url: str = field(
         default_factory=lambda: _env("KEA_OLLAMA_URL", "http://localhost:11434")
@@ -423,3 +423,11 @@ def get_context_store():
     from app.clarify.store import build_context_store
 
     return build_context_store(settings.persist)
+
+
+@lru_cache(maxsize=1)
+def get_observation_store():
+    """Daily connected-device readings, backed by the configured app store."""
+    from app.homelink.store import build_observation_store
+
+    return build_observation_store(settings.persist)

@@ -18,7 +18,7 @@ export const FALLBACK_DEMO_ACCOUNTS: DemoAccount[] = [
   { email: 'july@kea.example', password: 'julyhouse24', customer_id: 'H-JUL', display_name: 'July Household', scenario: "High standing load — the flagship 'why is my bill high' case." },
   { email: 'cold@kea.example', password: 'coldsnap24', customer_id: 'H-COLD', display_name: 'Cold Snap Household', scenario: 'Cold-snap driven, not behaviour. Trips the bill-shock warning at day 6.' },
   { email: 'spike@kea.example', password: 'spikeday24', customer_id: 'H-SPIKE', display_name: 'Spike Household', scenario: "One genuine behavioural spike — good for 'which day was highest'." },
-  { email: 'drop@kea.example', password: 'hardship24', customer_id: 'H-DROP', display_name: 'Usage Collapse Household', scenario: 'The hardship signal. Escalates to a human.' },
+  { email: 'drop@kea.example', password: 'hardship24', customer_id: 'H-DROP', display_name: 'Usage Collapse Household', scenario: 'The hardship signal. Sparky recommends verified human support.' },
   { email: 'tariff@kea.example', password: 'lowfixed24', customer_id: 'H-TARIFF', display_name: 'Low User Household', scenario: 'Low steady user, better off on another plan. Exercises the tariff check.' },
   { email: 'zara@kea.example', password: 'steady24', customer_id: 'H-ZARA', display_name: 'Zara Duncan', scenario: "Nothing is wrong. The account to check the agent doesn't invent a cause." },
   { email: 'aroha@kea.example', password: 'climbing24', customer_id: 'H-AROHA', display_name: 'Aroha Fraser', scenario: 'Usage drifts up all month with no alarming day. Trips the forecast, not a spike.' },

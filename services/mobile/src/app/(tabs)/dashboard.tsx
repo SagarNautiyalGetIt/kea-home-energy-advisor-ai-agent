@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
 import { ModalSheet } from '@/components/modal-sheet';
+import { MotionPressable } from '@/components/motion-pressable';
 import { Screen } from '@/components/screen';
 import SemiCircleGauge from '@/components/SemiCircleGauge';
 import { PrimaryButton } from '@/components/ui';
-import { dashboardNotifications, getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
+import { getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
@@ -15,6 +17,7 @@ export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
+  const { height: screenHeight } = useWindowDimensions();
 
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -24,23 +27,34 @@ export default function DashboardScreen() {
   const [dashboard, setDashboard] = useState<DashboardViewData | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
+  const [listInForeground, setListInForeground] = useState(false);
+  const [protectedHeaderHeight, setProtectedHeaderHeight] = useState(160);
+  const [measuredHeroHeight, setMeasuredHeroHeight] = useState(0);
+  const homeHeroPeekHeight = Math.max(measuredHeroHeight + 8, Math.max(380, Math.min(500, screenHeight - 240)));
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const homeSceneOpacity = scrollY.interpolate({ inputRange: [0, homeHeroPeekHeight * 0.45, homeHeroPeekHeight * 0.95], outputRange: [1, 0.55, 0.05], extrapolate: 'clamp' });
+  const homeBlurOpacity = scrollY.interpolate({ inputRange: [0, 80, 180], outputRange: [0, 0.35, 0.65], extrapolate: 'clamp' });
+  const gaugePercentage = dashboard?.overshootPct == null ? null : Math.min(Math.max(dashboard.overshootPct, 0), 100);
+  const projectedCost = dashboard?.projectedCycleCostNzd ?? null;
+  const expectedCost = dashboard?.expectedCostNzd ?? null;
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
-  const outlookTitle = dashboard?.warningTriggered
-    ? dashboard.expectationBasis === 'comparable_homes'
-      ? 'Your projected bill is higher than comparable homes'
-      : 'Your projected bill is higher than usual'
-    : 'Bill prediction';
   const expectationNote = dashboard?.expectationBasis === 'comparable_homes'
     ? 'Comparison uses similar households because a personal bill history is not available.'
     : dashboard?.expectationBasis === 'own_same_period_last_year'
       ? 'Comparison uses the same billing period last year.'
-      : 'Comparison uses your recent billing cycles.';
-  const insightTitle = dashboard?.warningTriggered ? 'Running hotter than expected' : "Sparky's read";
-  const insightBody = dashboard?.warningTriggered
-    ? dashboard.warningReasons[0] ?? 'Your projected total is pacing above expected. Shifting heavy loads off-peak can still pull it back before the cycle ends.'
+      : dashboard?.expectationBasis === 'own_recent_cycles'
+        ? 'Comparison uses your recent billing cycles.'
+        : 'A bill comparison is not available yet.';
+  const insightTitle = dashboard?.warningTriggered == null ? 'Prediction unavailable' : dashboard.warningTriggered ? 'Running hotter than expected' : "Sparky's read";
+  const insightBody = dashboard?.warningTriggered == null
+    ? 'A bill projection needs more billing data. Your available meter readings still appear on the Usage page.'
+    : dashboard.warningTriggered
+    ? dashboard.warningReasons[0] ?? 'Your projected total is above the expected amount. Ask Sparky to review your available readings.'
     : 'You are tracking comfortably so far. This prediction blends your usage to date with typical patterns for the rest of the cycle, and the dial updates as new days land.';
+  const dashboardNotifications = dashboard?.warningTriggered
+    ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
+    : [];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,80 +73,61 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} scroll={false}>
-      <ScrollView
-        contentContainerStyle={styles.menuScrollContent}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-        style={styles.menuScroll}
+      {/* Fixed backdrop with hero and scene blur overlay */}
+      <View
+        pointerEvents="box-none"
+        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
       >
-        <DemoHomeView
-          onOpenInfo={() => setWelcomeOpen(true)}
-          onOpenNotifications={() => setNotificationsOpen(true)}
-          onOpenProfile={() => router.push('/profile')}
-        />
-
-        {/* Metrics */}
-        {false ? <View style={styles.menuList}>
-          <View style={styles.menuRow}>
-            <View style={styles.menuCopy}>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>Latest day’s cost</Text>
-              <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>{money(dashboard?.latestDayCostNzd)}</Text>
-            </View>
-          </View>
-          <View style={styles.menuRow}>
-            <View style={styles.menuCopy}>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>Usage so far</Text>
-              <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
-                {/* @ts-expect-error Legacy list remains disabled while the card layout is active. */}
-                {dashboard?.usageSoFarKwh == null ? '—' : `${dashboard.usageSoFarKwh.toFixed(1)} kWh`}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.menuRow}>
-            <View style={styles.menuCopy}>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>Cost so far</Text>
-              <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>{money(dashboard?.costSoFarNzd)}</Text>
-            </View>
-          </View>
-          <View style={styles.menuRow}>
-            <View style={styles.menuCopy}>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>Projected this cycle</Text>
-              <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>{money(dashboard?.projectedCycleCostNzd)}</Text>
-            </View>
-          </View>
-        </View> : null}
-
-        <View style={styles.cardArea}>
-          {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
-          <View style={styles.dashboardList}>
-            <DashboardRow detail={dashboard?.warningTriggered ? 'Bill shock warning' : 'View your bill prediction'} icon="alert-circle-outline" label="Bill prediction" onPress={() => setBillShockOpen(true)} index={0} />
-            <DashboardRow detail="Track your usage" icon="analytics-outline" label="Usage" onPress={() => router.push('/usage')} index={1} />
-            <DashboardRow detail="Ask Kea Energy AI" icon="sparkles-outline" label="Sparky AI" onPress={() => router.push('/assistant')} index={2} />
-            <DashboardRow detail="View bills and payments" icon="receipt-outline" label="Billing" onPress={() => router.push('/billing')} index={3} />
-            <DashboardRow detail="Account, plans and settings" icon="grid-outline" label="More" onPress={() => router.push('/more')} index={4} />
-          </View>
-          {false ? <>
-          <Pressable accessibilityLabel="Open bill shock warning" onPress={() => setBillShockOpen(true)} style={({ pressed }) => [styles.billShockCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
-            <View style={styles.billShockHeader}>
-              <View style={styles.warningIdentity}>
-                <View style={[styles.cardIcon, { backgroundColor: dashboard?.warningTriggered ? 'rgba(255, 69, 58, 0.16)' : colors.input }]}><Ionicons color={dashboard?.warningTriggered ? palette.red : colors.text} name="alert-circle-outline" size={22} /></View>
-                <Text style={[styles.featuredEyebrow, { color: dashboard?.warningTriggered ? palette.red : colors.textMuted }]}>{dashboard?.warningTriggered ? 'BILL SHOCK WARNING' : 'BILL OUTLOOK'}</Text>
-              </View>
-              <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
-            </View>
-            <Text style={[styles.featuredTitle, { color: colors.text }]}>{outlookTitle}</Text>
-            <Text style={[styles.featuredCaption, { color: colors.textMuted }]}>Tap to view your bill outlook</Text>
-            <SemiCircleGauge percentage={gaugePercentage} projectedCost={money(dashboard?.projectedCycleCostNzd)} />
-          </Pressable>
-          <View style={styles.metricGrid}>
-            <MetricCard color={palette.solar} icon="calendar-outline" label="Latest day cost" value={money(dashboard?.latestDayCostNzd)} />
-            <MetricCard color={palette.home} icon="flash-outline" label="Usage so far" value={dashboard?.usageSoFarKwh == null ? '—' : `${dashboard?.usageSoFarKwh?.toFixed(1)} kWh`} />
-            <MetricCard color={palette.amber} icon="wallet-outline" label="Cost so far" value={money(dashboard?.costSoFarNzd)} />
-            <MetricCard color={palette.violet} icon="thermometer-outline" label="Temperature now" value={'— °C'} />
-          </View>
-          </> : null}
+        <View onLayout={(event) => {
+          const height = Math.ceil(event.nativeEvent.layout.height);
+          setMeasuredHeroHeight((current) => Math.abs(current - height) > 1 ? height : current);
+        }} style={styles.homeHero}>
+          <DemoHomeView
+            customerId={session?.customerId ?? null}
+            onOpenInfo={() => setWelcomeOpen(true)}
+            onOpenNotifications={() => setNotificationsOpen(true)}
+            onOpenProfile={() => router.push('/profile')}
+            onProtectedHeaderHeightChange={setProtectedHeaderHeight}
+            sceneOpacity={homeSceneOpacity}
+          />
         </View>
-      </ScrollView>
+        <Animated.View pointerEvents="none" style={[styles.sceneBlurWrap, { opacity: homeBlurOpacity, top: Math.max(160, protectedHeaderHeight) }]}>
+          <BlurView intensity={24} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
+        </Animated.View>
+      </View>
+
+      <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
+        <Animated.ScrollView
+          contentContainerStyle={styles.menuScrollContent}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            {
+              listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                const nextForeground = event.nativeEvent.contentOffset.y > 2;
+                setListInForeground((current) => current === nextForeground ? current : nextForeground);
+              },
+              useNativeDriver: true,
+            },
+          )}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          style={styles.menuScroll}
+        >
+          <View pointerEvents="none" style={{ height: homeHeroPeekHeight }} />
+
+          <View style={styles.cardArea}>
+            {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
+            <View style={styles.dashboardList}>
+              <DashboardRow detail={dashboard?.warningTriggered ? 'Bill shock warning' : 'View your bill prediction'} icon="alert-circle-outline" label="Bill prediction" onPress={() => setBillShockOpen(true)} index={0} />
+              <DashboardRow detail="Track your usage" icon="analytics-outline" label="Usage" onPress={() => router.push('/usage')} index={1} />
+              <DashboardRow detail="Ask Kea Energy AI" icon="sparkles-outline" label="Sparky AI" onPress={() => router.push('/assistant')} index={2} />
+              <DashboardRow detail="Explore the demo community league" icon="flash-outline" label="Power Clash" onPress={() => router.push('/clash')} index={3} />
+              <DashboardRow detail="View bills and payments" icon="receipt-outline" label="Billing" onPress={() => router.push('/billing')} index={4} />
+              <DashboardRow detail="Account, plans and settings" icon="grid-outline" label="More" onPress={() => router.push('/more')} index={5} />
+            </View>
+          </View>
+        </Animated.ScrollView>
+      </View>
 
       {/* --- MODAL SHEET 1: Welcome to the Demo Home (Screenshot 2 exact match) --- */}
       <ModalSheet
@@ -142,6 +137,7 @@ export default function DashboardScreen() {
         visible={notificationsOpen}
       >
         <Text style={[styles.notificationIntro, { color: colors.textMuted }]}>Recent account updates</Text>
+        {!dashboardNotifications.length ? <Text style={[styles.notificationDetail, { color: colors.textMuted }]}>No account alerts right now.</Text> : null}
         <View style={styles.notificationList}>
           {dashboardNotifications.map((notification) => (
             <Pressable
@@ -174,7 +170,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.welcomeModal}>
           <Text style={[styles.welcomeSubtitle, { color: colors.textMuted }]}>
-            This scene uses current modelled Auckland weather to illustrate how solar, the Kea battery, your home, and an electric car might share power. Energy values are examples, not readings from your home.
+            The sky reflects modelled weather for your account’s region. Energy cards show dated meter or connected-device readings when available. Power routes appear only with live power sensors.
           </Text>
 
           <View style={styles.welcomeFeatures}>
@@ -182,7 +178,7 @@ export default function DashboardScreen() {
               <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(255, 214, 10, 0.16)' }]}>
                 <Ionicons color={palette.solar} name="sunny" size={24} />
               </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>Generate energy during the day</Text>
+              <Text style={[styles.featureText, { color: colors.text }]}>Solar generation appears when a solar meter reports it</Text>
             </View>
 
             <View style={styles.welcomeFeatureRow}>
@@ -190,7 +186,7 @@ export default function DashboardScreen() {
                 <Ionicons color={palette.battery} name="battery-charging" size={24} />
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
-                Store excess energy in the Kea battery for use after dark
+                Battery figures need a connected battery energy meter
               </Text>
             </View>
 
@@ -199,7 +195,7 @@ export default function DashboardScreen() {
                 <Ionicons color={palette.violet} name="car-sport" size={24} />
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
-                Charge electric vehicles with clean energy you generate
+                EV charging figures need a connected charger meter
               </Text>
             </View>
 
@@ -207,7 +203,7 @@ export default function DashboardScreen() {
               <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(255, 255, 255, 0.14)' }]}>
                 <Ionicons color="#FFFFFF" name="flash" size={24} />
               </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>Reduce grid usage and save money</Text>
+              <Text style={[styles.featureText, { color: colors.text }]}>Grid import is read from your household meter</Text>
             </View>
           </View>
         </View>
@@ -268,7 +264,7 @@ export default function DashboardScreen() {
         visible={billShockOpen}
       >
         <View style={styles.shockModal}>
-          <SemiCircleGauge percentage={gaugePercentage} projectedCost={money(dashboard?.projectedCycleCostNzd)} />
+          <SemiCircleGauge percentage={gaugePercentage} projectedCost={money(projectedCost)} />
           <View style={[styles.insightCard, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
             <View style={styles.insightIcon}>
               <Ionicons color="#FFFFFF" name="sparkles" size={17} />
@@ -281,11 +277,11 @@ export default function DashboardScreen() {
           <View style={styles.compareRow}>
             <View style={[styles.compareChip, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <Text style={[styles.compareLabel, { color: colors.textMuted }]}>EXPECTED</Text>
-              <Text style={[styles.compareValue, { color: colors.text }]}>{money(dashboard?.expectedCostNzd)}</Text>
+              <Text style={[styles.compareValue, { color: colors.text }]}>{money(expectedCost)}</Text>
             </View>
             <View style={[styles.compareChip, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <Text style={[styles.compareLabel, { color: colors.textMuted }]}>PROJECTED</Text>
-              <Text style={[styles.compareValue, { color: dashboard?.warningTriggered ? palette.red : colors.text }]}>{money(dashboard?.projectedCycleCostNzd)}</Text>
+              <Text style={[styles.compareValue, { color: dashboard?.warningTriggered ? palette.red : colors.text }]}>{money(projectedCost)}</Text>
             </View>
           </View>
           <Text style={[styles.shockFootnote, { color: colors.textMuted }]}>{expectationNote}</Text>
@@ -299,15 +295,31 @@ export default function DashboardScreen() {
 
 function DashboardRow({ icon, label, detail, onPress, index }: { icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; onPress: () => void; index: number }) {
   const { colors } = useAppTheme();
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.dashboardRow, pressed && styles.pressed]}><View style={styles.dashboardRowIcon}><Ionicons color={colors.textMuted} name={icon} size={19} /></View><View style={styles.dashboardRowCopy}><Text style={[styles.dashboardRowTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.dashboardRowDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={21} /></Pressable>;
+  return <MotionPressable accessibilityRole="button" onPress={onPress} style={styles.dashboardRow}><View style={styles.dashboardRowIcon}><Ionicons color={colors.textMuted} name={icon} size={19} /></View><View style={styles.dashboardRowCopy}><Text style={[styles.dashboardRowTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.dashboardRowDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={21} /></MotionPressable>;
 }
 
-function MetricCard({ color, icon, label, value }: { color: string; icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
-  const { colors } = useAppTheme();
-  return <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Ionicons color={color} name={icon} size={20} /><Text style={[styles.metricLabel, { color: colors.textMuted }]}>{label}</Text><Text numberOfLines={1} style={[styles.metricValue, { color: colors.text }]}>{value}</Text></View>;
-}
 
 const styles = StyleSheet.create({
+  fixedBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#111111',
+  },
+  sceneBlurWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  listViewport: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
   dataError: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 14, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10 },
   dataErrorText: { flex: 1, fontSize: 11, lineHeight: 16 },
   screenContent: {
@@ -321,6 +333,8 @@ const styles = StyleSheet.create({
   menuScrollContent: {
     paddingBottom: 40,
   },
+  homeHero: { position: 'relative' },
+  homeBlurShade: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0, backgroundColor: 'rgba(12,17,22,0.24)' },
   menuList: {
     marginTop: 8,
     marginHorizontal: 16,

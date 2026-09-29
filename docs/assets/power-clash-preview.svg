@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="title description">
+  <title id="title">Power Clash demo preview</title>
+  <desc id="description">A dark sample Power Clash card with rank four in Grey Lynn and four isometric score pillars for conservation, EV charging, off-peak savings, and solar.</desc>
+  <rect width="900" height="350" rx="26" fill="#101010"/>
+  <rect x="18" y="18" width="864" height="314" rx="20" fill="#181818" stroke="#303030"/>
+  <text x="44" y="57" fill="#A8A8A8" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">MONTHLY SUBURB LEAGUE · DEMO</text>
+  <text x="44" y="111" fill="#F5F5F5" font-family="Arial, sans-serif" font-size="36" font-weight="700">Power Clash</text>
+  <text x="44" y="145" fill="#B7B7B7" font-family="Arial, sans-serif" font-size="16">Make your energy choices count.</text>
+  <rect x="44" y="178" width="250" height="128" rx="18" fill="#232323"/>
+  <text x="64" y="207" fill="#ABABAB" font-family="Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="1.2">GREY LYNN · SAMPLE RANK</text>
+  <text x="64" y="263" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="51" font-weight="700">#4</text>
+  <text x="150" y="260" fill="#AFAFAF" font-family="Arial, sans-serif" font-size="19">of 5</text>
+  <text x="64" y="289" fill="#BDBDBD" font-family="Arial, sans-serif" font-size="14">53.4 demo points</text>
+  <path d="M327 282 L570 324 L834 272 L590 229 Z" fill="#252525" stroke="#484848" stroke-width="2"/>
+  <g stroke="#A5A5A5" stroke-width="1.5" stroke-linejoin="round">
+    <path d="M375 180 L416 170 L454 187 L413 198 Z" fill="#E8E8E8"/>
+    <path d="M375 180 L413 198 L413 282 L375 264 Z" fill="#777777"/>
+    <path d="M413 198 L454 187 L454 270 L413 282 Z" fill="#B8B8B8"/>
+    <path d="M474 228 L515 217 L553 234 L512 245 Z" fill="#D2D2D2"/>
+    <path d="M474 228 L512 245 L512 287 L474 270 Z" fill="#626262"/>
+    <path d="M512 245 L553 234 L553 276 L512 287 Z" fill="#A5A5A5"/>
+    <path d="M575 199 L616 188 L654 205 L613 216 Z" fill="#E0E0E0"/>
+    <path d="M575 199 L613 216 L613 291 L575 274 Z" fill="#727272"/>
+    <path d="M613 216 L654 205 L654 279 L613 291 Z" fill="#B2B2B2"/>
+    <path d="M675 235 L716 224 L754 241 L713 252 Z" fill="#C4C4C4"/>
+    <path d="M675 235 L713 252 L713 296 L675 279 Z" fill="#595959"/>
+    <path d="M713 252 L754 241 L754 285 L713 296 Z" fill="#999999"/>
+  </g>
+  <g fill="#E0E0E0" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">
+    <text x="413" y="157">35% CONSERVE</text>
+    <text x="514" y="204">20% EV</text>
+    <text x="614" y="174">25% OFF-PEAK</text>
+    <text x="714" y="211">20% SOLAR</text>
+  </g>
+  <text x="834" y="308" fill="#8F8F8F" font-family="Arial, sans-serif" font-size="11" text-anchor="end">Illustrative scores · no bill credits active</text>
+</svg>

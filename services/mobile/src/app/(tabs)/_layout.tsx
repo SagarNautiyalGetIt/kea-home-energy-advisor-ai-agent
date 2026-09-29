@@ -17,6 +17,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
       <Tabs.Screen name="usage" options={{ title: 'Usage' }} />
       <Tabs.Screen name="assistant" options={{ title: 'Sparky AI' }} />
+      <Tabs.Screen name="clash" options={{ title: 'Power Clash' }} />
       <Tabs.Screen name="billing" options={{ title: 'Billing' }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
       <Tabs.Screen name="plans" options={{ href: null }} />

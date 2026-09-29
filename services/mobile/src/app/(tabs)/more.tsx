@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
+import { MotionPressable } from '@/components/motion-pressable';
 import { Screen } from '@/components/screen';
 import { Card, PageHeader, PrimaryButton, SectionTitle } from '@/components/ui';
 import { useAuth } from '@/providers/auth';
@@ -12,6 +13,7 @@ import { loadDemoAccounts, type DemoAccount } from '@/lib/account-api';
 import { useToast } from '@/providers/toast';
 
 const menu = [
+  { label: 'Power Clash', detail: 'Explore the demo community league', icon: 'flash-outline' as const, route: '/clash' as const },
   { label: 'Plans', detail: 'Compare pricing and terms', icon: 'swap-horizontal-outline' as const, route: '/plans' as const },
   { label: 'Profile', detail: 'Contact and account details', icon: 'person-outline' as const, route: '/profile' as const },
   { label: 'Help & support', detail: 'Answers and Customer Care', icon: 'help-circle-outline' as const, route: '/help' as const },
@@ -55,7 +57,7 @@ export default function MoreScreen() {
   return (
     <Screen>
       <PageHeader title="More" subtitle="Your Kea Energy account" />
-      <Pressable accessibilityLabel="Open profile" accessibilityRole="button" onPress={() => router.push('/profile')} style={({ pressed }) => [pressed && styles.pressed]}>
+      <MotionPressable accessibilityLabel="Open profile" accessibilityRole="button" onPress={() => router.push('/profile')}>
         <Card style={styles.profileCard}>
           <Image source={require('../../../assets/kea/kea-profile.png')} style={styles.avatar} />
           <View style={styles.profileCopy}>
@@ -64,9 +66,9 @@ export default function MoreScreen() {
           </View>
           <Ionicons color={colors.textMuted} name="chevron-forward" size={20} />
         </Card>
-      </Pressable>
+      </MotionPressable>
       <SectionTitle>Account</SectionTitle>
-      <Card style={styles.menuCard}>{menu.map((item, index) => <Pressable onPress={() => router.push(item.route)} style={({ pressed }) => [styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }, pressed && styles.pressed]}><View style={[styles.rowIcon, { backgroundColor: colors.input }]}><Ionicons color={colors.text} name={item.icon} size={21} /></View><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>)}</Card>
+      <Card style={styles.menuCard}>{menu.map((item, index) => <MotionPressable accessibilityRole="button" key={item.route} onPress={() => router.push(item.route)} style={[styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }]}><View style={[styles.rowIcon, { backgroundColor: colors.input }]}><Ionicons color={colors.text} name={item.icon} size={21} /></View><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></MotionPressable>)}</Card>
       <Pressable onPress={() => void openDemoAccounts()} style={[styles.switchDemo, { backgroundColor: colors.input, borderColor: colors.border }]}><Ionicons color={colors.text} name="people-outline" size={21} /><Text style={[styles.switchDemoText, { color: colors.text }]}>Switch demo account</Text></Pressable>
       <Pressable onPress={() => setLogoutOpen(true)} style={[styles.logout, { backgroundColor: colors.surface, borderColor: colors.border }]}><Ionicons color={palette.red} name="log-out-outline" size={21} /><Text style={styles.logoutText}>Sign out</Text></Pressable>
       <Text style={[styles.version, { color: colors.textMuted }]}>Kea Energy mobile · Version 1.0.0</Text>

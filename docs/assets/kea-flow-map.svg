@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" role="img" aria-labelledby="title desc">
+  <title id="title">Kea Home energy and Sparky overview</title>
+  <desc id="desc">Solar green, battery blue, and grid amber flows converge at an illustrative home. Sparky explains separately sourced household facts.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1"><stop stop-color="#142b3b"/><stop offset="1" stop-color="#0c1728"/></linearGradient>
+    <marker id="greenArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="#63f09a"/></marker>
+    <marker id="blueArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="#5ab8ff"/></marker>
+    <marker id="amberArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="#ff9f43"/></marker>
+  </defs>
+  <rect width="1000" height="330" rx="26" fill="url(#background)"/>
+  <text x="42" y="47" fill="#ffffff" font-family="Arial, sans-serif" font-size="22" font-weight="700">One home. Every energy source in view.</text>
+  <text x="42" y="72" fill="#a8bdc8" font-family="Arial, sans-serif" font-size="12">Illustrative energy flow · Account facts and bill comparisons come from the API</text>
+
+  <rect x="46" y="96" width="176" height="59" rx="15" fill="#1c3a3e" stroke="#63f09a" stroke-opacity=".65"/>
+  <circle cx="76" cy="125" r="10" fill="#63f09a"/>
+  <text x="98" y="121" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Solar</text>
+  <text x="98" y="140" fill="#bdd4cd" font-family="Arial, sans-serif" font-size="11">Generation</text>
+
+  <rect x="46" y="169" width="176" height="59" rx="15" fill="#1d3247" stroke="#5ab8ff" stroke-opacity=".65"/>
+  <rect x="68" y="189" width="17" height="20" rx="3" fill="none" stroke="#5ab8ff" stroke-width="3"/>
+  <text x="98" y="194" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Battery</text>
+  <text x="98" y="213" fill="#bdd2e1" font-family="Arial, sans-serif" font-size="11">Store or supply</text>
+
+  <rect x="46" y="242" width="176" height="59" rx="15" fill="#3b2d28" stroke="#ff9f43" stroke-opacity=".65"/>
+  <path d="M76 257L69 275H77L72 289L85 270H77L82 257Z" fill="#ff9f43"/>
+  <text x="98" y="267" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Grid</text>
+  <text x="98" y="286" fill="#e5c8ae" font-family="Arial, sans-serif" font-size="11">Import or export</text>
+
+  <path d="M229 125C291 125 304 163 364 166" fill="none" stroke="#63f09a" stroke-width="4" marker-end="url(#greenArrow)"/>
+  <path d="M229 199H363" fill="none" stroke="#5ab8ff" stroke-width="4" marker-end="url(#blueArrow)"/>
+  <path d="M229 272C291 272 304 235 364 232" fill="none" stroke="#ff9f43" stroke-width="4" marker-end="url(#amberArrow)"/>
+
+  <rect x="385" y="117" width="230" height="162" rx="23" fill="#20394b" stroke="#89aebe" stroke-opacity=".5"/>
+  <path d="M457 178L500 146L543 178V232H457Z" fill="none" stroke="#e4f4f8" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M486 232V194H514V232" fill="none" stroke="#e4f4f8" stroke-width="4"/>
+  <text x="500" y="256" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Kea Home</text>
+
+  <path d="M630 197H686" fill="none" stroke="#b9d5dc" stroke-width="3" stroke-dasharray="5 5"/>
+  <rect x="704" y="117" width="251" height="162" rx="23" fill="#233345" stroke="#63f09a" stroke-opacity=".5"/>
+  <circle cx="747" cy="158" r="22" fill="#315b53"/>
+  <path d="M747 145L751 156L762 160L751 164L747 175L743 164L732 160L743 156Z" fill="#63f09a"/>
+  <text x="783" y="160" fill="#ffffff" font-family="Arial, sans-serif" font-size="19" font-weight="700">Sparky AI</text>
+  <text x="727" y="201" fill="#d6e6ea" font-family="Arial, sans-serif" font-size="13">Explain bills and usage</text>
+  <text x="727" y="224" fill="#d6e6ea" font-family="Arial, sans-serif" font-size="13">Show named sources</text>
+  <text x="727" y="247" fill="#d6e6ea" font-family="Arial, sans-serif" font-size="13">Offer opt-in smart calls</text>
+</svg>

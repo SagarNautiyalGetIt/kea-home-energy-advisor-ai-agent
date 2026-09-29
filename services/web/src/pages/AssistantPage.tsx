@@ -136,6 +136,9 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // piper binaries, the flag is off, or the browser will not hand over a microphone
   // on an insecure origin. Each has a different fix, so the button names which one.
   const [voiceHint, setVoiceHint] = useState('Checking whether voice is available…')
+  const [modelStatus, setModelStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking')
+  const [modelLabel, setModelLabel] = useState('')
+  const [healthRefresh, setHealthRefresh] = useState(0)
   // Set once the customer asks why the mic is unavailable, so the reason is
   // announced to a screen reader rather than living only in a tooltip.
   const [voiceReasonShown, setVoiceReasonShown] = useState(false)
@@ -214,8 +217,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // properties of undefined" and reads like a bug in our code rather than the browser
   // refusing an insecure origin.
   useEffect(() => {
+    setModelStatus('checking')
     getHealth()
       .then((h) => {
+        setModelStatus(h.model_ready ? 'ready' : 'unavailable')
+        setModelLabel(`${h.provider} · ${h.model}`)
         const support = checkVoiceSupport()
         if (!support.ok) {
           // Usually the secure-context rule: on http://192.168.x.x the whole
@@ -245,10 +251,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         setVoiceHint('Ask by voice')
       })
       .catch(() => {
+        setModelStatus('unavailable')
+        setModelLabel('Service unreachable')
         setVoiceReady(false)
         setVoiceHint('Sparky is offline, so voice is unavailable too.')
       })
-  }, [])
+  }, [healthRefresh])
 
   // An in-flight stream outlives this component unless it is cancelled. So does an open
   // microphone — and a mic left live after navigating away is a recording indicator the
@@ -585,6 +593,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     <div className="page-heading assistant-heading">
       <div>
         <h1>AI Assistant</h1>
+        <div className={`assistant-model-status assistant-model-status--${modelStatus}`} role="status">
+          <span className="assistant-model-dot" aria-hidden="true" />
+          <span>{modelStatus === 'checking' ? 'Checking Sparky' : modelStatus === 'ready' ? `Sparky ready · ${modelLabel}` : `Sparky unavailable · ${modelLabel}`}</span>
+          <button type="button" onClick={() => setHealthRefresh((value) => value + 1)} aria-label="Refresh Sparky model status">Check again</button>
+        </div>
         {SHOW_ASSISTANT_DESCRIPTION && <p>Your personalised guide to electricity usage, bills and plans.</p>}
       </div>
       <div className="assistant-controls">
@@ -612,7 +625,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           <strong>Sparky can’t reach your usage data right now.</strong>
           <small>Answers are unavailable rather than guessed. Please try again shortly.</small>
         </span>
-        <button onClick={onEscalate}>Talk to a human</button>
+        <button onClick={onEscalate}>See support options</button>
       </div>
     )}
 
@@ -729,7 +742,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         </div>
       ) : (
         <div className="assistant-start">
-          <div className="assistant-orb"><SparkySparks state={sparkState} size={168}/></div>
+          <div className="assistant-orb"><SparkySparks state={sparkState} size={168} label={modelStatus === 'unavailable' ? 'Sparky is unavailable' : undefined}/></div>
           <h2>How can I help you today?</h2>
           {SHOW_ASSISTANT_DESCRIPTION && <p>Get clear answers about bills, usage patterns, and plans.</p>}
           <div className="prompt-grid">
@@ -746,8 +759,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     <div className="composer-area">
       {escalating && (
         <div className="escalation-prompt" role="status">
-          It sounds like this is about affording your bill. A person is better placed to help
-          than I am. <button onClick={onEscalate}>Talk to a human</button>
+          If you need a person, use the verified support details on your electricity bill.
+          This demo has not sent your chat to staff. <button onClick={onEscalate}>See support options</button>
         </div>
       )}
       <div className="chat-composer">
@@ -809,7 +822,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       {/* Announced, not hovered — see the mic button above. */}
       <p className="sr-only" role="status">{voiceReasonShown ? voiceHint : ''}</p>
       <div className="chat-footer">
-        Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Check Terms &amp; Conditions</button> · <button onClick={onEscalate}>Talk to a human</button>
+        Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Check Terms &amp; Conditions</button> · <button onClick={onEscalate}>See support options</button>
       </div>
     </div>
 
@@ -825,7 +838,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         <p>Sparky reads your own meter readings and account records to answer your questions, and lists what it looked up each time so you can see where its figures came from.</p>
         <p>Sparky can get things wrong. Costs and projections are estimates based on the information available at the time — your actual bill is what counts, and it may differ. Please don’t treat Sparky’s answers as financial advice or as a final word on your account.</p>
         <p>Sparky can’t tell which individual appliance used power, because a meter reads the whole house. Where a rate isn’t published, dollar figures are illustrative and Sparky says so.</p>
-        <p>If something looks wrong, or you’d like an answer checked, ask to talk to a human at any time and our team will take it from there.</p>
+        <p>If something looks wrong, use the support page to find your provider’s verified contact details. This demo does not send your chat to a person.</p>
       </Modal>
     )}
   </div>

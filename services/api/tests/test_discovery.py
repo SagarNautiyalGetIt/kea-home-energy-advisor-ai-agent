@@ -183,7 +183,8 @@ def test_the_summary_says_three_times_that_it_has_no_energy() -> None:
     assert payload["devices_found"] == 1
     assert payload["by_platform"] == {"google_home": 1}
     for device in payload["devices"]:
-        assert set(device) == {"name", "kind", "could_connect_via", "note", "address"}
+        assert set(device) == {"name", "kind", "service", "could_connect_via", "note", "address"}
+        assert device["service"] == "_googlecast._tcp.local."
 
 
 def test_every_service_type_maps_to_something_actionable() -> None:

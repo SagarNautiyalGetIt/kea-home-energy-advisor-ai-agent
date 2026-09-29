@@ -75,6 +75,8 @@ def record(
             updates["works_from_home"] = True
         elif question.hypothesis is Hypothesis.ELECTRIC_HEATING:
             updates["has_electric_heating"] = True
+        elif question.hypothesis is Hypothesis.EV_CHARGING:
+            updates["has_ev"] = True
 
     elif response.answer is Answer.NO:
         # A denial is a fact, not an absence of one — it is what promotes the next
@@ -87,6 +89,8 @@ def record(
             updates["works_from_home"] = False
         elif question.hypothesis is Hypothesis.ELECTRIC_HEATING:
             updates["has_electric_heating"] = False
+        elif question.hypothesis is Hypothesis.EV_CHARGING:
+            updates["has_ev"] = False
         # HOT_WATER_CHANGE has no denial field: it is last on the ladder, so recording the
         # question id is enough to stop it being re-asked, and there is no next question
         # for a denial to promote.

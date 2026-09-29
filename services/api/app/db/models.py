@@ -185,9 +185,7 @@ class WeatherDay(Base):
     """
 
     __tablename__ = "weather_day"
-    __table_args__ = (
-        UniqueConstraint("region", "day", name="uq_weather_region_day"),
-    )
+    __table_args__ = (UniqueConstraint("region", "day", name="uq_weather_region_day"),)
 
     id: Mapped[int] = _pk()
     region: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -217,9 +215,7 @@ class Conversation(Base):
         # Deflection and hardship reporting are both "count conversations where X, by
         # date". Partial indexes keep those cheap without carrying the whole table.
         Index("ix_conversation_escalated", "started_at", postgresql_where=text("was_escalated")),
-        Index(
-            "ix_conversation_hardship", "started_at", postgresql_where=text("hardship_detected")
-        ),
+        Index("ix_conversation_hardship", "started_at", postgresql_where=text("hardship_detected")),
         Index("ix_conversation_retention", "retain_until"),
         CheckConstraint(
             "ended_at IS NULL OR ended_at >= started_at", name="ck_conversation_dates_ordered"
@@ -604,9 +600,7 @@ class AlertPreferenceRow(Base):
             "tier1_pct <= tier2_pct AND tier2_pct <= tier3_pct",
             name="ck_alert_preference_ladder_monotonic",
         ),
-        CheckConstraint(
-            "tier1_pct >= 5 AND tier3_pct <= 200", name="ck_alert_preference_bounds"
-        ),
+        CheckConstraint("tier1_pct >= 5 AND tier3_pct <= 200", name="ck_alert_preference_bounds"),
         _APP_SCHEMA,
     )
 
@@ -624,9 +618,7 @@ class AlertPreferenceRow(Base):
     tier1_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=15)
     tier2_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=40)
     tier3_pct: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=75)
-    min_overshoot_nzd: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), nullable=False, default=20
-    )
+    min_overshoot_nzd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=20)
 
     email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sms_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -637,9 +629,7 @@ class AlertPreferenceRow(Base):
 
     quiet_hours_start: Mapped[int | None] = mapped_column(Integer, default=21)
     quiet_hours_end: Mapped[int | None] = mapped_column(Integer, default=8)
-    timezone: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="Pacific/Auckland"
-    )
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Pacific/Auckland")
 
     bill_reminders: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     """Remind the customer before a bill falls due. Defaults true, which is what the
@@ -686,12 +676,47 @@ class HouseholdContextRow(Base):
     works_from_home: Mapped[bool | None] = mapped_column(Boolean)
     has_electric_heating: Mapped[bool | None] = mapped_column(Boolean)
     hot_water_changed_since: Mapped[dt.date | None] = mapped_column(Date)
+    has_ev: Mapped[bool | None] = mapped_column(Boolean)
 
     asked: Mapped[list | None] = mapped_column(JSONB)
     """Question ids already put to this household. A question asked and ignored is still
     asked — re-asking it next cycle is how an assistant becomes something people mute."""
 
     updated_at: Mapped[dt.datetime] = _now()
+
+
+class DeviceObservationRow(Base):
+    """One daily device reading, scoped to a household and its reporting provider."""
+
+    __tablename__ = "device_observation"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_ref",
+            "provider",
+            "device_id",
+            "day",
+            name="uq_device_observation_household_device_day",
+        ),
+        Index("ix_device_observation_household_day", "account_ref", "day"),
+        CheckConstraint(
+            "energy_kwh IS NULL OR energy_kwh >= 0", name="ck_device_energy_nonnegative"
+        ),
+        _APP_SCHEMA,
+    )
+
+    id: Mapped[int] = _pk()
+    account_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    device_class: Mapped[str] = mapped_column(String(32), nullable=False)
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    day: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    runtime_minutes: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    energy_kwh: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    rated_watts: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False)
+    always_on: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    received_at: Mapped[dt.datetime] = _now()
 
 
 class PlanChangeRequestRow(Base):
@@ -733,8 +758,6 @@ class PlanChangeRequestRow(Base):
     quoted_saving_nzd_per_year: Mapped[float | None] = mapped_column(Numeric(10, 2))
     quoted_from_period: Mapped[str | None] = mapped_column(String(64))
 
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, server_default="pending_review"
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="pending_review")
     channel: Mapped[str] = mapped_column(String(24), nullable=False, server_default="chat")
     requested_at: Mapped[dt.datetime] = _now()
