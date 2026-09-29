@@ -434,7 +434,6 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 .profile-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}.profile-form label{display:grid;gap:7px}.profile-form label>span{display:flex;align-items:center;gap:7px;color:#58668a;font-size:12px;font-weight:600}.profile-form label svg{width:17px}.profile-password-action{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:14px;border-radius:14px;background:#f5f6fb}.profile-password-action>svg{width:24px;color:#654ded}.profile-password-action strong,.profile-password-action small{display:block}.profile-password-action small{color:#7d8aa8;font-size:11px}.profile-password-action button{padding:7px 12px;border:1px solid #dddff0;border-radius:10px;color:#5944d8;background:#fff}
 .assistant-heading{align-items:center}.assistant-heading h1{margin:0}.assistant-heading>button{margin-left:auto}.thinking{display:flex;align-items:center;gap:8px}.thinking svg{width:17px;animation:spin 1s linear infinite}.chat-composer.listening{border-color:#f05c73;box-shadow:0 0 0 4px rgb(240 92 115 / 10%)}.chat-composer.listening button[aria-pressed=true]{color:#e94f68}.chat-composer button:disabled{opacity:.45}
 .assistant-model-status{display:flex;align-items:center;gap:7px;margin-top:8px;color:#5e6a83;font-size:12px;font-weight:600}.assistant-model-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#8c98ac}.assistant-model-status--ready .assistant-model-dot{background:#30b579}.assistant-model-status--unavailable .assistant-model-dot{background:#dc755c}.assistant-model-status button{border:0;padding:3px 6px;background:transparent;color:inherit;text-decoration:underline;cursor:pointer}html[data-theme=dark] .assistant-model-status{color:#b8c5d9}
-.billing-demo-notice{margin:0 0 16px;padding:12px 16px;border:1px solid #e9b75b;border-radius:14px;background:#fff8e9;color:#694c19;font-size:13px;font-weight:650;line-height:1.5}html[data-theme=dark] .billing-demo-notice{border-color:#785e31;background:#322c22;color:#f5d9a8}
 
 /* Help, settings, feedback and 404 */
 .help-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.7fr);gap:20px}.help-faq{padding:22px}.help-faq>h2,.settings-card>h2{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:18px}.help-faq>h2 svg,.settings-card>h2 svg{width:21px;color:#6048e7}.help-faq article{border-top:1px solid #e9ecf4}.help-faq article>button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px;border:0;color:#3d4a6e;background:transparent;text-align:left;font-weight:600}.help-faq article>button svg{width:18px;transition:.3s}.help-faq article>button svg.rotate{transform:rotate(180deg)}.help-faq article>p{margin:0;padding:0 4px 16px;color:#667394;font-size:13px;line-height:1.6}.help-actions{display:grid;gap:12px}.help-actions article{padding:18px}.help-actions article>svg{width:25px;color:#5a43e8}.help-actions h3{margin:8px 0 3px;font-size:15px}.help-actions p{margin:0 0 12px;color:#7481a1;font-size:12px}.help-actions button{padding:8px 12px;border:1px solid #e0e3ef;border-radius:10px;color:#563fda;background:#fff;font-weight:600}.help-actions .urgent>svg{color:#ed596d}
@@ -1498,7 +1497,10 @@ html[data-theme=dark] .invoice-table>div>strong{color:#eef1ff}
 
 /* Two that fail in LIGHT mode, found by the same sweep and fixed here rather than left
    because the audit happened to be about dark. Neither is a dark-theme problem. */
-.faq-group h3{color:#c24a00}          /* was #fe6601 — 2.95:1 on white */
+/* FAQ group labels are back to the bright #fe6601 of the Billing page's "Payment:" label,
+   on purpose, for the visual match. Known trade-off: 2.95:1 on white, below the 4.5:1 that
+   #c24a00 met; to be raised with the team. */
+.faq-group h3{color:#fe6601}
 .verification-row time{color:#6d7899} /* was #9aa5c2 — 2.46:1 on white */
 html[data-theme=dark] .faq-group h3{color:#ffa766}
 html[data-theme=dark] .verification-row time{color:#9aa5c2}
@@ -1968,7 +1970,7 @@ html:not([data-theme=dark]) .settings-list .theme-options button.active:focus-vi
    three settings it governs (Alert messages, Never alert me under, Quiet hours) are
    titled in the brand blue. The channels (Email, Text message, A call from Sparky) belong
    to Alert messages, so they sit indented beneath it (its title starts at 38px; they start
-   24px further in), each switch right after its name. "Interest in offline Sparky" is
+   24px further in), each switch right after its name. "Answers without a connection" is
    not an alert setting and sits apart, below the Save button. */
 .bill-shock-title{align-items:center}
 .bill-shock-title>input{margin-left:auto}
@@ -2001,7 +2003,7 @@ html:not([data-theme=dark]) .threshold-actions .primary-action:disabled{box-shad
    a section (Alert messages, Never alert me under, Quiet hours). */
 .settings-section-title h2{font-size:21px;font-weight:600}
 .settings-section-title p{font-size:14px}
-/* Bill reminders and Interest in offline Sparky stand on their own: neither is part of
+/* Bill reminders and Answers without a connection stand on their own: neither is part of
    the bill-shock settings above them. Each is drawn like a section heading (its own icon,
    a section-sized title, the switch at the right edge), and the title keeps its colour on
    hover instead of turning blue. */
@@ -2082,12 +2084,13 @@ html[data-theme=dark] .settings-list .settings-link{border-top-color:#303953}
 
 /* Settings: the titles of the settings inside a section (Alert messages, Never alert me under,
    Quiet hours, Smart devices on your network, Privacy and data, Password and security) in the
-   Help FAQ labels' orange, instead of purple. It is the deep #c24a00, about 4.9:1 on white, so
-   it passes WCAG AA; the brighter #fe6601 is about 3:1 and does not. On dark it lightens to
-   the #ffa766 the FAQ labels use there. Delete this block to go back to purple. */
+   bright orange of the Help FAQ group labels, instead of purple. Trade-off: #fe6601 on white
+   is about 3:1, under the 4.5:1 WCAG AA asks of text this size (the deep #c24a00 would pass).
+   On dark it lightens to the #ffa766 the FAQ labels use there. Delete this block to go back
+   to purple. */
 .threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
 .settings-list .device-scan>h2,
-.settings-list .settings-link strong{color:#c24a00}
+.settings-list .settings-link strong{color:#fe6601}
 html[data-theme=dark] .threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
 html[data-theme=dark] .settings-list .device-scan>h2,
 html[data-theme=dark] .settings-list .settings-link strong{color:#ffa766}
@@ -2108,7 +2111,7 @@ html[data-theme=dark] .settings-list .settings-link strong{color:#ffa766}
 .privacy-info>svg{box-sizing:border-box;flex:0 0 auto;width:80px;height:80px;padding:20px;overflow:visible;border-radius:50%;color:var(--purple);background:#f6f7fd}
 .terms-content.privacy-info>p{max-width:40ch;margin:20px 0 0;padding:0;border:0;color:var(--ink);font-size:16px;font-weight:500;line-height:1.55;text-align:center}
 .privacy-rights{align-self:center;max-width:100%;margin-top:22px}
-.terms-content .privacy-rights h3{margin:0 0 6px;color:#c24a00;font-size:15px;font-weight:700}
+.terms-content .privacy-rights h3{margin:0 0 6px;color:#fe6601;font-size:15px;font-weight:700}
 .terms-content .privacy-rights li{display:flex;align-items:flex-start;gap:10px;margin:10px 0 0;padding:0;color:#536184;font-size:14px;line-height:1.5}
 .terms-content .privacy-rights li::before{content:none}
 .privacy-rights li>svg{flex:0 0 18px;width:18px;height:18px;margin-top:1px;color:var(--purple)}
