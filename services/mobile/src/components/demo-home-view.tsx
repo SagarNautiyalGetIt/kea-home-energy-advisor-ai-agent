@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, AppState, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -9,8 +10,9 @@ import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useActiveAnimation } from '@/lib/use-active-animation';
 import { AnimatedLogo } from './animated-logo';
+import { HIGHLIGHT_COLOR, VisualHighlight, type HighlightTarget } from './visual-highlight';
 
-type Device = 'solar' | 'home' | 'car' | 'battery' | 'grid';
+type Device = HighlightTarget;
 type Source = 'solar' | 'battery' | 'grid' | 'load';
 
 type Props = {
@@ -30,8 +32,8 @@ const PIPE_PATHS = {
   car: 'M1155 768 C1156 811 1155 850 1144 872 C1139 883 1131 891 1118 899 C1065 930 994 961 950 965 C920 969 906 956 902 939 C898 922 900 905 888 895 L883 892',
 } as const;
 
-const POWER_COLOR = '#38BDF8';
-const COLORS: Record<Source, string> = { solar: '#63F09A', battery: '#5AB8FF', grid: '#FF9F43', load: POWER_COLOR };
+const POWER_COLOR = HIGHLIGHT_COLOR.home;
+const COLORS: Record<Source, string> = { solar: HIGHLIGHT_COLOR.solar, battery: HIGHLIGHT_COLOR.battery, grid: HIGHLIGHT_COLOR.grid, load: HIGHLIGHT_COLOR.car };
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
 function FlowPath({ id, source, reverse, active, phase }: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; active: boolean; phase: SharedValue<number> }) {
@@ -74,14 +76,14 @@ function reading(scene: HomeSceneData | null, live: LivePower, device: Device): 
       const solarEnergy = deviceEnergy(scene, 'solar_generation');
       if (live.solar_generation !== undefined) return { value: current(live.solar_generation)!, detail: 'Solar output · live', color: COLORS.solar };
       if (solarEnergy !== null) return { value: measured(solarEnergy), detail: 'Solar meter · latest day', color: COLORS.solar };
-      return { value: 'N/A', detail: 'No solar connected', color: '#8E8E8E' };
+      return { value: 'N/A', detail: 'No solar connected', color: COLORS.solar };
     }
     case 'home': return { value: current(live.home_load) ?? '—', detail: live.home_load !== undefined ? 'Home load · live' : 'No home power sensor', color: POWER_COLOR };
     case 'car': {
       const evEnergy = deviceEnergy(scene, 'ev_charger');
       if (live.ev_charger !== undefined) return { value: current(live.ev_charger)!, detail: 'Charger · live', color: POWER_COLOR };
       if (evEnergy !== null) return { value: measured(evEnergy), detail: 'Charger meter · latest day', color: POWER_COLOR };
-      return { value: 'N/A', detail: 'No EV charger', color: '#8E8E8E' };
+      return { value: 'N/A', detail: 'No EV charger', color: HIGHLIGHT_COLOR.car };
     }
     case 'battery': {
       const charge = deviceEnergy(scene, 'battery_charge');
@@ -91,7 +93,7 @@ function reading(scene: HomeSceneData | null, live: LivePower, device: Device): 
       if (live.battery_charge !== undefined || live.battery_discharge !== undefined) return { value: current(live.battery_charge ?? live.battery_discharge)!, detail: 'Idle · live', color: COLORS.battery };
       if (charge !== null) return { value: measured(charge), detail: 'Charged · latest day', color: COLORS.battery };
       if (discharge !== null) return { value: measured(discharge), detail: 'Discharged · latest day', color: COLORS.battery };
-      return { value: 'N/A', detail: 'No battery connected', color: '#8E8E8E' };
+      return { value: 'N/A', detail: 'No battery connected', color: COLORS.battery };
     }
     case 'grid': {
       if (live.grid_import !== undefined && live.grid_import > 20) return { value: current(live.grid_import)!, detail: 'Importing · live', color: COLORS.grid };
@@ -247,6 +249,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
             <Image accessible={false} source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
             <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
+              <VisualHighlight active={animationActive} reduceMotion={reduceMotion} selected={selected} />
               {routes.map((route) => <Path key={`${route.id}-glow`} d={PIPE_PATHS[route.id]} fill="none" opacity={0.72} stroke={COLORS[route.source]} strokeLinecap="round" strokeWidth={15} />)}
               {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} phase={phase} {...route} />)}
             </Svg>
@@ -259,14 +262,14 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
           const metric = reading(scene, live, device);
-          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => setSelected(device)} style={[styles.deviceChip, { width: chipWidth }, selected === device && { borderColor: POWER_COLOR }]}>
+          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the home picture; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
             <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={styles.deviceName}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
             <Text style={styles.deviceValue}>{metric.value}</Text><Text numberOfLines={fontScale > 1.3 ? 2 : 1} style={styles.deviceDetail}>{metric.detail}</Text>
           </Pressable>;
         })}
       </ScrollView>
       {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={styles.retryText}>Home readings unavailable · Retry</Text></Pressable> : null}
-      <Text style={styles.demoNote}>{routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
+      <Text style={styles.demoNote}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the picture. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
     </View>
   </View>;
 }
