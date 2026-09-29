@@ -76,8 +76,12 @@ The server can use a local Ollama model when a **tool-capable** model is
 installed and selected. Mobile Settings shows the active model and a refreshable
 readiness result. The offline phone-model switch currently **records interest
 only**: this build has no on-device model download or offline answering runtime.
+The website also offers an opt-in browser-local model for general energy guidance
+on supported WebGPU browsers. It shows download and model readiness separately
+from the connected Kea service; bill and household answers still need that service.
 See [mobile setup](services/mobile/README.md) and the
 [provider configuration](services/api/README.md) before demonstrating AI live.
+Browser-local inference has its own [device and verification limits](docs/design/on-browser-sparky.md).
 
 ### Power Clash
 

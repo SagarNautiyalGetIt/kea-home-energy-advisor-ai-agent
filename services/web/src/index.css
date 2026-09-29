@@ -626,6 +626,11 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 .assistant-offline small{color:#8a7550;font-size:12px}
 .assistant-offline button{flex:0 0 auto;margin-left:auto;padding:8px 14px;border:1px solid #e6cf9f;border-radius:10px;color:#8a6420;background:#fff;font-weight:700}
 
+.assistant-browser-model{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 16px;padding:15px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink)}
+.assistant-browser-model strong{display:flex;align-items:center;gap:8px;font-size:14px}.assistant-browser-dot{width:8px;height:8px;border-radius:50%;background:#8c98ac}.assistant-browser-model--ready .assistant-browser-dot{background:#30b579}.assistant-browser-model--loading .assistant-browser-dot,.assistant-browser-model--update .assistant-browser-dot{background:#e5a93c}.assistant-browser-model--error .assistant-browser-dot{background:#dc755c}.assistant-browser-model p{margin:4px 0;color:var(--muted);font-size:12px;line-height:1.5}.assistant-browser-model small{display:block;color:var(--muted);font-size:11px}.assistant-browser-model progress{display:block;width:min(100%,300px);height:7px;margin-top:8px;accent-color:#5e46e7}
+.assistant-browser-actions{display:flex;align-items:center;gap:12px;flex:none}.assistant-browser-actions label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}.assistant-browser-actions button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}.assistant-browser-actions button:disabled{opacity:.55;cursor:default}.assistant-browser-source{margin:10px 0 0;color:var(--muted);font-size:11px;font-weight:700}
+@media(max-width:760px){.assistant-browser-model{align-items:stretch;flex-direction:column}.assistant-browser-actions{flex-wrap:wrap}}
+
 /* Deliberately quiet. The claim is strong enough that shouting it reads as insecurity —
    and it must never appear on an answer that consulted nothing. */
 .verified-badge{margin-top:10px;color:#3f8f6b;font-size:11px;font-weight:600}

@@ -20,6 +20,9 @@ import { loadSession } from '../lib/session'
 import { clearThread, loadThread, saveThread } from '../lib/thread'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
 import { SparkySparks } from '../components/sparky'
+import { BROWSER_MODEL } from '../lib/browser-sparky'
+import { canAnswerInBrowser } from '../lib/browser-sparky-policy'
+import { useBrowserSparky } from '../lib/use-browser-sparky'
 
 /**
  * The assistant.
@@ -74,6 +77,8 @@ type Message = {
   attachment?: { name: string; kind: 'image' | 'pdf'; status: 'reading' | 'ready' | 'failed' }
   /** The service could not answer — never a fabricated stand-in. See `onError`. */
   error?: string
+  /** General guidance generated in this browser, without household tools or sources. */
+  browserLocal?: boolean
 }
 
 const SHOW_ASSISTANT_DESCRIPTION = false
@@ -110,6 +115,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const [households, setHouseholds] = useState<HouseholdSummary[]>([])
   const [customerId, setCustomerId] = useState('')
   const [backendDown, setBackendDown] = useState(false)
+  const browserSparky = useBrowserSparky()
 
   const [messages, setMessages] = useState<Message[]>([{ id: 1, role: 'assistant', text: GREETING }])
   const [started, setStarted] = useState(false)
@@ -368,7 +374,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
        */
       shown?: { text: string; attachment?: Message['attachment'] },
     ) => {
-      if (!customerId) {
+      const useLocal = browserSparky.ready && !solarContext && !shown?.attachment && canAnswerInBrowser(question)
+      if (!customerId && !useLocal) {
         onToast('Still connecting to your account — try again in a moment', 'warning')
         return
       }
@@ -400,6 +407,18 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
       const patch = (fn: (m: Message) => Message) =>
         setMessages((current) => current.map((m) => (m.id === answerId ? fn(m) : m)))
+
+      if (useLocal) {
+        try {
+          const text = await browserSparky.answer(question)
+          if (!controller.signal.aborted) patch((m) => ({ ...m, text, browserLocal: true, streaming: false }))
+        } catch (error) {
+          if (!controller.signal.aborted) patch((m) => ({ ...m, error: error instanceof Error ? error.message : 'The browser model could not answer.', streaming: false }))
+        } finally {
+          if (!controller.signal.aborted) setBusy(false)
+        }
+        return
+      }
 
       try {
         await streamChat(
@@ -462,7 +481,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         if (!controller.signal.aborted) setBusy(false)
       }
     },
-    [customerId, onToast, solarContext],
+    [browserSparky, customerId, onToast, solarContext],
   )
 
   /**
@@ -618,12 +637,26 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       </div>
     </div>
 
+    <section className={`assistant-browser-model assistant-browser-model--${browserSparky.status.phase}`} aria-label="On-device Sparky">
+      <div>
+        <strong><span className="assistant-browser-dot" aria-hidden="true" />On-device Sparky</strong>
+        <p>Opt in to download a model from Hugging Face for general energy guidance. Your account, bill and plan questions still use Kea's connected service.</p>
+        <small role="status">{browserSparky.status.phase === 'ready' ? `${BROWSER_MODEL.label} · ${BROWSER_MODEL.revision.slice(0, 7)} · ready` : browserSparky.status.detail}</small>
+        {browserSparky.status.phase === 'loading' && browserSparky.status.progress !== undefined && <progress max="100" value={browserSparky.status.progress} aria-label="Model download progress" />}
+      </div>
+      <div className="assistant-browser-actions">
+        <label><input type="checkbox" checked={browserSparky.enabled} onChange={(event) => browserSparky.toggle(event.target.checked)} disabled={browserSparky.status.phase === 'unsupported' || browserSparky.status.phase === 'checking'} /> Enable</label>
+        {browserSparky.enabled && browserSparky.status.phase !== 'ready' && browserSparky.status.phase !== 'unsupported' && <button type="button" disabled={browserSparky.status.phase === 'loading'} onClick={() => void browserSparky.install()}>{browserSparky.status.phase === 'update' ? 'Update model' : 'Load model'} · {BROWSER_MODEL.download}</button>}
+        {browserSparky.enabled && browserSparky.status.phase === 'ready' && <button type="button" onClick={() => void browserSparky.remove()}>Remove model</button>}
+      </div>
+    </section>
+
     {backendDown && (
       <div className="assistant-offline" role="alert">
         <AlertTriangle/>
         <span>
           <strong>Sparky can’t reach your usage data right now.</strong>
-          <small>Answers are unavailable rather than guessed. Please try again shortly.</small>
+          <small>{browserSparky.ready ? 'General energy questions can still use the on-device model. Account answers need a connection.' : 'Account answers are unavailable rather than guessed. Please try again shortly.'}</small>
         </span>
         <button onClick={onEscalate}>See support options</button>
       </div>
@@ -676,6 +709,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                         hand-written: the string is model output, and no HTML is built
                         from it. */}
                     <AnswerText text={item.text}/>
+                    {item.browserLocal && <p className="assistant-browser-source">On this browser · general guidance · no account data</p>}
 
                     {/* The figures the answer is about, drawn from the same lookup that
                         produced them. Under the prose rather than above it: the sentence
@@ -784,8 +818,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
-          placeholder={backendDown ? 'Unavailable while Sparky is offline' : 'Message Sparky'}
-          disabled={backendDown}
+          placeholder={backendDown && !browserSparky.ready ? 'Unavailable while Sparky is offline' : 'Message Sparky'}
+          disabled={backendDown && !browserSparky.ready}
         />
         {/* Always rendered. Hiding it when the stack is missing meant the mic simply
             never appeared and looked unbuilt — and a control that vanishes is harder to
