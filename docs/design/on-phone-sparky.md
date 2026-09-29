@@ -20,11 +20,16 @@ The current guard requires at least 3 GiB reported RAM, at least 1 GiB available
 
 Expo Go does not contain the C++ runtime. The app still opens there and explains that the Kea development build is required for on-phone inference. Build the project with Expo's native development-build workflow after installing dependencies. Native packages were added to the Expo config plugin list; generating and testing iOS requires macOS or an EAS build.
 
+`llama.rn` downloads its pinned Android and iOS native libraries during `npm ci` and checks each archive against its package SHA-256 manifest. If dependencies were installed with `--ignore-scripts`, run `node node_modules/llama.rn/install/download-native-artifacts.js` from `services/mobile` before building a native client. An APK can compile without these libraries yet fail when local inference starts, so inspect the package for `lib/arm64-v8a/librnllama.so` as part of Android verification.
+
+On 30 September 2026, an Android debug APK built on Linux after the verified native-artifact download, and inspection confirmed the arm64 `librnllama` variants were packaged. This build used a local, ignored Gradle override to select installed NDK 28.2.13676358 because the Expo default NDK 27.1.12297006 was not available on that machine. It does not establish that the app launches or answers on a phone.
+
 When the local model is enabled, installed, and the question is general energy education, Sparky runs on the phone and labels the reply **On this phone · general guidance · no account data**. Questions about a household, bill, meter, tariff, plan, carbon offset, or rewards continue to the existing Kea service. If the service is unavailable, the app shows that account answers cannot be checked offline. This is intentional until there is a customer-scoped, dated, verified fact pack with logout deletion and freshness rules.
 
 ## Release gates
 
 - [x] Native dependencies locked; TypeScript, changed-file lint, policy tests and diff check pass.
+- [x] Android debug APK compiles with the verified `llama.rn` native libraries packaged (local NDK 28 override; no device run).
 - [ ] Build and launch native development clients on physical iOS and Android devices.
 - [ ] Install and hash-verify the model over Wi-Fi, test cancellation/update/removal, and measure storage and memory on low and high capability devices.
 - [ ] Inspect response quality and content boundaries with a fixed question set; verify streaming and app background behavior.
