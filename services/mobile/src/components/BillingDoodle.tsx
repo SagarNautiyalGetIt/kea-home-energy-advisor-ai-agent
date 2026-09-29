@@ -14,21 +14,8 @@ export function BillingDoodle() {
             <Stop offset="1" stopColor={palette.green} stopOpacity="1" />
           </LinearGradient>
         </Defs>
-        <Path
-          d="M 20 80 Q 40 20 80 40 T 120 20"
-          fill="none"
-          stroke="url(#grad)"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-        <Path
-          d="M 10 90 Q 50 30 90 50 T 130 30"
-          fill="none"
-          stroke="url(#grad)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="4, 8"
-        />
+        <Path d="M 20 80 Q 40 20 80 40 T 120 20" fill="none" stroke="url(#grad)" strokeWidth="4" strokeLinecap="round" />
+        <Path d="M 10 90 Q 50 30 90 50 T 130 30" fill="none" stroke="url(#grad)" strokeWidth="2" strokeLinecap="round" strokeDasharray="4, 8" />
       </Svg>
     </View>
   );

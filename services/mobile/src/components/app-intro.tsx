@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { AnimatedLogo } from './animated-logo';
 
@@ -23,15 +23,15 @@ const EXIT_MS = 480;
 
 export function AppIntro({ onDone }: { onDone: () => void }) {
   const { width, height } = useWindowDimensions();
-  const [exit] = useState(() => new Animated.Value(1));
-  const [logoOpacity] = useState(() => new Animated.Value(0));
-  const [logoScale] = useState(() => new Animated.Value(0.55));
-  const [ringPulse] = useState(() => new Animated.Value(0));
-  const [dividerScale] = useState(() => new Animated.Value(0));
-  const [shimmerX] = useState(() => new Animated.Value(-width));
-  const [tagShimmerX] = useState(() => new Animated.Value(-width));
-  const [letters] = useState(() => NAME.split('').map(() => new Animated.Value(0)));
-  const [chunks] = useState(() => TAGLINE.map(() => new Animated.Value(0)));
+  const exit = useRef(new Animated.Value(1)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.55)).current;
+  const ringPulse = useRef(new Animated.Value(0)).current;
+  const dividerScale = useRef(new Animated.Value(0)).current;
+  const shimmerX = useRef(new Animated.Value(-width)).current;
+  const tagShimmerX = useRef(new Animated.Value(-width)).current;
+  const letters = useRef<Animated.Value[]>(NAME.split('').map(() => new Animated.Value(0))).current;
+  const chunks = useRef<Animated.Value[]>(TAGLINE.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];

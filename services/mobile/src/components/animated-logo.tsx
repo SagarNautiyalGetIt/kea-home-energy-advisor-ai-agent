@@ -79,7 +79,7 @@ export function AnimatedLogo({
     };
   }, [flip, spin]);
 
-  const ringRotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+  const ringRotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const boltFlip = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
 
   return (

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiBase, apiJson, jsonRequest, loadAccessToken, storeTokenPair } from '@/lib/backend-client';
+import { apiJson, jsonRequest, loadAccessToken, storeTokenPair } from '@/lib/backend-client';
 
 export type LocalSession = {
   customerId: string;
@@ -25,22 +25,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function authenticate(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
-  try {
-    const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: normalizedEmail, password }));
-    if (isRecord(body) && typeof body.customer_id === 'string' && body.customer_id.trim()) {
-      const token = typeof body.access_token === 'string' ? body.access_token : null;
-      if (!token) throw new Error('Sign-in did not return an account session.');
-      await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
-      return {
-        customerId: body.customer_id,
-        displayName: typeof body.display_name === 'string' && body.display_name.trim()
-          ? body.display_name
-          : displayNameFromEmail(email),
-      };
-    }
-  } catch (error) {
-    if (error instanceof TypeError) throw new Error(`Cannot reach Kea at ${apiBase()}. Connect your phone and API to the same network, then try again.`);
-    throw error instanceof Error ? error : new Error('Sign-in failed.');
+  const body: unknown = await apiJson('/api/auth/login', jsonRequest('POST', { email: normalizedEmail, password }));
+  if (isRecord(body) && typeof body.customer_id === 'string' && body.customer_id.trim()) {
+    const token = typeof body.access_token === 'string' ? body.access_token : typeof body.token === 'string' ? body.token : null;
+    await storeTokenPair(token, typeof body.refresh_token === 'string' ? body.refresh_token : null);
+    return {
+      customerId: body.customer_id,
+      displayName: typeof body.display_name === 'string' && body.display_name.trim()
+        ? body.display_name
+        : displayNameFromEmail(email),
+    };
   }
   throw new Error('Sign-in response did not include a customer ID.');
 }
@@ -60,13 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     Promise.all([AsyncStorage.getItem(STORAGE_KEY), loadAccessToken()])
-      .then(async ([saved, token]) => {
+      .then(([saved, token]) => {
         if (!saved) return;
         const parsed: unknown = JSON.parse(saved);
         if (!isRecord(parsed) || typeof parsed.customerId !== 'string' || typeof parsed.displayName !== 'string' || typeof parsed.email !== 'string') return;
-        if (token === null) return;
-        const live = await apiJson<{ customer_id: string }>('/api/auth/session');
-        if (live.customer_id !== parsed.customerId) return;
+        // A token-bearing session must not be restored after its secure token has gone.
+        // Tokenless sessions are the documented demo-backend mode.
+        if (token === null && parsed.email.endsWith('@kea.example') === false) return;
         setSession(parsed as LocalSession);
       })
       .catch(() => undefined)

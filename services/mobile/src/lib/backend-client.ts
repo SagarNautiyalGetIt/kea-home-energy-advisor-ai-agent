@@ -61,7 +61,11 @@ export async function storeTokenPair(accessToken: string | null, refreshToken: s
 async function refreshAccessToken() {
   if (!memoryRefreshToken && Platform.OS !== 'web') memoryRefreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
   if (!memoryRefreshToken) return null;
-  const path = process.env.EXPO_PUBLIC_REFRESH_TOKEN_PATH?.trim() || '/api/auth/refresh';
+  // The current Kea API has no token-refresh endpoint. A future authenticated
+  // deployment must opt in by supplying its exact route rather than causing a
+  // misleading request to a path this backend does not expose.
+  const path = process.env.EXPO_PUBLIC_REFRESH_TOKEN_PATH?.trim();
+  if (!path) return null;
   const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: memoryRefreshToken }) });
   if (!response.ok) return null;
   const body = await response.json() as Record<string, unknown>;

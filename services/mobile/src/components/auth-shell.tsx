@@ -55,5 +55,5 @@ const styles = StyleSheet.create({
   subtitleCompact: { marginTop: 10, fontSize: 16, lineHeight: 22 },
   form: { marginTop: 30, gap: 14 },
   formCompact: { marginTop: 22, gap: 12 },
-  legal: { marginTop: 22, fontSize: 11, textAlign: 'center' },
+  legal: { marginTop: 22, fontSize: 12, textAlign: 'center' },
 });
