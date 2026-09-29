@@ -27,6 +27,11 @@ Scan the Expo QR code from an iOS or Android device. For a browser preview, run
 `make mobile-web`. From this directory, the equivalent commands are `npm ci`,
 `npm run start`, and `npm run web`.
 
+To test the native on-phone Sparky model and Home Visual Highlight with an
+Android phone, use the [Android phone validation runbook](../../qa/android-phone.md).
+Expo Go can preview the rest of the app but cannot load the local inference
+library; the runbook builds and verifies a development APK.
+
 ## Backend integration
 
 Set `EXPO_PUBLIC_API_URL` to the backend origin on a physical phone. The emulator
