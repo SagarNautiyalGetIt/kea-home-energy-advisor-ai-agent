@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import type { FocusEvent, MouseEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
 import BrandMark from './BrandMark'
 import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
@@ -12,15 +13,16 @@ const SHOW_PLANS_NAV_ITEM = true
 // Temporarily hide Profile from the navigation during Sprint 2. Its page and
 // route remain available; change this flag to true when it should be exposed.
 const SHOW_PROFILE_NAV_ITEM = false
-// Keep theme support intact, but hide the top-bar shortcut until it is needed again.
-const SHOW_THEME_TOGGLE = false
+// The top-bar light/dark shortcut. Settings also switches the theme; set this to false to
+// leave that as the only way.
+const SHOW_THEME_TOGGLE = true
 
 type NavItem = { id: PageId; label: string; icon: typeof House; description: string; keywords: string }
 
 // `description` is what the search panel shows; `keywords` only feeds the match,
 // so synonyms customers might type can live there without cluttering the list.
 const allNavItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: House, description: 'Cost summary, usage charts and Kea news', keywords: 'home overview projection bill shock warning today monthly' },
+  { id: 'dashboard', label: 'Dashboard', icon: House, description: 'Energy flow, cost summary, bill warning and news', keywords: 'home overview projection bill shock warning today monthly' },
   { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, description: 'Daily, weekly and monthly electricity use', keywords: 'graph chart energy kwh peak off-peak night consumption' },
   { id: 'billing', label: 'Billing', icon: CircleDollarSign, description: 'Invoices, payment status and saved card', keywords: 'bill pay invoice history balance due receipt' },
   { id: 'plans', label: 'Plans', icon: ListChecks, description: 'Pricing styles, terms and plan comparison', keywords: 'pricing compare tariff rate anytime time of use free weekends commitment credit' },
@@ -74,8 +76,14 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
     const closePanels = (event: PointerEvent) => {
       if (openPanel && !topbarRef.current?.contains(event.target as Node)) setOpenPanel(null)
     }
+    // The search results have no close button, so Escape is the keyboard's way out.
+    const closeOnEscape = (event: KeyboardEvent) => { if (openPanel && event.key === 'Escape') setOpenPanel(null) }
     document.addEventListener('pointerdown', closePanels)
-    return () => document.removeEventListener('pointerdown', closePanels)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closePanels)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
   }, [openPanel])
 
   const searchResults = useMemo(() => {
@@ -88,6 +96,22 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('kea-theme', next) }
   const toggleSidebar = () => { const next = !collapsed; setCollapsed(next); localStorage.setItem('kea-sidebar-collapsed', String(next)) }
 
+  // Collapsed, the labels are hidden, so a small tooltip names the button under the pointer,
+  // just below and right of it like the browser's own `title` tooltip, but at once rather
+  // than after its one-second delay. Keyboard focus shows it beside the button instead.
+  // Rendered into <body>, so nothing on the page can clip or cover it.
+  const [navTip, setNavTip] = useState<{ label: string; x: number; y: number } | null>(null)
+  const tipFor = (label: string) => collapsed ? {
+    'aria-label': label,
+    onMouseMove: (event: MouseEvent) => setNavTip({ label, x: event.clientX + 12, y: event.clientY + 18 }),
+    onMouseLeave: () => setNavTip(null),
+    onFocus: (event: FocusEvent<HTMLButtonElement>) => {
+      const box = event.currentTarget.getBoundingClientRect()
+      setNavTip({ label, x: box.right - 16, y: box.top + box.height / 2 - 12 })
+    },
+    onBlur: () => setNavTip(null),
+  } : {}
+
   const sidebarContent = <>
     <BrandMark />
     <button
@@ -98,12 +122,14 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
       title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
       onClick={toggleSidebar}
     >{collapsed ? <PanelLeftOpen aria-hidden="true"/> : <PanelLeftClose aria-hidden="true"/>}</button>
+    {/* Collapsed, the buttons are named by `navTip` rather than a `title`, which would stack
+        the slow native tooltip on top of it. */}
     <nav aria-label="Primary navigation">
-      {nav.map((item) => <button type="button" key={item.id} title={collapsed ? item.label : undefined} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon" aria-hidden="true"/><span>{item.label}</span></button>)}
+      {nav.map((item) => <button type="button" key={item.id} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)} {...tipFor(item.label)}><item.icon className="nav-icon" aria-hidden="true"/><span>{item.label}</span></button>)}
     </nav>
     <div className="sidebar-utilities">
-      {utilityPages.map((item) => <button type="button" key={item.id} title={collapsed ? item.label : undefined} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)}><item.icon className="nav-icon"/><span>{item.label}</span></button>)}
-      <button type="button" title={collapsed ? 'Logout' : undefined} onClick={onLogout}><LogOut className="nav-icon" aria-hidden="true"/><span>Logout</span></button>
+      {utilityPages.map((item) => <button type="button" key={item.id} className={active === item.id ? 'active' : ''} onClick={() => go(item.id)} {...tipFor(item.label)}><item.icon className="nav-icon"/><span>{item.label}</span></button>)}
+      <button type="button" onClick={onLogout} {...tipFor('Logout')}><LogOut className="nav-icon" aria-hidden="true"/><span>Logout</span></button>
     </div>
   </>
 
@@ -111,9 +137,11 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
     <div className={`app-shell page-${active ?? 'default'} ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <div className="kea-energy-decor" aria-hidden="true">
         <span className="kea-energy-burst kea-energy-burst-right"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>
-        {active === 'dashboard' && <span className="kea-energy-burst kea-energy-burst-left"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>}
+        {/* On every page, like the right-hand burst; it used to be drawn on the dashboard only. */}
+        <span className="kea-energy-burst kea-energy-burst-left"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>
       </div>
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>{sidebarContent}<button className="mobile-drawer-close" aria-label="Close menu" onClick={() => setMobileOpen(false)}><X/></button></aside>
+      {collapsed && navTip && createPortal(<div className="nav-tooltip" role="tooltip" style={{ left: navTip.x, top: navTip.y }}>{navTip.label}</div>, document.body)}
       {mobileOpen && <button className="mobile-menu-backdrop" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
 
       <div className="app-main">
@@ -124,7 +152,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
           <div className="topbar-cluster">
             <div className="topbar-control search-control">
             <div className="search-box"><Search aria-hidden="true"/><input aria-label="Search pages" placeholder="Search" value={query} onFocus={() => setOpenPanel('search')} onChange={(event) => { setQuery(event.target.value); setOpenPanel('search') }}/>{query && <button aria-label="Clear search" onClick={() => setQuery('')}><X/></button>}</div>
-            {openPanel === 'search' && <div className="topbar-panel search-results"><header><strong>Quick navigation</strong><button onClick={() => setOpenPanel(null)}><X/></button></header>{searchResults.length ? searchResults.map((item) => <button key={item.id} onClick={() => go(item.id)}><item.icon/><span><strong>{item.label}</strong><small>{item.description}</small></span></button>) : <p>No matching pages found.</p>}</div>}
+            {openPanel === 'search' && <div className="topbar-panel search-results">{searchResults.length ? searchResults.map((item) => <button key={item.id} onClick={() => go(item.id)}><item.icon/><span><strong>{item.label}</strong><small>{item.description}</small></span></button>) : <p>No matching pages found.</p>}</div>}
             </div>
 
             <div className="topbar-control">

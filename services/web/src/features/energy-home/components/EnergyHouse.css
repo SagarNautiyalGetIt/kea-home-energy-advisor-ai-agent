@@ -80,9 +80,12 @@
   font-weight: 600;
 }
 
+/* Hover and keyboard focus only. The selected chip used to stay dark as well, but
+   selecting a device shows nothing else in the dashboard scene, so it only left one chip
+   (SOLAR by default, or whichever was last clicked) darker than the rest and deaf to
+   hover. */
 .kea-house-chip:hover .kea-house-chip-back,
-.kea-house-chip:focus-visible .kea-house-chip-back,
-.kea-house-chip.is-selected .kea-house-chip-back {
+.kea-house-chip:focus-visible .kea-house-chip-back {
   fill-opacity: .97;
   stroke-opacity: .85;
 }
@@ -92,43 +95,7 @@
   stroke-width: 3;
 }
 
-.kea-energy-house-caption {
-  position: absolute;
-  right: 1.5%;
-  bottom: 1.5%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 9px;
-  border: 1px solid rgba(179, 205, 197, .18);
-  border-radius: 999px;
-  color: #a9bcb7;
-  background: rgba(5, 14, 15, .7);
-  backdrop-filter: blur(8px);
-  font-size: clamp(8px, 1.05vw, 12px);
-  letter-spacing: .04em;
-}
-
-.kea-flow-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.kea-flow-key i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 6px currentColor;
-}
-
-.kea-flow-key--solar { color: #63f09a; }
-.kea-flow-key--battery { color: #5ab8ff; }
-.kea-flow-key--grid { color: #ff9f43; }
-
 @media (max-width: 700px) {
   .kea-energy-house-scene { width: 100%; min-width: 0; }
   .kea-house-hotspots { display: none; }
-  .kea-energy-house-caption { display: none; }
 }

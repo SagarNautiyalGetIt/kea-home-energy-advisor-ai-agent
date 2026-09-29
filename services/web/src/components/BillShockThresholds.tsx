@@ -1,5 +1,5 @@
-import { Mail, MessageSquare, Phone, TriangleAlert } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { BellRing, Mail, MessageSquare, Phone, TriangleAlert, WifiOff } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   CHANNEL_LABEL,
   TIER_OPTIONS,
@@ -40,6 +40,27 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   label: new Intl.DateTimeFormat('en-NZ', { hour: 'numeric' }).format(new Date(2020, 0, 1, hour)),
 }))
 
+/**
+ * The section's heading. The master switch lives here, beside the title, because it turns
+ * the whole section on and off: with it off, no alert is sent on any channel, whatever
+ * the levels and quiet hours below say (the API's alert policy checks it first).
+ */
+export function BillShockHeading({ control }: { control?: ReactNode }) {
+  return (
+    <div className="settings-section-title bill-shock-title">
+      <BellRing />
+      <div>
+        <h2>Bill-shock alerts</h2>
+        <p>
+          You choose how far over your bill has to be tracking before we get in touch, and
+          how. Turning this off stops the messages; the warning still shows in the app.
+        </p>
+      </div>
+      {control}
+    </div>
+  )
+}
+
 type Props = {
   customerId: string
   /** What this cycle would normally come to, from the bill-shock response. Null until it
@@ -54,11 +75,18 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // What the server last confirmed. The offline switch saves on top of this, not on top of
+  // `prefs`, so an unsaved threshold edit is neither saved nor lost when it is flipped.
+  const [saved, setSaved] = useState<AlertPreferences | null>(null)
 
   useEffect(() => {
     let live = true
     getAlertPreferences(customerId)
-      .then((loaded) => live && setPrefs(loaded))
+      .then((loaded) => {
+        if (!live) return
+        setPrefs(loaded)
+        setSaved(loaded)
+      })
       .catch((error: Error) => live && setLoadError(error.message))
     return () => {
       live = false
@@ -74,7 +102,9 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
     if (!prefs) return
     setSaving(true)
     try {
-      setPrefs(await saveAlertPreferences(customerId, prefs))
+      const result = await saveAlertPreferences(customerId, prefs)
+      setPrefs(result)
+      setSaved(result)
       setDirty(false)
       onToast('Alert settings saved')
     } catch (error) {
@@ -86,36 +116,68 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
     }
   }
 
+  // "Interest in offline Sparky" sits below the Save button, apart from the alert
+  // settings it has nothing to do with, so it saves the moment it is flipped, like the
+  // other switches on this page.
+  const saveOffline = async (on: boolean) => {
+    if (!saved) return
+    setPrefs((current) => current && { ...current, offline_model_opt_in: on })
+    try {
+      setSaved(await saveAlertPreferences(customerId, { ...saved, offline_model_opt_in: on }))
+      onToast(on ? 'Offline Sparky interest saved' : 'Offline Sparky interest removed')
+    } catch (error) {
+      setPrefs((current) => current && { ...current, offline_model_opt_in: !on })
+      onToast(`Could not save: ${(error as Error).message}`)
+    }
+  }
+
+  const masterSwitch = (
+    <input
+      type="checkbox"
+      role="switch"
+      aria-label="Bill-shock alerts"
+      aria-checked={prefs?.enabled ?? false}
+      checked={prefs?.enabled ?? false}
+      disabled={!prefs}
+      onChange={(event) => prefs && update({ ...prefs, enabled: event.target.checked })}
+    />
+  )
+
   if (loadError) {
     return (
-      <p className="settings-inline-error" role="alert">
-        <TriangleAlert aria-hidden="true" /> Could not load your alert settings: {loadError}
-      </p>
+      <>
+        <BillShockHeading />
+        <p className="settings-inline-error" role="alert">
+          <TriangleAlert aria-hidden="true" /> Could not load your alert settings: {loadError}
+        </p>
+      </>
     )
   }
-  if (!prefs) return <p className="settings-loading">Loading your alert settings…</p>
+  if (!prefs) {
+    return (
+      <>
+        <BillShockHeading control={masterSwitch} />
+        <p className="settings-loading">Loading your alert settings…</p>
+      </>
+    )
+  }
 
   const ladder = ladderError(prefs)
 
   return (
+    <>
+    <BillShockHeading control={masterSwitch} />
     <div className="threshold-editor">
-      <label className="setting-row">
-        <span>
-          <strong>Bill-shock alerts</strong>
-          <small>
-            Tell me when this cycle is heading somewhere I would not expect. Turning this
-            off stops the messages; the warning still shows in the app.
-          </small>
-        </span>
-        <input
-          type="checkbox"
-          checked={prefs.enabled}
-          onChange={(event) => update({ ...prefs, enabled: event.target.checked })}
-        />
-      </label>
-
-      <fieldset className="threshold-ladder" disabled={!prefs.enabled}>
-        <legend>How we tell you, and how far over is far enough</legend>
+      {/* Everything the master switch governs, greyed out together when it is off:
+          Alert messages (the channels and their levels), Never alert me under, and
+          Quiet hours. */}
+      <fieldset className="threshold-ladder" disabled={!prefs.enabled} aria-label="Bill-shock alert settings">
+        <div className="setting-row threshold-group-head">
+          <span>
+            <strong>Alert messages</strong>
+            <small>How we tell you, and how far over is far enough.</small>
+          </span>
+        </div>
 
         {/* The three channels are wrapped and indented rather than left as siblings of
             the master switch. They only exist as ways of delivering a bill-shock alert,
@@ -143,7 +205,6 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
                     three under it were not, which made them look like a different kind
                     of setting. */}
                 <span className="channel-switch">
-                  <span aria-hidden="true">{channelOn ? 'On' : 'Off'}</span>
                   <input
                     type="checkbox"
                     role="switch"
@@ -273,23 +334,6 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
         </div>
       </fieldset>
 
-        <label className="setting-row">
-          <span>
-            <strong>Interest in offline Sparky</strong>
-            <small>
-              Save your preference for a future offline release. This build does not
-              download a model or answer without a connection.
-            </small>
-          </span>
-          <input
-            type="checkbox"
-            checked={prefs.offline_model_opt_in}
-            onChange={(event) =>
-              update({ ...prefs, offline_model_opt_in: event.target.checked })
-            }
-          />
-        </label>
-
       <div className="threshold-actions">
         <button
           type="button"
@@ -300,6 +344,23 @@ export default function BillShockThresholds({ customerId, expectedCostNzd = null
           {saving ? 'Saving…' : 'Save alert settings'}
         </button>
       </div>
+
+      <label className="setting-row setting-standalone offline-answers">
+        <WifiOff aria-hidden="true" />
+        <span>
+          <strong>Interest in offline Sparky</strong>
+          <small>
+            Save your preference for a future offline release. This build does not
+            download a model or answer without a connection.
+          </small>
+        </span>
+        <input
+          type="checkbox"
+          checked={prefs.offline_model_opt_in}
+          onChange={(event) => void saveOffline(event.target.checked)}
+        />
+      </label>
     </div>
+    </>
   )
 }
