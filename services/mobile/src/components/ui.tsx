@@ -19,7 +19,7 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 
 export function PrimaryButton({ label, onPress, icon, disabled = false, loading = false, variant = 'primary' }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean; loading?: boolean; variant?: 'primary' | 'secondary' | 'danger' | 'blue' }) {
   const { colors } = useAppTheme();
-  const foreground = variant === 'primary' ? colors.onPrimary : colors.text;
+  const foreground = variant === 'danger' || variant === 'blue' ? '#FFFFFF' : variant === 'primary' ? colors.onPrimary : colors.text;
   const content = (
     <View style={styles.buttonContent}>
       {loading ? <ActivityIndicator color={foreground} /> : icon ? <Ionicons name={icon} size={19} color={foreground} /> : null}

@@ -40,7 +40,7 @@ export default function AssistantScreen() {
   const { session } = useAuth();
   const { showToast } = useToast();
   const isDemoMode = process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false';
-  const { plan, question } = useLocalSearchParams<{ plan?: string | string[]; question?: string | string[] }>();
+  const { plan, question, billPrediction } = useLocalSearchParams<{ plan?: string | string[]; question?: string | string[]; billPrediction?: string | string[] }>();
   const scrollRef = useRef<ScrollView>(null);
   const nextId = useRef(2);
   const chatVersion = useRef(0);
@@ -51,6 +51,7 @@ export default function AssistantScreen() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [introDone, setIntroDone] = useState(false);
+  const [billPromptPending, setBillPromptPending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const started = messages.length > 1;
 
@@ -62,11 +63,22 @@ export default function AssistantScreen() {
     return () => clearTimeout(prefill);
   }, [plan, question]);
 
+  useEffect(() => {
+    const fromBillPrediction = Array.isArray(billPrediction) ? billPrediction[0] : billPrediction;
+    if (!fromBillPrediction) {
+      setBillPromptPending(false);
+      return;
+    }
+    setIntroDone(true);
+    setBillPromptPending(true);
+  }, [billPrediction]);
+
   useEffect(() => () => requestRef.current?.abort(), []);
 
   const send = async (question: string) => {
     const clean = question.trim();
     if (!clean || busy) return;
+    setBillPromptPending(false);
     const version = chatVersion.current;
     setText('');
     setBusy(true);
@@ -194,7 +206,7 @@ export default function AssistantScreen() {
         </ScrollView>
       ) : introDone ? <View style={styles.startState}><SparkyLogo size={148} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View> : <SparkyIntro onDone={() => setIntroDone(true)} />}
 
-      {!started && introDone ? <View style={styles.prompts}>{prompts.map((prompt) => <Pressable key={prompt} onPress={() => void send(prompt)} style={styles.prompt}><Text style={styles.promptText}>{prompt}</Text></Pressable>)}</View> : null}
+      {introDone && (!started || billPromptPending) ? <View style={styles.prompts}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable key={prompt} onPress={() => void send(prompt)} style={[styles.prompt, billPromptPending && index === 0 && styles.billPrompt]}><Text style={styles.promptText}>{prompt}</Text></Pressable>)}</View> : null}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <TextInput blurOnSubmit={false} multiline onChangeText={setText} onSubmitEditing={() => void send(text)} placeholder="Ask about your energy…" placeholderTextColor={colors.text} style={[styles.input, { color: colors.text }]} value={text} />
@@ -215,4 +227,5 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '92%', borderWidth: 1, borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11 }, userBubble: { backgroundColor: palette.violet, borderColor: palette.violet, borderBottomLeftRadius: 18, borderBottomRightRadius: 6 }, bubbleText: { fontSize: 14, lineHeight: 20 }, replyActions: { flexDirection: 'row', alignItems: 'center', gap: 13, marginTop: 8 }, replyAction: { minWidth: 24, minHeight: 24, alignItems: 'center', justifyContent: 'center' },
   escalationAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 11, borderRadius: 13, backgroundColor: palette.violet, paddingHorizontal: 12 }, escalationText: { color: '#000000', fontSize: 12, fontWeight: '900' }, thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 }, thinkingBubble: { borderWidth: 1, borderRadius: 17, paddingHorizontal: 14, paddingVertical: 11 },
   prompts: { alignItems: 'flex-end', gap: 8, paddingBottom: 10 }, prompt: { maxWidth: '84%', minHeight: 42, justifyContent: 'center', borderWidth: 1, borderColor: '#FFFFFF', borderRadius: 17, borderBottomRightRadius: 6, backgroundColor: 'transparent', paddingHorizontal: 14, paddingVertical: 10, shadowColor: '#FFFFFF', shadowOpacity: 0.34, shadowRadius: 7 }, promptText: { color: '#FFFFFF', fontSize: 12, lineHeight: 17, fontWeight: '700', textAlign: 'right' }, composer: { minHeight: 48, maxHeight: 100, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 22, paddingHorizontal: 12, paddingVertical: 7 }, input: { flex: 1, maxHeight: 88, fontSize: 16, lineHeight: 22 }, send: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: palette.violet }, sendDisabled: { opacity: 0.35 },
+  billPrompt: { borderColor: palette.red, borderWidth: 2, backgroundColor: 'rgba(232,33,39,0.16)', shadowColor: palette.red, shadowOpacity: 0.5 },
 });
