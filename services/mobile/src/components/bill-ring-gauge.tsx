@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop } from 'react-native-svg';
+import {
+  BILL_RING_MAX_DEG,
+  BILL_RING_START_DEG,
+  billRingEndAngle,
+  billRingToneForAngle,
+  billRingToneForRatio,
+  type BillRingTone,
+} from '@/lib/bill-ring';
 
 /*
  * BillRingGauge — Bill Shock ring animation for the Bill prediction modal.
@@ -14,10 +22,8 @@ import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop } from 'react
  * - track: full circle, #231C23, with 72 subtle tick marks (every 5deg)
  * - ring starts drawing exactly at the BOTTOM, clockwise, at a constant ~125 deg/sec
  *   (linear — no easing), then HOLDS the final state (no loop, no replay)
- * - 3 equal 120deg colour zones: green #22C55E (90->210), orange #FB923C (210->330),
- *   red #EF4444 (330->450); zone arcs are JS-computed SVG paths (no transform tricks)
- * - data mapping: overshootPct 0 -> 80deg drawn, 100 -> 312deg drawn
- *   (red stops at 60% of its zone, never completes the circle)
+ * - ratio mapping: 1.0 -> 210deg, 1.25 -> 330deg, 1.75 -> 449.9deg
+ *   across green, orange and red zones
  * - white-hot head dot (r=5) with a soft zone-coloured glow (r=45) rides the tip
  * - inner lightning bolt (video's exact points) sits centred and takes the colour of
  *   whichever zone the head currently occupies; its halo glow is steady (no pulsing)
@@ -35,21 +41,10 @@ const ORANGE = '#FB923C';
 const RED = '#EF4444';
 const TRACK = '#231C23';
 
-const START_DEG = 90; // bottom (screen coords, y down, clockwise = increasing angle)
+const START_DEG = BILL_RING_START_DEG; // bottom (screen coords, y down, clockwise = increasing angle)
 const ZONE_DEG = 120;
 const ZONE_STARTS = [START_DEG, START_DEG + ZONE_DEG, START_DEG + ZONE_DEG * 2];
 const ZONE_COLORS = [GREEN, ORANGE, RED] as const;
-const MAX_DRAW_DEG = ZONE_STARTS[2] + ZONE_DEG * 0.6;
-
-// The video reveals the green zone first, then orange, then red. The comparison
-// state supplies a minimum endpoint so a small dollar overshoot still reaches its
-// correct colour zone even when the backend percentage is small.
-const drawnDegrees = (v: number, tone: BillRingTone) => {
-  const raw = 80 + (Math.min(100, Math.max(0, v)) / 100) * (MAX_DRAW_DEG - 80);
-  const minimum = tone === 'red' ? 332 : tone === 'orange' ? 212 : 80;
-  return Math.min(MAX_DRAW_DEG, Math.max(minimum, raw));
-};
-
 // measured: the three demo phases draw at ~120-137 deg/sec; use a constant 125
 const DRAW_SPEED_DEG_PER_SEC = 125;
 
@@ -88,28 +83,28 @@ const RING_SIZE = 360;
 const WRAP_SIZE = 280;
 const RING_OFFSET = (WRAP_SIZE - RING_SIZE) / 2;
 
-export type BillRingTone = 'green' | 'orange' | 'red';
+export type { BillRingTone } from '@/lib/bill-ring';
 
-export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: number; tone?: BillRingTone; onToneChange?: (tone: BillRingTone) => void }) {
+export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneChange?: (tone: BillRingTone) => void }) {
   const reduceMotion = useReducedMotion();
   const [progress] = useState(() => new Animated.Value(0));
   const [headDeg, setHeadDeg] = useState(START_DEG);
   const firstMount = useRef(true);
 
-  const target = drawnDegrees(value, tone);
+  const tone = billRingToneForRatio(ratio);
+  const target = billRingEndAngle(ratio) - START_DEG;
 
   useEffect(() => {
-    const toneAtDegrees = (degrees: number): BillRingTone => degrees < 210 ? 'green' : degrees < 330 ? 'orange' : 'red';
-    onToneChange?.(toneAtDegrees(START_DEG));
+    onToneChange?.(billRingToneForAngle(START_DEG));
     const id = progress.addListener(({ value: p }) => {
       setHeadDeg(START_DEG + p);
-      onToneChange?.(toneAtDegrees(START_DEG + p));
+      onToneChange?.(billRingToneForAngle(START_DEG + p));
     });
     progress.stopAnimation();
     if (reduceMotion) {
       // reduced motion: final customer-data state immediately, no animation
       progress.setValue(target);
-      onToneChange?.(toneAtDegrees(START_DEG + target));
+      onToneChange?.(tone);
     } else if (firstMount.current) {
       firstMount.current = false;
       // one-shot: blank track -> customer-data endpoint, linear, then HOLD
@@ -133,20 +128,20 @@ export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: 
     return () => {
       progress.removeListener(id);
     };
-  }, [onToneChange, progress, target, reduceMotion]);
+  }, [onToneChange, progress, target, reduceMotion, tone]);
 
-  const endDeg = Math.min(headDeg, MAX_DRAW_DEG);
+  const endDeg = Math.min(headDeg, BILL_RING_MAX_DEG);
   const head = polar(endDeg);
-  const zoneColor = (absDeg: number) => (absDeg < 210 ? GREEN : absDeg < 330 ? ORANGE : RED);
-  const headColor = zoneColor(endDeg);
+  const currentTone = billRingToneForAngle(endDeg);
+  const headColor = currentTone === 'green' ? GREEN : currentTone === 'orange' ? ORANGE : RED;
   const showHead = endDeg > START_DEG + 2;
 
-  const pct = Math.round(Math.min(100, Math.max(0, value)));
+  const pct = Math.round(Math.max(0, ratio) * 100);
   const state = tone === 'green' ? 'within expectation' : tone === 'orange' ? 'slightly above expected' : 'above expected';
 
   return (
     <View
-      accessibilityLabel={`Projected bill ${state}, ${pct} percent above expected`}
+      accessibilityLabel={`Projected bill ${pct} percent of expected, ${state}`}
       accessibilityRole="image"
       style={styles.wrap}
     >

@@ -36,7 +36,9 @@ export default function DashboardScreen() {
   const backgroundTranslateY = scrollY.interpolate({ inputRange: [0, Math.max(1, backgroundShift)], outputRange: [0, -backgroundShift], extrapolate: 'clamp' });
   const backgroundBlurOpacity = scrollY.interpolate({ inputRange: [Math.max(0, backgroundShift - 90), backgroundShift + 30], outputRange: [0, 1], extrapolate: 'clamp' });
   const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
-  const billShockTone: BillRingTone = dashboard?.warningTriggered ? 'red' : 'green';
+  const projected = dashboard?.projectedCycleCostNzd;
+  const expected = dashboard?.expectedCostNzd;
+  const billRatio = projected != null && expected != null && expected > 0 ? projected / expected : 0;
   const animatedBillShockColor = ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
@@ -310,7 +312,7 @@ export default function DashboardScreen() {
         visible={billShockOpen}
       >
         <View style={styles.shockModal}>
-          <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
+          <BillRingGauge onToneChange={setRingTone} ratio={billRatio} />
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />
             <View style={styles.overshootCopy}>
