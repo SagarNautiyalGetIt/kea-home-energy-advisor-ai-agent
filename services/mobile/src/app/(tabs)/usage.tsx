@@ -205,12 +205,6 @@ export default function UsageScreen() {
   const bands = data?.bands ?? unavailableBands;
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
   useEffect(() => {
-    if (canShowCost || unit !== 'cost') return;
-    const timer = setTimeout(() => setUnit('kwh'), 0);
-    return () => clearTimeout(timer);
-  }, [canShowCost, unit]);
-
-  useEffect(() => {
     const controller = new AbortController();
     if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
       void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
@@ -221,8 +215,8 @@ export default function UsageScreen() {
       .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
-  const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
-  const totalDisplay = unit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
+  const formatAmount = (kwh: number | null, costNzd: number | null) => displayUnit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
+  const totalDisplay = displayUnit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
 
 
   const refresh = () => {
@@ -486,9 +480,9 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setUnit(item);
                       }}
-                      style={[styles.unitOption, unit === item && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.unitOption, displayUnit === item && { backgroundColor: '#FFFFFF' }]}
                     >
-                      <Text style={[styles.unitText, { color: unit === item ? '#000000' : colors.textMuted }]}>
+                      <Text style={[styles.unitText, { color: displayUnit === item ? '#000000' : colors.textMuted }]}>
                         {item === 'kwh' ? 'kWh' : '$'}
                       </Text>
                     </Pressable>
@@ -506,18 +500,18 @@ export default function UsageScreen() {
           >
             <View style={styles.fullWidthChartWrap}>
               <UsageChart
-                accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
+                accessibilityLabel={`${period} electricity usage in ${displayUnit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
                 active={chartActive}
                 chartType={chartType}
                 leadingDecorativeAnchor
-                key={`${period}-${unit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
+                key={`${period}-${displayUnit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
                 axisLabels={chartAxisLabels}
                 labels={chartLabels}
                 onActivate={() => setChartActive(true)}
                 previous={chartPrevious}
                 previousTooltipLabels={previousTooltipLabels}
                 tooltipLabels={tooltipLabels}
-                unit={unit}
+                unit={displayUnit}
                 values={chartValues}
                 xLabelInterval={1}
               />

@@ -36,13 +36,7 @@ export default function DashboardScreen() {
   const backgroundTranslateY = scrollY.interpolate({ inputRange: [0, Math.max(1, backgroundShift)], outputRange: [0, -backgroundShift], extrapolate: 'clamp' });
   const backgroundBlurOpacity = scrollY.interpolate({ inputRange: [Math.max(0, backgroundShift - 90), backgroundShift + 30], outputRange: [0, 1], extrapolate: 'clamp' });
   const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
-  const billShockTone: BillRingTone = (() => {
-    const projected = dashboard?.projectedCycleCostNzd;
-    const expected = dashboard?.expectedCostNzd;
-    if (projected == null || expected == null) return 'green';
-    const difference = projected - expected;
-    return difference <= 0 ? 'green' : difference <= 10 ? 'orange' : 'red';
-  })();
+  const billShockTone: BillRingTone = dashboard?.warningTriggered ? 'red' : 'green';
   const animatedBillShockColor = ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
@@ -55,7 +49,7 @@ export default function DashboardScreen() {
       ? 'Your projected bill is higher than comparable homes'
       : 'Your projected bill is higher than usual'
     : 'Bill prediction';
-  const insightTitle = dashboard?.warningTriggered ? 'Projecting more than expected' : 'Projecting within expectation';
+  const insightTitle = dashboard?.warningTriggered ? 'Currently tracking for bill shock' : 'Below bill-shock alert threshold';
   const dashboardNotifications = dashboard?.warningTriggered
     ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
     : [];
@@ -170,8 +164,9 @@ export default function DashboardScreen() {
           <View pointerEvents="none" style={{ height: fixedContentHeight }} />
           <BottomNavigation
             billPrediction={{
-              detail: dashboard?.warningTriggered ? 'Bill shock warning' : 'View your bill prediction',
+              detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
               onPress: () => setBillShockOpen(true),
+              status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
             }}
             includeHome={false}
             listMode
@@ -301,10 +296,10 @@ export default function DashboardScreen() {
         footer={
           <PrimaryButton
             icon="sparkles-outline"
-            label="Ask Sparky AI"
+            label="Ask Sparky AI to help"
             onPress={() => {
               setBillShockOpen(false);
-              router.push('/assistant');
+              router.push({ pathname: '/assistant', params: { billPrediction: String(Date.now()) } });
             }}
             variant="blue"
           />
@@ -315,6 +310,13 @@ export default function DashboardScreen() {
       >
         <View style={styles.shockModal}>
           <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
+          {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
+            <Ionicons color={palette.red} name="alert-circle" size={24} />
+            <View style={styles.overshootCopy}>
+              <Text style={[styles.overshootValue, { color: colors.text }]}>{dashboard.overshootPct.toFixed(1)}% over expected</Text>
+              <Text style={[styles.overshootDetail, { color: colors.textMuted }]}>Projected {money(dashboard.overshootNzd)} above {dashboard.expectationBasis === 'comparable_homes' ? 'comparable homes' : 'your usual amount'}.</Text>
+            </View>
+          </View> : null}
           <View style={[styles.insightCard, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
             <View style={[styles.insightIcon, { backgroundColor: animatedBillShockColor }]}>
               <Ionicons color="#FFFFFF" name="flash" size={17} />
@@ -382,6 +384,10 @@ const styles = StyleSheet.create({
   dashboardRowTitle: { fontSize: 16, fontWeight: '800' },
   dashboardRowDetail: { marginTop: 3, fontSize: 12, lineHeight: 16 },
   billShockCard: { borderWidth: 1, borderRadius: 22, padding: 14, paddingBottom: 6 },
+  overshootCallout: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderWidth: 1.5, borderColor: palette.red, borderRadius: 16, backgroundColor: 'rgba(232,33,39,0.13)' },
+  overshootCopy: { flex: 1 },
+  overshootValue: { fontSize: 19, lineHeight: 25, fontWeight: '800' },
+  overshootDetail: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   billShockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   warningIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardIconRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
