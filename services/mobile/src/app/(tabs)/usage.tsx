@@ -226,6 +226,7 @@ export default function UsageScreen() {
 
 
   const refresh = () => {
+    setData(null);
     setReloadToken((token) => token + 1);
     setAnimationRun((run) => run + 1);
     void Haptics.selectionAsync();
@@ -237,6 +238,7 @@ export default function UsageScreen() {
       await Promise.resolve();
       if (controller.signal.aborted) return;
       setLoading(true);
+      setData(null);
       setLoadError(null);
       try {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
@@ -340,6 +342,8 @@ export default function UsageScreen() {
   const selectionMode: CalendarSelectionMode = period === 'daily' ? 'day' : period === 'weekly' ? 'week' : 'month';
   const changePeriod = (nextPeriod: Period) => {
     setChartActive(false);
+    setData(null);
+    setLoadError(null);
     setPeriod(nextPeriod);
   };
 
@@ -442,7 +446,7 @@ export default function UsageScreen() {
             </View>
           </View>
 
-          {loading && !data ? (
+          {loading || !data ? (
             <UsageChartLoader />
           ) : (
           <>

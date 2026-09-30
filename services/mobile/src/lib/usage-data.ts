@@ -48,6 +48,7 @@ type HouseholdSummaryApi = {
   label: string;
   period: string;
   daily_kwh: number[];
+  daily_dates: string[];
   daily_peak_kwh: (number | null)[];
   daily_off_peak_kwh: (number | null)[];
   daily_night_kwh: (number | null)[];
@@ -103,7 +104,11 @@ function finiteNumber(value: unknown, field: string) {
 function validateHousehold(value: unknown): HouseholdSummaryApi {
   if (!value || typeof value !== 'object') throw new Error('Usage response is not an object.');
   const row = value as Partial<HouseholdSummaryApi>;
-  if (!row.customer_id || !row.period || !Array.isArray(row.daily_kwh)) throw new Error('Usage response is missing required fields.');
+  if (!row.customer_id || !row.period || !Array.isArray(row.daily_kwh) || !Array.isArray(row.daily_dates)) throw new Error('Usage response is missing required fields.');
+  if (row.daily_dates.length !== row.daily_kwh.length) throw new Error('Usage response has mismatched daily dates and readings.');
+  row.daily_dates.forEach((date) => {
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Usage response has an invalid daily date.');
+  });
   row.daily_kwh.forEach((reading) => finiteNumber(reading, 'daily_kwh reading'));
   for (const field of ['daily_peak_kwh', 'daily_off_peak_kwh', 'daily_night_kwh'] as const) {
     if (!Array.isArray(row[field]) || row[field]?.length !== row.daily_kwh.length) throw new Error(`Usage response has an invalid ${field}.`);
@@ -114,17 +119,8 @@ function validateHousehold(value: unknown): HouseholdSummaryApi {
   return row as HouseholdSummaryApi;
 }
 
-function periodStart(label: string) {
-  const match = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i.exec(label.trim());
-  if (!match) return null;
-  const month = monthNames.findIndex((name) => name.toLowerCase() === match[1]?.toLowerCase());
-  return month < 0 ? null : new Date(Number(match[2]), month, 1);
-}
-
 function apiReadings(summary: HouseholdSummaryApi) {
-  const start = periodStart(summary.period);
-  if (!start) return [];
-  return summary.daily_kwh.map((kwh, index) => ({ date: addDays(start, index), kwh }));
+  return summary.daily_kwh.map((kwh, index) => ({ date: parseIsoDate(summary.daily_dates[index]!), kwh }));
 }
 
 function selectApiPoints(summary: HouseholdSummaryApi, period: UsagePeriod, selected: string): UsagePoint[] {
@@ -233,23 +229,39 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
   const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : null;
   const loadDailyPoints = async (selectedDate: string, fallback: UsagePoint[]) => {
     let dailyPoints = fallback;
-    const dayValue = await fetchJson(`${customerPath}/usage/day?date=${encodeURIComponent(selectedDate)}`, query.signal).catch(() => null);
-    if (dayValue && typeof dayValue === 'object' && Array.isArray((dayValue as { points?: unknown[] }).points)) {
-      dailyPoints = ((dayValue as { points: { time?: unknown; kwh?: unknown }[] }).points)
-        .filter((point) => typeof point.kwh === 'number' && Number.isFinite(point.kwh))
-        .map((point, index) => {
-          const hour = Math.floor(index / 2);
-          const minute = index % 2 ? '30' : '00';
-          const timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:${minute} ${hour < 12 ? 'AM' : 'PM'}`;
-          return {
-            axisLabel: index % 6 === 0 ? timeLabel : '',
-            tooltipLabel: `${shortDate(parseIsoDate(selectedDate))}, ${timeLabel}`,
-            kwh: point.kwh as number,
-            costNzd: unitRate === null ? null : (point.kwh as number) * unitRate,
-          };
-        });
+    const dayValue = await fetchJson(
+      `${customerPath}/usage-series?start=${encodeURIComponent(selectedDate)}&end=${encodeURIComponent(selectedDate)}`,
+      query.signal,
+    ).catch(() => null);
+    if (dayValue && typeof dayValue === 'object' && Array.isArray((dayValue as { intervals?: unknown[] }).intervals)) {
+      const intervals = (dayValue as { intervals: { timestamp?: unknown; kwh?: unknown }[] }).intervals
+        .filter((interval) => typeof interval.timestamp === 'string' && typeof interval.kwh === 'number' && Number.isFinite(interval.kwh));
+      dailyPoints = intervals.map((interval) => {
+        const timestamp = new Date(interval.timestamp as string);
+        const hour = timestamp.getHours();
+        const minute = timestamp.getMinutes();
+        const timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+        return {
+          axisLabel: timeLabel,
+          tooltipLabel: `${shortDate(timestamp)}, ${timeLabel}`,
+          kwh: interval.kwh as number,
+          costNzd: unitRate === null ? null : (interval.kwh as number) * unitRate,
+        };
+      });
+    } else if (dayValue && typeof dayValue === 'object' && Array.isArray((dayValue as { daily_kwh?: unknown[] }).daily_kwh)) {
+      const dayKwh = (dayValue as { daily_kwh: unknown[] }).daily_kwh[0];
+      if (typeof dayKwh === 'number' && Number.isFinite(dayKwh)) {
+        dailyPoints = [{
+          axisLabel: shortDate(parseIsoDate(selectedDate)),
+          tooltipLabel: `${shortDate(parseIsoDate(selectedDate))} · daily total`,
+          kwh: dayKwh,
+          costNzd: unitRate === null ? null : dayKwh * unitRate,
+        }];
+      }
     }
-    if (dailyPoints.length <= 1) {
+    // One point is the correct shape for a daily total. If the range endpoint
+    // is unavailable for a demo account, use the dated household summary point.
+    if (dailyPoints.length === 0) {
       throw new Error('Daily usage data is unavailable from the backend for the selected date.');
     }
     return dailyPoints;
