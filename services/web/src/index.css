@@ -303,7 +303,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,.app-ma
 
 .page-heading h1{margin-top:0;color:var(--ink);font-weight:800;letter-spacing:-.035em}
 .page-heading p{color:var(--muted);font-size:16px;font-weight:500}
-.welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description{margin-top:10px!important;/* Previous green: color:#2dad82!important; */color:#4318ff!important;font-size:clamp(17px,1.6vw,21px)!important;font-weight:600!important}
+.welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description,.solar-description{margin-top:10px!important;/* Previous green: color:#2dad82!important; */color:#4318ff!important;font-size:clamp(17px,1.6vw,21px)!important;font-weight:600!important}
 .welcome-customer strong{color:#56668f;font-size:.8em;font-weight:600}
 
 .sidebar nav button,.search-box input,.search-box input::placeholder,.login-content header p,.login-panel footer,.tariff-note,
@@ -369,7 +369,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,.app-ma
 
 @media(max-width:680px){
   .page-heading p{font-size:15px}
-  .welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description{font-size:17px!important}
+  .welcome-customer,.settings-description,.help-description,.plans-description,.profile-description,.billing-description,.solar-description{font-size:17px!important}
   .metric-row strong{font-size:17px}
   .bar-chart small{font-size:10px}
   .plan-card li{font-size:13px}
@@ -434,7 +434,6 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 .profile-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}.profile-form label{display:grid;gap:7px}.profile-form label>span{display:flex;align-items:center;gap:7px;color:#58668a;font-size:12px;font-weight:600}.profile-form label svg{width:17px}.profile-password-action{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:14px;border-radius:14px;background:#f5f6fb}.profile-password-action>svg{width:24px;color:#654ded}.profile-password-action strong,.profile-password-action small{display:block}.profile-password-action small{color:#7d8aa8;font-size:11px}.profile-password-action button{padding:7px 12px;border:1px solid #dddff0;border-radius:10px;color:#5944d8;background:#fff}
 .assistant-heading{align-items:center}.assistant-heading h1{margin:0}.assistant-heading>button{margin-left:auto}.thinking{display:flex;align-items:center;gap:8px}.thinking svg{width:17px;animation:spin 1s linear infinite}.chat-composer.listening{border-color:#f05c73;box-shadow:0 0 0 4px rgb(240 92 115 / 10%)}.chat-composer.listening button[aria-pressed=true]{color:#e94f68}.chat-composer button:disabled{opacity:.45}
 .assistant-model-status{display:flex;align-items:center;gap:7px;margin-top:8px;color:#5e6a83;font-size:12px;font-weight:600}.assistant-model-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#8c98ac}.assistant-model-status--ready .assistant-model-dot{background:#30b579}.assistant-model-status--unavailable .assistant-model-dot{background:#dc755c}.assistant-model-status button{border:0;padding:3px 6px;background:transparent;color:inherit;text-decoration:underline;cursor:pointer}html[data-theme=dark] .assistant-model-status{color:#b8c5d9}
-.billing-demo-notice{margin:0 0 16px;padding:12px 16px;border:1px solid #e9b75b;border-radius:14px;background:#fff8e9;color:#694c19;font-size:13px;font-weight:650;line-height:1.5}html[data-theme=dark] .billing-demo-notice{border-color:#785e31;background:#322c22;color:#f5d9a8}
 
 /* Help, settings, feedback and 404 */
 .help-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.7fr);gap:20px}.help-faq{padding:22px}.help-faq>h2,.settings-card>h2{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:18px}.help-faq>h2 svg,.settings-card>h2 svg{width:21px;color:#6048e7}.help-faq article{border-top:1px solid #e9ecf4}.help-faq article>button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px;border:0;color:#3d4a6e;background:transparent;text-align:left;font-weight:600}.help-faq article>button svg{width:18px;transition:.3s}.help-faq article>button svg.rotate{transform:rotate(180deg)}.help-faq article>p{margin:0;padding:0 4px 16px;color:#667394;font-size:13px;line-height:1.6}.help-actions{display:grid;gap:12px}.help-actions article{padding:18px}.help-actions article>svg{width:25px;color:#5a43e8}.help-actions h3{margin:8px 0 3px;font-size:15px}.help-actions p{margin:0 0 12px;color:#7481a1;font-size:12px}.help-actions button{padding:8px 12px;border:1px solid #e0e3ef;border-radius:10px;color:#563fda;background:#fff;font-weight:600}.help-actions .urgent>svg{color:#ed596d}
@@ -625,11 +624,6 @@ html[data-theme=dark] .chat-composer textarea{color:#e5e9f8}
 .assistant-offline strong,.assistant-offline small{display:block}
 .assistant-offline small{color:#8a7550;font-size:12px}
 .assistant-offline button{flex:0 0 auto;margin-left:auto;padding:8px 14px;border:1px solid #e6cf9f;border-radius:10px;color:#8a6420;background:#fff;font-weight:700}
-
-.assistant-browser-model{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 16px;padding:15px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink)}
-.assistant-browser-model strong{display:flex;align-items:center;gap:8px;font-size:14px}.assistant-browser-dot{width:8px;height:8px;border-radius:50%;background:#8c98ac}.assistant-browser-model--ready .assistant-browser-dot{background:#30b579}.assistant-browser-model--loading .assistant-browser-dot,.assistant-browser-model--update .assistant-browser-dot{background:#e5a93c}.assistant-browser-model--error .assistant-browser-dot{background:#dc755c}.assistant-browser-model p{margin:4px 0;color:var(--muted);font-size:12px;line-height:1.5}.assistant-browser-model small{display:block;color:var(--muted);font-size:11px}.assistant-browser-model progress{display:block;width:min(100%,300px);height:7px;margin-top:8px;accent-color:#5e46e7}
-.assistant-browser-actions{display:flex;align-items:center;gap:12px;flex:none}.assistant-browser-actions label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}.assistant-browser-actions button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}.assistant-browser-actions button:disabled{opacity:.55;cursor:default}.assistant-browser-source{margin:10px 0 0;color:var(--muted);font-size:11px;font-weight:700}
-@media(max-width:760px){.assistant-browser-model{align-items:stretch;flex-direction:column}.assistant-browser-actions{flex-wrap:wrap}}
 
 /* Deliberately quiet. The claim is strong enough that shouting it reads as insecurity —
    and it must never appear on an answer that consulted nothing. */
@@ -1478,7 +1472,7 @@ html[data-theme=dark] .shock-card.shock-offline h3{color:#c3cdea}
 
 /* The page subtitles are `!important` in light mode, so the override has to be too. */
 html[data-theme=dark] :where(.welcome-customer,.settings-description,.help-description,
-  .plans-description,.profile-description,.billing-description){color:#a693ff!important}
+  .plans-description,.profile-description,.billing-description,.solar-description){color:#a693ff!important}
 html[data-theme=dark] .welcome-customer strong{color:#aab5d2}
 
 /* Chart furniture: axis labels and the answer-chart bars sit on the dark card now. */
@@ -1503,7 +1497,10 @@ html[data-theme=dark] .invoice-table>div>strong{color:#eef1ff}
 
 /* Two that fail in LIGHT mode, found by the same sweep and fixed here rather than left
    because the audit happened to be about dark. Neither is a dark-theme problem. */
-.faq-group h3{color:#c24a00}          /* was #fe6601 — 2.95:1 on white */
+/* FAQ group labels are back to the bright #fe6601 of the Billing page's "Payment:" label,
+   on purpose, for the visual match. Known trade-off: 2.95:1 on white, below the 4.5:1 that
+   #c24a00 met; to be raised with the team. */
+.faq-group h3{color:#fe6601}
 .verification-row time{color:#6d7899} /* was #9aa5c2 — 2.46:1 on white */
 html[data-theme=dark] .faq-group h3{color:#ffa766}
 html[data-theme=dark] .verification-row time{color:#9aa5c2}
@@ -1973,7 +1970,7 @@ html:not([data-theme=dark]) .settings-list .theme-options button.active:focus-vi
    three settings it governs (Alert messages, Never alert me under, Quiet hours) are
    titled in the brand blue. The channels (Email, Text message, A call from Sparky) belong
    to Alert messages, so they sit indented beneath it (its title starts at 38px; they start
-   24px further in), each switch right after its name. "Interest in offline Sparky" is
+   24px further in), each switch right after its name. "Answers without a connection" is
    not an alert setting and sits apart, below the Save button. */
 .bill-shock-title{align-items:center}
 .bill-shock-title>input{margin-left:auto}
@@ -2006,7 +2003,7 @@ html:not([data-theme=dark]) .threshold-actions .primary-action:disabled{box-shad
    a section (Alert messages, Never alert me under, Quiet hours). */
 .settings-section-title h2{font-size:21px;font-weight:600}
 .settings-section-title p{font-size:14px}
-/* Bill reminders and Interest in offline Sparky stand on their own: neither is part of
+/* Bill reminders and Answers without a connection stand on their own: neither is part of
    the bill-shock settings above them. Each is drawn like a section heading (its own icon,
    a section-sized title, the switch at the right edge), and the title keeps its colour on
    hover instead of turning blue. */
@@ -2087,12 +2084,13 @@ html[data-theme=dark] .settings-list .settings-link{border-top-color:#303953}
 
 /* Settings: the titles of the settings inside a section (Alert messages, Never alert me under,
    Quiet hours, Smart devices on your network, Privacy and data, Password and security) in the
-   Help FAQ labels' orange, instead of purple. It is the deep #c24a00, about 4.9:1 on white, so
-   it passes WCAG AA; the brighter #fe6601 is about 3:1 and does not. On dark it lightens to
-   the #ffa766 the FAQ labels use there. Delete this block to go back to purple. */
+   bright orange of the Help FAQ group labels, instead of purple. Trade-off: #fe6601 on white
+   is about 3:1, under the 4.5:1 WCAG AA asks of text this size (the deep #c24a00 would pass).
+   On dark it lightens to the #ffa766 the FAQ labels use there. Delete this block to go back
+   to purple. */
 .threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
 .settings-list .device-scan>h2,
-.settings-list .settings-link strong{color:#c24a00}
+.settings-list .settings-link strong{color:#fe6601}
 html[data-theme=dark] .threshold-editor .setting-row:not(.offline-answers)>span:first-child>strong,
 html[data-theme=dark] .settings-list .device-scan>h2,
 html[data-theme=dark] .settings-list .settings-link strong{color:#ffa766}
@@ -2113,7 +2111,7 @@ html[data-theme=dark] .settings-list .settings-link strong{color:#ffa766}
 .privacy-info>svg{box-sizing:border-box;flex:0 0 auto;width:80px;height:80px;padding:20px;overflow:visible;border-radius:50%;color:var(--purple);background:#f6f7fd}
 .terms-content.privacy-info>p{max-width:40ch;margin:20px 0 0;padding:0;border:0;color:var(--ink);font-size:16px;font-weight:500;line-height:1.55;text-align:center}
 .privacy-rights{align-self:center;max-width:100%;margin-top:22px}
-.terms-content .privacy-rights h3{margin:0 0 6px;color:#c24a00;font-size:15px;font-weight:700}
+.terms-content .privacy-rights h3{margin:0 0 6px;color:#fe6601;font-size:15px;font-weight:700}
 .terms-content .privacy-rights li{display:flex;align-items:flex-start;gap:10px;margin:10px 0 0;padding:0;color:#536184;font-size:14px;line-height:1.5}
 .terms-content .privacy-rights li::before{content:none}
 .privacy-rights li>svg{flex:0 0 18px;width:18px;height:18px;margin-top:1px;color:var(--purple)}
@@ -2127,3 +2125,398 @@ html[data-theme=dark] .privacy-info>svg{background:#241f4d}
 html[data-theme=dark] .terms-content.privacy-info>p{color:#eef1ff}
 html[data-theme=dark] .terms-content .privacy-rights h3{color:#ffa766}
 html[data-theme=dark] .terms-content .privacy-rights li{color:#c3cdea}
+
+/* Sparky AI: the conversation and the composer sit in one card, so the page frames its
+   content like the others do. The card takes the height the page leaves under the heading,
+   and the thread scrolls inside it. In light mode it wears the Dashboard energy scene's box:
+   the same pale lavender sky deepening towards the bottom, the same soft purple glow, radius
+   and shadow. All-white read as empty. The composer and the prompt buttons stay white, so
+   they stand out on the lavender, as the scene's white corner icons do. */
+.assistant-panel{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 24px 16px;overflow:hidden}
+html:not([data-theme=dark]) .assistant-panel{
+  border-color:var(--glass-line,#edf0f8);
+  border-radius:22px;
+  background:
+    radial-gradient(ellipse 48% 54% at 52% 66%,rgb(178 165 239 / 20%),transparent 76%),
+    linear-gradient(180deg,#f9f8ff 0%,#eeedfb 46%,#d9ddf1 100%);
+  box-shadow:0 18px 52px rgb(86 73 155 / 12%);
+}
+.assistant-page .assistant-panel .composer-area{background:transparent}
+@media(max-width:760px){.assistant-panel{padding:4px 12px 12px}}
+/* Sparky AI: the starter questions and the composer are boxes, not pills. On this site a
+   pill means a button, so a full-width pill read as one big button. They take the rounded
+   rectangle of the site's other inner boxes instead. The send button stays round: it is a
+   button. */
+.assistant-start .prompt-grid>button,
+.assistant-panel .chat-composer{border-radius:14px}
+/* Sparky AI: a smaller send button. At 44px it filled nearly the whole height of the
+   composer and outweighed the text; 36px sits inside it with room around it, and is still
+   comfortably above the 24px minimum target size. The arrow shrinks with it. */
+.assistant-panel .chat-composer .send-button{width:36px;height:36px;min-width:36px;min-height:36px;flex:0 0 36px}
+.assistant-panel .chat-composer .send-button svg{width:17px;height:17px}
+/* Sparky AI start screen, a size down and higher up. The orb is drawn at 140px (was 168,
+   set on the component) and the question at 24px (was 28), with a little less space under
+   the orb. The block is still centred by its auto margins; the extra bottom padding on the
+   conversation shifts that centre up so the questions clear the composer. It moves the
+   block within the scroll container rather than out of it, so a short window can still
+   scroll to the top of the orb (see the note on `.assistant-start` above). */
+.assistant-panel .assistant-orb{margin-bottom:20px}
+.assistant-panel .assistant-start h2{font-size:24px}
+.assistant-panel .assistant-conversation:has(>.assistant-start){padding-bottom:clamp(32px,9vh,96px)}
+@media(max-width:760px){.assistant-panel .assistant-start h2{font-size:21px}}
+/* Sparky AI: the column is a little narrower, 760px (was 860), so the questions, the
+   conversation and the composer share one width and do not stretch across the card. */
+.assistant-panel .assistant-start,
+.assistant-panel .chat-thread{max-width:760px}
+.assistant-panel .composer-area{width:min(760px,100%)}
+/* Sparky AI: the model status sits to the right of the "AI Assistant" title instead of on
+   a line of its own, so the chat card gains that line's height. Plain text, no box: it is
+   a note about the page, not a control. If the title and the status do not fit on one
+   line, the status wraps under the title. The optional description, when shown, still
+   takes a line of its own. */
+.assistant-heading>div:first-child{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.assistant-heading>div:first-child>p{flex-basis:100%}
+.assistant-heading .assistant-model-status{margin-top:0}
+/* Sparky AI start screen: the orb is drawn at 132px (was 168, set on the component). The
+   question boxes keep their size and spacing. The bottom padding that used to lift the
+   block is small again: the spacers below now decide where it sits. */
+.assistant-panel .assistant-conversation:has(>.assistant-start){padding-bottom:clamp(12px,3vh,32px)}
+/* Sparky AI start screen, placed higher in the card. The spare height is split one part
+   above the block to six parts below, so the block sits near the top rather than in the
+   middle. Two empty flex spacers do the splitting instead of the block's auto margins; on a
+   window too short to have spare height they shrink to nothing, and the block is top-aligned
+   and scrollable as before. */
+.assistant-panel .assistant-conversation:has(>.assistant-start)::before{content:"";flex:1 1 0}
+.assistant-panel .assistant-conversation:has(>.assistant-start)::after{content:"";flex:6 1 0}
+.assistant-panel .assistant-start{margin:0 auto}
+
+/* Sparky AI conversation, laid out like the phone app: Sparky's avatar to the left of each
+   answer, the customer's photo to the right of their messages, both sitting on the bottom
+   edge of the bubble. The bubbles take the phone's shape too, with the corner by the
+   avatar squared off. Answers get their own padding; they had none, so the text ran into
+   the edge of the white bubble. */
+.assistant-panel .message-row{align-items:flex-end;gap:10px}
+.message-avatar{flex:0 0 44px;width:44px;height:44px;display:grid;place-items:center}
+/* Sparky's core fills about two thirds of its box, the rest being halo, so it is drawn at
+   64px to match the 44px photo and overflows its 44px slot evenly on every side. */
+.message-avatar .sparky-presence{margin:-10px}
+.message-avatar.user-avatar{box-sizing:border-box;border:2px solid #fff;border-radius:50%;object-fit:cover;box-shadow:0 4px 12px rgb(45 62 123 / 14%)}
+html[data-theme=dark] .message-avatar.user-avatar{border-color:#2a3150}
+.assistant-panel .message-row.user .edit-chat-button{order:-1;align-self:center}
+.assistant-panel .assistant-bubble{padding:14px 18px;border-radius:18px 18px 18px 6px}
+.assistant-panel .user-bubble{border-radius:18px 18px 6px 18px}
+/* Once a conversation starts, the thread and the composer widen to 1040px (the start
+   screen stays at 760px), so the answers use the card instead of a strip down its middle.
+   A bubble can take the row less the avatar, up to 860px, so long answers stay readable. */
+.assistant-panel .chat-thread{max-width:1040px}
+.assistant-panel .assistant-conversation:has(>.chat-thread)+.composer-area{width:min(1040px,100%)}
+.assistant-panel .message-row .bubble{max-width:min(calc(100% - 54px),860px)}
+/* Sparky AI attachment menu: "Take a photo" only where a camera can be opened from the page,
+   which means a touch screen. A desktop browser ignores `capture`, so there the option would
+   open the same picker as "Upload a photo". */
+@media (hover:hover) and (pointer:fine){.attachment-menu>.attach-camera{display:none}}
+/* Sparky AI: the customer's bubble runs deep to light from left to right (the site's violet
+   #4A25FF into the lighter #765FFF), the reverse of the site's buttons. */
+.assistant-panel .user-bubble{background:linear-gradient(135deg,var(--purple),var(--purple2))}
+/* The Sparky AI terms dialog, laid out like the Privacy information dialog: Sparky smiling at
+   the top, the four points as a list, each with its icon in a soft violet square and a short
+   bold heading over its paragraph, and "Got it" centred at the bottom in the same pill,
+   white with a violet ring at rest and filled on hover. */
+.sparky-terms{display:flex;flex-direction:column;align-items:center;padding:var(--space-2) 0 4px}
+.sparky-terms ul{align-self:stretch;display:grid;gap:18px;margin:18px 0 0;padding:0;list-style:none}
+.sparky-terms li{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:start;gap:14px}
+.sparky-terms li>svg{box-sizing:border-box;width:36px;height:36px;padding:8px;border-radius:10px;color:var(--purple);background:#f3f1ff}
+.sparky-terms strong{display:block;margin-bottom:3px;color:var(--ink);font-size:15px;font-weight:700}
+.sparky-terms p{margin:0;color:#536184;font-size:14px;line-height:1.55}
+.app-modal:has(.sparky-terms)>footer{justify-content:center}
+.app-modal:has(.sparky-terms)>footer .primary-action{min-width:140px;min-height:46px;padding:10px 28px;border-radius:999px;font-size:15px;font-weight:700}
+html:not([data-theme=dark]) .app-modal:has(.sparky-terms)>footer .primary-action{border:1.5px solid var(--purple);color:var(--purple);background:#fff;box-shadow:none;outline:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) .app-modal:has(.sparky-terms)>footer .primary-action:hover,
+html:not([data-theme=dark]) .app-modal:has(.sparky-terms)>footer .primary-action:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}
+html:not([data-theme=dark]) .app-modal:has(.sparky-terms)>footer .primary-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+html[data-theme=dark] .sparky-terms li>svg{background:#241f4d}
+html[data-theme=dark] .sparky-terms strong{color:#eef1ff}
+html[data-theme=dark] .sparky-terms p{color:#c3cdea}
+/* Sparky AI: the new-chat button in the card's top-right corner. A 40px circle drawn as a
+   light grey ring and a grey compose icon, turning violet with a small lift on hover. It
+   has a faint white fill so it stays clean when the conversation scrolls under it, and the
+   thread keeps 56px clear on each side so the button never covers a message at rest. It
+   also carries the old `new-chat-action` class, which the e2e page object finds it by;
+   the sizing that class brings (52px tall, padded) is reset here. */
+.assistant-panel{position:relative}
+.new-session-button{position:absolute;z-index:3;top:16px;right:16px;display:grid;place-items:center;width:40px;height:40px;min-height:0;margin:0;padding:0;border:1.5px solid #d6dbe8;border-radius:50%;color:#7e8baa;background:rgb(255 255 255 / 60%);cursor:pointer;transition:color .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.new-session-button svg{width:18px;height:18px}
+.new-session-button:hover{color:#4318ff;border-color:#4318ff;box-shadow:0 6px 16px rgb(67 24 255 / 14%);transform:translateY(-1px)}
+.new-session-button:focus-visible{color:#4318ff;border-color:#4318ff;outline:1.5px solid #4318ff;outline-offset:2px}
+html[data-theme=dark] .new-session-button{border-color:#3a4466;color:#c3cdea;background:rgb(255 255 255 / 6%)}
+html[data-theme=dark] .new-session-button:hover{color:#b9a8ff;border-color:#8b74ff}
+.assistant-panel .chat-thread{max-width:min(1040px,calc(100% - 112px))}
+.assistant-panel .assistant-conversation:has(>.chat-thread)+.composer-area{width:min(1040px,calc(100% - 112px))}
+@media(max-width:760px){
+  .new-session-button{top:10px;right:10px;width:36px;height:36px}
+  .assistant-panel .chat-thread{max-width:100%;padding-top:44px}
+  .assistant-panel .assistant-conversation:has(>.chat-thread)+.composer-area{width:100%}
+}
+/* Sparky AI page, held still. The page keeps its size, which leaves the footer line just
+   below the window, and on a desktop the window does not scroll while this page is open, so
+   the heading and the card stay put however long the conversation gets; the footer is
+   simply out of view here. The conversation keeps its scrolling to itself, so reaching its
+   end never hands the scroll on, and it scrolls without a visible bar. */
+@media (min-width:761px){
+  .app-main:has(.assistant-page){overflow:hidden}
+}
+.assistant-panel .assistant-conversation{overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.assistant-panel .assistant-conversation::-webkit-scrollbar{width:0;height:0;display:none}
+/* Sparky AI conversation: messages fade out at the top and bottom edges of the scrolling
+   area instead of being cut off in a hard line, 24px at the top and 32px above the
+   composer. A mask rather than a painted overlay, so it fades to whatever is behind (the
+   card's gradient, or the dark card). The extra bottom padding lets the last message rest
+   fully above the fade once the thread is scrolled to the end. */
+.assistant-panel .assistant-conversation:has(>.chat-thread){
+  padding-bottom:36px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 24px,#000 calc(100% - 32px),transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 24px,#000 calc(100% - 32px),transparent 100%);
+}
+/* Sparky AI, once a conversation is under way: a tighter footer, so the composer sits lower
+   and the answers get the height (about 10px above the "Sparky can make mistakes" line and
+   about 17px from it to the card's edge). The start screen, with its three questions and plenty of
+   room, keeps the original, roomier footer. Most of the old gap was the two links: they are
+   buttons, and the site-wide 44px minimum for buttons made the line 44px tall. Links inside
+   a sentence do not need it (the target-size rule exempts inline links). */
+.assistant-panel:has(>.assistant-conversation>.chat-thread){padding-bottom:12px}
+.assistant-panel .assistant-conversation:has(>.chat-thread)+.composer-area .chat-footer{padding:10px 4px 4px;line-height:1.3}
+.assistant-panel .assistant-conversation:has(>.chat-thread)+.composer-area .chat-footer button{min-height:0;padding:0}
+/* Toasts line up with the page's content instead of the window's corner: their right edge on
+   the right edge of the page's cards (the content area's own right padding, at each width)
+   and their bottom edge 22px up, where the Sparky AI card ends. On a phone they already span
+   the content width, 16px in from each side. */
+@media (min-width:901px){.toast-stack{right:clamp(var(--space-2),4vw,56px);bottom:22px}}
+@media (min-width:681px) and (max-width:900px){.toast-stack{right:var(--space-3);bottom:22px}}
+/* Sparky AI attachment menu: placed against the whole composer rather than the paperclip
+   inside it, so its left edge lines up with the composer's and it sits 8px above it instead
+   of overlapping its top edge. On a phone it keeps its own full-width placement. */
+@media (min-width:761px){
+  .assistant-panel .attachment-control{position:static}
+  /* -1px and +9px make up for the composer's 1px border, which absolute offsets start inside. */
+  .assistant-panel .attachment-menu{left:-1px;bottom:calc(100% + 9px)}
+}
+
+/* Plans: "Ask Sparky to recommend a plan" rests light, like the Help page's contact buttons
+   and the search bar beside it: white with a 1.5px light grey edge, grey-blue text and icon,
+   and the search bar's soft shadow. On hover the edge, text and icon turn violet, with a
+   soft violet glow and a 1px lift. The edge stays 1.5px, so the button never changes size,
+   and the generic gradient button's inset hover outline is dropped; keyboard focus gets a
+   ring outside. Dark mode keeps its current button. */
+html:not([data-theme=dark]) .compare-action{border:1.5px solid #e6e9f5;color:#5b6a8f;background:#fff;box-shadow:0 6px 16px rgb(45 62 123 / 8%);outline:none}
+html:not([data-theme=dark]) .compare-action:hover,
+html:not([data-theme=dark]) .compare-action:focus-visible{border-color:#4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .compare-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+/* Plans' "Ask Sparky" button: the icon and the text in one grey (the search box's text
+   grey), the icon at the size of the top bar's bell and moon, and the text semibold, a step
+   lighter than the button's bold. Hover still turns the whole button violet. */
+html:not([data-theme=dark]) .compare-action{color:#68779f;font-weight:600}
+.compare-action svg{flex:0 0 21px;width:21px;height:21px}
+/* The top search box: its "Search" placeholder in the light grey of the bell and moon beside
+   it, at medium weight, a touch heavier than the old regular. What is typed keeps the
+   darker grey, so a query stays easy to read. */
+.search-box input{font-weight:500}
+html:not([data-theme=dark]) .search-box input::placeholder{color:#9eadd4;opacity:1}
+/* Its magnifier in the Ask Sparky button's grey, a step lighter than the navy it had. */
+html:not([data-theme=dark]) .search-box>svg{color:#68779f}
+
+/* Plans, pricing cards. Colour follows the choice, never the pointer. The chosen style's
+   "Selected" button is white with a violet ring, violet text and check and a soft violet
+   shadow, and stays exactly that on hover (clicking it changes nothing, so the cursor is the
+   arrow). The other styles' "Choose …" buttons are quiet, a light grey edge and grey text
+   like the site's other secondary buttons, and on hover only lift a little, with a faint
+   shadow to show it. Only a click changes colour: the clicked card's button and rates panel
+   turn blue together and the previous card's go grey. The edge is 1.5px in every state, and
+   the old inset hover outline is dropped; keyboard focus gets a violet ring outside. Dark
+   mode keeps its current buttons. */
+html:not([data-theme=dark]) .pricing-card-selected .pricing-choose,
+html:not([data-theme=dark]) .pricing-card-selected .pricing-choose:hover,
+html:not([data-theme=dark]) .pricing-card-selected .pricing-choose:focus-visible{border:1.5px solid #4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 18%);transform:none;outline:none;cursor:default}
+html:not([data-theme=dark]) .pricing-card:not(.pricing-card-selected) .pricing-choose{border:1.5px solid #e6e9f5;color:#68779f;background:#fff;box-shadow:none;outline:none}
+html:not([data-theme=dark]) .pricing-card:not(.pricing-card-selected) .pricing-choose:hover,
+html:not([data-theme=dark]) .pricing-card:not(.pricing-card-selected) .pricing-choose:focus-visible{border-color:#e6e9f5;color:#68779f;background:#fff;box-shadow:0 6px 14px rgb(45 62 123 / 10%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .pricing-card .pricing-choose:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+/* Plans, pricing cards: the rates panel says which style is chosen, like the buttons under
+   it. The chosen style's panel is a very light blue; the others are a very light, neutral
+   grey. Picking another style moves the blue with the violet "Selected" button. */
+.pricing-rates{background:#f5f6f8}
+.pricing-card-selected .pricing-rates{background:#eef0ff}
+html[data-theme=dark] .pricing-rates{background:#141a30}
+html[data-theme=dark] .pricing-card-selected .pricing-rates{background:#1e1f4c}
+
+/* Plans summary bar: "Compare all rates" and "Terms & Conditions" underline on hover only. */
+.plan-summary-links button{text-decoration:none}
+.plan-summary-links button:hover,.plan-summary-links button:focus-visible{text-decoration:underline;text-underline-offset:3px}
+/* The two links were 44px-tall buttons (the global button minimum) with the text in the
+   middle, so the block's visible bottom sat well above its box and the block looked pushed
+   to the top of the card. Sized to their text, the button and links centre in the card. */
+@media(min-width:1181px){
+  /* Box-centred it still read as high: the button's outline is heavier than the small links
+     under it. The top margin (halved by the centring) lowers it by 6px. */
+  .plan-summary-actions{gap:14px;margin-top:12px}
+  .plan-summary-links button{min-height:0;padding:2px 0}
+}
+
+/* Compare all rates dialog. The tables lose their heavy violet header bar: each sits in a
+   rounded, hairline-edged box with a light grey header row, and the section titles take the
+   bright orange of the site's other in-card titles. The style and term picked on the page
+   stand out: the style's column in violet with a check in its header, the term's row tinted
+   the light blue of the chosen rates panel. The prototype note gets an info icon. */
+.plan-rate-tables h3{color:#fe6601;font-size:15px;font-weight:700}
+.plan-rate-tables .plan-rate-table{border:1px solid #e8ebf3;border-radius:14px}
+.plan-rate-tables .plan-rate-table>div{padding-top:9px;padding-bottom:9px}
+.plan-rate-tables .plan-rate-table>div:first-child{border-radius:0;background:#f5f6f8}
+.plan-rate-tables .plan-rate-table>div:first-child>span{color:var(--ink);font-weight:700}
+.plan-rate-table span.is-picked{color:#4318ff;font-weight:700}
+.plan-rate-table span svg{display:inline-block;width:14px;height:14px;margin-right:5px;vertical-align:-2px;stroke-width:3}
+.plan-rate-table>div.is-picked,.plan-rate-table>div.is-picked:hover{background:#eef0ff}
+.plan-rate-table>div.is-picked>span:first-child{color:#4318ff}
+.plan-rate-tables .prototype-note{display:flex;align-items:flex-start;gap:8px;margin:16px 0 0;padding:12px 14px;border-radius:12px;color:#68779f;background:#f5f6f8;font-size:12px;line-height:1.5}
+.plan-rate-tables .prototype-note svg{flex:0 0 15px;width:15px;height:15px;margin-top:1px;color:#9eadd4}
+html[data-theme=dark] .plan-rate-tables h3{color:#ffa766}
+html[data-theme=dark] .plan-rate-tables .plan-rate-table{border-color:#303953}
+html[data-theme=dark] .plan-rate-tables .plan-rate-table>div:first-child{background:#141a30}
+html[data-theme=dark] .plan-rate-tables .plan-rate-table>div:first-child>span{color:#eef1ff}
+html[data-theme=dark] .plan-rate-table span.is-picked,html[data-theme=dark] .plan-rate-table>div.is-picked>span:first-child{color:#b9a8ff}
+html[data-theme=dark] .plan-rate-table>div.is-picked,html[data-theme=dark] .plan-rate-table>div.is-picked:hover{background:#1e1f4c}
+
+/* Terms & Conditions dialog. The plan it covers is a tag at the top rather than a title too
+   long for one line. The three groups of terms are soft grey panels, each headed by its icon
+   in a white rounded square, with small violet dots for the points. */
+.plan-terms{display:grid;gap:12px}
+.plan-terms-tag{justify-self:start;padding:5px 12px;border-radius:8px;color:#4318ff;background:#eef0ff;font-size:12.5px;font-weight:700}
+.plan-terms-lede{margin:0;color:#536184;font-size:14px;line-height:1.6}
+.plan-terms section{padding:14px 20px;border-radius:14px;background:#f5f6f8}
+.plan-terms h3{display:flex;align-items:center;gap:10px;margin:0 0 10px;color:var(--ink);font-size:15px;font-weight:700}
+.plan-terms h3 svg{box-sizing:border-box;flex:0 0 30px;width:30px;height:30px;padding:6px;border-radius:9px;color:var(--purple);background:#fff}
+.plan-terms ul{display:grid;gap:6px;margin:0;padding:0 0 0 40px;list-style:none}
+.plan-terms li{position:relative;padding-left:14px;color:#536184;font-size:13.5px;line-height:1.55}
+.plan-terms li::before{content:"";position:absolute;top:.62em;left:0;width:5px;height:5px;border-radius:50%;background:#a99bff}
+html[data-theme=dark] .plan-terms-tag{color:#c8bdff;background:#241f4d}
+html[data-theme=dark] .plan-terms-lede,html[data-theme=dark] .plan-terms li{color:#c3cdea}
+html[data-theme=dark] .plan-terms section{background:rgb(255 255 255 / 4%)}
+html[data-theme=dark] .plan-terms h3{color:#eef1ff}
+html[data-theme=dark] .plan-terms h3 svg{background:#241f4d}
+@media(max-width:600px){.plan-terms ul{padding-left:0}}
+
+/* Both Plans dialogs: Done centred, in the confirmation buttons' pill, resting white with a
+   violet ring and filling with the gradient on hover. */
+/* Both plan dialogs show everything at once instead of scrolling: the rows and panels above
+   are sized to fit, and the dialog may grow a little taller than the shared 760px cap. On a
+   window too short for that, the content still scrolls rather than being cut off. The Plans
+   page behind (.app-main, the page's scroller) is held still while either is open; the
+   wheel over the dialog used to scroll it. */
+:is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms)){max-height:min(92vh,800px)}
+:is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>.app-modal-content{overscroll-behavior:contain}
+.app-main:has(.modal-backdrop :is(.plan-rate-tables,.plan-terms)){overflow:hidden}
+:is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer{justify-content:center}
+:is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer .primary-action{min-width:140px;min-height:46px;padding:10px 28px;border-radius:999px;font-size:15px;font-weight:700}
+html:not([data-theme=dark]) :is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer .primary-action{border:1.5px solid var(--purple);color:var(--purple);background:#fff;box-shadow:none;outline:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) :is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer .primary-action:hover,
+html:not([data-theme=dark]) :is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer .primary-action:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px)}
+html:not([data-theme=dark]) :is(.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms))>footer .primary-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+
+/* Plans: step 1 and step 2 in one panel. The two steps were separate cards with a gap
+   between them, which split one task in two; now one card holds both, and the steps drop
+   their own card surface. */
+.plan-builder{margin-top:var(--space-3)}
+.plan-builder>.plan-step{margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+/* Step 1's bottom padding already separates the two; step 2 adds only a little more.
+   Choosing a pricing style scrolls step 2 to the top; the margin keeps it below the
+   sticky top bar. */
+.plan-builder>.plan-step+.plan-step{padding-top:var(--space-2);scroll-margin-top:96px}
+html:not([data-theme=dark]) .plan-builder{background:var(--glass-panel-strong)}
+html[data-theme=dark] .plan-builder{background:#1a2039;border-color:#303953}
+
+/* Plans: the "Your plan" bar and the solar card under it. On a wide screen the two share
+   one set of columns (each is a subgrid of .plan-closing), so they are the same height and
+   the solar button takes the same column, width and edges as "You're on this plan". */
+.plan-closing{display:grid;gap:var(--space-3);margin:var(--space-3) 0}
+.plan-closing>.plan-summary,.plan-closing>.solar-entry{margin:0}
+@media(min-width:1181px){
+  /* The bar's own columns were 1fr 2.1fr inside its padding; shared, the padding comes out
+     of the outer columns, so 1.1fr 2fr keeps its columns at about their old widths. */
+  .plan-closing{container-type:inline-size;grid-template-columns:minmax(180px,1.1fr) minmax(0,2fr) minmax(200px,auto);grid-auto-rows:1fr}
+  .plan-closing>.plan-summary,.plan-closing>.solar-entry{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
+  /* The same padding and column gap as the bar above, or the shared columns shift. */
+  .solar-entry.plan-solar{align-items:center;gap:var(--space-3);padding:var(--space-3) clamp(var(--space-3),2.2vw,var(--space-4))}
+  .solar-entry.plan-solar>.plan-solar-cta{grid-column:3}
+  /* The text block spans the first two columns, so its right edge is the gap before the
+     button. It fills the card's height, and the sun hangs off its right edge from the
+     card's top to its bottom, behind the text, with the text kept clear of it. */
+  .solar-entry.plan-solar>div{grid-column:1/3;align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding-right:364px}
+  .solar-entry.plan-solar .plan-solar-sun{display:block;z-index:-1;top:calc(-1 * var(--space-3));right:0;width:340px;height:calc(100% + 2 * var(--space-3))}
+}
+/* Too narrow for the sun beside the text: drop it and give the text the room. */
+@container (max-width:1040px){
+  .solar-entry.plan-solar .plan-solar-sun{display:none}
+  .solar-entry.plan-solar>div{padding-right:0}
+}
+
+/* The solar card: a warm gold-to-amber gradient that answers the violet bar above it, with
+   a line-drawn sun as its background pattern. The title is the page subtitle's orange; the
+   button is the summary button's shape, outlined in that orange on the card's own colour. */
+.solar-entry.plan-solar{position:relative;overflow:hidden;border:0;background:linear-gradient(110deg,#fff8ec 0%,#ffeacc 48%,#ffd6a0 100%);box-shadow:inset 0 0 0 1px #ffe2bd,0 18px 40px rgb(254 128 20 / 14%)}
+.solar-entry.plan-solar>:not(.plan-solar-sun){position:relative;z-index:1}
+.solar-entry.plan-solar h2{margin:0 0 6px;color:var(--kea-orange-ink);font-size:clamp(18px,1.5vw,21px);font-weight:750;letter-spacing:-.02em}
+.solar-entry.plan-solar p{color:#7a5a3c;font-size:14px}
+.plan-solar-sun{display:none;position:absolute;max-width:none;stroke:#fe6601;pointer-events:none}
+.plan-solar-cta{min-height:46px;padding:11px 22px;border:1.5px solid var(--kea-orange-ink);border-radius:14px;color:var(--kea-orange-ink);background:transparent;font-size:14px;font-weight:800;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.plan-solar-cta:hover,.plan-solar-cta:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,#ff8a2a,#e85d04);background-origin:border-box;box-shadow:0 9px 20px rgb(232 93 4 / 24%);transform:translateY(-1px);outline:none}
+.plan-solar-cta:focus-visible{outline:1.5px solid var(--kea-orange-ink);outline-offset:2px}
+html[data-theme=dark] .solar-entry.plan-solar{background:linear-gradient(110deg,#1a2039 0%,#2b2236 50%,#4a2c17 100%);box-shadow:inset 0 0 0 1px #4a3526}
+html[data-theme=dark] .solar-entry.plan-solar h2{color:#ffad73}
+html[data-theme=dark] .solar-entry.plan-solar p{color:#e9caa9}
+html[data-theme=dark] .plan-solar-cta{border-color:#ffad73;color:#ffad73}
+html[data-theme=dark] .plan-solar-cta:hover,html[data-theme=dark] .plan-solar-cta:focus-visible{color:#fff;border-color:transparent}
+html[data-theme=dark] .plan-solar-sun{stroke:#ffa766}
+html[data-theme=dark] .plan-solar-sun circle[fill]{fill-opacity:.06}
+
+/* Plans, trial: the "Your plan" bar in the solar card's light style instead of the deep
+   violet gradient, so the two read as a pair: a pale lavender-to-lilac gradient where the
+   solar card runs cream to apricot, the plan name in violet where the solar title is
+   orange, and an outlined violet button in the solar button's place. Light theme only;
+   remove this block to go back to the deep violet bar. */
+html:not([data-theme=dark]) .plan-summary{color:var(--ink);background:linear-gradient(110deg,#f8f6ff 0%,#eeeaff 48%,#dcd4ff 100%);box-shadow:inset 0 0 0 1px #e6e0ff,0 18px 40px rgb(74 37 255 / 12%)}
+html:not([data-theme=dark]) .plan-summary-main span{color:#7b6fd6}
+html:not([data-theme=dark]) .plan-summary-main strong{color:#4318ff}
+html:not([data-theme=dark]) .plan-summary-main small{color:#68779f}
+html:not([data-theme=dark]) .plan-summary-stats dt{color:#7d86a8}
+html:not([data-theme=dark]) .plan-summary-stats dd{color:var(--ink)}
+html:not([data-theme=dark]) .plan-summary-cta{border-color:#4318ff;color:#4318ff;background:transparent;box-shadow:none;transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+html:not([data-theme=dark]) .plan-summary-cta:hover:not(:disabled),
+html:not([data-theme=dark]) .plan-summary-cta:focus-visible:not(:disabled){color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .plan-summary-cta:focus-visible:not(:disabled){outline:1.5px solid #4318ff;outline-offset:2px}
+html:not([data-theme=dark]) .plan-summary-cta:disabled{border-color:#c3b8ff;color:#7b6fd6;background:transparent;cursor:default}
+/* The two links in the "Your plan" eyebrow's softer violet, lighter than the plan name. */
+html:not([data-theme=dark]) .plan-summary-links button,
+html:not([data-theme=dark]) .plan-summary-links button:hover{color:#7b6fd6}
+
+/* Sparky: the solar result a chat is about (opened from Explore solar savings), as a
+   message from Sparky: the avatar and the ordinary white answer bubble, with the title in
+   the solar orange behind a small sun. In the thread it sits above the question it opened
+   with; on the start screen, above the start block. */
+.solar-advisor h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;color:#fe6601;font-size:16px;font-weight:750;letter-spacing:-.01em}
+.solar-advisor h2 svg{flex:0 0 21px;width:21px;height:21px;color:#fe6601}
+.solar-advisor p{margin:0}
+.solar-advisor p+p{margin-top:4px}
+.solar-advisor a{color:#fe6601;font-weight:600;text-decoration:none}
+.solar-advisor a:hover,.solar-advisor a:focus-visible{text-decoration:underline;text-underline-offset:3px}
+.solar-advisor-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:12px}
+.solar-advisor-leave{min-height:0;padding:2px 0;border:0;color:#68779f;background:transparent;font-size:14px;font-weight:600;cursor:pointer}
+.solar-advisor-leave:hover,.solar-advisor-leave:focus-visible{text-decoration:underline;text-underline-offset:3px}
+.assistant-conversation>.solar-advisor-row{width:min(760px,100%);margin:0 auto var(--space-2)}
+html[data-theme=dark] .solar-advisor h2,html[data-theme=dark] .solar-advisor a{color:#ffad73}
+html[data-theme=dark] .solar-advisor-leave{color:#aab5d2}
+
+/* Sparky AI: no copyright line under the page, in any state. On a wide screen the page is
+   locked to the window; the line sat just below it, so the start screen never showed it,
+   but once a chat started the page could shift up and bring it (and a gap) into view.
+   Without it, and with the bottom padding trimmed so the page is exactly the window's
+   height, there is nothing left to shift. */
+.app-main:has(.assistant-page) .tariff-note{display:none}
+@media(min-width:761px){.app-main:has(.assistant-page) .page-content{padding-bottom:22px}}

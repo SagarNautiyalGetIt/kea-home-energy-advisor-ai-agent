@@ -1,14 +1,15 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { solarPrompt, type SolarContext } from '../lib/solar'
-import { AlertTriangle, ArrowUp, Camera, FileText, Image, MessageSquare, MessageSquarePlus, Mic, Paperclip, Pencil, Search, ShieldCheck, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertTriangle, ArrowUp, Camera, FileText, House, Image, LifeBuoy, MessageSquare, Mic, Paperclip, Pencil, ScanSearch, Search, ShieldCheck, SquarePen, Sun, X } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import AnswerChart from '../components/AnswerChart'
 import AnswerText from '../components/AnswerText'
 import Modal from '../components/Modal'
 import {
   analyseBill,
   getHealth,
-  getHouseholds,
+  getHousehold,
   streamChat,
   toolLabel,
   type HouseholdSummary,
@@ -19,10 +20,9 @@ import { fromDoneEvent } from '../lib/answerLog'
 import { loadSession } from '../lib/session'
 import { clearThread, loadThread, saveThread } from '../lib/thread'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
-import { SparkySparks } from '../components/sparky'
-import { BROWSER_MODEL } from '../lib/browser-sparky'
-import { canAnswerInBrowser } from '../lib/browser-sparky-policy'
-import { useBrowserSparky } from '../lib/use-browser-sparky'
+import SparkyPresence, { type SparkyPresenceMode } from '../components/SparkyPresence'
+import type { ToastMessage } from '../components/ToastStack'
+import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 
 /**
  * The assistant.
@@ -77,8 +77,14 @@ type Message = {
   attachment?: { name: string; kind: 'image' | 'pdf'; status: 'reading' | 'ready' | 'failed' }
   /** The service could not answer — never a fabricated stand-in. See `onError`. */
   error?: string
-  /** General guidance generated in this browser, without household tools or sources. */
-  browserLocal?: boolean
+  /**
+   * A solar calculation brought over from Explore solar savings, shown as Sparky's message
+   * about it. Kept in the thread (and so saved with it) rather than only in the page's
+   * navigation state: that state is gone when the customer comes back to Sparky from
+   * another page, which took the message with it. It is also what keeps the chat about
+   * this result until a New chat.
+   */
+  solar?: SolarContext
 }
 
 const SHOW_ASSISTANT_DESCRIPTION = false
@@ -98,26 +104,51 @@ const SHOW_ASSISTANT_DESCRIPTION = false
  * reachable by typing, and `get_hourly_profile` now returns real data for the mart
  * accounts rather than refusing for everyone.
  */
+// "Was that just the cold snap?" is hidden from the start screen rather than deleted: three
+// starters are enough there. Typing it still works. Set this to true to bring the chip back.
+const SHOW_COLD_SNAP_PROMPT = false
+
+// The "If you need a person…" box above the composer, shown after an answer that suggests
+// a handoff, is hidden rather than deleted: the footer's "Help & Support" link stays.
+// Set this to true to bring it back.
+const SHOW_ESCALATION_PROMPT = false
+
 const PROMPTS = [
   'Why is my power bill so high?',
   'Which day was my highest usage?',
-  'Was that just the cold snap?',
+  ...(SHOW_COLD_SNAP_PROMPT ? ['Was that just the cold snap?'] : []),
   'Could another plan save me money?',
 ]
 
 const GREETING = 'Hello! I’m Sparky. Ask me about your bill, usage, or energy plan.'
 
-export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>void; onToast:(message:string,tone?:'success'|'info'|'warning')=>void }) {
+// Opened from Explore solar savings ("Ask Sparky about these results"), the customer has
+// already said what they want, so the chat goes straight into it and asks this for them.
+// Their bubble shows the short label, the words of the card's old "Explain" button; the
+// model gets the full instruction.
+const SOLAR_EXPLAIN_QUESTION = 'Explain these solar results and their limitations without calculating new figures.'
+const SOLAR_EXPLAIN_LABEL = 'Explain my solar results'
+
+// "Leave solar discussion" in the solar message is hidden rather than deleted. Set this to
+// true to bring it back.
+const SHOW_SOLAR_LEAVE = false
+
+export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>void; onToast:(message:string,tone?:'success'|'info'|'warning',icon?:ToastMessage['icon'])=>void }) {
   const routeLocation = useLocation()
   const navigateSolar = useNavigate()
+  // A result handed over by Explore solar savings. Used once, on arrival: it becomes a
+  // message in the thread and the navigation state is cleared (see the effect after `ask`).
   const incomingSolar = (routeLocation.state as { solarContext?: SolarContext } | null)?.solarContext
-  const solarContext = incomingSolar?.customerId === loadSession()?.customerId ? incomingSolar : undefined
+  const arrivingSolar = incomingSolar?.customerId === loadSession()?.customerId ? incomingSolar : undefined
   const [households, setHouseholds] = useState<HouseholdSummary[]>([])
   const [customerId, setCustomerId] = useState('')
   const [backendDown, setBackendDown] = useState(false)
-  const browserSparky = useBrowserSparky()
 
   const [messages, setMessages] = useState<Message[]>([{ id: 1, role: 'assistant', text: GREETING }])
+  // The solar result this chat is about: the latest one in the thread, or one arriving now.
+  // While there is one, every question is asked about it (see `ask`).
+  const threadSolar = [...messages].reverse().find((item) => item.solar)?.solar
+  const solarContext = threadSolar?.customerId === loadSession()?.customerId ? threadSolar : arrivingSolar
   const [started, setStarted] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -153,6 +184,9 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // every one of the six places that change busy/listening/speaking, and would be wrong
   // at whichever one someone forgot.
   const sparkState = listening ? 'listening' : speaking ? 'speaking' : busy ? 'thinking' : 'idle'
+  // The start screen's Sparky, in the phone app's modes: still when Sparky is unavailable,
+  // quick while it works, and at the resting pace otherwise.
+  const presenceMode: SparkyPresenceMode = modelStatus === 'unavailable' ? 'static' : sparkState === 'thinking' ? 'thinking' : sparkState === 'speaking' ? 'replying' : 'idle'
 
   const nextId = useRef(2)
   // `askAboutBill` runs long after its own render — an upload round trip — so reading
@@ -167,17 +201,27 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const abortRef = useRef<AbortController | null>(null)
   const fileInput = useRef<HTMLInputElement | null>(null)
   const photoInput = useRef<HTMLInputElement | null>(null)
+  const galleryInput = useRef<HTMLInputElement | null>(null)
+  // Where the New chat button's tooltip sits: by the pointer, or under the button when it
+  // has keyboard focus. The sidebar's collapsed-nav tooltip works the same way.
+  const [newChatTip, setNewChatTip] = useState<{ x: number; y: number } | null>(null)
   const voiceRef = useRef<VoiceClient | null>(null)
 
   useEffect(() => {
-    getHouseholds()
-      .then((hs) => {
-        setHouseholds(hs)
-        // The signed-in customer, not hs[0]. Falling through to the first household was
-        // why every one of the fourteen logins showed the same person's usage.
-        const mine = loadSession()?.customerId
-        const chosen = hs.find((h) => h.customer_id === mine) ?? hs[0]
-        if (chosen) setCustomerId(chosen.customer_id)
+    // The signed-in customer's own household, asked for by id, the same way the Dashboard
+    // does. This used to load the whole list and pick the customer out of it, so one bad
+    // row anywhere in the list (an account with no usage makes GET /api/households a 500,
+    // see #178) took Sparky offline for every customer, including ones whose own data was
+    // fine. It never falls back to another household: no session, no data.
+    const mine = loadSession()?.customerId
+    if (!mine) {
+      setBackendDown(true)
+      return
+    }
+    getHousehold(mine)
+      .then((h) => {
+        setHouseholds([h])
+        setCustomerId(h.customer_id)
       })
       .catch(() => setBackendDown(true))
   }, [])
@@ -190,9 +234,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // which would otherwise overwrite a live thread with the last saved copy of itself
   // mid-answer.
   const restoredFor = useRef<string | null>(null)
+  // True once any saved thread is back, so a question asked on arrival joins it rather
+  // than being overwritten by it.
+  const [threadReady, setThreadReady] = useState(false)
   useEffect(() => {
     if (!customerId || restoredFor.current === customerId) return
     restoredFor.current = customerId
+    setThreadReady(true)
     const saved = loadThread<Message>(customerId)
     if (!saved) return
     setMessages(saved.messages)
@@ -374,8 +422,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
        */
       shown?: { text: string; attachment?: Message['attachment'] },
     ) => {
-      const useLocal = browserSparky.ready && !solarContext && !shown?.attachment && canAnswerInBrowser(question)
-      if (!customerId && !useLocal) {
+      if (!customerId) {
         onToast('Still connecting to your account — try again in a moment', 'warning')
         return
       }
@@ -407,18 +454,6 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
       const patch = (fn: (m: Message) => Message) =>
         setMessages((current) => current.map((m) => (m.id === answerId ? fn(m) : m)))
-
-      if (useLocal) {
-        try {
-          const text = await browserSparky.answer(question)
-          if (!controller.signal.aborted) patch((m) => ({ ...m, text, browserLocal: true, streaming: false }))
-        } catch (error) {
-          if (!controller.signal.aborted) patch((m) => ({ ...m, error: error instanceof Error ? error.message : 'The browser model could not answer.', streaming: false }))
-        } finally {
-          if (!controller.signal.aborted) setBusy(false)
-        }
-        return
-      }
 
       try {
         await streamChat(
@@ -481,8 +516,23 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         if (!controller.signal.aborted) setBusy(false)
       }
     },
-    [browserSparky, customerId, onToast, solarContext],
+    [customerId, onToast, solarContext],
   )
+
+  // Arriving from Explore solar savings: once the account and any saved thread are ready,
+  // put the result in the thread as Sparky's message and ask about it. A thread that has
+  // not started yet loses its greeting, which the solar message replaces as Sparky's
+  // opening line; a conversation already under way keeps everything and continues below.
+  // The navigation state is cleared first, so a refresh does not ask again.
+  const solarAsked = useRef(false)
+  useEffect(() => {
+    if (!arrivingSolar || !threadReady || solarAsked.current) return
+    solarAsked.current = true
+    navigateSolar('/assistant', { replace: true, state: null })
+    const history = started ? messagesRef.current : []
+    const solarMessage: Message = { id: nextId.current++, role: 'assistant', text: '', solar: arrivingSolar }
+    void ask(SOLAR_EXPLAIN_QUESTION, [...history, solarMessage], { text: SOLAR_EXPLAIN_LABEL })
+  }, [arrivingSolar, threadReady, started, navigateSolar, ask])
 
   /**
    * Push-to-talk. One button, two states, and the socket is opened lazily on first use
@@ -593,7 +643,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     setEditingId(null)
     setBusy(false)
     setEscalating(false)
-    onToast('New chat started', 'info')
+    // The New chat button's own icon, so the toast reads as that button's confirmation.
+    onToast('New chat started', 'info', SquarePen)
   }
 
   const saveEdit = (id: number) => {
@@ -606,8 +657,31 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     void ask(value, upto)
   }
 
+  // The empty answer that opens a stream is left out until it has something in it: the
+  // "reading your account" row stands in for it, so Sparky does not appear twice while it
+  // works.
+  const shownMessages = messages.filter((item) => !(item.role === 'assistant' && item.streaming && !item.text && !item.activity?.length && !item.error))
+  // A solar result as a message from Sparky: its avatar and a white answer bubble. In the
+  // thread it is the message the solar discussion opens with. On the start screen (arrived
+  // with a result, but it could not be asked about yet) it carries the button that asks.
+  const solarMessage = (solar: SolarContext, withAsk = false) => (
+    <div className="message-row assistant solar-advisor-row">
+      <span className="message-avatar"><SparkyPresence size={64} mode="happy"/></span>
+      <section className="bubble assistant-bubble long solar-advisor" aria-label="Your solar calculation">
+        <h2><Sun aria-hidden="true"/>Your solar calculation</h2>
+        <p>Based on assumed solar self-use. {solar.result.display.netBenefit} annual net savings after maintenance and replacement allowance · {solar.result.display.payback} simple payback.</p>
+        <p>Kea can explain this scenario. For numerical what-if questions, <Link to="/solar">adjust the calculator and recalculate</Link>.</p>
+        {(withAsk || SHOW_SOLAR_LEAVE) && (
+          <div className="solar-advisor-actions">
+            {withAsk && <button className="primary-action" disabled={busy || !customerId} onClick={() => void ask(SOLAR_EXPLAIN_QUESTION, [{ id: nextId.current++, role: 'assistant', text: '', solar }], { text: SOLAR_EXPLAIN_LABEL })}>Explain my solar results</button>}
+            {SHOW_SOLAR_LEAVE && <button type="button" className="solar-advisor-leave" onClick={() => { navigateSolar('/assistant', { replace: true, state: null }); newChat() }}>Leave solar discussion</button>}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+
   return <div className="assistant-page">
-    {solarContext && <section className="card solar-advisor"><h2>Your solar calculation</h2><p>Based on assumed solar self-use. {solarContext.result.display.netBenefit} annual net savings after maintenance and replacement allowance · {solarContext.result.display.payback} simple payback.</p><p>Kea can explain this scenario. For numerical what-if questions, <Link to="/solar">adjust the calculator and recalculate</Link>.</p><button className="primary-action" disabled={busy || !customerId} onClick={() => void ask('Explain these solar results and their limitations without calculating new figures.', messagesRef.current)}>Explain my solar results</button><button className="solar-text-button" onClick={() => navigateSolar('/assistant', { replace: true, state: null })}>Leave solar discussion</button></section>}
 
     <div className="page-heading assistant-heading">
       <div>
@@ -628,45 +702,52 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             </select>
           </label>
         )}
-        {/* KEA-141 §7. Was rendered unconditionally, so it sat on the start screen
-            offering to leave a chat that had not begun — a control that does nothing is
-            worse than one that is absent, because people click it and learn the UI lies. */}
-        {started && (
-          <button className="new-chat-action" onClick={newChat}><MessageSquarePlus/>New chat</button>
-        )}
       </div>
     </div>
-
-    <section className={`assistant-browser-model assistant-browser-model--${browserSparky.status.phase}`} aria-label="On-device Sparky">
-      <div>
-        <strong><span className="assistant-browser-dot" aria-hidden="true" />On-device Sparky</strong>
-        <p>Opt in to download a model from Hugging Face for general energy guidance. Your account, bill and plan questions still use Kea's connected service.</p>
-        <small role="status">{browserSparky.status.phase === 'ready' ? `${BROWSER_MODEL.label} · ${BROWSER_MODEL.revision.slice(0, 7)} · ready` : browserSparky.status.detail}</small>
-        {browserSparky.status.phase === 'loading' && browserSparky.status.progress !== undefined && <progress max="100" value={browserSparky.status.progress} aria-label="Model download progress" />}
-      </div>
-      <div className="assistant-browser-actions">
-        <label><input type="checkbox" checked={browserSparky.enabled} onChange={(event) => browserSparky.toggle(event.target.checked)} disabled={browserSparky.status.phase === 'unsupported' || browserSparky.status.phase === 'checking'} /> Enable</label>
-        {browserSparky.enabled && browserSparky.status.phase !== 'ready' && browserSparky.status.phase !== 'unsupported' && <button type="button" disabled={browserSparky.status.phase === 'loading'} onClick={() => void browserSparky.install()}>{browserSparky.status.phase === 'update' ? 'Update model' : 'Load model'} · {BROWSER_MODEL.download}</button>}
-        {browserSparky.enabled && browserSparky.status.phase === 'ready' && <button type="button" onClick={() => void browserSparky.remove()}>Remove model</button>}
-      </div>
-    </section>
 
     {backendDown && (
       <div className="assistant-offline" role="alert">
         <AlertTriangle/>
         <span>
           <strong>Sparky can’t reach your usage data right now.</strong>
-          <small>{browserSparky.ready ? 'General energy questions can still use the on-device model. Account answers need a connection.' : 'Account answers are unavailable rather than guessed. Please try again shortly.'}</small>
+          <small>Answers are unavailable rather than guessed. Please try again shortly.</small>
         </span>
         <button onClick={onEscalate}>See support options</button>
       </div>
     )}
 
+    {/* The conversation and the composer share one card, like the content of Settings and
+        Billing, so every page frames its content the same way. */}
+    <section className="card assistant-panel" aria-label="Chat with Sparky">
+    {/* New chat, as a round icon button in the card's top-right corner, with the phone
+        app's compose icon. It used to be a "New chat" pill under the page heading, where the
+        chat card now covers it. KEA-141 §7 still holds: it only appears once a chat has
+        started, because on the start screen there is nothing to leave. */}
+    {started && (
+      <button
+        type="button"
+        className="new-session-button new-chat-action"
+        aria-label="New chat"
+        onClick={() => { setNewChatTip(null); newChat() }}
+        onMouseMove={(event) => setNewChatTip({ x: Math.min(event.clientX + 12, window.innerWidth - 88), y: event.clientY + 18 })}
+        onMouseLeave={() => setNewChatTip(null)}
+        onFocus={(event) => { const box = event.currentTarget.getBoundingClientRect(); setNewChatTip({ x: Math.min(box.left, window.innerWidth - 88), y: box.bottom + 8 }) }}
+        onBlur={() => setNewChatTip(null)}
+      ><SquarePen aria-hidden="true"/></button>
+    )}
     <div className="assistant-conversation">
       {started ? (
         <div className="chat-thread" aria-live="polite">
-          {messages.map((item) => (
+          {shownMessages.map((item) => item.solar ? (
+            <Fragment key={item.id}>{solarMessage(item.solar)}</Fragment>
+          ) : (
             <div className={`message-row ${item.role}`} key={item.id}>
+              {/* As on the phone: Sparky beside each answer, moving while it writes and
+                  smiling once it has answered; the customer's photo beside their own
+                  messages. One photo for every account for now. */}
+              {item.role === 'assistant' && (
+                <span className="message-avatar"><SparkyPresence size={64} mode={item.streaming ? 'replying' : 'happy'}/></span>
+              )}
               <div className={`bubble ${item.role === 'assistant' ? 'assistant-bubble' : 'user-bubble'} ${item.text.length > 90 ? 'long' : ''}`}>
                 {/* The file, as a chip. Above the text so the attachment reads as the
                     subject of the sentence under it, and shown while the upload is
@@ -709,7 +790,6 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                         hand-written: the string is model output, and no HTML is built
                         from it. */}
                     <AnswerText text={item.text}/>
-                    {item.browserLocal && <p className="assistant-browser-source">On this browser · general guidance · no account data</p>}
 
                     {/* The figures the answer is about, drawn from the same lookup that
                         produced them. Under the prose rather than above it: the sentence
@@ -762,6 +842,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
               {item.role === 'user' && editingId !== item.id && !busy && (
                 <button className="edit-chat-button" aria-label="Edit message" onClick={() => { setEditingId(item.id); setEditText(item.text) }}><Pencil/></button>
               )}
+              {item.role === 'user' && <img className="message-avatar user-avatar" src={CUSTOMER_PROFILE_PHOTO} alt=""/>}
             </div>
           ))}
           {/* Only until the first lookup or the first word arrives. After that the
@@ -771,12 +852,17 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           {busy
             && messages[messages.length - 1]?.text === ''
             && !messages[messages.length - 1]?.activity?.length && (
-            <div className="bubble assistant-bubble thinking"><SparkySparks state="thinking" size={32}/>Sparky is reading your account…</div>
+            <div className="message-row assistant">
+              <span className="message-avatar"><SparkyPresence size={64} mode="thinking"/></span>
+              <div className="bubble assistant-bubble thinking">Sparky is reading your account…</div>
+            </div>
           )}
         </div>
       ) : (
+        <>
+        {arrivingSolar && solarMessage(arrivingSolar, true)}
         <div className="assistant-start">
-          <div className="assistant-orb"><SparkySparks state={sparkState} size={168} label={modelStatus === 'unavailable' ? 'Sparky is unavailable' : undefined}/></div>
+          <div className="assistant-orb"><SparkyPresence size={132} mode={presenceMode} label={modelStatus === 'unavailable' ? 'Sparky is unavailable' : undefined}/></div>
           <h2>How can I help you today?</h2>
           {SHOW_ASSISTANT_DESCRIPTION && <p>Get clear answers about bills, usage patterns, and plans.</p>}
           <div className="prompt-grid">
@@ -787,11 +873,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             ))}
           </div>
         </div>
+        </>
       )}
     </div>
 
     <div className="composer-area">
-      {escalating && (
+      {SHOW_ESCALATION_PROMPT && escalating && (
         <div className="escalation-prompt" role="status">
           If you need a person, use the verified support details on your electricity bill.
           This demo has not sent your chat to staff. <button onClick={onEscalate}>See support options</button>
@@ -805,21 +892,28 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           <button aria-label="Add attachment" aria-expanded={attachOpen} onClick={() => setAttachOpen((open) => !open)}>{attachOpen ? <X/> : <Paperclip/>}</button>
           {attachOpen && (
             <div className="attachment-menu">
-              <button onClick={() => fileInput.current?.click()}><FileText/><span><strong>Upload a bill</strong><small>PDF or photo, from any retailer</small></span></button>
-              <button onClick={() => photoInput.current?.click()}><Image/><span><strong>Upload photo</strong><small>A photo of your bill</small></span></button>
-              <button onClick={() => photoInput.current?.click()}><Camera/><span><strong>Take a photo</strong><small>Use your device camera</small></span></button>
+              {/* Three different ways in, one picker each. "Upload a bill" used to take a
+                  PDF or a photo, and "Upload photo" and "Take a photo" opened the same
+                  camera picker, so two of the three repeated each other and a phone could
+                  not upload a photo it already had. Take a photo shows on touch screens
+                  only: a desktop browser ignores `capture` and would just open the same
+                  picker as Upload a photo. */}
+              <button onClick={() => fileInput.current?.click()}><FileText/><span><strong>Upload a PDF</strong><small>Your bill as a PDF, from any retailer</small></span></button>
+              <button onClick={() => galleryInput.current?.click()}><Image/><span><strong>Upload a photo</strong><small>A photo or screenshot of your bill</small></span></button>
+              <button className="attach-camera" onClick={() => photoInput.current?.click()}><Camera/><span><strong>Take a photo</strong><small>Use your device camera</small></span></button>
             </div>
           )}
         </div>
-        <input ref={fileInput} type="file" className="sr-only" accept="application/pdf,image/*" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
+        <input ref={fileInput} type="file" className="sr-only" accept="application/pdf" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
+        <input ref={galleryInput} type="file" className="sr-only" accept="image/*" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
         <input ref={photoInput} type="file" className="sr-only" accept="image/*" capture="environment" onChange={(event) => { const f = event.target.files?.[0]; event.target.value = ''; if (f) void askAboutBill(f) }}/>
         <textarea
           rows={1}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
-          placeholder={backendDown && !browserSparky.ready ? 'Unavailable while Sparky is offline' : 'Message Sparky'}
-          disabled={backendDown && !browserSparky.ready}
+          placeholder={backendDown ? 'Unavailable while Sparky is offline' : 'Message Sparky'}
+          disabled={backendDown}
         />
         {/* Always rendered. Hiding it when the stack is missing meant the mic simply
             never appeared and looked unbuilt — and a control that vanishes is harder to
@@ -856,12 +950,22 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       {/* Announced, not hovered — see the mic button above. */}
       <p className="sr-only" role="status">{voiceReasonShown ? voiceHint : ''}</p>
       <div className="chat-footer">
-        Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Check Terms &amp; Conditions</button> · <button onClick={onEscalate}>See support options</button>
+        {/* Each link is named after where it goes: the "Sparky AI terms" dialog and the
+            "Help & Support" page. They read "Check Terms & Conditions" and "See support
+            options", which matched neither and mixed title case with sentence case. */}
+        Sparky can make mistakes. <button onClick={() => setTermsOpen(true)}>Sparky AI terms</button> · <button onClick={onEscalate}>Help &amp; Support</button>
       </div>
     </div>
+    </section>
+    {/* The sidebar's tooltip, as it is: a native `title` looked like the browser, not the
+        page. Portalled so the card's rounded, clipped corner cannot cut it off. */}
+    {started && newChatTip && createPortal(
+      <div className="nav-tooltip" role="tooltip" style={{ left: newChatTip.x, top: newChatTip.y }}>New chat</div>,
+      document.body,
+    )}
 
     {termsOpen && (
-      <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)}>
+      <Modal title="Sparky AI terms" onClose={() => setTermsOpen(false)} footer={<button className="primary-action" onClick={() => setTermsOpen(false)}>Got it</button>}>
         {/* Reworded twice. First when the assistant started reading the data itself —
             the original text promised every number was "checked against those
             calculations before you see it", which described a control that no longer
@@ -869,10 +973,18 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             what Sparky does and what it cannot do, and is careful not to promise an
             accuracy Kea would then have to make good on. The bill is the record; this
             is a tool for understanding it. */}
-        <p>Sparky reads your own meter readings and account records to answer your questions, and lists what it looked up each time so you can see where its figures came from.</p>
-        <p>Sparky can get things wrong. Costs and projections are estimates based on the information available at the time — your actual bill is what counts, and it may differ. Please don’t treat Sparky’s answers as financial advice or as a final word on your account.</p>
-        <p>Sparky can’t tell which individual appliance used power, because a meter reads the whole house. Where a rate isn’t published, dollar figures are illustrative and Sparky says so.</p>
-        <p>If something looks wrong, use the support page to find your provider’s verified contact details. This demo does not send your chat to a person.</p>
+        {/* Laid out like the Privacy information dialog: Sparky at the top, then one point
+            per paragraph, each with an icon and a few-word heading so the four can be
+            scanned, and a centred button to close it. The paragraphs are word for word. */}
+        <div className="sparky-terms">
+          <SparkyPresence size={88} mode="happy" label="Sparky"/>
+          <ul>
+            <li><ScanSearch aria-hidden="true"/><div><strong>What Sparky reads</strong><p>Sparky reads your own meter readings and account records to answer your questions, and lists what it looked up each time so you can see where its figures came from.</p></div></li>
+            <li><AlertTriangle aria-hidden="true"/><div><strong>It can be wrong</strong><p>Sparky can get things wrong. Costs and projections are estimates based on the information available at the time — your actual bill is what counts, and it may differ. Please don’t treat Sparky’s answers as financial advice or as a final word on your account.</p></div></li>
+            <li><House aria-hidden="true"/><div><strong>What it can’t see</strong><p>Sparky can’t tell which individual appliance used power, because a meter reads the whole house. Where a rate isn’t published, dollar figures are illustrative and Sparky says so.</p></div></li>
+            <li><LifeBuoy aria-hidden="true"/><div><strong>Getting help</strong><p>If something looks wrong, use the support page to find your provider’s verified contact details. This demo does not send your chat to a person.</p></div></li>
+          </ul>
+        </div>
       </Modal>
     )}
   </div>

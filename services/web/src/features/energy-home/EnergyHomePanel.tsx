@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import gsap from 'gsap'
-import { AlarmClock, BatteryCharging, Cloud, CloudRain, Compass, Gauge, Moon, Sun, UtilityPole } from 'lucide-react'
+import { AlarmClock, BatteryCharging, Cloud, CloudRain, Compass, Gauge, Moon, Sun } from 'lucide-react'
+import GridTowerIcon from '../../components/GridTowerIcon'
 import EnergyHouse, { type EnergyDevice } from './components/EnergyHouse'
 import SettingsDialog from './components/SettingsDialog'
 import WeatherSky from './components/WeatherSky'
@@ -185,7 +186,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockTriggered
       ? 'battery'
       : 'solar'
   const status = { grid: 'Grid assisting', battery: 'Battery assisting', solar: 'Self-powered now' }[statusSource]
-  const StatusIcon = { grid: UtilityPole, battery: BatteryCharging, solar: Sun }[statusSource]
+  const StatusIcon = { grid: GridTowerIcon, battery: BatteryCharging, solar: Sun }[statusSource]
   const summaryPopover = usePopover()
   const alertPopover = usePopover()
 
