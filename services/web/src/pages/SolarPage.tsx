@@ -9,6 +9,8 @@ import '../solar.css'
 
 const inputLabels: Record<string, string> = { panelKw: 'Panel capacity (kW DC)', installedCost: 'Installed price (NZD incl. GST)', annualDemand: 'Annual demand (kWh)', location: 'Reference location', generationOverride: 'Installer generation (kWh/year)', selfUse: 'Assumed solar self-use', importRate: 'Import before (NZD/kWh)', solarImportRate: 'Import after (NZD/kWh)', exportRate: 'Export (NZD/kWh)', baselineDaily: 'Daily charge before (NZD)', solarDaily: 'Daily charge after (NZD)', baselineCredit: 'Annual credit before (NZD)', solarCredit: 'Annual credit after (NZD)', operatingCost: 'Maintenance and replacement allowance (NZD/year)' }
 type Fields = Record<'kw' | 'cost' | 'demand' | 'generation' | 'importCents' | 'solarImportCents' | 'exportCents' | 'daily' | 'solarDaily' | 'credit' | 'solarCredit', string>
+/** Tama is a synthetic account (services/api/app/auth.py); this fills its annual demand when the API cannot supply one. */
+const TAMA_DEMAND = { customerId: 'DEMO-ACCT-223001', kwh: 4324.5 }
 export default function SolarPage() {
   const resultsRef = useRef<HTMLElement>(null)
   const navigate = useNavigate()
@@ -39,6 +41,11 @@ export default function SolarPage() {
       if (!active) return
       setProfileNote(`${profile.plan_name ? `Account plan: ${profile.plan_name}. ` : ''}${profile.address ? `Account location: ${profile.address}. Choose the matching reference city below.` : 'No account location is available; confirm a reference city.'}`)
     }).catch(() => { /* Demand can still load when profile details are unavailable. */ })
+    const fillTamaDemand = () => {
+      if (customerId !== TAMA_DEMAND.customerId) return
+      setAccountDemand(TAMA_DEMAND.kwh)
+      setFields(prev => ({ ...prev, demand: String(TAMA_DEMAND.kwh) }))
+    }
     void getAnnualDemand(customerId).then(summary => {
       if (!active) return
       if (summary.available && summary.annual_kwh !== null) {
@@ -50,9 +57,12 @@ export default function SolarPage() {
         setDemandOrigin(summary.note)
       } else {
         setAccountNote(summary.note)
+        fillTamaDemand()
       }
     }).catch(() => {
-      if (active) setAccountNote('Annual account demand could not be loaded. Enter a representative annual value.')
+      if (!active) return
+      setAccountNote('Annual account demand could not be loaded. Enter a representative annual value.')
+      fillTamaDemand()
     })
     return () => { active = false }
   }, [customerId])
