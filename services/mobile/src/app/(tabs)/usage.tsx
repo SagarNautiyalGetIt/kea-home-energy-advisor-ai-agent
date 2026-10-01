@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
@@ -161,6 +161,7 @@ export default function UsageScreen() {
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const initialDateCustomer = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -237,11 +238,11 @@ export default function UsageScreen() {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
         if (!controller.signal.aborted) {
           setData(result);
-          // Move a date outside the fixture range to available data. Weekly charts
-          // deliberately settle on the latest complete Monday-Sunday week, so their
-          // X axis is never cut short at the final reading (for example, Friday).
-          const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
-          if (!comparison && needsAvailableRange && result.availableTo) {
+          // Settle the initial default date once per account. Never replace a
+          // user's later selection just because some days or bands are missing.
+          const initialSelection = initialDateCustomer.current !== session?.customerId;
+          initialDateCustomer.current = session?.customerId ?? null;
+          if (initialSelection && !comparison && result.totalKwh === null && result.availableTo) {
             const latest = parseDate(result.availableTo);
             const fallbackDate = period === 'weekly'
               ? toDateValue(addDays(startOfWeek(latest), -1))
