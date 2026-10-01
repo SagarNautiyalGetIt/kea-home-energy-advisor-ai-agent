@@ -22,14 +22,14 @@ function RingSvg({ size, color }: { size: number; color: string }) {
 /* ------------------------------------------------------------------ */
 /*  Bolt: inner lightning (flips front -> back -> front, in place)     */
 /* ------------------------------------------------------------------ */
-function BoltSvg({ size }: { size: number }) {
+function BoltSvg({ size, color }: { size: number; color: string }) {
   return (
     <Svg height={size} viewBox="0 0 256 256" width={size}>
       <Defs>
         <LinearGradient gradientUnits="userSpaceOnUse" id="keaBoltAnim" x1="102" x2="158" y1="61" y2="197">
-          <Stop offset="0" stopColor="#FFFFFF" />
-          <Stop offset="0.54" stopColor="#E5E5EA" />
-          <Stop offset="1" stopColor="#AEAEB2" />
+          <Stop offset="0" stopColor={color} />
+          <Stop offset="0.54" stopColor={color} stopOpacity={0.9} />
+          <Stop offset="1" stopColor={color} stopOpacity={0.7} />
         </LinearGradient>
       </Defs>
       <Path
@@ -90,7 +90,7 @@ export function AnimatedLogo({
       <Animated.View
         style={[StyleSheet.absoluteFill, { transform: [{ perspective: 500 }, { rotateY: boltFlip }] }]}
       >
-        <BoltSvg size={size} />
+        <BoltSvg color={color} size={size} />
       </Animated.View>
     </Animated.View>
   );

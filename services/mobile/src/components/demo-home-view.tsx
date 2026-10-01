@@ -234,7 +234,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
 
   return <View style={[styles.container, { backgroundColor: colors.background }]}>
     <View style={styles.topBar}>
-      <View style={styles.logoContainer}><AnimatedLogo size={36} /><Text style={[styles.topTitle, { color: colors.text }]}>Kea Energy</Text></View>
+      <View style={styles.logoContainer}><AnimatedLogo color={colors.text} size={36} /><Text style={[styles.topTitle, { color: colors.text }]}>Kea Energy</Text></View>
       <View style={styles.topIcons}>
         <Pressable accessibilityLabel="Notifications" accessibilityRole="button" hitSlop={8} onPress={onOpenNotifications} style={styles.iconBtn}><Ionicons color={colors.text} name="notifications-outline" size={23} /></Pressable>
         <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color={colors.text} name="person-circle-outline" size={24} /></Pressable>
