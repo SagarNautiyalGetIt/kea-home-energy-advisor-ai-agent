@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import { Platform, TurboModuleRegistry } from 'react-native';
 import { canAnswerWithLocalModel, LOCAL_EVIDENCE_LIMIT } from './local-sparky-policy';
+import { singleFlight } from './single-flight';
 
 // Pin both the model revision and its actual file hash. A newer model is an
 // explicit update, never a silent change to a customer's offline assistant.
@@ -29,6 +30,7 @@ type NativeFiles = typeof import('react-native-file-access');
 let verifiedPath: string | null = null;
 let activeDownload: ReturnType<NativeFiles['FileSystem']['fetchManaged']> | null = null;
 let activeContext: import('llama.rn').LlamaContext | null = null;
+const modelInstall = singleFlight<PhoneModelStatus>('The phone model is already downloading.');
 
 export const isPhoneModelEnabled = async () => (await AsyncStorage.getItem(ENABLED_KEY)) === 'true';
 export const setPhoneModelEnabled = async (enabled: boolean) => {
@@ -90,7 +92,7 @@ export async function phoneModelStatus(): Promise<PhoneModelStatus> {
   }
 }
 
-export async function installPhoneModel(onProgress: (status: PhoneModelStatus) => void): Promise<PhoneModelStatus> {
+export const installPhoneModel = (onProgress: (status: PhoneModelStatus) => void): Promise<PhoneModelStatus> => modelInstall(async () => {
   const status = await phoneModelStatus();
   if (status.phase === 'installed') return status;
   if (status.phase !== 'available' && status.phase !== 'update') throw new Error(status.detail);
@@ -120,7 +122,7 @@ export async function installPhoneModel(onProgress: (status: PhoneModelStatus) =
     activeDownload = null;
     if (await files.FileSystem.exists(temporary)) await files.FileSystem.unlink(temporary);
   }
-}
+});
 
 export async function cancelPhoneModelDownload() {
   await activeDownload?.cancel();

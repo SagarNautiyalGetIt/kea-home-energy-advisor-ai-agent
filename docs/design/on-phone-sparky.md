@@ -12,7 +12,7 @@ The mobile client keeps the existing Kea API assistant as its connected path. A 
 | Revision | `b5f37287796e5be0ea3dab2e7430873fb3f73e49` |
 | SHA-256 | `da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4` |
 
-The model downloads only after a user enables on-phone Sparky and taps **Install model on Wi-Fi**. The download goes to a temporary file, then passes an exact-size and SHA-256 check before it is moved into the app's document directory. The app shows download, verification, installed, update, low-space, and unsupported states. A new pinned revision appears as an update rather than silently changing the model.
+The model downloads only after a user explicitly taps **Download model on Wi-Fi**; downloading is available before enabling on-phone answers. The separate **Use on-phone Sparky** switch controls whether the verified model answers general questions. The download goes to a temporary file, then passes an exact-size and SHA-256 check before it is moved into the app's document directory. The app shows download, verification, installed, update, low-space, and unsupported states. A new pinned revision appears as an update rather than silently changing the model.
 
 The current guard requires at least 3 GiB reported RAM, at least 1 GiB available storage, a native `RNLlama` module, and an arm64 Android CPU. These are conservative gates, not proof of acceptable speed or memory pressure. Android 32-bit builds are unsupported by this runtime. The default inference mode uses CPU; device profiling may justify a GPU tier later.
 
