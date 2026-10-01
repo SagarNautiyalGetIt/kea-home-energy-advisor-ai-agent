@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1.1,
   },
   suffix: {
-    fontSize: 9,
+    fontSize: 12,
     color: '#FFFFFF',
   },
   swipeHint: {

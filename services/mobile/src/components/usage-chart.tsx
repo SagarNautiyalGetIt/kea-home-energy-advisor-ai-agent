@@ -509,7 +509,7 @@ export function UsageChart({
             <G key={`label-${label}-${index}`}>
               <SvgText
                 fill={isSelected ? colors.text : colors.textMuted}
-                fontSize={isHourlyAxis ? 9.5 : 12}
+                fontSize={isHourlyAxis ? 11 : 12}
                 fontWeight="800"
                 textAnchor={textAnchor}
                 x={labelX}
@@ -532,7 +532,7 @@ export function UsageChart({
               {tertiaryLabels?.[index] ? (
                 <SvgText
                   fill={colors.textMuted}
-                  fontSize={10.5}
+                  fontSize={11}
                   fontWeight="700"
                   textAnchor={textAnchor}
                   x={x}
@@ -573,7 +573,7 @@ export function UsageChart({
         {[1, 0.66, 0.33, 0].map((ratio) => {
           const y = PAD_TOP + (1 - ratio) * (plotBottom - PAD_TOP);
           const axisValue = max * ratio;
-          return <G key={`right-axis-${ratio}`}><Line stroke="#456476" strokeOpacity={0.75} strokeWidth={1} x1={plotWidth + 2} x2={plotWidth + 6} y1={y} y2={y} /><SvgText fill={colors.textMuted} fontSize={9} fontWeight="700" textAnchor="end" x={chartWidth - 1} y={y + 3}>{isCost ? `$${axisValue.toFixed(1)}` : axisValue.toFixed(max <= 2 ? 1 : 0)}</SvgText></G>;
+          return <G key={`right-axis-${ratio}`}><Line stroke="#456476" strokeOpacity={0.75} strokeWidth={1} x1={plotWidth + 2} x2={plotWidth + 6} y1={y} y2={y} /><SvgText fill={colors.textMuted} fontSize={11} fontWeight="700" textAnchor="end" x={chartWidth - 1} y={y + 3}>{isCost ? `$${axisValue.toFixed(1)}` : axisValue.toFixed(max <= 2 ? 1 : 0)}</SvgText></G>;
         })}
       </Svg>
       <Pressable
