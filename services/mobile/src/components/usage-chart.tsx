@@ -388,7 +388,7 @@ export function UsageChart({
                     cy={point.y}
                     fill="#C7F071"
                     r={isSelected ? 3.5 : POINT_RADIUS}
-                    stroke="#FFFFFF"
+                    stroke={colors.background}
                     strokeWidth={1}
                   />
                 </G>
@@ -475,7 +475,7 @@ export function UsageChart({
               </SvgText>
               {previousMetric && activePreviousLabel ? (
                 <SvgText
-                  fill={colors.textMuted}
+                  fill="#C7D0D9"
                   fontSize={10}
                   fontWeight="700"
                   textAnchor="middle"

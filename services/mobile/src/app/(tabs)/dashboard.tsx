@@ -15,7 +15,7 @@ import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
 export default function DashboardScreen() {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
   const { height: screenHeight } = useWindowDimensions();
@@ -80,7 +80,7 @@ export default function DashboardScreen() {
       <Animated.View
         onLayout={(event) => setFixedContentHeight(event.nativeEvent.layout.height)}
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20, transform: [{ translateY: backgroundTranslateY }] }]}
+        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20, transform: [{ translateY: backgroundTranslateY }] }]}
       >
         <DemoHomeView customerId={session?.customerId ?? null}
           onOpenInfo={() => setWelcomeOpen(true)}
@@ -145,13 +145,13 @@ export default function DashboardScreen() {
       </Animated.View>
 
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.blurLayer, { opacity: listInForeground ? backgroundBlurOpacity : 0 }]}>
-        <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-        <View pointerEvents="none" style={styles.blurShade} />
+        <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
+        <View pointerEvents="none" style={[styles.blurShade, { backgroundColor: mode === 'dark' ? 'rgba(8,10,13,0.24)' : 'rgba(238,238,238,0.24)' }]} />
       </Animated.View>
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
         <Animated.ScrollView
-          contentContainerStyle={styles.homeListScrollContent}
+          contentContainerStyle={[styles.homeListScrollContent, { backgroundColor: colors.background }]}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             {

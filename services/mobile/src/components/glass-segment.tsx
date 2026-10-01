@@ -106,7 +106,7 @@ export function GlassSegmented<T extends string>({
     <View
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="radiogroup"
-      style={[styles.container, appearance === 'usage' && styles.usageContainer, { backgroundColor: appearance === 'usage' ? '#202722' : colors.input, borderColor: appearance === 'usage' ? '#29312D' : colors.border }]}
+      style={[styles.container, appearance === 'usage' && styles.usageContainer, { backgroundColor: colors.input, borderColor: colors.border }]}
     >
       <View style={styles.row}>
         {appearance === 'usage' ? null : <Animated.View pointerEvents="none" style={[styles.pill, pillStyle]}>
@@ -132,9 +132,9 @@ export function GlassSegmented<T extends string>({
                 void Haptics.selectionAsync();
                 onChange(option.value);
               }}
-              style={[styles.option, appearance === 'usage' && styles.usageOption, appearance === 'usage' && active && styles.usageActiveOption, { height }]}
+              style={[styles.option, appearance === 'usage' && styles.usageOption, appearance === 'usage' && active && styles.usageActiveOption, appearance === 'usage' && active && { backgroundColor: dark ? '#FFFFFF' : colors.surface }, { height }]}
             >
-              <Text style={[styles.label, { color: active ? appearance === 'usage' ? '#000000' : colors.text : colors.textMuted }]}>{option.label}</Text>
+              <Text style={[styles.label, { color: active && appearance === 'usage' && dark ? '#000000' : active ? colors.text : colors.textMuted }]}>{option.label}</Text>
             </Pressable>
           );
         })}

@@ -144,7 +144,7 @@ function energyCategoryPresentation(key: string) {
 }
 
 export default function UsageScreen() {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const { height: screenHeight } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
@@ -369,14 +369,14 @@ export default function UsageScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.screenRoot} onTouchStart={() => setChartActive(false)} scroll={false}>
+    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)} scroll={false}>
       <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
       <View
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
+        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20 }]}
       >
         <Animated.View style={styles.chartContainer}>
           <View style={styles.headerControls}>
@@ -387,7 +387,7 @@ export default function UsageScreen() {
                   onPress={refresh}
                   style={[styles.refresh, { backgroundColor: colors.input }]}
                 >
-                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons color="#FFFFFF" name="refresh" size={20} />}
+                  {loading ? <ActivityIndicator color={colors.text} /> : <Ionicons color={colors.text} name="refresh" size={20} />}
                 </Pressable>
               }
               subtitle="Track your usage"
@@ -407,12 +407,13 @@ export default function UsageScreen() {
                 onPress={compare ? openComparison : () => setDateOpen(true)}
                 style={({ pressed }) => [
                   styles.toolbarButton,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                   compare && styles.comparisonDateButton,
                   compare && period === 'weekly' && styles.weekComparisonDateButton,
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons color="#FFFFFF" name="calendar-outline" size={19} />
+                <Ionicons color={colors.text} name="calendar-outline" size={19} />
                 <Text numberOfLines={compare && period === 'weekly' ? 3 : 2} style={[styles.toolbarButtonText, { color: colors.text }]}>
                   {selectedPeriodLabel}
                 </Text>
@@ -423,6 +424,7 @@ export default function UsageScreen() {
                 style={[
                   styles.toolbarButton,
                   styles.compareButton,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
               >
                 <Pressable
@@ -430,12 +432,12 @@ export default function UsageScreen() {
                   onPress={openComparison}
                   style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
                 >
-                  <Ionicons color="#FFFFFF" name="git-compare-outline" size={19} />
-                  <Text style={[styles.toolbarButtonText, { color: '#FFFFFF' }]}>Compare</Text>
+                  <Ionicons color={colors.text} name="git-compare-outline" size={19} />
+                  <Text style={[styles.toolbarButtonText, { color: colors.text }]}>Compare</Text>
                 </Pressable>
                 {compare ? (
                   <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
-                    <Ionicons color="#FFFFFF" name="close" size={18} />
+                    <Ionicons color={colors.text} name="close" size={18} />
                   </Pressable>
                 ) : null}
               </View>
@@ -451,7 +453,7 @@ export default function UsageScreen() {
             <View style={styles.chartHeader}>
               <View>
                 <Text style={[styles.total, { color: colors.text }]}>
-                  {totalDisplay} <Text style={styles.suffix}>{suffix}</Text>
+                  {totalDisplay} <Text style={[styles.suffix, { color: colors.textMuted }]}>{suffix}</Text>
                 </Text>
               </View>
               <View style={styles.headerToggles}>
@@ -467,12 +469,12 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setChartType(item);
                       }}
-                      style={[styles.unitOption, chartType === item && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.unitOption, chartType === item && { backgroundColor: colors.surface }]}
                     >
                       {item === 'line' ? (
-                        <LineChartIcon color={chartType === item ? '#000000' : colors.textMuted} />
+                        <LineChartIcon color={chartType === item ? colors.text : colors.textMuted} />
                       ) : (
-                        <Ionicons color={chartType === item ? '#000000' : colors.textMuted} name="bar-chart-outline" size={16} />
+                        <Ionicons color={chartType === item ? colors.text : colors.textMuted} name="bar-chart-outline" size={16} />
                       )}
                     </Pressable>
                   ))}
@@ -486,9 +488,9 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setUnit(item);
                       }}
-                      style={[styles.unitOption, unit === item && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.unitOption, unit === item && { backgroundColor: colors.surface }]}
                     >
-                      <Text style={[styles.unitText, { color: unit === item ? '#000000' : colors.textMuted }]}>
+                      <Text style={[styles.unitText, { color: unit === item ? colors.text : colors.textMuted }]}>
                         {item === 'kwh' ? 'kWh' : '$'}
                       </Text>
                     </Pressable>
@@ -539,14 +541,14 @@ export default function UsageScreen() {
           )}
         </Animated.View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
-          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-          <View pointerEvents="none" style={styles.backdropBlurShade} />
+          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
+          <View pointerEvents="none" style={[styles.backdropBlurShade, { backgroundColor: mode === 'dark' ? 'rgba(0,0,0,0.48)' : 'rgba(238,238,238,0.48)' }]} />
         </Animated.View>
       </View>
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
         <Animated.ScrollView
-          contentContainerStyle={styles.listScrollContent}
+          contentContainerStyle={[styles.listScrollContent, { backgroundColor: colors.background }]}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             {
@@ -571,7 +573,7 @@ export default function UsageScreen() {
                   </View>
                   <View style={styles.breakdownCopy}>
                     <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
-                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown.period || 'Selected period'}</Text>
+                    <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{energyBreakdown.period || 'Selected period'}</Text>
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
@@ -582,7 +584,7 @@ export default function UsageScreen() {
                 </View>
                 <View style={styles.breakdownCopy}>
                   <Text style={[styles.breakdownTitle, { color: colors.text }]}>{periodTitle}</Text>
-                  <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>Current selected period</Text>
+                  <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Current selected period</Text>
                 </View>
                 <View style={styles.breakdownValueWrap}>
                   <Text style={[styles.breakdownValue, { color: colors.text }]}>
@@ -611,7 +613,7 @@ export default function UsageScreen() {
                     </View>
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
-                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>
+                      <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>
                         {band.window ?? 'No time window supplied'}
                       </Text>
                     </View>
@@ -619,7 +621,7 @@ export default function UsageScreen() {
                       <Text style={[styles.breakdownValue, { color: colors.text }]}>
                         {formatAmount(band.kwh, band.costNzd)}
                       </Text>
-                      <Text style={[styles.breakdownShare, { color: '#A1A1AA' }]}>{share}</Text>
+                      <Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{share}</Text>
                     </View>
                   </View>
                 );
