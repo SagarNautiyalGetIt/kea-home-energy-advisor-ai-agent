@@ -133,7 +133,9 @@ export function UsageChart({
   leadingDecorativeAnchor?: boolean;
   highlightedIndices?: readonly number[];
 }) {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
+  const chartColor = mode === 'dark' ? '#C7F071' : '#277442';
+  const comparisonColor = mode === 'dark' ? '#FBBF24' : '#946000';
   const { width: windowWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -177,10 +179,9 @@ export function UsageChart({
   const line = useMemo(() => pathFor(linePoints), [linePoints]);
   const compareLine = useMemo(() => pathFor(compareLinePoints), [compareLinePoints]);
   const baselineY = plotBottom;
-  const area = line && points.length
+  const area = line && points.length > 1
     ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${linePoints[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
     : '';
-  const onlyPoint = points.length === 1 ? points[0] : undefined;
   const hasCompare = comparePoints.length === values.length && comparePoints.length > 0;
   const slotWidth = points.length > 1 ? points[1]!.x - points[0]!.x : plotWidth;
   const singleBarWidth = Math.max(8, Math.min(30, slotWidth * 0.56));
@@ -265,9 +266,9 @@ export function UsageChart({
       <Svg height={HEIGHT} viewBox={`0 0 ${chartWidth} ${HEIGHT}`} width="100%">
         <Defs>
           <LinearGradient id="usageAreaShade" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0%" stopColor="#75914B" stopOpacity={0.58} />
-            <Stop offset="58%" stopColor="#C7F071" stopOpacity={0.30} />
-            <Stop offset="100%" stopColor="#C7F071" stopOpacity={0.04} />
+            <Stop offset="0%" stopColor={chartColor} stopOpacity={0.58} />
+            <Stop offset="58%" stopColor={chartColor} stopOpacity={0.30} />
+            <Stop offset="100%" stopColor={chartColor} stopOpacity={0.04} />
           </LinearGradient>
         </Defs>
 
@@ -289,7 +290,7 @@ export function UsageChart({
 
         {isBar ? (
           points.map((point, index) => {
-            const mainFill = '#C7F071';
+            const mainFill = chartColor;
             if (hasCompare) {
               const comparePoint = comparePoints[index];
               return (
@@ -297,7 +298,7 @@ export function UsageChart({
                   {comparePoint ? (
                     <Bar
                       baseline={plotBottom}
-                      fill="#FBBF24"
+                      fill={comparisonColor}
                       fillOpacity={0.85}
                       fullHeight={Math.max(0, plotBottom - comparePoint.y)}
                       progress={barProgress}
@@ -338,35 +339,25 @@ export function UsageChart({
                 animatedProps={compareAnimatedProps}
                 d={compareLine}
                 fill="none"
-                stroke="#FBBF24"
+                stroke={comparisonColor}
                 strokeLinecap="round"
                 strokeOpacity={0.9}
                 strokeWidth={2}
               />
             ) : null}
 
-            {onlyPoint ? (
-              <Line
-                stroke="#C7F071"
-                strokeLinecap="round"
-                strokeOpacity={0.86}
-                strokeWidth={3.3}
-                x1={horizontalPadding}
-                x2={plotWidth - horizontalPadding}
-                y1={onlyPoint.y}
-                y2={onlyPoint.y}
-              />
-            ) : (
+            {hasCompare && comparePoints.length === 1 ? <Circle cx={comparePoints[0]!.x} cy={comparePoints[0]!.y} fill={comparisonColor} r={4} /> : null}
+            {points.length > 1 ? (
               <AnimatedPath
                 animatedProps={lineAnimatedProps}
                 d={line}
                 fill="none"
-                stroke="#C7F071"
+                stroke={chartColor}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={3.3}
               />
-            )}
+            ) : null}
 
             {points.map((point, index) => {
               const isSelected = visibleActiveIndex === index;
@@ -378,7 +369,7 @@ export function UsageChart({
                       cy={point.y}
                       fill="rgba(199,240,113,0.2)"
                       r={ACTIVE_RING_RADIUS}
-                      stroke="#C7F071"
+                      stroke={chartColor}
                       strokeWidth={2}
                     />
                   ) : null}
@@ -386,9 +377,9 @@ export function UsageChart({
                     animatedProps={pointAnimatedProps}
                     cx={point.x}
                     cy={point.y}
-                    fill="#C7F071"
-                    r={isSelected ? 3.5 : POINT_RADIUS}
-                    stroke="#FFFFFF"
+                    fill={chartColor}
+                    r={points.length === 1 ? 5 : isSelected ? 3.5 : POINT_RADIUS}
+                    stroke={colors.background}
                     strokeWidth={1}
                   />
                 </G>
@@ -414,7 +405,7 @@ export function UsageChart({
             <G pointerEvents="none">
               {!isBar ? (
                 <Line
-                  stroke="#C7F071"
+                  stroke={chartColor}
                   strokeDasharray="4 5"
                   strokeOpacity={0.82}
                   strokeWidth={1.4}
@@ -475,7 +466,7 @@ export function UsageChart({
               </SvgText>
               {previousMetric && activePreviousLabel ? (
                 <SvgText
-                  fill={colors.textMuted}
+                  fill="#C7D0D9"
                   fontSize={10}
                   fontWeight="700"
                   textAnchor="middle"
@@ -495,7 +486,7 @@ export function UsageChart({
           const x = leadingDataInset + xForIndex(index, displayLabels.length, plotWidth - leadingDataInset, horizontalPadding);
           const isHourlyAxis = displayLabels.length >= 20;
           const labelX = isHourlyAxis && index === 3 ? x + 4 : x;
-          const textAnchor = isBar && !isHourlyAxis
+          const textAnchor = displayLabels.length === 1 || (isBar && !isHourlyAxis)
             ? 'middle'
             : index === 0
               ? 'start'
@@ -506,8 +497,8 @@ export function UsageChart({
           return (
             <G key={`label-${label}-${index}`}>
               <SvgText
-                fill={isSelected ? '#C7F071' : '#A1A1AA'}
-                fontSize={isHourlyAxis ? 9.5 : 12}
+                fill={isSelected ? colors.text : colors.textMuted}
+                fontSize={isHourlyAxis ? 11 : 12}
                 fontWeight="800"
                 textAnchor={textAnchor}
                 x={labelX}
@@ -517,7 +508,7 @@ export function UsageChart({
               </SvgText>
               {secondaryLabels?.[index] ? (
                 <SvgText
-                  fill={isSelected ? '#C7F071' : '#F2F2F7'}
+                  fill={colors.text}
                   fontSize={13}
                   fontWeight="900"
                   textAnchor={textAnchor}
@@ -529,8 +520,8 @@ export function UsageChart({
               ) : null}
               {tertiaryLabels?.[index] ? (
                 <SvgText
-                  fill="#A1A1AA"
-                  fontSize={10.5}
+                  fill={colors.textMuted}
+                  fontSize={11}
                   fontWeight="700"
                   textAnchor={textAnchor}
                   x={x}
@@ -555,7 +546,7 @@ export function UsageChart({
               <Line stroke="#5A5A5F" strokeOpacity={0.7} strokeWidth={1} x1={horizontalPadding} x2={Math.max(horizontalPadding, center - textGap)} y1={y - 5} y2={y - 5} />
               <Line stroke="#5A5A5F" strokeOpacity={0.7} strokeWidth={1} x1={Math.min(plotWidth - horizontalPadding, center + textGap)} x2={plotWidth - horizontalPadding} y1={y - 5} y2={y - 5} />
               <SvgText
-                fill="#A1A1AA"
+                fill={colors.textMuted}
                 fontSize={12}
                 fontWeight="900"
                 letterSpacing={2}
@@ -571,7 +562,7 @@ export function UsageChart({
         {[1, 0.66, 0.33, 0].map((ratio) => {
           const y = PAD_TOP + (1 - ratio) * (plotBottom - PAD_TOP);
           const axisValue = max * ratio;
-          return <G key={`right-axis-${ratio}`}><Line stroke="#456476" strokeOpacity={0.75} strokeWidth={1} x1={plotWidth + 2} x2={plotWidth + 6} y1={y} y2={y} /><SvgText fill="#A1A1AA" fontSize={9} fontWeight="700" textAnchor="end" x={chartWidth - 1} y={y + 3}>{isCost ? `$${axisValue.toFixed(1)}` : axisValue.toFixed(max <= 2 ? 1 : 0)}</SvgText></G>;
+          return <G key={`right-axis-${ratio}`}><Line stroke="#456476" strokeOpacity={0.75} strokeWidth={1} x1={plotWidth + 2} x2={plotWidth + 6} y1={y} y2={y} /><SvgText fill={colors.textMuted} fontSize={11} fontWeight="700" textAnchor="end" x={chartWidth - 1} y={y + 3}>{isCost ? `$${axisValue.toFixed(1)}` : axisValue.toFixed(max <= 2 ? 1 : 0)}</SvgText></G>;
         })}
       </Svg>
       <Pressable

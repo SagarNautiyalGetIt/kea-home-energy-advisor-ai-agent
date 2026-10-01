@@ -20,7 +20,7 @@ The current guard requires at least 3 GiB reported RAM, at least 1 GiB available
 
 Expo Go does not contain the C++ runtime. The app still opens there and explains that the Kea development build is required for on-phone inference. Build the project with Expo's native development-build workflow after installing dependencies. Native packages were added to the Expo config plugin list; generating and testing iOS requires macOS or an EAS build.
 
-`llama.rn` downloads its pinned Android and iOS native libraries during `npm ci` and checks each archive against its package SHA-256 manifest. If dependencies were installed with `--ignore-scripts`, run `node node_modules/llama.rn/install/download-native-artifacts.js` from `services/mobile` before building a native client. An APK can compile without these libraries yet fail when local inference starts, so inspect the package for `lib/arm64-v8a/librnllama.so` as part of Android verification.
+`llama.rn` normally downloads its pinned Android and iOS native libraries during `npm ci`, checking each archive against its package SHA-256 manifest. Some npm policies block dependency install scripts; `npm ci --ignore-scripts` skips them too. The Android phone build helper runs `node node_modules/llama.rn/install/download-native-artifacts.js` explicitly and checks its marker and arm64 library before Gradle starts. An APK can compile without these libraries yet fail when local inference starts, so it also inspects the package for `lib/arm64-v8a/librnllama.so`.
 
 On 30 September 2026, an Android debug APK built on Linux after the verified native-artifact download, and inspection confirmed the arm64 `librnllama` variants were packaged. This build used a local, ignored Gradle override to select installed NDK 28.2.13676358 because the Expo default NDK 27.1.12297006 was not available on that machine. It does not establish that the app launches or answers on a phone.
 
@@ -33,7 +33,7 @@ When the local model is enabled, installed, and the question is general energy e
 - [ ] Build and launch native development clients on physical iOS and Android devices.
 - [ ] Install and hash-verify the model over Wi-Fi, test cancellation/update/removal, and measure storage and memory on low and high capability devices.
 - [ ] Inspect response quality and content boundaries with a fixed question set; verify streaming and app background behavior.
-- [ ] Capture device screenshots, frame pacing, and a second teammate's machine run before merge.
+- [ ] Written iOS/Android and second-teammate-machine test confirmation before merge; screenshots/frame reports are optional diagnostics.
 - [ ] Add a verified household fact pack before claiming account-specific offline answers.
 
-The browser has a separate inference and caching boundary and is tracked independently from this mobile card.
+Teammates can use the [Android phone validation runbook](../../qa/android-phone.md) to build, install, and record the remaining Android evidence. The browser has a separate inference and caching boundary and is tracked independently from this mobile card.

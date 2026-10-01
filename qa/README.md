@@ -21,6 +21,7 @@ to AWS. `qa/` is that directory for testing.
 | Path | What goes in it |
 |---|---|
 | [`e2e/`](e2e/) | End-to-end functional tests. Playwright + TypeScript, driving a real browser against the real stack. Rules in [`e2e/CONVENTIONS.md`](e2e/CONVENTIONS.md) |
+| [`android-phone.md`](android-phone.md) | Physical Android development-build runbook for local Sparky, Home Visual Highlight, and frame evidence. |
 
 Each subdirectory owns its own dependency manifest and lockfile, the same rule
 `services/` follows — so an API-testing or performance suite added later brings its own

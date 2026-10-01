@@ -12,20 +12,22 @@ type Props = {
   billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
 };
 
-function BillingNavIcon({ color, size }: { color: string; size: number }) {
+function BillingNavIcon({ color, detailColor, size }: { color: string; detailColor: string; size: number }) {
   return (
     <Svg height={size} viewBox="0 0 24 24" width={size}>
       <Path d="M4.5 2.8h9.8l5.2 5v9.8c0 2.5-1.7 3.8-3.4 3.8H6.2c-2 0-3.4-1.4-3.4-3.4V4.8c0-1.1.6-2 1.7-2Z" fill={color} />
       <Path d="M14.3 2.8v4.1c0 .7.5 1.2 1.2 1.2h4" fill="none" stroke={color} strokeWidth="1.2" />
-      <Path d="M6 12h6M6 15h5.2M6 18h4" fill="none" stroke="#000000" strokeLinecap="round" strokeWidth="1.3" />
+      <Path d="M6 12h6M6 15h5.2M6 18h4" fill="none" stroke={detailColor} strokeLinecap="round" strokeWidth="1.3" />
       <Circle cx="16.6" cy="16.4" fill={color} r="4.8" stroke={color} strokeWidth="1.5" />
-      <Path d="M17.8 13.9c-.4-.4-.9-.6-1.5-.6-1 0-1.7.5-1.7 1.2 0 1.8 3.3.8 3.3 2.5 0 .7-.7 1.2-1.7 1.2-.7 0-1.3-.2-1.7-.7M16.3 12.6v6.9" fill="none" stroke="#000000" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.1" />
+      <Path d="M17.8 13.9c-.4-.4-.9-.6-1.5-.6-1 0-1.7.5-1.7 1.2 0 1.8 3.3.8 3.3 2.5 0 .7-.7 1.2-1.7 1.2-.7 0-1.3-.2-1.7-.7M16.3 12.6v6.9" fill="none" stroke={detailColor} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.1" />
     </Svg>
   );
 }
 
 export function BottomNavigation({ includeHome = true, listMode = false, billPrediction }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
+  const selectedColor = mode === 'dark' ? '#FFFFFF' : colors.text;
+  const idleColor = mode === 'dark' ? 'rgba(255,255,255,0.52)' : colors.textMuted;
   const pathname = usePathname();
   const allItems: readonly { label: string; detail: string; path: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; tint: string }[] = [
     { label: 'Home', detail: 'Return to your energy overview', path: '/dashboard', icon: 'home', onPress: () => router.push('/dashboard'), tint: colors.text },
@@ -39,17 +41,17 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
     ? [{ label: 'Bill prediction', detail: billPrediction.detail, path: '', icon: 'alert-circle-outline' as const, onPress: billPrediction.onPress, tint: colors.text }, ...navigationItems]
     : navigationItems;
 
-  return <View style={[styles.container, listMode && styles.listContainer, { borderColor: 'rgba(255,255,255,0.22)', paddingBottom: 0 }]}>
-    {!listMode ? <BlurView intensity={72} tint="dark" pointerEvents="none" style={styles.glassBackground} /> : null}
+  return <View style={[styles.container, listMode && styles.listContainer, { borderColor: colors.border, backgroundColor: listMode ? 'transparent' : colors.surface, paddingBottom: 0 }]}>
+    {!listMode ? <BlurView intensity={72} tint={mode} pointerEvents="none" style={styles.glassBackground} /> : null}
     {!listMode ? <View pointerEvents="none" style={styles.glassTint} /> : null}
     {items.map((item) => {
       const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
       const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
       return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
-      {item.label === 'Sparky' ? <SparkyPresence mode="static" size={28} /> : item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} name={item.icon} size={24} />}
-      {!listMode && pathname === item.path ? <View style={styles.selectedDot} /> : null}
-      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, warning && styles.warningLabel]}>{item.label}</Text><Text style={[styles.listDetail, warning && styles.warningDetail, normal && styles.normalDetail]}>{item.detail}</Text></View> : null}
-      {listMode ? <Ionicons color="rgba(255,255,255,0.68)" name="chevron-forward" size={21} /> : null}
+      {item.label === 'Sparky' ? <SparkyPresence mode="static" size={28} /> : item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
+      {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
+      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
+      {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}
     </Pressable>;
     })}
   </View>;

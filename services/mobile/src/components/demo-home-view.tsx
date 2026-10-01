@@ -9,6 +9,7 @@ import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from 
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useActiveAnimation } from '@/lib/use-active-animation';
+import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
 import { HIGHLIGHT_COLOR, VisualHighlight, type HighlightTarget } from './visual-highlight';
 
@@ -133,6 +134,7 @@ function reading(scene: HomeSceneData | null, live: LivePower, device: Device): 
 }
 
 export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOpenProfile, onProtectedHeaderHeightChange, sceneOpacity }: Props) {
+  const { colors, mode } = useAppTheme();
   const { width, fontScale } = useWindowDimensions();
   const [sceneState, setScene] = useState<HomeSceneData | null>(null);
   const scene = sceneState?.customerId === customerId ? sceneState : null;
@@ -230,33 +232,31 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     ? new Date(`${scene.day}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
 
-  return <View style={styles.container}>
+  return <View style={[styles.container, { backgroundColor: colors.background }]}>
     <View style={styles.topBar}>
-      <View style={styles.logoContainer}><AnimatedLogo size={36} /><Text style={styles.topTitle}>Kea Energy</Text></View>
+      <View style={styles.logoContainer}><AnimatedLogo color={colors.text} size={36} /><Text style={[styles.topTitle, { color: colors.text }]}>Kea Energy</Text></View>
       <View style={styles.topIcons}>
-        <Pressable accessibilityLabel="Notifications" accessibilityRole="button" hitSlop={8} onPress={onOpenNotifications} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="notifications-outline" size={23} /></Pressable>
-        <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color="#F4F5F7" name="person-circle-outline" size={24} /></Pressable>
+        <Pressable accessibilityLabel="Notifications" accessibilityRole="button" hitSlop={8} onPress={onOpenNotifications} style={styles.iconBtn}><Ionicons color={colors.text} name="notifications-outline" size={23} /></Pressable>
+        <Pressable accessibilityLabel="Profile" accessibilityRole="button" hitSlop={8} onPress={onOpenProfile} style={styles.iconBtn}><Ionicons color={colors.text} name="person-circle-outline" size={24} /></Pressable>
       </View>
     </View>
     <View style={styles.heading}>
-      <View style={styles.headingCopy}><Text style={styles.eyebrow}>YOUR KEA HOME</Text><Text style={styles.headingTitle}>Energy in its element.</Text></View>
-      <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color="#BAC3CD" name="information-circle-outline" size={22} /></Pressable>
+      <View style={styles.headingCopy}><Text style={[styles.eyebrow, { color: colors.textMuted }]}>YOUR KEA HOME</Text><Text style={[styles.headingTitle, { color: colors.text }]}>Energy in its element.</Text></View>
+      <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color={colors.textMuted} name="information-circle-outline" size={22} /></Pressable>
     </View>
     <View onLayout={({ nativeEvent: { layout } }) => { sceneTop.current = layout.y; reportProtectedHeader(); }} style={styles.sceneWrapper}>
       <Animated.View style={{ opacity: sceneOpacity ?? 1 }}>
         <View style={styles.sceneCard}>
           <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
           <LinearGradient
-            colors={[
-              '#111111',
-              'rgba(17,17,17,0.96)',
-              'rgba(17,17,17,0.85)',
-              'rgba(17,17,17,0.68)',
-              'rgba(17,17,17,0.48)',
-              'rgba(17,17,17,0.28)',
-              'rgba(17,17,17,0.12)',
-              'rgba(17,17,17,0.03)',
-              'rgba(17,17,17,0)',
+            colors={mode === 'dark' ? [
+              '#111111', 'rgba(17,17,17,0.96)', 'rgba(17,17,17,0.85)',
+              'rgba(17,17,17,0.68)', 'rgba(17,17,17,0.48)', 'rgba(17,17,17,0.28)',
+              'rgba(17,17,17,0.12)', 'rgba(17,17,17,0.03)', 'rgba(17,17,17,0)',
+            ] : [
+              '#EEEEEE', 'rgba(238,238,238,0.96)', 'rgba(238,238,238,0.85)',
+              'rgba(238,238,238,0.68)', 'rgba(238,238,238,0.48)', 'rgba(238,238,238,0.28)',
+              'rgba(238,238,238,0.12)', 'rgba(238,238,238,0.03)', 'rgba(238,238,238,0)',
             ]}
             locations={[0, 0.12, 0.25, 0.40, 0.55, 0.70, 0.82, 0.93, 1]}
             pointerEvents="none"
@@ -271,22 +271,22 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
               {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} {...route} />)}
             </Svg>
           </View>
-          <LinearGradient colors={['rgba(17,17,17,0)', '#111111']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
+          <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
       </Animated.View>
-      <View onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color="#E9F5FB" size={15} /><Text numberOfLines={1} style={styles.weatherInSceneText}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
-      <Text style={styles.readingDate}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
+      <View onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color={mode === 'dark' ? '#E9F5FB' : colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: mode === 'dark' ? '#E9F5FB' : colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
+      <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
           const metric = reading(scene, live, device);
-          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the home picture; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
-            <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={styles.deviceName}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
-            <Text style={styles.deviceValue}>{metric.value}</Text><Text numberOfLines={fontScale > 1.3 ? 2 : 1} style={styles.deviceDetail}>{metric.detail}</Text>
+          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the home picture; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth, backgroundColor: colors.surface, borderColor: colors.border }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
+            <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={[styles.deviceName, { color: colors.textMuted }]}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
+            <Text style={[styles.deviceValue, { color: colors.text }]}>{metric.value}</Text><Text numberOfLines={fontScale > 1.3 ? 2 : 1} style={[styles.deviceDetail, { color: colors.textMuted }]}>{metric.detail}</Text>
           </Pressable>;
         })}
       </ScrollView>
-      {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={styles.retryText}>Home readings unavailable · Retry</Text></Pressable> : null}
-      <Text style={styles.demoNote}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the picture. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
+      {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home readings unavailable · Retry</Text></Pressable> : null}
+      <Text style={[styles.demoNote, { color: colors.textMuted }]}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the picture. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
     </View>
   </View>;
 }

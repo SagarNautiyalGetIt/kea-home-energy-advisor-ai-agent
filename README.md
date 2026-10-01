@@ -53,11 +53,11 @@ readings from a connected meter, inverter, battery, or EV.
 
 | Experience | Web | Mobile |
 | --- | --- | --- |
-| **Home energy** | Animated Kea Home beside household usage, projected cost, and bill-risk status. | Kea Home preview with solar-green, battery-blue, and grid-amber flows. |
+| **Home energy** | Animated Kea Home beside household usage, projected cost, and bill-risk status. | Kea Home preview with solar-green, battery-blue, and grid-amber flows; source-card scene highlighting is in Android validation. |
 | **Usage comparison** | Daily, weekly, and monthly views with a previous-period comparison. | Select two dates, weeks, or months; inspect usage or cost side by side. |
 | **Bills** | A labelled demo billing preview; Sparky compares backend bill facts when a prior bill exists. | Account invoice details, a current-versus-prior total when both exist, and a shareable invoice view. |
 | **Bill-shock alerts** | A visible forecast and reason; set email, text, and optional call thresholds. | Forecast and the same alert preferences in Settings. |
-| **Sparky AI** | Chat, named sources, bill upload, and voice when the server reports voice ready. | Chat and a dedicated status card showing the active model and whether it is ready. |
+| **Sparky AI** | Chat, named sources, bill upload, and voice when the server reports voice ready. | Chat, model status, and an opt-in on-phone model path for general guidance in native development builds. |
 | **Connected home** | Device discovery and energy-breakdown context. | A network scan that separates discovery from actual power readings. |
 | **Power Clash** | Design blueprint for a monthly suburb league. | Interactive dark demo with a score arena, four weighted categories, sample ranks, and next steps. No real rewards are active. |
 
@@ -74,8 +74,13 @@ separate thresholds; actual delivery depends on the configured gateways.
 
 The server can use a local Ollama model when a **tool-capable** model is
 installed and selected. Mobile Settings shows the active model and a refreshable
-readiness result. The offline phone-model switch currently **records interest
-only**: this build has no on-device model download or offline answering runtime.
+readiness result. In a supported **native development build**, the separate
+Sparky AI card can opt in to a pinned on-phone model for general energy guidance.
+The model is downloaded and verified on the phone; household and bill questions
+still use the Kea API. Expo Go cannot run that native model, and physical Android
+and iOS inference remains under validation. See the
+[Android phone test guide](qa/android-phone.md), [mobile setup](services/mobile/README.md),
+and [provider configuration](services/api/README.md) before demonstrating AI live.
 The website also offers an opt-in browser-local model for general energy guidance
 on supported WebGPU browsers. It shows download and model readiness separately
 from the connected Kea service; bill and household answers still need that service.

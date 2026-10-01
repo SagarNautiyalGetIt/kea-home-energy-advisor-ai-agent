@@ -15,7 +15,7 @@ import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
 export default function DashboardScreen() {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
   const { height: screenHeight } = useWindowDimensions();
@@ -74,7 +74,7 @@ export default function DashboardScreen() {
       <Animated.View
         onLayout={(event) => setFixedContentHeight(event.nativeEvent.layout.height)}
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20, transform: [{ translateY: backgroundTranslateY }] }]}
+        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20, transform: [{ translateY: backgroundTranslateY }] }]}
       >
         <DemoHomeView customerId={session?.customerId ?? null}
           onOpenInfo={() => setWelcomeOpen(true)}
@@ -114,6 +114,7 @@ export default function DashboardScreen() {
         </View> : null}
 
         <View style={styles.cardArea}>
+          {dashboard ? <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
           {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
           {false ? <>
           <Pressable accessibilityLabel="Open bill shock warning" onPress={() => setBillShockOpen(true)} style={({ pressed }) => [styles.billShockCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
@@ -139,8 +140,8 @@ export default function DashboardScreen() {
       </Animated.View>
 
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.blurLayer, { opacity: listInForeground ? backgroundBlurOpacity : 0 }]}>
-        <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-        <View pointerEvents="none" style={styles.blurShade} />
+        <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
+        <View pointerEvents="none" style={[styles.blurShade, { backgroundColor: mode === 'dark' ? 'rgba(8,10,13,0.24)' : 'rgba(238,238,238,0.24)' }]} />
       </Animated.View>
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
@@ -162,7 +163,7 @@ export default function DashboardScreen() {
           style={styles.listScrollView}
         >
           <View pointerEvents="none" style={{ height: fixedContentHeight }} />
-          <BottomNavigation
+          <View style={{ backgroundColor: colors.background }}><BottomNavigation
             billPrediction={{
               detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
               onPress: () => setBillShockOpen(true),
@@ -170,7 +171,7 @@ export default function DashboardScreen() {
             }}
             includeHome={false}
             listMode
-          />
+          /></View>
         </Animated.ScrollView>
       </View>
 

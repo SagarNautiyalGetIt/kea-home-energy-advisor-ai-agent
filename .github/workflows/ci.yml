@@ -128,6 +128,35 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  mobile:
+    name: mobile (types + lint + tests + native bundles)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      # Organization policy allows local actions only; use the same git checkout
+      # as the other jobs and keep the stable required check name unchanged.
+      - name: Check out
+        working-directory: .
+        run: |
+          git clone --filter=blob:none \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" .
+          git fetch --filter=blob:none origin "${{ github.event.pull_request.head.sha || github.sha }}"
+          git checkout --detach "${{ github.event.pull_request.head.sha || github.sha }}"
+      # Bundle checks do not need the native JNI/XCFramework downloads. The
+      # phone build helper installs and verifies those explicitly before Gradle.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Export native JavaScript bundles (not a physical phone run)
+        run: npx --no-install expo export --platform all --max-workers 2 --output-dir /tmp/kea-mobile-ci-export
+
   # This repository is assessed as the team's own engineering work. Assistant tooling
   # config, session links and commit trailers are not part of the system and do not
   # belong in the record. See docs/attribution-checklist.md.
@@ -230,7 +259,7 @@ jobs:
   # then adding or renaming a job above never touches the ruleset.
   check:
     name: check
-    needs: [api, contract, web, attribution, data, data-dbt, data-dags]
+    needs: [api, contract, web, mobile, attribution, data, data-dbt, data-dags]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -239,6 +268,7 @@ jobs:
           echo "api=${{ needs.api.result }}"
           echo "contract=${{ needs.contract.result }}"
           echo "web=${{ needs.web.result }}"
+          echo "mobile=${{ needs.mobile.result }}"
           echo "attribution=${{ needs.attribution.result }}"
           echo "data=${{ needs.data.result }}"
           echo "data-dbt=${{ needs.data-dbt.result }}"
@@ -247,6 +277,7 @@ jobs:
           || [ "${{ needs.contract.result }}" != "success" ] \
           || [ "${{ needs.attribution.result }}" != "success" ] \
           || [ "${{ needs.web.result }}" != "success" ] \
+          || [ "${{ needs.mobile.result }}" != "success" ] \
           || [ "${{ needs.data.result }}" != "success" ] \
           || [ "${{ needs.data-dbt.result }}" != "success" ] \
           || [ "${{ needs.data-dags.result }}" != "success" ]; then

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
@@ -144,7 +144,7 @@ function energyCategoryPresentation(key: string) {
 }
 
 export default function UsageScreen() {
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const { height: screenHeight } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
@@ -160,7 +160,8 @@ export default function UsageScreen() {
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
-  const [, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const initialDateCustomer = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -203,10 +204,10 @@ export default function UsageScreen() {
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
-  const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
+  const periodTitle = period === 'daily' ? "Selected day's total" : period === 'weekly' ? "Selected week's total" : "Selected month's total";
   useEffect(() => {
     const controller = new AbortController();
-    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
       void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
       return () => controller.abort();
     }
@@ -231,16 +232,17 @@ export default function UsageScreen() {
       await Promise.resolve();
       if (controller.signal.aborted) return;
       setLoading(true);
+      setData(null);
       setLoadError(null);
       try {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
         if (!controller.signal.aborted) {
           setData(result);
-          // Move a date outside the fixture range to available data. Weekly charts
-          // deliberately settle on the latest complete Monday-Sunday week, so their
-          // X axis is never cut short at the final reading (for example, Friday).
-          const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
-          if (!comparison && !result.isDemo && needsAvailableRange && result.availableTo) {
+          // Settle the initial default date once per account. Never replace a
+          // user's later selection just because some days or bands are missing.
+          const initialSelection = initialDateCustomer.current !== session?.customerId;
+          initialDateCustomer.current = session?.customerId ?? null;
+          if (initialSelection && !comparison && result.totalKwh === null && result.availableTo) {
             const latest = parseDate(result.availableTo);
             const fallbackDate = period === 'weekly'
               ? toDateValue(addDays(startOfWeek(latest), -1))
@@ -363,14 +365,14 @@ export default function UsageScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.screenRoot} onTouchStart={() => setChartActive(false)} scroll={false}>
+    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)} scroll={false}>
       <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
       <View
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { zIndex: listInForeground ? 1 : 20 }]}
+        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20 }]}
       >
         <Animated.View style={styles.chartContainer}>
           <View style={styles.headerControls}>
@@ -381,7 +383,7 @@ export default function UsageScreen() {
                   onPress={refresh}
                   style={[styles.refresh, { backgroundColor: colors.input }]}
                 >
-                  {loading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons color="#FFFFFF" name="refresh" size={20} />}
+                  {loading ? <ActivityIndicator color={colors.text} /> : <Ionicons color={colors.text} name="refresh" size={20} />}
                 </Pressable>
               }
               subtitle="Track your usage"
@@ -401,12 +403,13 @@ export default function UsageScreen() {
                 onPress={compare ? openComparison : () => setDateOpen(true)}
                 style={({ pressed }) => [
                   styles.toolbarButton,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                   compare && styles.comparisonDateButton,
                   compare && period === 'weekly' && styles.weekComparisonDateButton,
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons color="#FFFFFF" name="calendar-outline" size={19} />
+                <Ionicons color={colors.text} name="calendar-outline" size={19} />
                 <Text numberOfLines={compare && period === 'weekly' ? 3 : 2} style={[styles.toolbarButtonText, { color: colors.text }]}>
                   {selectedPeriodLabel}
                 </Text>
@@ -417,6 +420,7 @@ export default function UsageScreen() {
                 style={[
                   styles.toolbarButton,
                   styles.compareButton,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
               >
                 <Pressable
@@ -424,28 +428,33 @@ export default function UsageScreen() {
                   onPress={openComparison}
                   style={({ pressed }) => [styles.compareMain, pressed && styles.pressed]}
                 >
-                  <Ionicons color="#FFFFFF" name="git-compare-outline" size={19} />
-                  <Text style={[styles.toolbarButtonText, { color: '#FFFFFF' }]}>Compare</Text>
+                  <Ionicons color={colors.text} name="git-compare-outline" size={19} />
+                  <Text style={[styles.toolbarButtonText, { color: colors.text }]}>Compare</Text>
                 </Pressable>
                 {compare ? (
                   <Pressable accessibilityLabel="Exit comparison mode" hitSlop={5} onPress={clearComparison} style={styles.compareClose}>
-                    <Ionicons color="#FFFFFF" name="close" size={18} />
+                    <Ionicons color={colors.text} name="close" size={18} />
                   </Pressable>
                 ) : null}
               </View>
             </View>
           </View>
 
-          {loading && !data ? (
+          {loading ? (
             <UsageChartLoader />
+          ) : loadError ? (
+            <View style={styles.usageStatus}><Text accessibilityRole="alert" style={[styles.usageStatusText, { color: colors.text }]}>{loadError}</Text><PrimaryButton label="Retry usage" onPress={refresh} /></View>
+          ) : !data || data.points.length === 0 ? (
+            <View style={styles.usageStatus}><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>No dated readings are available for this selection. Choose another date.</Text></View>
           ) : (
           <>
+          <Text style={[styles.usageSource, { color: colors.textMuted }]}>{data.sourceLabel}</Text>
           {/* Chart Header & Unit Toggle (Outside of PanResponder for instant, 100% reliable tapping) */}
           <View style={styles.chartHeaderCard}>
             <View style={styles.chartHeader}>
               <View>
                 <Text style={[styles.total, { color: colors.text }]}>
-                  {totalDisplay} <Text style={styles.suffix}>{suffix}</Text>
+                  {totalDisplay} <Text style={[styles.suffix, { color: colors.textMuted }]}>{suffix}</Text>
                 </Text>
               </View>
               <View style={styles.headerToggles}>
@@ -461,12 +470,12 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setChartType(item);
                       }}
-                      style={[styles.unitOption, chartType === item && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.unitOption, chartType === item && { backgroundColor: colors.primary }]}
                     >
                       {item === 'line' ? (
-                        <LineChartIcon color={chartType === item ? '#000000' : colors.textMuted} />
+                        <LineChartIcon color={chartType === item ? colors.onPrimary : colors.textMuted} />
                       ) : (
-                        <Ionicons color={chartType === item ? '#000000' : colors.textMuted} name="bar-chart-outline" size={16} />
+                        <Ionicons color={chartType === item ? colors.onPrimary : colors.textMuted} name="bar-chart-outline" size={16} />
                       )}
                     </Pressable>
                   ))}
@@ -480,9 +489,9 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setUnit(item);
                       }}
-                      style={[styles.unitOption, displayUnit === item && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.unitOption, displayUnit === item && { backgroundColor: colors.primary }]}
                     >
-                      <Text style={[styles.unitText, { color: displayUnit === item ? '#000000' : colors.textMuted }]}>
+                      <Text style={[styles.unitText, { color: displayUnit === item ? colors.onPrimary : colors.textMuted }]}>
                         {item === 'kwh' ? 'kWh' : '$'}
                       </Text>
                     </Pressable>
@@ -519,11 +528,11 @@ export default function UsageScreen() {
                 <View style={styles.chartLegend}>
                   <View style={styles.chartLegendItem}>
                     <View style={[styles.chartLegendDot, { backgroundColor: '#C7F071' }]} />
-                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
+                    <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
                   </View>
                   <View style={styles.chartLegendItem}>
                     <View style={[styles.chartLegendDot, { backgroundColor: '#FBBF24' }]} />
-                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
+                    <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
                   </View>
                 </View>
               ) : null}
@@ -533,8 +542,8 @@ export default function UsageScreen() {
           )}
         </Animated.View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
-          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint="dark" />
-          <View pointerEvents="none" style={styles.backdropBlurShade} />
+          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
+          <View pointerEvents="none" style={[styles.backdropBlurShade, { backgroundColor: mode === 'dark' ? 'rgba(0,0,0,0.48)' : 'rgba(238,238,238,0.48)' }]} />
         </Animated.View>
       </View>
 
@@ -556,7 +565,7 @@ export default function UsageScreen() {
           style={styles.listScrollView}
         >
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
-          <View style={styles.breakdownContent}>
+          <View style={[styles.breakdownContent, { backgroundColor: colors.background }]}>
             <View style={styles.breakdownList}>
               {energyBreakdown?.categories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
@@ -565,7 +574,7 @@ export default function UsageScreen() {
                   </View>
                   <View style={styles.breakdownCopy}>
                     <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
-                    <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>{energyBreakdown.period || 'Selected period'}</Text>
+                    <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{energyBreakdown.period || 'Selected period'}</Text>
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
@@ -576,7 +585,7 @@ export default function UsageScreen() {
                 </View>
                 <View style={styles.breakdownCopy}>
                   <Text style={[styles.breakdownTitle, { color: colors.text }]}>{periodTitle}</Text>
-                  <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>Current selected period</Text>
+                  <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Current selected period</Text>
                 </View>
                 <View style={styles.breakdownValueWrap}>
                   <Text style={[styles.breakdownValue, { color: colors.text }]}>
@@ -605,7 +614,7 @@ export default function UsageScreen() {
                     </View>
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
-                      <Text style={[styles.breakdownDetail, { color: '#A1A1AA' }]}>
+                      <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>
                         {band.window ?? 'No time window supplied'}
                       </Text>
                     </View>
@@ -613,7 +622,7 @@ export default function UsageScreen() {
                       <Text style={[styles.breakdownValue, { color: colors.text }]}>
                         {formatAmount(band.kwh, band.costNzd)}
                       </Text>
-                      <Text style={[styles.breakdownShare, { color: '#A1A1AA' }]}>{share}</Text>
+                      <Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{share}</Text>
                     </View>
                   </View>
                 );
@@ -732,6 +741,9 @@ export default function UsageScreen() {
 }
 
 const styles = StyleSheet.create({
+  usageSource: { fontSize: 12, lineHeight: 17, paddingHorizontal: 8, paddingTop: 10 },
+  usageStatus: { paddingVertical: 30, paddingHorizontal: 16, gap: 16 },
+  usageStatusText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
   screenEnter: { flex: 1 },
   screenRoot: {
     flex: 1,
@@ -857,7 +869,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1.1,
   },
   suffix: {
-    fontSize: 9,
+    fontSize: 12,
     color: '#FFFFFF',
   },
   swipeHint: {
