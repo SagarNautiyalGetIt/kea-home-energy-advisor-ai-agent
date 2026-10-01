@@ -3,34 +3,79 @@
    keyframe list whose percentages are those step durations over the loop length. The
    phone's Easing.out(Easing.exp) is the cubic-bezier(.16,1,.3,1) used on every moving step.
 
-   Resting values (no animation: `happy`, `static`, reduced motion) are the phone's value 0:
+   Resting values (no animation: `happy`, `sorry`, `static`, reduced motion) are the phone's value 0:
    a dim, slightly small halo, the body at the start of its breath, eyes centred and open. */
 .sparky-presence{position:relative;flex:none}
 /* Two classes deep on purpose: the page has older rules that size any svg in its slot
    (`.assistant-orb svg` pinned them at 31px), and each layer has to fill the whole box. */
 .sparky-presence .sparky-presence__halo,
+.sparky-presence .sparky-presence__squash,
 .sparky-presence .sparky-presence__body,
 .sparky-presence .sparky-presence__gaze{position:absolute;inset:0;width:100%;height:100%;max-width:none}
 .sparky-presence .sparky-presence__eyes{display:block;width:100%;height:100%;max-width:none;transform-origin:50% 48.3%}
+.sparky-presence .sparky-presence__reaction{display:block;width:100%;height:100%;max-width:none}
 .sparky-presence .sparky-presence__mouth{position:absolute;inset:0;width:100%;height:100%;max-width:none}
 .sparky-presence__halo{opacity:.38;transform:scale(.96);transform-origin:50% 50%}
 .sparky-presence__body{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg);transform-origin:50% 50%}
 
-/* Resting pace: idle and replying. */
+/* Resting pace: idle, replying and listening. */
 .sparky-presence--idle .sparky-presence__halo,
 .sparky-presence--replying .sparky-presence__halo{animation:sparky-halo 9.4s infinite}
 .sparky-presence--idle .sparky-presence__body,
-.sparky-presence--replying .sparky-presence__body{animation:sparky-breath 6.6s infinite}
+.sparky-presence--replying .sparky-presence__body,
+.sparky-presence--listening .sparky-presence__body{animation:sparky-breath 6.6s infinite}
 .sparky-presence--idle .sparky-presence__gaze,
 .sparky-presence--replying .sparky-presence__gaze,
 .sparky-presence--thinking .sparky-presence__gaze{animation:sparky-gaze 7.1s infinite}
 .sparky-presence--idle .sparky-presence__eyes,
-.sparky-presence--replying .sparky-presence__eyes{animation:sparky-blink 5.36s infinite}
+.sparky-presence--replying .sparky-presence__eyes,
+.sparky-presence--listening .sparky-presence__eyes{animation:sparky-blink 5.36s infinite}
 
-/* Thinking: the same moves, faster and brighter. */
-.sparky-presence--thinking .sparky-presence__halo{animation:sparky-halo-thinking 2.8s infinite}
-.sparky-presence--thinking .sparky-presence__body{animation:sparky-breath-thinking 1.75s infinite}
-.sparky-presence--thinking .sparky-presence__eyes{animation:sparky-blink-thinking 3.46s infinite}
+/* Thinking and searching: the same moves, faster and brighter. */
+.sparky-presence--thinking .sparky-presence__halo,
+.sparky-presence--searching .sparky-presence__halo{animation:sparky-halo-thinking 2.8s infinite}
+.sparky-presence--thinking .sparky-presence__body,
+.sparky-presence--searching .sparky-presence__body{animation:sparky-breath-thinking 1.75s infinite}
+.sparky-presence--thinking .sparky-presence__eyes,
+.sparky-presence--searching .sparky-presence__eyes{animation:sparky-blink-thinking 3.46s infinite}
+
+/* Listening: no glance, since it is attending to the reader. The head tilts and the halo
+   pulses at about the pace of speech. */
+.sparky-presence--listening .sparky-presence__halo{animation:sparky-halo 2.4s infinite}
+.sparky-presence--listening .sparky-presence__gaze{rotate:-7deg}
+/* Searching: no glance either; the head holds still while the pupils read along a line.
+   The sweep and the talking below belong to the face rather than the mode, so they come
+   and go with it while a working Sparky shuffles its faces. */
+.sparky-presence .sparky-presence__pupils--searching{animation:sparky-read 1.5s infinite}
+/* Pondering (a thinking face, shuffled in while Sparky prepares an answer): the raised
+   brow lifts a little further, then settles. */
+.sparky-presence__brow{animation:sparky-brow 2.4s ease-in-out infinite}
+@keyframes sparky-brow{
+  0%,30%,100%{transform:translateY(0)}
+  50%,70%{transform:translateY(-1.8px)}
+}
+/* Replying: the mouth works open and shut, hinged at its top edge. */
+.sparky-presence__talk{transform-box:fill-box;transform-origin:50% 0;animation:sparky-talk 1.3s infinite}
+/* Moving between faces, the eyes and pupils slide to their new shape and place rather
+   than jumping (in browsers that treat these as CSS properties; others just switch). */
+.sparky-presence__eyes ellipse,
+.sparky-presence__pupils circle{transition:cx .3s ease,cy .3s ease,rx .3s ease,ry .3s ease}
+
+/* Left, then back quickly, like eyes reaching the end of a line. */
+@keyframes sparky-read{
+  0%{transform:translate(-2.6px,0);animation-timing-function:cubic-bezier(.45,0,.55,1)}
+  70%{transform:translate(2.6px,0);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{transform:translate(-2.6px,0)}
+}
+/* Uneven on purpose, so it reads as words rather than a metronome. */
+@keyframes sparky-talk{
+  0%,100%{transform:scaleY(.35)}
+  15%{transform:scaleY(1.1)}
+  30%{transform:scaleY(.55)}
+  48%{transform:scaleY(.95)}
+  63%{transform:scaleY(.3)}
+  80%{transform:scaleY(.8)}
+}
 
 /* 4.7s out, 4.7s back. */
 @keyframes sparky-halo{
@@ -78,6 +123,39 @@
   72.54%,100%{transform:scaleY(1)}
 }
 
+/* Interactive: following the cursor and being booped (after page-mascot; see useMascot in
+   SparkyPresence.tsx). The component sets --look-x and --look-y to the unit vector toward
+   the cursor, or 0 0 when it is close by. The face slides furthest, the pupils a little
+   further within the eyes, and the core leans only slightly, so the face appears to turn
+   on a round head. Each uses the `translate` property, which stacks with the `transform`
+   that the glance animation and the boop squash both drive, so none of them fight. */
+.sparky-presence .sparky-presence__squash{transform-origin:50% 82%;translate:calc(var(--look-x,0) * 1.6%) calc(var(--look-y,0) * 1.4%);transition:translate .5s cubic-bezier(.16,1,.3,1)}
+.sparky-presence .sparky-presence__gaze{translate:calc(var(--look-x,0) * 7%) calc(var(--look-y,0) * 6%);transition:translate .5s cubic-bezier(.16,1,.3,1),rotate .5s cubic-bezier(.16,1,.3,1)}
+.sparky-presence .sparky-presence__pupils{translate:calc(var(--look-x,0) * 2.6px) calc(var(--look-y,0) * 4px);transition:translate .5s cubic-bezier(.16,1,.3,1)}
+/* Thinking's and pondering's pupils are already up at the edge of the eye; following the
+   cursor as well would take them out of it. The face still turns. */
+.sparky-presence .sparky-presence__pupils--thinking,
+.sparky-presence .sparky-presence__pupils--pondering{translate:none}
+/* While it is looking at the cursor the idle glance pauses where it is, rather than
+   drifting the eyes off the cursor, and picks up again from there when it looks back. */
+.sparky-presence--looking .sparky-presence__gaze{animation-play-state:paused}
+
+/* The button itself adds nothing to the picture, and keeps the site's own focus ring,
+   rounded to match. Two classes on :hover to beat the site's button:hover lift. */
+.sparky-presence--interactive{display:block;min-height:0;padding:0;border:0;border-radius:50%;background:none;appearance:none;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:none}
+.sparky-presence--interactive:hover{transform:none}
+
+/* Dizzy eyes spin (each about its own eye, set inline); the twinkles around the sparkle
+   face pop in. */
+.sparky-presence__spiral{animation:sparky-spin .7s linear infinite}
+.sparky-presence__twinkle{transform-box:fill-box;transform-origin:50% 50%;animation:sparky-twinkle .44s cubic-bezier(.16,1,.3,1) both}
+@keyframes sparky-spin{to{transform:rotate(360deg)}}
+@keyframes sparky-twinkle{
+  0%{opacity:0;transform:scale(.2) rotate(-30deg)}
+  60%{opacity:1;transform:scale(1.15) rotate(8deg)}
+  100%{opacity:1;transform:scale(1) rotate(0)}
+}
+
 @media (prefers-reduced-motion:reduce){
-  .sparky-presence *{animation:none!important}
+  .sparky-presence *{animation:none!important;transition:none!important}
 }

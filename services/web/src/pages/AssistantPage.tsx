@@ -184,9 +184,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // every one of the six places that change busy/listening/speaking, and would be wrong
   // at whichever one someone forgot.
   const sparkState = listening ? 'listening' : speaking ? 'speaking' : busy ? 'thinking' : 'idle'
-  // The start screen's Sparky, in the phone app's modes: still when Sparky is unavailable,
-  // quick while it works, and at the resting pace otherwise.
-  const presenceMode: SparkyPresenceMode = modelStatus === 'unavailable' ? 'static' : sparkState === 'thinking' ? 'thinking' : sparkState === 'speaking' ? 'replying' : 'idle'
+  // The start screen's Sparky, with the face for what it is doing: still and level when it
+  // cannot answer (the model is down, or the account data is), listening while the mic is
+  // on (the thread only starts once the transcript comes back), thinking while it works,
+  // talking while it reads an answer aloud, and at rest otherwise. It is the interactive
+  // one: it follows the cursor and reacts when booped, except when unavailable.
+  const unavailable = modelStatus === 'unavailable' || backendDown
+  const presenceMode: SparkyPresenceMode = unavailable ? 'static' : sparkState === 'speaking' ? 'replying' : sparkState
 
   const nextId = useRef(2)
   // `askAboutBill` runs long after its own render — an upload round trip — so reading
@@ -661,6 +665,16 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // "reading your account" row stands in for it, so Sparky does not appear twice while it
   // works.
   const shownMessages = messages.filter((item) => !(item.role === 'assistant' && item.streaming && !item.text && !item.activity?.length && !item.error))
+  // A voice answer arrives whole, so it is never `streaming`; it is being spoken instead,
+  // and it is the last answer in the thread while it is.
+  const spokenId = speaking ? [...messages].reverse().find((item) => item.role === 'assistant')?.id : undefined
+  // Sparky's face beside an answer, following what is happening to that answer. The error
+  // comes first: an unreachable service leaves the message `streaming`.
+  const answerMode = (item: Message): SparkyPresenceMode =>
+    item.error ? 'sorry'
+      : item.streaming ? (item.text ? 'replying' : item.activity?.some((a) => !a.done) ? 'searching' : 'thinking')
+        : item.id === spokenId ? 'replying'
+          : 'happy'
   // A solar result as a message from Sparky: its avatar and a white answer bubble. In the
   // thread it is the message the solar discussion opens with. On the start screen (arrived
   // with a result, but it could not be asked about yet) it carries the button that asks.
@@ -744,9 +758,11 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             <div className={`message-row ${item.role}`} key={item.id}>
               {/* As on the phone: Sparky beside each answer, moving while it writes and
                   smiling once it has answered; the customer's photo beside their own
-                  messages. One photo for every account for now. */}
+                  messages. One photo for every account for now. In between, its face
+                  follows the answer: reading while a lookup runs, thinking between
+                  lookups, talking as the words arrive, and sorry if it could not answer. */}
               {item.role === 'assistant' && (
-                <span className="message-avatar"><SparkyPresence size={64} mode={item.streaming ? 'replying' : 'happy'}/></span>
+                <span className="message-avatar"><SparkyPresence size={64} mode={answerMode(item)}/></span>
               )}
               <div className={`bubble ${item.role === 'assistant' ? 'assistant-bubble' : 'user-bubble'} ${item.text.length > 90 ? 'long' : ''}`}>
                 {/* The file, as a chip. Above the text so the attachment reads as the
@@ -853,7 +869,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             && messages[messages.length - 1]?.text === ''
             && !messages[messages.length - 1]?.activity?.length && (
             <div className="message-row assistant">
-              <span className="message-avatar"><SparkyPresence size={64} mode="thinking"/></span>
+              {/* Reading, while it is a bill being read off the page; thinking otherwise. */}
+              <span className="message-avatar"><SparkyPresence size={64} mode={messages[messages.length - 1]?.attachment?.status === 'reading' ? 'searching' : 'thinking'}/></span>
               <div className="bubble assistant-bubble thinking">Sparky is reading your account…</div>
             </div>
           )}
@@ -862,7 +879,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         <>
         {arrivingSolar && solarMessage(arrivingSolar, true)}
         <div className="assistant-start">
-          <div className="assistant-orb"><SparkyPresence size={132} mode={presenceMode} label={modelStatus === 'unavailable' ? 'Sparky is unavailable' : undefined}/></div>
+          <div className="assistant-orb"><SparkyPresence size={132} mode={presenceMode} interactive label={unavailable ? 'Sparky is unavailable' : undefined}/></div>
           <h2>How can I help you today?</h2>
           {SHOW_ASSISTANT_DESCRIPTION && <p>Get clear answers about bills, usage patterns, and plans.</p>}
           <div className="prompt-grid">
