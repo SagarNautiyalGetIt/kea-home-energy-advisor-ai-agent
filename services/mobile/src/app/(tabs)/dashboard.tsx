@@ -114,6 +114,7 @@ export default function DashboardScreen() {
         </View> : null}
 
         <View style={styles.cardArea}>
+          {dashboard ? <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
           {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
           {false ? <>
           <Pressable accessibilityLabel="Open bill shock warning" onPress={() => setBillShockOpen(true)} style={({ pressed }) => [styles.billShockCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>

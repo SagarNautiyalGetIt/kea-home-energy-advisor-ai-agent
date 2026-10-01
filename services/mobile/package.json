@@ -53,7 +53,7 @@
     "lint": "node ./node_modules/expo/bin/cli lint",
     "types": "openapi-typescript ../../contracts/openapi.json -o src/api.d.ts",
     "test": "node --experimental-strip-types --test src/lib/*.test.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run types && tsc --noEmit",
     "export:web": "expo export --platform web",
     "export:ios": "expo export --platform ios",
     "export:android": "expo export --platform android"

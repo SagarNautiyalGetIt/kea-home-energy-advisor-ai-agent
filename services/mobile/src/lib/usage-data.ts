@@ -1,5 +1,6 @@
 import { hourlyUsage, usage as fixtureUsage } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
+import { selectedIndexes, selectedTotals, usageRange, usageSource, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
 
 export type UsagePeriod = 'daily' | 'weekly' | 'monthly';
 export type UsageBandKey = 'peak' | 'offPeak' | 'night';
@@ -23,6 +24,7 @@ export type UsageViewData = {
   period: UsagePeriod;
   selectedDate: string;
   sourcePeriod: string;
+  sourceLabel: string;
   points: UsagePoint[];
   comparisonPoints: UsagePoint[] | null;
   totalKwh: number | null;
@@ -41,22 +43,6 @@ export type UsageQuery = {
   compareDate?: string;
   signal?: AbortSignal;
 };
-
-/** The exact HouseholdSummary currently published in contracts/openapi.json. */
-type HouseholdSummaryApi = {
-  customer_id: string;
-  label: string;
-  period: string;
-  daily_kwh: number[];
-  daily_peak_kwh: (number | null)[];
-  daily_off_peak_kwh: (number | null)[];
-  daily_night_kwh: (number | null)[];
-  band_data_source?: string | null;
-  total_kwh: number;
-  estimated_cost_nzd: number;
-};
-
-type BillShockApi = { recent_trend_pct?: number };
 
 const demoTariffNzd = 0.3;
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -77,141 +63,45 @@ function parseIsoDate(value: string) {
   return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
 }
 
-function toIsoDate(value: Date) {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(value: Date, amount: number) {
-  const result = new Date(value);
-  result.setDate(result.getDate() + amount);
-  return result;
-}
-
 function shortDate(value: Date) {
   return `${value.getDate()} ${shortMonths[value.getMonth()]}`;
 }
 
-function startOfWeek(value: Date) {
-  return addDays(value, -((value.getDay() + 6) % 7));
-}
-
-function finiteNumber(value: unknown, field: string) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Usage response has an invalid ${field}.`);
-  return value;
-}
-
-function validateHousehold(value: unknown): HouseholdSummaryApi {
-  if (!value || typeof value !== 'object') throw new Error('Usage response is not an object.');
-  const row = value as Partial<HouseholdSummaryApi>;
-  if (!row.customer_id || !row.period || !Array.isArray(row.daily_kwh)) throw new Error('Usage response is missing required fields.');
-  row.daily_kwh.forEach((reading) => finiteNumber(reading, 'daily_kwh reading'));
-  for (const field of ['daily_peak_kwh', 'daily_off_peak_kwh', 'daily_night_kwh'] as const) {
-    if (!Array.isArray(row[field]) || row[field]?.length !== row.daily_kwh.length) throw new Error(`Usage response has an invalid ${field}.`);
-    row[field]?.forEach((reading) => { if (reading !== null) finiteNumber(reading, `${field} reading`); });
-  }
-  finiteNumber(row.total_kwh, 'total_kwh');
-  finiteNumber(row.estimated_cost_nzd, 'estimated_cost_nzd');
-  return row as HouseholdSummaryApi;
-}
-
-function periodStart(label: string) {
-  const match = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i.exec(label.trim());
-  if (!match) return null;
-  const month = monthNames.findIndex((name) => name.toLowerCase() === match[1]?.toLowerCase());
-  return month < 0 ? null : new Date(Number(match[2]), month, 1);
-}
-
-function apiReadings(summary: HouseholdSummaryApi) {
-  const start = periodStart(summary.period);
-  if (!start) return [];
-  return summary.daily_kwh.map((kwh, index) => ({ date: addDays(start, index), kwh }));
-}
-
-function selectApiPoints(summary: HouseholdSummaryApi, period: UsagePeriod, selected: string): UsagePoint[] {
-  const selectedDate = parseIsoDate(selected);
-  const weekStart = startOfWeek(selectedDate);
-  const weekEnd = addDays(weekStart, 6);
-  // The official response provides the measured period total and estimated cost,
-  // not a separate cost beside each daily reading. Derive the published rate once
-  // so every displayed point remains backed by API data.
-  const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : null;
-  const allReadings = apiReadings(summary);
-  const readings = allReadings
-    .filter(({ date }) => period === 'daily'
-      ? toIsoDate(date) === selected
-      : period === 'weekly'
-        ? date >= weekStart && date <= weekEnd
-        : date.getFullYear() === selectedDate.getFullYear() && date.getMonth() === selectedDate.getMonth())
-  if (period === 'daily' && readings[0]) {
-    // This endpoint has one reading per day. Never stretch it into fictional hours.
-    const reading = readings[0];
-    return [{
-      axisLabel: shortDate(reading.date),
-      tooltipLabel: `${shortDate(reading.date)} · daily total`,
-      kwh: reading.kwh,
-      costNzd: unitRate === null ? null : reading.kwh * unitRate,
-    }];
-  }
+function seriesPoints(series: UsageSeries, period: UsagePeriod): UsagePoint[] {
+  const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
   if (period === 'monthly') {
-    const buckets = new Map<string, { start: Date; kwh: number }>();
-    allReadings.forEach(({ date, kwh }) => {
-      const start = new Date(date.getFullYear(), date.getMonth(), 1);
-      const key = `${start.getFullYear()}-${start.getMonth()}`;
-      const existing = buckets.get(key);
-      buckets.set(key, { start, kwh: (existing?.kwh ?? 0) + kwh });
+    const buckets = new Map<string, number>();
+    series.daily_dates.forEach((day, index) => {
+      const key = day.slice(0, 7);
+      buckets.set(key, (buckets.get(key) ?? 0) + series.daily_kwh[index]!);
     });
-    const availableMonths = [...buckets.values()].sort((left, right) => left.start.getTime() - right.start.getTime());
-    return availableMonths
-      .filter(({ start }) => start.getTime() <= new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1).getTime())
-      .slice(-4)
-      .map(({ start, kwh }) => {
-      return {
-        axisLabel: shortMonths[start.getMonth()] ?? '',
-        tooltipLabel: `${monthNames[start.getMonth()]} ${start.getFullYear()}`,
-        kwh,
-        costNzd: unitRate === null ? null : kwh * unitRate,
-      };
+    return [...buckets].map(([month, kwh]) => {
+      const date = parseIsoDate(`${month}-01`);
+      return { axisLabel: shortMonths[date.getMonth()]!, tooltipLabel: `${monthNames[date.getMonth()]} ${date.getFullYear()}`, kwh, costNzd: kwh * rate };
     });
   }
-  return readings.map(({ date, kwh }) => ({
-      axisLabel: period === 'weekly' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.getDay() + 6) % 7] ?? '' : String(date.getDate()),
-      tooltipLabel: shortDate(date),
+  return series.daily_dates.map((day, index) => {
+    const date = parseIsoDate(day);
+    const kwh = series.daily_kwh[index]!;
+    return {
+      axisLabel: period === 'weekly' ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]! : shortDate(date),
+      tooltipLabel: `${shortDate(date)} · daily total`,
       kwh,
-      costNzd: unitRate === null ? null : kwh * unitRate,
-    }));
-}
-
-function emptyBands(): UsageBand[] {
-  return bandDefinitions.map((band) => ({ ...band, kwh: null, costNzd: null }));
-}
-
-function selectApiBands(summary: HouseholdSummaryApi, period: UsagePeriod, selected: string): UsageBand[] {
-  if (!summary.daily_peak_kwh?.length && !summary.daily_off_peak_kwh?.length && !summary.daily_night_kwh?.length) {
-    return emptyBands();
-  }
-  const selectedDate = parseIsoDate(selected);
-  const weekStart = startOfWeek(selectedDate);
-  const weekEnd = addDays(weekStart, 6);
-  const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : null;
-  const series: Record<UsageBandKey, (number | null)[]> = {
-    peak: summary.daily_peak_kwh,
-    offPeak: summary.daily_off_peak_kwh,
-    night: summary.daily_night_kwh,
-  };
-  const selectedIndexes = apiReadings(summary).flatMap(({ date }, index) => {
-    const included = period === 'daily'
-      ? toIsoDate(date) === selected
-      : period === 'weekly'
-        ? date >= weekStart && date <= weekEnd
-        : date.getFullYear() === selectedDate.getFullYear() && date.getMonth() === selectedDate.getMonth();
-    return included ? [index] : [];
+      costNzd: kwh * rate,
+    };
   });
+}
+
+function seriesBands(series: UsageSeries, period: UsagePeriod, selected: string): UsageBand[] {
+  const indexes = selectedIndexes(series, period, selected);
+  const fields = { peak: series.daily_peak_kwh, offPeak: series.daily_off_peak_kwh, night: series.daily_night_kwh };
+  const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
   return bandDefinitions.map((band) => {
-    const values = selectedIndexes.map((index) => series[band.key][index]);
-    const kwh = values.length && values.every((value) => value !== null && value !== undefined)
-      ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-      : null;
-    return { ...band, kwh, costNzd: kwh !== null && unitRate !== null ? kwh * unitRate : null };
+    const values = indexes.map((index) => fields[band.key][index]);
+    const complete = series.band_data_source === 'measured' && values.length > 0 && values.every((value) => value != null);
+    const kwh = complete ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
+    // Tariff time windows are not part of this endpoint's contract.
+    return { ...band, window: null, kwh, costNzd: kwh === null ? null : kwh * rate };
   });
 }
 
@@ -222,73 +112,35 @@ async function fetchJson(path: string, signal?: AbortSignal) {
 }
 
 async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
-  const customerPath = `/api/households/${encodeURIComponent(query.customerId)}`;
-  const [summaryValue, shockResult] = await Promise.all([
-    fetchJson(customerPath, query.signal),
-    fetchJson(`${customerPath}/bill-shock`, query.signal).catch(() => null),
-  ]);
-  const summary = validateHousehold(summaryValue);
-  if (summary.customer_id !== query.customerId) throw new Error('Usage response belongs to a different customer.');
-
-  const unitRate = summary.total_kwh > 0 ? summary.estimated_cost_nzd / summary.total_kwh : null;
-  const loadDailyPoints = async (selectedDate: string, fallback: UsagePoint[]) => {
-    let dailyPoints = fallback;
-    const dayValue = await fetchJson(`${customerPath}/usage/day?date=${encodeURIComponent(selectedDate)}`, query.signal).catch(() => null);
-    if (dayValue && typeof dayValue === 'object' && Array.isArray((dayValue as { points?: unknown[] }).points)) {
-      dailyPoints = ((dayValue as { points: { time?: unknown; kwh?: unknown }[] }).points)
-        .filter((point) => typeof point.kwh === 'number' && Number.isFinite(point.kwh))
-        .map((point, index) => {
-          const hour = Math.floor(index / 2);
-          const minute = index % 2 ? '30' : '00';
-          const timeLabel = `${hour === 0 ? 12 : hour > 12 ? hour - 12 : hour}:${minute} ${hour < 12 ? 'AM' : 'PM'}`;
-          return {
-            axisLabel: index % 6 === 0 ? timeLabel : '',
-            tooltipLabel: `${shortDate(parseIsoDate(selectedDate))}, ${timeLabel}`,
-            kwh: point.kwh as number,
-            costNzd: unitRate === null ? null : (point.kwh as number) * unitRate,
-          };
-        });
-    }
-    if (dailyPoints.length <= 1) {
-      throw new Error('Daily usage data is unavailable from the backend for the selected date.');
-    }
-    return dailyPoints;
+  const customerPath = `/api/households/${encodeURIComponent(query.customerId)}/usage-series`;
+  const load = async (selected: string) => {
+    const range = usageRange(query.period, selected);
+    const value = await fetchJson(`${customerPath}?start=${range.start}&end=${range.end}`, query.signal);
+    return validateUsageSeries(value, query.customerId, range);
   };
-
-  let points = selectApiPoints(summary, query.period, query.date);
-  let comparisonPoints = query.compareDate ? selectApiPoints(summary, query.period, query.compareDate) : null;
-  if (query.period === 'daily') {
-    const [currentDailyPoints, previousDailyPoints] = await Promise.all([
-      loadDailyPoints(query.date, points),
-      query.compareDate && comparisonPoints ? loadDailyPoints(query.compareDate, comparisonPoints) : Promise.resolve(null),
-    ]);
-    points = currentDailyPoints;
-    comparisonPoints = previousDailyPoints;
-  }
-  const readings = apiReadings(summary);
-  const selectedMonth = parseIsoDate(query.date);
-  const isWholeBackendPeriod = query.period === 'monthly' && points.length === 1
-    && summary.daily_kwh.length === new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate()
-    && summary.period.toLowerCase() === `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`.toLowerCase();
-  const totalKwh = isWholeBackendPeriod ? summary.total_kwh : points.length ? points.reduce((sum, point) => sum + point.kwh, 0) : null;
-  const selectedCost = points.length && points.every((point) => point.costNzd !== null)
-    ? points.reduce((sum, point) => sum + (point.costNzd ?? 0), 0)
-    : null;
-  const shock = shockResult && typeof shockResult === 'object' ? shockResult as BillShockApi : null;
+  const [series, previous] = await Promise.all([load(query.date), query.compareDate ? load(query.compareDate) : Promise.resolve(null)]);
+  const points = seriesPoints(series, query.period);
+  const comparisonPoints = previous ? seriesPoints(previous, query.period) : null;
+  const totals = selectedTotals(series, query.period, query.date);
+  const previousTotals = previous ? selectedTotals(previous, query.period, query.compareDate!) : null;
+  const source = usageSource(series);
+  const previousSource = previous ? usageSource(previous) : null;
+  const selectedDays = selectedIndexes(series, query.period, query.date).length;
 
   return {
     period: query.period,
     selectedDate: query.date,
-    sourcePeriod: summary.period,
+    sourcePeriod: query.date.slice(0, 7),
+    sourceLabel: `${source.label}${previousSource ? ` · comparison: ${previousSource.label}` : ''} · ${selectedDays} day${selectedDays === 1 ? '' : 's'} available`,
     points,
     comparisonPoints: comparisonPoints?.length ? comparisonPoints : null,
-    totalKwh,
-    totalCostNzd: isWholeBackendPeriod ? summary.estimated_cost_nzd : selectedCost,
-    trendPercent: isWholeBackendPeriod && typeof shock?.recent_trend_pct === 'number' ? shock.recent_trend_pct : null,
-    bands: selectApiBands(summary, query.period, query.date),
-    availableFrom: readings[0] ? toIsoDate(readings[0].date) : null,
-    availableTo: readings.at(-1) ? toIsoDate(readings.at(-1)!.date) : null,
-    isDemo: false,
+    totalKwh: totals.kwh,
+    totalCostNzd: totals.costNzd,
+    trendPercent: totals.kwh !== null && previousTotals?.kwh ? (totals.kwh - previousTotals.kwh) / previousTotals.kwh * 100 : null,
+    bands: seriesBands(series, query.period, query.date),
+    availableFrom: series.available_from ?? null,
+    availableTo: series.available_to ?? null,
+    isDemo: source.isDemo || previousSource?.isDemo === true,
   };
 }
 
@@ -348,6 +200,7 @@ function loadDemoUsage(query: UsageQuery): UsageViewData {
     period: query.period,
     selectedDate: query.date,
     sourcePeriod: 'Local preview',
+    sourceLabel: 'Local demo preview · illustrative estimated cost',
     points,
     comparisonPoints: query.compareDate ? previous : null,
     totalKwh,

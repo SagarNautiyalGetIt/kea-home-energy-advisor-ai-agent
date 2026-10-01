@@ -160,7 +160,7 @@ export default function UsageScreen() {
   const [secondPeriod, setSecondPeriod] = useState(() => toDateValue(addDays(new Date(), -7)));
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
-  const [, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -206,7 +206,7 @@ export default function UsageScreen() {
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
   useEffect(() => {
     const controller = new AbortController();
-    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
       void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
       return () => controller.abort();
     }
@@ -231,6 +231,7 @@ export default function UsageScreen() {
       await Promise.resolve();
       if (controller.signal.aborted) return;
       setLoading(true);
+      setData(null);
       setLoadError(null);
       try {
         const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
@@ -240,7 +241,7 @@ export default function UsageScreen() {
           // deliberately settle on the latest complete Monday-Sunday week, so their
           // X axis is never cut short at the final reading (for example, Friday).
           const needsAvailableRange = period === 'weekly' ? result.points.length < 7 : result.points.length === 0;
-          if (!comparison && !result.isDemo && needsAvailableRange && result.availableTo) {
+          if (!comparison && needsAvailableRange && result.availableTo) {
             const latest = parseDate(result.availableTo);
             const fallbackDate = period === 'weekly'
               ? toDateValue(addDays(startOfWeek(latest), -1))
@@ -436,10 +437,15 @@ export default function UsageScreen() {
             </View>
           </View>
 
-          {loading && !data ? (
+          {loading ? (
             <UsageChartLoader />
+          ) : loadError ? (
+            <View style={styles.usageStatus}><Text accessibilityRole="alert" style={[styles.usageStatusText, { color: colors.text }]}>{loadError}</Text><PrimaryButton label="Retry usage" onPress={refresh} /></View>
+          ) : !data || data.points.length === 0 ? (
+            <View style={styles.usageStatus}><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>No dated readings are available for this selection. Choose another date.</Text></View>
           ) : (
           <>
+          <Text style={[styles.usageSource, { color: colors.textMuted }]}>{data.sourceLabel}</Text>
           {/* Chart Header & Unit Toggle (Outside of PanResponder for instant, 100% reliable tapping) */}
           <View style={styles.chartHeaderCard}>
             <View style={styles.chartHeader}>
@@ -732,6 +738,9 @@ export default function UsageScreen() {
 }
 
 const styles = StyleSheet.create({
+  usageSource: { fontSize: 12, lineHeight: 17, paddingHorizontal: 8, paddingTop: 10 },
+  usageStatus: { paddingVertical: 30, paddingHorizontal: 16, gap: 16 },
+  usageStatusText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
   screenEnter: { flex: 1 },
   screenRoot: {
     flex: 1,

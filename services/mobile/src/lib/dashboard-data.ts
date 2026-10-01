@@ -7,6 +7,7 @@ type HouseholdSummaryApi = {
   period: string;
   daily_kwh: number[];
   daily_dates?: string[];
+  date_source?: string;
   region?: string | null;
   total_kwh: number;
   estimated_cost_nzd: number;
@@ -49,6 +50,7 @@ export type DashboardViewData = {
   warningCaveats: string[];
   warningTriggered: boolean | null;
   isDemo: boolean;
+  sourceLabel: string;
 };
 
 const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -159,7 +161,8 @@ async function loadApiDashboard(customerId: string, signal?: AbortSignal): Promi
     warningReasons: shock?.reasons?.map(readableBillReason) ?? [],
     warningCaveats: shock?.caveats ?? [],
     warningTriggered: shock?.triggered ?? null,
-    isDemo: false,
+    isDemo: household.date_source === 'demo',
+    sourceLabel: household.date_source === 'demo' ? 'Demo usage · illustrative estimated costs' : 'Account daily totals · estimated costs',
   };
 }
 
@@ -190,6 +193,7 @@ function loadDemoDashboard(): DashboardViewData {
     warningCaveats: [],
     warningTriggered: true,
     isDemo: true,
+    sourceLabel: 'Local demo preview · illustrative estimated costs',
   };
 }
 
