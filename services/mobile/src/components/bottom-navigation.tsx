@@ -4,6 +4,7 @@ import { router, usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { palette, useAppTheme } from '@/theme';
+import { SparkyPresence } from './sparky-presence';
 
 type Props = {
   includeHome?: boolean;
@@ -45,7 +46,7 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
       const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
       const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
       return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
-      {item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} name={item.icon} size={24} />}
+      {item.label === 'Sparky' ? <SparkyPresence mode="static" size={28} /> : item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? '#FFFFFF' : 'rgba(255,255,255,0.52)'} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={styles.selectedDot} /> : null}
       {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, warning && styles.warningLabel]}>{item.label}</Text><Text style={[styles.listDetail, warning && styles.warningDetail, normal && styles.normalDetail]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color="rgba(255,255,255,0.68)" name="chevron-forward" size={21} /> : null}
