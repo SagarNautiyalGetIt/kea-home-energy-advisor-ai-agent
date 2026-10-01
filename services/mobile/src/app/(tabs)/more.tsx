@@ -12,15 +12,15 @@ import { loadDemoAccounts, type DemoAccount } from '@/lib/account-api';
 import { useToast } from '@/providers/toast';
 
 const menu = [
-  { label: 'Plans', detail: 'Compare pricing and terms', icon: 'swap-horizontal' as const, route: '/plans' as const, tint: 'money' as const },
   { label: 'Profile', detail: 'Contact and account details', icon: 'person' as const, route: '/profile' as const, tint: 'info' as const },
+  { label: 'Plans', detail: 'Compare pricing and terms', icon: 'swap-horizontal' as const, route: '/plans' as const, tint: 'money' as const },
   { label: 'Help & support', detail: 'Answers and Customer Care', icon: 'help-circle' as const, route: '/help' as const, tint: 'ai' as const },
   { label: 'Settings', detail: 'Alerts, privacy and security', icon: 'settings' as const, route: '/settings' as const, tint: 'utility' as const },
 ];
 
 export default function MoreScreen() {
   const { colors } = useAppTheme();
-  const { session, signIn, signOut } = useAuth();
+  const { signIn, signOut } = useAuth();
   const { showToast } = useToast();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
@@ -55,18 +55,6 @@ export default function MoreScreen() {
   return (
     <Screen>
       <PageHeader title="More" subtitle="Your Kea Energy account" />
-      <Pressable accessibilityLabel="Open profile" accessibilityRole="button" onPress={() => router.push('/profile')} style={({ pressed }) => [pressed && styles.pressed]}>
-        <View style={styles.profileCard}>
-          <View style={styles.profileCardContent}>
-            <Ionicons color={colors.text} name="person-circle" size={58} />
-            <View style={styles.profileCopy}>
-              <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>{session?.displayName}</Text>
-              <Text numberOfLines={1} style={[styles.email, { color: colors.textMuted }]}>{session?.email} {session?.customerId ? `(${session.customerId})` : ''}</Text>
-            </View>
-            <Ionicons color={colors.textMuted} name="chevron-forward" size={20} />
-          </View>
-        </View>
-      </Pressable>
       <SectionTitle>Account</SectionTitle>
       <View style={styles.menuCard}>{menu.map((item, index) => <Pressable key={item.route} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }, pressed && styles.pressed]}><Ionicons color={colors.text} name={item.icon} size={24} /><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>)}</View>
       <Pressable onPress={() => void openDemoAccounts()} style={[styles.switchDemo, { backgroundColor: 'transparent', borderColor: colors.border }]}><Ionicons color={colors.text} name="people" size={24} /><Text style={[styles.switchDemoText, { color: colors.text }]}>Switch demo account</Text></Pressable>
@@ -92,7 +80,6 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   screenEnter: { flex: 1 },
-  profileCard: { height: 96, maxHeight: 96, minHeight: 0, flexGrow: 0, padding: 12, overflow: 'hidden' }, profileCardContent: { width: '100%', height: '100%', flexDirection: 'row', alignItems: 'center', gap: 14 }, avatar: { width: 56, height: 56, borderRadius: 18 }, profileCopy: { flex: 1, minWidth: 0 }, name: { fontSize: 18, fontWeight: '900' }, email: { marginTop: 3, fontSize: 12 },
   menuCard: { paddingVertical: 1 }, row: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }, rowCopy: { flex: 1 }, rowTitle: { fontSize: 14, fontWeight: '900' }, rowDetail: { marginTop: 3, fontSize: 12 }, pressed: { opacity: 0.65 },
   logout: { minHeight: 78, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 12, marginTop: 0, borderWidth: 0, borderTopWidth: 1, borderRadius: 0, paddingVertical: 12 }, logoutText: { color: palette.red, fontSize: 14, fontWeight: '900' }, version: { marginTop: 18, fontSize: 12, textAlign: 'center' }, modalText: { fontSize: 14, lineHeight: 21, textAlign: 'center', paddingVertical: 12 }, footerButtons: { flex: 1, flexDirection: 'row', gap: 10 }, footerButton: { flex: 1 },
   switchDemo: { minHeight: 78, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 12, marginTop: 0, borderWidth: 0, borderTopWidth: 1, borderRadius: 0, paddingVertical: 12 },

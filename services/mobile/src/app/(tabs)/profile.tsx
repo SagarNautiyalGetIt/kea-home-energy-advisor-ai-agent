@@ -13,13 +13,9 @@ import { palette, useAppTheme } from '@/theme';
 
 type Errors = Partial<Record<'name' | 'address' | 'phone' | 'email', string>>;
 
-function portraitForCustomer(customerId: string) {
-  // The API has no gender/avatar field. Keep the supplied Zara portrait tied to
-  // the known Zara account and use the supplied male portrait for other accounts.
-  return customerId === 'H-ZARA'
-    ? require('../../../assets/kea/profile-female.png')
-    : require('../../../assets/kea/profile-male.png');
-}
+// The backend has no avatar field. Match the illustrative photo used by the
+// website's profile menu and page; it is not asserted to be the account holder.
+const customerPortrait = require('../../../assets/kea/customer-profile-man.png');
 
 export default function ProfileScreen() {
   const { colors } = useAppTheme();
@@ -34,7 +30,6 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
-  const portrait = portraitForCustomer(profile.customerId);
   const details = [
     ['person', 'Customer ID', profile.customerId, 'info'],
     ['person-circle', 'Name', profile.name, 'info'],
@@ -94,7 +89,7 @@ export default function ProfileScreen() {
     <Screen>
       <PageHeader action={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />} title="Profile" subtitle="Review and manage your contact details" />
       <View style={styles.profileContent}>
-        <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image resizeMode="contain" source={portrait} style={styles.portrait} /></View>
+        <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image accessibilityLabel="Illustrative customer portrait" resizeMode="cover" source={customerPortrait} style={styles.portrait} /></View>
         <View style={styles.details}>{details.map(([icon, label, value, tint]) => <View key={label} style={[styles.detail, { borderBottomColor: colors.border }]}><Ionicons color={colors.icons[tint]} name={icon} size={22} /><View style={styles.detailCopy}><Text style={[styles.detailLabel, { color: colors.textMuted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.text }]}>{value || 'Not available'}</Text></View></View>)}</View>
         {message ? <Text accessibilityRole={status === 'error' ? 'alert' : 'text'} style={[styles.dataMessage, { color: status === 'error' ? palette.red : colors.textMuted }]}>{message}</Text> : null}
         <PrimaryButton disabled={status !== 'ready' || !canEdit} icon="create-outline" label={status === 'loading' ? 'Loading…' : canEdit ? 'Edit profile' : 'Updates unavailable'} onPress={() => { setDraft(profile); setErrors({}); setEditing(true); }} />
@@ -108,5 +103,5 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  profileContent: { overflow: 'hidden' }, hero: { minHeight: 145, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, paddingLeft: 20 }, heroEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.1 }, heroName: { maxWidth: 200, marginTop: 7, fontSize: 24, fontWeight: '900' }, portrait: { width: 132, height: 132, marginRight: 8 }, details: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }, detail: { minHeight: 67, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1 }, detailCopy: { flex: 1 }, detailLabel: { fontSize: 12, fontWeight: '700' }, detailValue: { marginTop: 3, fontSize: 14, fontWeight: '800' }, dataMessage: { paddingHorizontal: 18, paddingBottom: 14, fontSize: 12, lineHeight: 17 }, security: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, borderTopWidth: 1, paddingTop: 16, paddingHorizontal: 2 }, securityCopy: { flex: 1 }, securityTitle: { fontSize: 14, fontWeight: '900' }, securityBody: { marginTop: 3, fontSize: 12, lineHeight: 17 }, form: { gap: 16 }, footerButtons: { flex: 1, flexDirection: 'row', gap: 10 }, footerButton: { flex: 1 },
+  profileContent: { overflow: 'hidden' }, hero: { minHeight: 145, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, paddingLeft: 20 }, heroEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.1 }, heroName: { maxWidth: 200, marginTop: 7, fontSize: 24, fontWeight: '900' }, portrait: { width: 112, height: 112, borderRadius: 56, marginRight: 18 }, details: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }, detail: { minHeight: 67, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1 }, detailCopy: { flex: 1 }, detailLabel: { fontSize: 12, fontWeight: '700' }, detailValue: { marginTop: 3, fontSize: 14, fontWeight: '800' }, dataMessage: { paddingHorizontal: 18, paddingBottom: 14, fontSize: 12, lineHeight: 17 }, security: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, borderTopWidth: 1, paddingTop: 16, paddingHorizontal: 2 }, securityCopy: { flex: 1 }, securityTitle: { fontSize: 14, fontWeight: '900' }, securityBody: { marginTop: 3, fontSize: 12, lineHeight: 17 }, form: { gap: 16 }, footerButtons: { flex: 1, flexDirection: 'row', gap: 10 }, footerButton: { flex: 1 },
 });
