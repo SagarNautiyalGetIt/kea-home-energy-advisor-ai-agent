@@ -177,10 +177,9 @@ export function UsageChart({
   const line = useMemo(() => pathFor(linePoints), [linePoints]);
   const compareLine = useMemo(() => pathFor(compareLinePoints), [compareLinePoints]);
   const baselineY = plotBottom;
-  const area = line && points.length
+  const area = line && points.length > 1
     ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${linePoints[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
     : '';
-  const onlyPoint = points.length === 1 ? points[0] : undefined;
   const hasCompare = comparePoints.length === values.length && comparePoints.length > 0;
   const slotWidth = points.length > 1 ? points[1]!.x - points[0]!.x : plotWidth;
   const singleBarWidth = Math.max(8, Math.min(30, slotWidth * 0.56));
@@ -345,18 +344,8 @@ export function UsageChart({
               />
             ) : null}
 
-            {onlyPoint ? (
-              <Line
-                stroke="#C7F071"
-                strokeLinecap="round"
-                strokeOpacity={0.86}
-                strokeWidth={3.3}
-                x1={horizontalPadding}
-                x2={plotWidth - horizontalPadding}
-                y1={onlyPoint.y}
-                y2={onlyPoint.y}
-              />
-            ) : (
+            {hasCompare && comparePoints.length === 1 ? <Circle cx={comparePoints[0]!.x} cy={comparePoints[0]!.y} fill="#FBBF24" r={4} /> : null}
+            {points.length > 1 ? (
               <AnimatedPath
                 animatedProps={lineAnimatedProps}
                 d={line}
@@ -366,7 +355,7 @@ export function UsageChart({
                 strokeLinejoin="round"
                 strokeWidth={3.3}
               />
-            )}
+            ) : null}
 
             {points.map((point, index) => {
               const isSelected = visibleActiveIndex === index;
@@ -387,7 +376,7 @@ export function UsageChart({
                     cx={point.x}
                     cy={point.y}
                     fill="#C7F071"
-                    r={isSelected ? 3.5 : POINT_RADIUS}
+                    r={points.length === 1 ? 5 : isSelected ? 3.5 : POINT_RADIUS}
                     stroke="#FFFFFF"
                     strokeWidth={1}
                   />
@@ -495,7 +484,7 @@ export function UsageChart({
           const x = leadingDataInset + xForIndex(index, displayLabels.length, plotWidth - leadingDataInset, horizontalPadding);
           const isHourlyAxis = displayLabels.length >= 20;
           const labelX = isHourlyAxis && index === 3 ? x + 4 : x;
-          const textAnchor = isBar && !isHourlyAxis
+          const textAnchor = displayLabels.length === 1 || (isBar && !isHourlyAxis)
             ? 'middle'
             : index === 0
               ? 'start'

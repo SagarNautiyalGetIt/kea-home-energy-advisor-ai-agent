@@ -203,7 +203,7 @@ export default function UsageScreen() {
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
-  const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
+  const periodTitle = period === 'daily' ? "Selected day's total" : period === 'weekly' ? "Selected week's total" : "Selected month's total";
   useEffect(() => {
     const controller = new AbortController();
     if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
