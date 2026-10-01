@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
+import Svg, { Path as SvgPath, Line as SvgLine, Polygon } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
@@ -14,12 +15,75 @@ import { UsageChartLoader } from '@/components/usage-chart-loader';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
 import { useAuth } from '@/providers/auth';
+import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
 
 type Period = UsagePeriod;
 type Unit = 'kwh' | 'cost';
 type ChartType = 'line' | 'bar';
 type ComparisonSelection = { first: string; second: string };
+
+const CHART_PALETTE_KEY = 'kea-usage-chart-palette-v1';
+const DEFAULT_CHART_COLOR = '#C7F071';
+const DEFAULT_LIGHT_CHART_COLOR = '#277442';
+const chartPalettes = [
+  { id: 'coral', name: 'Coral', primary: '#FB7185', comparison: '#67E8F9', areaTop: '#BE123C' },
+  { id: 'ember', name: 'Ember', primary: '#FB923C', comparison: '#67E8F9', areaTop: '#C2410C' },
+  { id: 'gold', name: 'Gold', primary: '#FBBF24', comparison: '#38BDF8', areaTop: '#B45309' },
+  { id: 'lime', name: 'Lime', primary: '#C7F071', comparison: '#FBBF24', areaTop: '#75914B' },
+  { id: 'emerald', name: 'Emerald', primary: '#4ADE80', comparison: '#FBBF24', areaTop: '#15803D' },
+  { id: 'mint', name: 'Mint', primary: '#2DD4BF', comparison: '#F472B6', areaTop: '#0F766E' },
+  { id: 'ocean', name: 'Ocean', primary: '#38BDF8', comparison: '#FBBF24', areaTop: '#0369A1' },
+  { id: 'azure', name: 'Azure', primary: '#60A5FA', comparison: '#FBBF24', areaTop: '#1D4ED8' },
+  { id: 'iris', name: 'Iris', primary: '#A78BFA', comparison: '#FCD34D', areaTop: '#6D28D9' },
+  { id: 'orchid', name: 'Orchid', primary: '#E879F9', comparison: '#67E8F9', areaTop: '#A21CAF' },
+  { id: 'rose', name: 'Rose', primary: '#F472B6', comparison: '#2DD4BF', areaTop: '#BE185D' },
+] as const;
+
+function blendHex(from: string, to: string, amount: number) {
+  const channels = [1, 3, 5].map((index) => {
+    const start = Number.parseInt(from.slice(index, index + 2), 16);
+    const end = Number.parseInt(to.slice(index, index + 2), 16);
+    return Math.round(start + (end - start) * amount).toString(16).padStart(2, '0');
+  });
+  return `#${channels.join('')}`.toUpperCase();
+}
+
+function iconColorOn(hex: string) {
+  const [red, green, blue] = [1, 3, 5].map((index) => {
+    const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue! > 0.18 ? '#111111' : '#FFFFFF';
+}
+
+const chartColorRows = [
+  ['#FFFFFF', '#E4E4E7', '#C4C4CA', '#A1A1AA', '#71717A'].map((primary, index) => ({
+    name: `Neutral ${index + 1}`,
+    primary,
+    comparison: '#FBBF24',
+    areaTop: blendHex(primary, '#000000', 0.4),
+  })),
+  ...chartPalettes.map((family) => [
+    { name: `Soft ${family.name}`, primary: blendHex(family.primary, '#FFFFFF', 0.52) },
+    { name: `Light ${family.name}`, primary: blendHex(family.primary, '#FFFFFF', 0.27) },
+    { name: family.name, primary: family.primary },
+    { name: `Rich ${family.name}`, primary: blendHex(family.primary, '#000000', 0.13) },
+    { name: `Deep ${family.name}`, primary: blendHex(family.primary, '#000000', 0.25) },
+  ].map((shade) => ({
+    ...shade,
+    comparison: family.comparison,
+    areaTop: shade.primary === family.primary ? family.areaTop : blendHex(shade.primary, '#000000', 0.4),
+  }))),
+];
+const chartColors = chartColorRows.flat();
+const octagonRowCounts = [5, 6, 7, 8, 8, 8, 7, 6, 5] as const;
+let nextOctagonColor = 0;
+const octagonRows = octagonRowCounts.map((count) => {
+  const row = chartColors.slice(nextOctagonColor, nextOctagonColor + count);
+  nextOctagonColor += count;
+  return row;
+});
 
 function LineChartIcon({ color }: { color: string }) {
   return (
@@ -146,10 +210,13 @@ function energyCategoryPresentation(key: string) {
 export default function UsageScreen() {
   const { colors, mode } = useAppTheme();
   const { session } = useAuth();
-  const { height: screenHeight } = useWindowDimensions();
+  const { showToast } = useToast();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
   const [unit, setUnit] = useState<Unit>('cost');
   const [chartType, setChartType] = useState<ChartType>('line');
+  const [chartColor, setChartColor] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [comparisons, setComparisons] = useState<Record<Period, ComparisonSelection | null>>({ daily: null, weekly: null, monthly: null });
   const [date, setDate] = useState(() => toDateValue(new Date()));
   const [dateOpen, setDateOpen] = useState(false);
@@ -175,6 +242,42 @@ export default function UsageScreen() {
   const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
   const breakdownListPeekHeight = 62 * 4.6;
   const breakdownListStart = Math.max(0, screenHeight - breakdownListPeekHeight);
+  const hexHeight = Math.min(30, Math.max(24, Math.floor((screenWidth - 52) / (8.5 * Math.sqrt(3) / 2))));
+  const hexWidth = Math.round(hexHeight * Math.sqrt(3) / 2);
+  const octagonWidth = hexWidth * 8.5;
+  const octagonHeight = hexHeight * 7;
+  const hexCells = octagonRows.flatMap((row, rowIndex) => row.map((option, cellIndex) => ({
+    option,
+    x: ((8.5 - row.length) / 2 + (rowIndex === 4 ? 0.25 : -0.25) + cellIndex) * hexWidth,
+    y: rowIndex * hexHeight * 0.75,
+  })));
+  const selectedHex = hexCells.find(({ option }) => option.primary === chartColor);
+  const defaultChartColor = mode === 'dark' ? DEFAULT_CHART_COLOR : DEFAULT_LIGHT_CHART_COLOR;
+  const chartPalette = chartColors.find((item) => item.primary === chartColor) ?? {
+    name: 'Default',
+    primary: defaultChartColor,
+    comparison: mode === 'dark' ? '#FBBF24' : '#946000',
+    areaTop: defaultChartColor,
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    void AsyncStorage.getItem(CHART_PALETTE_KEY)
+      .then((saved) => {
+        const savedHex = saved && /^#[0-9a-f]{6}$/i.test(saved) ? saved.toUpperCase() : null;
+        const previousChoice = chartPalettes.find((item) => item.id === saved)?.primary;
+        if (mounted) setChartColor(savedHex ?? previousChoice ?? null);
+      })
+      .catch(() => { if (mounted) setChartColor(null); });
+    return () => { mounted = false; };
+  }, []);
+
+  const chooseChartPalette = (next: string | null) => {
+    setChartColor(next);
+    void Haptics.selectionAsync();
+    void (next === null ? AsyncStorage.removeItem(CHART_PALETTE_KEY) : AsyncStorage.setItem(CHART_PALETTE_KEY, next))
+      .catch(() => showToast('Graph colour could not be saved.', 'warning'));
+  };
 
   const comparison = comparisons[period];
   const compare = comparison !== null;
@@ -441,7 +544,7 @@ export default function UsageScreen() {
           </View>
 
           {loading ? (
-            <UsageChartLoader />
+            <UsageChartLoader color={chartPalette.primary} />
           ) : loadError ? (
             <View style={styles.usageStatus}><Text accessibilityRole="alert" style={[styles.usageStatusText, { color: colors.text }]}>{loadError}</Text><PrimaryButton label="Retry usage" onPress={refresh} /></View>
           ) : !data || data.points.length === 0 ? (
@@ -458,6 +561,16 @@ export default function UsageScreen() {
                 </Text>
               </View>
               <View style={styles.headerToggles}>
+                <Pressable
+                  accessibilityLabel={`Graph colours: ${chartPalette.name}. Choose colours`}
+                  accessibilityRole="button"
+                  hitSlop={6}
+                  onPress={() => setPaletteOpen(true)}
+                  style={({ pressed }) => [styles.paletteTrigger, { backgroundColor: colors.input, borderColor: colors.border }, pressed && styles.pressed]}
+                >
+                  <View style={[styles.paletteTriggerDot, { backgroundColor: chartPalette.primary }]} />
+                  <Ionicons color={colors.text} name="color-palette-outline" size={16} />
+                </Pressable>
                 <View style={[styles.unitToggle, { backgroundColor: colors.input }]}>
                   {(['line', 'bar'] as const).map((item) => (
                     <Pressable
@@ -512,6 +625,9 @@ export default function UsageScreen() {
                 accessibilityLabel={`${period} electricity usage in ${displayUnit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
                 active={chartActive}
                 chartType={chartType}
+                primaryColor={chartPalette.primary}
+                comparisonColor={chartPalette.comparison}
+                areaTopColor={chartPalette.areaTop}
                 leadingDecorativeAnchor
                 key={`${period}-${displayUnit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
                 axisLabels={chartAxisLabels}
@@ -527,11 +643,11 @@ export default function UsageScreen() {
               {compare ? (
                 <View style={styles.chartLegend}>
                   <View style={styles.chartLegendItem}>
-                    <View style={[styles.chartLegendDot, { backgroundColor: '#C7F071' }]} />
+                    <View style={[styles.chartLegendDot, { backgroundColor: chartPalette.primary }]} />
                     <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
                   </View>
                   <View style={styles.chartLegendItem}>
-                    <View style={[styles.chartLegendDot, { backgroundColor: '#FBBF24' }]} />
+                    <View style={[styles.chartLegendDot, { backgroundColor: chartPalette.comparison }]} />
                     <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
                   </View>
                 </View>
@@ -662,6 +778,67 @@ export default function UsageScreen() {
               </View>
             </View>;
           })}
+        </View>
+      </ModalSheet>
+      <ModalSheet
+        dismissOnBackdropPress={false}
+        onClose={() => setPaletteOpen(false)}
+        title="Graph colours"
+        visible={paletteOpen}
+      >
+        <View style={styles.palettePreviewRow}>
+          <View style={[styles.palettePreview, styles.selectedPalettePreview, { borderColor: colors.border }]}>
+            <Svg height={24} style={{ marginLeft: 3 }} viewBox="0 0 44 44" width={24}>
+              <Polygon fill={chartPalette.primary} points="22,1 42,11 42,33 22,43 2,33 2,11" />
+            </Svg>
+            <View style={styles.palettePreviewCopy}>
+              <Text style={[styles.palettePreviewLabel, { color: colors.textMuted, fontSize: 10 }]}>SELECTED COLOUR</Text>
+              <Text style={[styles.palettePreviewValue, { color: colors.text, fontSize: 14 }]}>{chartPalette.name} · {chartPalette.primary}</Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityLabel="Use default graph colour"
+            accessibilityRole="button"
+            onPress={() => chooseChartPalette(null)}
+            style={({ pressed }) => [styles.palettePreview, styles.defaultPalettePreview, { borderColor: colors.border }, pressed && styles.pressed]}
+          >
+            <Svg height={24} style={{ marginLeft: 3 }} viewBox="0 0 44 44" width={24}>
+              <Polygon fill={defaultChartColor} points="22,1 42,11 42,33 22,43 2,33 2,11" />
+            </Svg>
+            <View style={styles.defaultPaletteCopy}>
+              <Text style={[styles.palettePreviewLabel, { color: colors.textMuted, fontSize: 10 }]}>DEFAULT</Text>
+            </View>
+          </Pressable>
+        </View>
+        <View style={[styles.hexPaletteGrid, { width: octagonWidth, height: octagonHeight }]}>
+          <Svg height={octagonHeight} viewBox={`0 0 ${octagonWidth} ${octagonHeight}`} width={octagonWidth}>
+            {hexCells.map(({ option, x, y }) => {
+              const selected = chartColor === option.primary;
+              const points = `${x + hexWidth / 2},${y} ${x + hexWidth},${y + hexHeight / 4} ${x + hexWidth},${y + hexHeight * 3 / 4} ${x + hexWidth / 2},${y + hexHeight} ${x},${y + hexHeight * 3 / 4} ${x},${y + hexHeight / 4}`;
+              return (
+                <Polygon
+                  accessible
+                  accessibilityLabel={`${option.name}, ${option.primary}${selected ? ', selected' : ''}`}
+                  fill={option.primary}
+                  key={option.primary}
+                  onPress={() => chooseChartPalette(option.primary)}
+                  points={points}
+                  stroke="#050505"
+                  strokeWidth={1.35}
+                />
+              );
+            })}
+            {selectedHex ? (
+              <Polygon
+                fill="none"
+                pointerEvents="none"
+                points={`${selectedHex.x + hexWidth / 2},${selectedHex.y} ${selectedHex.x + hexWidth},${selectedHex.y + hexHeight / 4} ${selectedHex.x + hexWidth},${selectedHex.y + hexHeight * 3 / 4} ${selectedHex.x + hexWidth / 2},${selectedHex.y + hexHeight} ${selectedHex.x},${selectedHex.y + hexHeight * 3 / 4} ${selectedHex.x},${selectedHex.y + hexHeight / 4}`}
+                stroke="#FFFFFF"
+                strokeWidth={2}
+              />
+            ) : null}
+          </Svg>
+          {selectedHex ? <Ionicons color={iconColorOn(selectedHex.option.primary)} name="checkmark" pointerEvents="none" size={Math.round(hexHeight * 0.5)} style={[styles.hexPaletteCheck, { left: selectedHex.x + hexWidth / 2 - hexHeight / 4, top: selectedHex.y + hexHeight / 4 }]} /> : null}
         </View>
       </ModalSheet>
       <ModalSheet
@@ -899,6 +1076,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  paletteTrigger: {
+    width: 36,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  paletteTriggerDot: { width: 9, height: 9, borderRadius: 5 },
+  palettePreview: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, overflow: 'hidden', padding: 6 },
+  selectedPalettePreview: { flex: 7, padding: 10 },
+  defaultPalettePreview: { flex: 3 },
+  palettePreviewRow: { flexDirection: 'row', gap: 8, width: '100%' },
+  palettePreviewCopy: { flex: 1, minWidth: 0 },
+  defaultPaletteCopy: { flex: 0 },
+  palettePreviewLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  palettePreviewValue: { marginTop: 3, fontSize: 15, fontWeight: '800' },
+  hexPaletteGrid: { alignSelf: 'center', marginTop: 20, position: 'relative' },
+  hexPaletteCheck: { position: 'absolute' },
   unitOption: {
     width: 38,
     height: 30,

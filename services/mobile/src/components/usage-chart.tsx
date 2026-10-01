@@ -106,6 +106,9 @@ export function UsageChart({
   previous,
   unit = 'kwh',
   chartType = 'line',
+  primaryColor: requestedPrimaryColor,
+  comparisonColor: requestedComparisonColor,
+  areaTopColor: requestedAreaTopColor,
   max: requestedMax,
   xLabelInterval = 1,
   accessibilityLabel = 'Electricity usage chart',
@@ -124,6 +127,9 @@ export function UsageChart({
   previous?: readonly number[];
   unit?: ChartUnit;
   chartType?: ChartType;
+  primaryColor?: string;
+  comparisonColor?: string;
+  areaTopColor?: string;
   max?: number;
   xLabelInterval?: number;
   accessibilityLabel?: string;
@@ -134,8 +140,9 @@ export function UsageChart({
   highlightedIndices?: readonly number[];
 }) {
   const { colors, mode } = useAppTheme();
-  const chartColor = mode === 'dark' ? '#C7F071' : '#277442';
-  const comparisonColor = mode === 'dark' ? '#FBBF24' : '#946000';
+  const primaryColor = requestedPrimaryColor ?? (mode === 'dark' ? '#C7F071' : '#277442');
+  const comparisonColor = requestedComparisonColor ?? (mode === 'dark' ? '#FBBF24' : '#946000');
+  const areaTopColor = requestedAreaTopColor ?? primaryColor;
   const { width: windowWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -266,9 +273,9 @@ export function UsageChart({
       <Svg height={HEIGHT} viewBox={`0 0 ${chartWidth} ${HEIGHT}`} width="100%">
         <Defs>
           <LinearGradient id="usageAreaShade" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0%" stopColor={chartColor} stopOpacity={0.58} />
-            <Stop offset="58%" stopColor={chartColor} stopOpacity={0.30} />
-            <Stop offset="100%" stopColor={chartColor} stopOpacity={0.04} />
+            <Stop offset="0%" stopColor={areaTopColor} stopOpacity={0.58} />
+            <Stop offset="58%" stopColor={primaryColor} stopOpacity={0.30} />
+            <Stop offset="100%" stopColor={primaryColor} stopOpacity={0.04} />
           </LinearGradient>
         </Defs>
 
@@ -290,7 +297,7 @@ export function UsageChart({
 
         {isBar ? (
           points.map((point, index) => {
-            const mainFill = chartColor;
+            const mainFill = primaryColor;
             if (hasCompare) {
               const comparePoint = comparePoints[index];
               return (
@@ -352,7 +359,7 @@ export function UsageChart({
                 animatedProps={lineAnimatedProps}
                 d={line}
                 fill="none"
-                stroke={chartColor}
+                stroke={primaryColor}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={3.3}
@@ -367,9 +374,10 @@ export function UsageChart({
                     <Circle
                       cx={point.x}
                       cy={point.y}
-                      fill="rgba(199,240,113,0.2)"
+                      fill={primaryColor}
+                      fillOpacity={0.2}
                       r={ACTIVE_RING_RADIUS}
-                      stroke={chartColor}
+                      stroke={primaryColor}
                       strokeWidth={2}
                     />
                   ) : null}
@@ -377,7 +385,7 @@ export function UsageChart({
                     animatedProps={pointAnimatedProps}
                     cx={point.x}
                     cy={point.y}
-                    fill={chartColor}
+                    fill={primaryColor}
                     r={points.length === 1 ? 5 : isSelected ? 3.5 : POINT_RADIUS}
                     stroke={colors.background}
                     strokeWidth={1}
@@ -405,7 +413,7 @@ export function UsageChart({
             <G pointerEvents="none">
               {!isBar ? (
                 <Line
-                  stroke={chartColor}
+                  stroke={primaryColor}
                   strokeDasharray="4 5"
                   strokeOpacity={0.82}
                   strokeWidth={1.4}
@@ -419,7 +427,7 @@ export function UsageChart({
                 <Circle
                   cx={activeComparePoint.x}
                   cy={activeComparePoint.y}
-                  fill="#8E8E93"
+                  fill={comparisonColor}
                   r={4.5}
                   stroke="#F2F2F7"
                   strokeWidth={1.8}

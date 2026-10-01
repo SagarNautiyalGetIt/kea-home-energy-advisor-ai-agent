@@ -17,7 +17,7 @@ const LOADER_POINTS = [
   { x: 157, y: 109 }, { x: 205, y: 75 }, { x: 253, y: 89 }, { x: 303, y: 47 },
 ];
 
-function LoaderPoint({ delay, x, y }: { delay: number; x: number; y: number }) {
+function LoaderPoint({ delay, x, y, color }: { delay: number; x: number; y: number; color: string }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -37,10 +37,10 @@ function LoaderPoint({ delay, x, y }: { delay: number; x: number; y: number }) {
     r: 2 + progress.value * 1.5,
   }));
 
-  return <AnimatedCircle animatedProps={animatedProps} cx={x} cy={y} fill="#C7F071" stroke="#9CBD4B" strokeWidth="1.5" />;
+  return <AnimatedCircle animatedProps={animatedProps} cx={x} cy={y} fill={color} stroke={color} strokeOpacity={0.65} strokeWidth="1.5" />;
 }
 
-function LoaderBar({ delay, height, x }: { delay: number; height: number; x: number }) {
+function LoaderBar({ delay, height, x, color }: { delay: number; height: number; x: number; color: string }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -61,11 +61,11 @@ function LoaderBar({ delay, height, x }: { delay: number; height: number; x: num
     y: BASELINE - height * progress.value,
   }));
 
-  return <AnimatedRect animatedProps={animatedProps} fill="#C7F071" rx="2" width="19" x={x} />;
+  return <AnimatedRect animatedProps={animatedProps} fill={color} rx="2" width="19" x={x} />;
 }
 
 /** Visual-only loading state; it never supplies or changes Usage data. */
-export function UsageChartLoader() {
+export function UsageChartLoader({ color = '#C7F071' }: { color?: string }) {
   const draw = useSharedValue(0);
   const entrance = useSharedValue(0);
   const grid = useSharedValue(0);
@@ -98,13 +98,13 @@ export function UsageChartLoader() {
 
   return <Animated.View accessible accessibilityLabel="Loading usage chart" style={[styles.wrap, entranceStyle]}>
     <Svg height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%">
-      <Defs><LinearGradient id="usage-loader-fill" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor="#C7F071" stopOpacity={0.42} /><Stop offset="1" stopColor="#C7F071" stopOpacity={0} /></LinearGradient></Defs>
+      <Defs><LinearGradient id="usage-loader-fill" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={color} stopOpacity={0.42} /><Stop offset="1" stopColor={color} stopOpacity={0} /></LinearGradient></Defs>
       <AnimatedPath animatedProps={gridProps} d="M10 42H350 M10 86H350 M10 130H350 M10 174H350 M18 18V174 M70 18V174 M122 18V174 M174 18V174 M226 18V174 M278 18V174 M330 18V174" fill="none" stroke="#3A3A3C" strokeDasharray="5 7" strokeOpacity={0.42} />
-      {[44, 93, 142, 191, 240, 289].map((x, index) => <LoaderBar delay={120 + index * 72} height={[34, 51, 40, 64, 46, 73][index]!} key={x} x={x} />)}
+      {[44, 93, 142, 191, 240, 289].map((x, index) => <LoaderBar color={color} delay={120 + index * 72} height={[34, 51, 40, 64, 46, 73][index]!} key={x} x={x} />)}
       <AnimatedPath animatedProps={areaProps} d={AREA} fill="url(#usage-loader-fill)" />
-      <AnimatedPath animatedProps={lineProps} d={PATH} fill="none" stroke="#C7F071" strokeDasharray={LENGTH} strokeLinecap="round" strokeWidth="3.5" />
-      {LOADER_POINTS.map((point, index) => <LoaderPoint delay={470 + index * 70} key={point.x} x={point.x} y={point.y} />)}
-      <AnimatedCircle animatedProps={cursorProps} fill="#FFFFFF" r="5" stroke="#C7F071" strokeWidth="3" />
+      <AnimatedPath animatedProps={lineProps} d={PATH} fill="none" stroke={color} strokeDasharray={LENGTH} strokeLinecap="round" strokeWidth="3.5" />
+      {LOADER_POINTS.map((point, index) => <LoaderPoint color={color} delay={470 + index * 70} key={point.x} x={point.x} y={point.y} />)}
+      <AnimatedCircle animatedProps={cursorProps} fill="#FFFFFF" r="5" stroke={color} strokeWidth="3" />
     </Svg>
     <View style={styles.sheen} />
   </Animated.View>;
