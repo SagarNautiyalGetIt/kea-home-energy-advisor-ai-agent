@@ -70,9 +70,36 @@ export function selectedIndexes(series: UsageSeries, period: SeriesPeriod, selec
   return series.daily_dates.flatMap((day, index) => period !== 'monthly' || day.slice(0, 7) === selected.slice(0, 7) ? [index] : []);
 }
 
+export function usageCoverage(series: UsageSeries, period: SeriesPeriod, selected: string) {
+  const range = usageRange(period, selected);
+  // The headline covers the selected month, not all four chart months.
+  const start = period === 'monthly' ? `${selected.slice(0, 7)}-01` : range.start;
+  const expectedDays = Math.round((isoDay(range.end).getTime() - isoDay(start).getTime()) / 86_400_000) + 1;
+  const days = selectedIndexes(series, period, selected).length;
+  return { days, expectedDays, complete: days === expectedDays };
+}
+
+export function canOverlayUsage(series: UsageSeries, previous: UsageSeries, period: SeriesPeriod, selected: string, compared: string) {
+  const coversWindow = (row: UsageSeries, date: string) => {
+    const range = usageRange(period, date);
+    const expected = Math.round((isoDay(range.end).getTime() - isoDay(range.start).getTime()) / 86_400_000) + 1;
+    return row.daily_dates.length === expected;
+  };
+  // A missing weekday or month must not shift the remaining readings into
+  // another date's chart slot. Render only complete, matching relative windows.
+  return coversWindow(series, selected) && coversWindow(previous, compared);
+}
+
 export function selectedTotals(series: UsageSeries, period: SeriesPeriod, selected: string) {
   const indexes = selectedIndexes(series, period, selected);
   if (!indexes.length) return { kwh: null, costNzd: null };
   const kwh = indexes.reduce((sum, index) => sum + series.daily_kwh[index]!, 0);
   return { kwh, costNzd: series.total_kwh > 0 ? kwh * series.estimated_cost_nzd / series.total_kwh : 0 };
+}
+
+export function usageTrendPercent(series: UsageSeries, previous: UsageSeries, period: SeriesPeriod, selected: string, compared: string) {
+  if (!usageCoverage(series, period, selected).complete || !usageCoverage(previous, period, compared).complete) return null;
+  const currentKwh = selectedTotals(series, period, selected).kwh;
+  const previousKwh = selectedTotals(previous, period, compared).kwh;
+  return currentKwh !== null && previousKwh ? (currentKwh - previousKwh) / previousKwh * 100 : null;
 }

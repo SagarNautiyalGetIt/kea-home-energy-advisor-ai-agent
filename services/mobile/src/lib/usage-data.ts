@@ -1,6 +1,6 @@
 import { hourlyUsage, usage as fixtureUsage } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
-import { selectedIndexes, selectedTotals, usageRange, usageSource, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
+import { canOverlayUsage, selectedIndexes, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
 
 export type UsagePeriod = 'daily' | 'weekly' | 'monthly';
 export type UsageBandKey = 'peak' | 'offPeak' | 'night';
@@ -122,21 +122,25 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
   const points = seriesPoints(series, query.period);
   const comparisonPoints = previous ? seriesPoints(previous, query.period) : null;
   const totals = selectedTotals(series, query.period, query.date);
-  const previousTotals = previous ? selectedTotals(previous, query.period, query.compareDate!) : null;
   const source = usageSource(series);
   const previousSource = previous ? usageSource(previous) : null;
-  const selectedDays = selectedIndexes(series, query.period, query.date).length;
+  const coverage = usageCoverage(series, query.period, query.date);
+  const previousCoverage = previous ? usageCoverage(previous, query.period, query.compareDate!) : null;
+  const overlayAvailable = previous ? canOverlayUsage(series, previous, query.period, query.date, query.compareDate!) : false;
+  const comparisonLabel = previousSource && previousCoverage
+    ? ` · comparison: ${previousSource.label} · ${previousCoverage.days}/${previousCoverage.expectedDays} days${overlayAvailable ? '' : ' · comparison chart unavailable: incomplete date coverage'}`
+    : '';
 
   return {
     period: query.period,
     selectedDate: query.date,
     sourcePeriod: query.date.slice(0, 7),
-    sourceLabel: `${source.label}${previousSource ? ` · comparison: ${previousSource.label}` : ''} · ${selectedDays} day${selectedDays === 1 ? '' : 's'} available`,
+    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${comparisonLabel}`,
     points,
-    comparisonPoints: comparisonPoints?.length ? comparisonPoints : null,
+    comparisonPoints: overlayAvailable && comparisonPoints?.length ? comparisonPoints : null,
     totalKwh: totals.kwh,
     totalCostNzd: totals.costNzd,
-    trendPercent: totals.kwh !== null && previousTotals?.kwh ? (totals.kwh - previousTotals.kwh) / previousTotals.kwh * 100 : null,
+    trendPercent: previous ? usageTrendPercent(series, previous, query.period, query.date, query.compareDate!) : null,
     bands: seriesBands(series, query.period, query.date),
     availableFrom: series.available_from ?? null,
     availableTo: series.available_to ?? null,

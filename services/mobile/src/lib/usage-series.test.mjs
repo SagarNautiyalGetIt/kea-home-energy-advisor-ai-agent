@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isoDay, selectedTotals, usageRange, usageSource, validateUsageSeries } from './usage-series.ts';
+import { canOverlayUsage, isoDay, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries } from './usage-series.ts';
 
 const fixture = () => ({ customer_id: 'A', daily_dates: ['2026-09-29', '2026-10-01'], daily_kwh: [10, 20], daily_quality: ['measured', 'estimated'], daily_peak_kwh: [null, null], daily_off_peak_kwh: [null, null], daily_night_kwh: [null, null], date_source: 'mart', total_kwh: 30, estimated_cost_nzd: 9, available_from: '2026-09-29', available_to: '2026-10-01' });
 const range = { start: '2026-09-01', end: '2026-10-31' };
@@ -32,5 +32,29 @@ describe('Frozen dated usage contract', () => {
     assert.deepEqual(selectedTotals(fixture(), 'monthly', '2026-10-01'), { kwh: 20, costNzd: 6 });
     assert.deepEqual(selectedTotals(fixture(), 'monthly', '2026-08-01'), { kwh: null, costNzd: null });
     assert.deepEqual(selectedTotals({ ...fixture(), daily_kwh: [0, 0], total_kwh: 0, estimated_cost_nzd: 0 }, 'monthly', '2026-10-01'), { kwh: 0, costNzd: 0 });
+  });
+  it('does not treat sparse weeks or months as complete comparison periods', () => {
+    assert.deepEqual(usageCoverage(fixture(), 'weekly', '2026-10-01'), { days: 2, expectedDays: 7, complete: false });
+    assert.deepEqual(usageCoverage(fixture(), 'monthly', '2026-10-01'), { days: 1, expectedDays: 31, complete: false });
+    assert.equal(canOverlayUsage(fixture(), fixture(), 'weekly', '2026-10-01', '2026-10-01'), false);
+    assert.equal(canOverlayUsage(fixture(), fixture(), 'monthly', '2026-10-01', '2026-10-01'), false);
+    const fullWeek = { ...fixture(), daily_dates: ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'] };
+    assert.equal(usageCoverage(fullWeek, 'weekly', '2026-10-01').complete, true);
+    assert.equal(canOverlayUsage(fullWeek, fullWeek, 'weekly', '2026-10-01', '2026-10-01'), true);
+  });
+  it('counts leap-month coverage and supports complete single-day comparisons', () => {
+    const leap = { ...fixture(), daily_dates: Array.from({ length: 29 }, (_, index) => `2024-02-${String(index + 1).padStart(2, '0')}`) };
+    assert.deepEqual(usageCoverage(leap, 'monthly', '2024-02-29'), { days: 29, expectedDays: 29, complete: true });
+    // A complete headline month is not a complete four-month chart window.
+    assert.equal(canOverlayUsage(leap, leap, 'monthly', '2024-02-29', '2024-02-29'), false);
+    const oneDay = { ...fixture(), daily_dates: ['2026-10-01'] };
+    assert.equal(canOverlayUsage(oneDay, oneDay, 'daily', '2026-10-01', '2026-10-01'), true);
+  });
+  it('suppresses misleading partial-period percentage changes and zero baselines', () => {
+    const full = { ...fixture(), daily_dates: ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'], daily_kwh: Array(7).fill(10) };
+    assert.equal(usageTrendPercent(full, fixture(), 'weekly', '2026-10-01', '2026-10-01'), null);
+    assert.equal(usageTrendPercent(fixture(), full, 'weekly', '2026-10-01', '2026-10-01'), null);
+    assert.equal(usageTrendPercent(full, { ...full, daily_kwh: Array(7).fill(5) }, 'weekly', '2026-10-01', '2026-10-01'), 100);
+    assert.equal(usageTrendPercent(full, { ...full, daily_kwh: Array(7).fill(0) }, 'weekly', '2026-10-01', '2026-10-01'), null);
   });
 });

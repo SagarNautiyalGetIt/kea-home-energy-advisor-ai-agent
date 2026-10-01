@@ -38,6 +38,9 @@ voice streams use the same configured base with their streaming transports.
 - Keep missing dates and null bands unavailable. Do not assume tariff time windows
   from the band names or claim derived daily costs are billing invoices.
 - Label demo usage and estimated readings/costs, including comparison data.
+- Show actual/expected date coverage for both selections. Suppress percentage
+  changes for incomplete headline periods and comparison overlays for incomplete
+  chart windows so a missing day or month cannot shift into another date's slot.
 - Clear previous-selection data while fetching; show an error with Retry after
   failure, and a distinct empty state when the server returns no readings.
 - Load energy breakdown with the same real-data default as other feature clients.
