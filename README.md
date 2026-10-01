@@ -81,6 +81,12 @@ still use the Kea API. Expo Go cannot run that native model, and physical Androi
 and iOS inference remains under validation. See the
 [Android phone test guide](qa/android-phone.md), [mobile setup](services/mobile/README.md),
 and [provider configuration](services/api/README.md) before demonstrating AI live.
+The website also offers an opt-in browser-local model for general energy guidance
+on supported WebGPU browsers. It shows download and model readiness separately
+from the connected Kea service; bill and household answers still need that service.
+See [mobile setup](services/mobile/README.md) and the
+[provider configuration](services/api/README.md) before demonstrating AI live.
+Browser-local inference has its own [device and verification limits](docs/design/on-browser-sparky.md).
 
 ### Power Clash
 

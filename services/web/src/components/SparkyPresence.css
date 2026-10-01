@@ -1,0 +1,83 @@
+/* Sparky's motion, ported from the phone app's Reanimated timings (sparky-presence.tsx).
+   Each loop there is a withSequence of withTiming/withDelay steps; here each becomes one
+   keyframe list whose percentages are those step durations over the loop length. The
+   phone's Easing.out(Easing.exp) is the cubic-bezier(.16,1,.3,1) used on every moving step.
+
+   Resting values (no animation: `happy`, `static`, reduced motion) are the phone's value 0:
+   a dim, slightly small halo, the body at the start of its breath, eyes centred and open. */
+.sparky-presence{position:relative;flex:none}
+/* Two classes deep on purpose: the page has older rules that size any svg in its slot
+   (`.assistant-orb svg` pinned them at 31px), and each layer has to fill the whole box. */
+.sparky-presence .sparky-presence__halo,
+.sparky-presence .sparky-presence__body,
+.sparky-presence .sparky-presence__gaze{position:absolute;inset:0;width:100%;height:100%;max-width:none}
+.sparky-presence .sparky-presence__eyes{display:block;width:100%;height:100%;max-width:none;transform-origin:50% 48.3%}
+.sparky-presence .sparky-presence__mouth{position:absolute;inset:0;width:100%;height:100%;max-width:none}
+.sparky-presence__halo{opacity:.38;transform:scale(.96);transform-origin:50% 50%}
+.sparky-presence__body{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg);transform-origin:50% 50%}
+
+/* Resting pace: idle and replying. */
+.sparky-presence--idle .sparky-presence__halo,
+.sparky-presence--replying .sparky-presence__halo{animation:sparky-halo 9.4s infinite}
+.sparky-presence--idle .sparky-presence__body,
+.sparky-presence--replying .sparky-presence__body{animation:sparky-breath 6.6s infinite}
+.sparky-presence--idle .sparky-presence__gaze,
+.sparky-presence--replying .sparky-presence__gaze,
+.sparky-presence--thinking .sparky-presence__gaze{animation:sparky-gaze 7.1s infinite}
+.sparky-presence--idle .sparky-presence__eyes,
+.sparky-presence--replying .sparky-presence__eyes{animation:sparky-blink 5.36s infinite}
+
+/* Thinking: the same moves, faster and brighter. */
+.sparky-presence--thinking .sparky-presence__halo{animation:sparky-halo-thinking 2.8s infinite}
+.sparky-presence--thinking .sparky-presence__body{animation:sparky-breath-thinking 1.75s infinite}
+.sparky-presence--thinking .sparky-presence__eyes{animation:sparky-blink-thinking 3.46s infinite}
+
+/* 4.7s out, 4.7s back. */
+@keyframes sparky-halo{
+  0%{opacity:.38;transform:scale(.96);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  50%{opacity:.58;transform:scale(1.07);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{opacity:.38;transform:scale(.96)}
+}
+/* 1.4s out, 1.4s back. */
+@keyframes sparky-halo-thinking{
+  0%{opacity:.38;transform:scale(.96);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  50%{opacity:.86;transform:scale(1.07);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{opacity:.38;transform:scale(.96)}
+}
+/* In for 3.1s, out for 3.5s. */
+@keyframes sparky-breath{
+  0%{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  46.97%{transform:scaleX(1.022) scaleY(.985) rotate(2.2deg);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg)}
+}
+/* In for 0.82s, out for 0.93s, and a deeper squash. */
+@keyframes sparky-breath-thinking{
+  0%{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  46.86%{transform:scaleX(1.055) scaleY(.952) rotate(2.2deg);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{transform:scaleX(.98) scaleY(1.02) rotate(-2.2deg)}
+}
+/* Look right (1.9s), hold 0.7s, look left (2.2s), hold 0.7s, back to centre (1.6s). */
+@keyframes sparky-gaze{
+  0%{transform:translate(0,0);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  26.76%{transform:translate(2.2%,-.75%);animation-timing-function:linear}
+  36.62%{transform:translate(2.2%,-.75%);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  67.61%{transform:translate(-2.2%,.75%);animation-timing-function:linear}
+  77.46%{transform:translate(-2.2%,.75%);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  100%{transform:translate(0,0)}
+}
+/* Open 4.2s, shut in 75ms, open in 135ms, then 0.95s before the loop starts again. */
+@keyframes sparky-blink{
+  0%,78.36%{transform:scaleY(1)}
+  79.76%{transform:scaleY(.08);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  82.28%,100%{transform:scaleY(1)}
+}
+/* The same blink after 2.3s instead of 4.2s. */
+@keyframes sparky-blink-thinking{
+  0%,66.47%{transform:scaleY(1)}
+  68.64%{transform:scaleY(.08);animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  72.54%,100%{transform:scaleY(1)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .sparky-presence *{animation:none!important}
+}

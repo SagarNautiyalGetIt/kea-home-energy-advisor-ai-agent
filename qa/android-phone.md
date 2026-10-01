@@ -2,7 +2,15 @@
 
 This is the teammate runbook for [on-phone Sparky](../docs/design/on-phone-sparky.md) and [Home Visual Highlight](../services/mobile/src/components/visual-highlight.tsx). Use a **physical arm64 Android phone** and a native Kea development APK. Expo Go does not include the `llama.rn` inference library. Power Clash is already on `main`; its checks below cover integration with the two new features.
 
-If you keep the source repository inside the Friday Vault, create an isolated checkout under `~/.cache/vault-builds/` first. `npm ci` and Expo prebuild generate many files and must stay outside the Vault.
+If you keep the source repository inside the Friday Vault, create an isolated checkout outside it first. `npm ci` and Expo prebuild generate many files and must stay outside the Vault. From the PR checkout, this makes a detached test copy of the exact checked-out commit without switching your working branch:
+
+```bash
+task_phone_checkout="$(mktemp -d /tmp/kea-android-validation.XXXXXX)"
+git worktree add --detach "$task_phone_checkout" HEAD
+cd "$task_phone_checkout"
+```
+
+Run the remaining commands there. The helper also resolves symlinks before enforcing the outside-Vault build boundary.
 
 The model is downloaded by the app after opt-in. It is **not** in the PR or APK. Allow at least 1 GiB free storage and use Wi-Fi for its 428,970,080-byte download. The current local model guard also requires at least 3 GiB reported RAM. A lower-capability phone should show an unsupported state and retain connected Sparky.
 
@@ -25,7 +33,7 @@ npm run android:phone -- build
 npm run android:phone -- install
 ```
 
-`build` runs Expo prebuild, installs/checks the SHA-256-pinned `llama.rn` native artifacts, assembles an **arm64-only** APK for a physical phone with at most two Gradle workers, and verifies `lib/arm64-v8a/librnllama.so` is packaged. The APK and generated `android/` directory stay untracked. Run lint/tests before the build, rather than at the same time on a memory-limited machine. If the default NDK is unavailable but 28.2.13676358 is installed, use `npm run android:phone -- build --ndk-version=28.2.13676358`. Check the installed version first; the helper refuses an absent NDK. `install` uses `adb install -r` and does not erase app data. If the phone has a differently signed Kea build, resolve that explicitly rather than silently uninstalling it.
+`build` runs Expo prebuild, installs/checks the SHA-256-pinned `llama.rn` native artifacts, assembles an **arm64-only development-client APK** for a physical phone with one Gradle worker by default (at most two via `--workers=2`) and a 1.5 GiB Java heap, and verifies `lib/arm64-v8a/librnllama.so` is packaged. `expo-dev-client` is a direct, SDK-compatible mobile dependency; rebuild and install this APK rather than reusing an older APK without the development launcher. The APK and generated `android/` directory stay untracked. Run lint/tests before the build, rather than at the same time on a memory-limited machine. If the default NDK is unavailable but 28.2.13676358 is installed, use `npm run android:phone -- build --ndk-version=28.2.13676358`. Check the installed version first; the helper refuses an absent NDK. `install` uses `adb install -r` and does not erase app data. If the phone has a differently signed Kea build, resolve that explicitly rather than silently uninstalling it.
 
 To inspect an APK before installing, run `npm run android:phone -- verify-apk`. To verify a separately built APK, pass `--apk=/absolute/path/to/app-debug.apk`.
 
@@ -59,7 +67,7 @@ Open `http://<the-entered-LAN-IP>:8000/api/health` in the **phone browser** too.
 
 ## 3. Record phone results
 
-For each screen, tap through at a normal pace and then repeat with Android **Remove animations** enabled in Accessibility settings. Take screenshots with `npm run android:phone -- screenshot`; they are saved only under `~/.cache/kea-energy/android-evidence/`. Review screenshots before sharing, as they can contain account content.
+For each screen, tap through at a normal pace and then repeat with Android **Remove animations** enabled in Accessibility settings. Written test confirmation in the PR is sufficient; screenshots and frame reports are optional diagnostics, not required submissions. If helpful, take screenshots with `npm run android:phone -- screenshot`; they are saved only under `~/.cache/kea-energy/android-evidence/`. Review screenshots before sharing, as they can contain account content.
 
 | Check | Expected result |
 | --- | --- |
@@ -95,8 +103,8 @@ Sparky model download, SHA verification, cancel, update, remove:
 Offline general response and time to first answer:
 Offline account-question boundary:
 Frame report path / median / p95 / over-budget percent:
-Screenshot or recording links after privacy review:
+Optional screenshot or recording links after privacy review:
 Failures, reproduction steps, and device logs with personal data removed:
 ```
 
-Do not check the physical-device or second-machine boxes on the PR until another teammate supplies the evidence. This runbook does not validate iOS or production account data.
+Do not check the physical-device or second-machine boxes on the PR until a tester supplies written confirmation. This runbook does not validate iOS or production account data.

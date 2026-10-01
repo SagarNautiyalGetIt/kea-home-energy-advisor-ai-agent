@@ -37,9 +37,9 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
-  const addToast = (message: string, tone: ToastMessage['tone'] = 'success') => {
+  const addToast = (message: string, tone: ToastMessage['tone'] = 'success', icon?: ToastMessage['icon']) => {
     const id = nextToastId.current++
-    setToasts((current) => [...current, { id, message, tone }])
+    setToasts((current) => [...current, { id, message, tone, icon }])
     window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4200)
   }
   const go = (page: PageId) => navigate(routeFor[page])

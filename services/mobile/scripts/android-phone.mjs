@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -152,9 +152,23 @@ function overrideGeneratedNdk(version) {
   console.log(`Using local generated Gradle NDK override: ${version}`);
 }
 
+export function assertBuildDirectory(directory, vaultDirectory = path.join(os.homedir(), 'Documents/Vault')) {
+  const actual = realpathSync(directory);
+  const vault = existsSync(vaultDirectory) ? realpathSync(vaultDirectory) : path.resolve(vaultDirectory);
+  const relative = path.relative(vault, actual);
+  if (relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))) {
+    throw new Error('Build in an isolated checkout under ~/.cache/vault-builds/ so generated Android files stay outside the Vault.');
+  }
+}
+
+export function gradleBuildArgs(workers = 1) {
+  if (![1, 2].includes(workers)) throw new Error('--workers must be 1 or 2.');
+  return [':app:assembleDebug', '-PreactNativeArchitectures=arm64-v8a', `--max-workers=${workers}`, '--no-parallel', '--no-daemon', '--console=plain', '-Dorg.gradle.jvmargs=-Xmx1536m -XX:MaxMetaspaceSize=512m'];
+}
+
 function build() {
-  const vaultRoot = path.join(os.homedir(), 'Documents/Vault') + path.sep;
-  if (mobileRoot.startsWith(vaultRoot)) throw new Error('Build in an isolated checkout under ~/.cache/vault-builds/ so generated Android files stay outside the Vault.');
+  assertBuildDirectory(mobileRoot);
+  const gradleArgs = gradleBuildArgs(Number(option('workers') ?? 1));
   requireTool('java', ['-version']);
   requireTool('jar', ['--version']);
   const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
@@ -165,7 +179,7 @@ function build() {
   command('node', [expo, 'prebuild', '--platform', 'android', '--no-install'], { stdio: 'inherit', env: { ...process.env, CI: '1', EXPO_NO_TELEMETRY: '1' } });
   if (option('ndk-version')) overrideGeneratedNdk(option('ndk-version'));
   const gradle = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-  command(gradle, [':app:assembleDebug', '-PreactNativeArchitectures=arm64-v8a', '--max-workers=2', '--no-parallel', '--no-daemon', '--console=plain'], { cwd: androidRoot, stdio: 'inherit' });
+  command(gradle, gradleArgs, { cwd: androidRoot, stdio: 'inherit' });
   verifyApk(defaultApk);
 }
 
@@ -210,7 +224,7 @@ function framesReport() {
 }
 
 function help() {
-  console.log('Usage: node scripts/android-phone.mjs <doctor|build|verify-apk|install|screenshot|frames-start|frames-report> [--serial=DEVICE] [--apk=PATH] [--ndk-version=VERSION]');
+  console.log('Usage: node scripts/android-phone.mjs <doctor|build|verify-apk|install|screenshot|frames-start|frames-report> [--serial=DEVICE] [--apk=PATH] [--ndk-version=VERSION] [--workers=1|2]');
 }
 
 async function main() {

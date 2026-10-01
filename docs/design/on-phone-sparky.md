@@ -33,7 +33,7 @@ When the local model is enabled, installed, and the question is general energy e
 - [ ] Build and launch native development clients on physical iOS and Android devices.
 - [ ] Install and hash-verify the model over Wi-Fi, test cancellation/update/removal, and measure storage and memory on low and high capability devices.
 - [ ] Inspect response quality and content boundaries with a fixed question set; verify streaming and app background behavior.
-- [ ] Capture device screenshots, frame pacing, and a second teammate's machine run before merge.
+- [ ] Written iOS/Android and second-teammate-machine test confirmation before merge; screenshots/frame reports are optional diagnostics.
 - [ ] Add a verified household fact pack before claiming account-specific offline answers.
 
 Teammates can use the [Android phone validation runbook](../../qa/android-phone.md) to build, install, and record the remaining Android evidence. The browser has a separate inference and caching boundary and is tracked independently from this mobile card.

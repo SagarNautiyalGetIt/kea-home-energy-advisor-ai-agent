@@ -1,8 +1,9 @@
-import type { FocusEvent, MouseEvent, ReactNode } from 'react'
+import type { ComponentType, FocusEvent, MouseEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, MessagesSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X } from 'lucide-react'
+import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X, type LucideProps } from 'lucide-react'
 import BrandMark from './BrandMark'
+import SparkyIcon from './SparkyIcon'
 import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 import { loadSession } from '../lib/session'
 import type { PageId } from '../types/navigation'
@@ -17,7 +18,8 @@ const SHOW_PROFILE_NAV_ITEM = false
 // leave that as the only way.
 const SHOW_THEME_TOGGLE = true
 
-type NavItem = { id: PageId; label: string; icon: typeof House; description: string; keywords: string }
+// Any icon that takes lucide's props: lucide's own, or the site's Sparky icon.
+type NavItem = { id: PageId; label: string; icon: ComponentType<LucideProps>; description: string; keywords: string }
 
 // `description` is what the search panel shows; `keywords` only feeds the match,
 // so synonyms customers might type can live there without cluttering the list.
@@ -26,7 +28,7 @@ const allNavItems: NavItem[] = [
   { id: 'usage', label: 'Usage', icon: ChartNoAxesColumnIncreasing, description: 'Daily, weekly and monthly electricity use', keywords: 'graph chart energy kwh peak off-peak night consumption' },
   { id: 'billing', label: 'Billing', icon: CircleDollarSign, description: 'Invoices, payment status and saved card', keywords: 'bill pay invoice history balance due receipt' },
   { id: 'plans', label: 'Plans', icon: ListChecks, description: 'Pricing styles, terms and plan comparison', keywords: 'pricing compare tariff rate anytime time of use free weekends commitment credit' },
-  { id: 'assistant', label: 'Sparky AI', icon: MessagesSquare, description: 'Ask about your bill, usage and plans', keywords: 'ai assistant chat question explain bill explainer' },
+  { id: 'assistant', label: 'Sparky AI', icon: SparkyIcon, description: 'Ask about your bill, usage and plans', keywords: 'ai assistant chat question explain bill explainer' },
   { id: 'profile', label: 'Profile', icon: SquareUserRound, description: 'Your customer and contact details', keywords: 'account name address phone email password' },
 ]
 

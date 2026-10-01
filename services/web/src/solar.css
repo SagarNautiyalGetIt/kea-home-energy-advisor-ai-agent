@@ -1,5 +1,124 @@
-.solar-page{max-width:1280px;margin:0 auto}.solar-back{display:inline-flex;align-items:center;gap:8px;color:var(--purple);margin-bottom:18px;text-decoration:none}.solar-page .page-heading p{max-width:760px;line-height:1.6}.solar-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}.solar-inputs,.solar-results{padding:28px;min-width:0}.solar-inputs h2{display:flex;gap:10px;align-items:center}.solar-page h2{font-size:22px;margin:0 0 18px}.solar-page h3{font-size:16px;margin:24px 0 12px}.solar-page p{line-height:1.6}.solar-field{display:flex;flex-direction:column;gap:8px;margin:16px 0;font-size:13px;font-weight:650;min-width:0}.solar-field input,.solar-field select{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;min-height:44px}.solar-page input:focus-visible,.solar-page select:focus-visible,.solar-page button:focus-visible,.solar-page summary:focus-visible{outline:3px solid var(--purple2);outline-offset:3px}.solar-help{font-size:12px;color:var(--ink);opacity:.82}.solar-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.solar-page fieldset{border:0;padding:0;margin:20px 0}.solar-page legend{font-weight:700;font-size:14px;margin-bottom:12px}.solar-choice{display:flex;flex-wrap:wrap;gap:10px}.solar-choice label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:13px;cursor:pointer}.solar-choice label:has(input:checked){border-color:var(--purple);background:var(--bg)}.solar-choice input{accent-color:var(--purple);width:16px;height:16px}.solar-text-button{border:0;background:transparent;color:var(--purple);padding:10px 0;text-align:left;text-decoration:underline;font-size:13px}.solar-callout{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:13px;line-height:1.6}.solar-callout svg{vertical-align:middle}.solar-error{color:#b4233b;font-weight:650}.solar-page .primary-action{min-height:46px;white-space:normal;width:100%;padding:12px 18px}.solar-page details{margin:20px 0;border-top:1px solid var(--line);padding-top:16px;font-size:13px;line-height:1.6}.solar-page summary{cursor:pointer;font-weight:700}.solar-page details li{margin-bottom:10px}.solar-page details a{color:var(--purple)}.solar-badge{display:inline-block;color:var(--purple);background:var(--bg);padding:8px 12px;border-radius:20px;font-size:11px;font-weight:750;margin-bottom:20px}.solar-hero{display:flex;flex-direction:column;gap:8px;border-radius:16px;padding:24px;background:linear-gradient(140deg,#4a25ff,#765fff);color:#fff;margin:20px 0}.solar-hero strong{font-size:clamp(30px,3vw,44px);letter-spacing:-1px}.solar-hero span{font-size:13px}.solar-stats{margin:18px 0}.solar-stats>div{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:12px 0;font-size:13px;flex-wrap:wrap}.solar-stats dt{flex:1;min-width:120px;overflow-wrap:anywhere}.solar-stats dd{margin:0;font-weight:750;max-width:60%;text-align:right;overflow-wrap:anywhere}.solar-bar-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin:16px 0;font-size:13px}.solar-bar-track{grid-column:1/-1;background:var(--bg);height:12px;border-radius:6px;overflow:hidden}.solar-bar-track>div{height:100%;background:var(--purple2);border-radius:6px}.solar-entry{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:26px;margin:24px 0}.solar-entry h2{margin:0 0 8px}.solar-entry p{margin:0;line-height:1.6}.solar-entry button{flex-shrink:0}.solar-advisor{padding:18px;margin-bottom:16px;font-size:13px}.solar-advisor p{line-height:1.6}.solar-advisor .solar-text-button{margin-left:16px}
+.solar-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}.solar-inputs,.solar-results{padding:28px;min-width:0}.solar-inputs h2{display:flex;gap:10px;align-items:center}.solar-page h2{font-size:22px;margin:0 0 18px}.solar-page h3{font-size:16px;margin:24px 0 12px}.solar-page p{line-height:1.6}.solar-field{display:flex;flex-direction:column;gap:8px;margin:16px 0;font-size:13px;font-weight:650;min-width:0}.solar-field input,.solar-field select{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;min-height:44px}.solar-help{font-size:12px;color:var(--ink);opacity:.82}.solar-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.solar-page fieldset{border:0;padding:0;margin:20px 0}.solar-page legend{font-weight:700;font-size:14px;margin-bottom:12px}.solar-choice{display:flex;flex-wrap:wrap;gap:10px}.solar-choice label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:13px;cursor:pointer}.solar-choice label:has(input:checked){border-color:var(--purple);background:var(--bg)}.solar-choice input{accent-color:var(--purple);width:16px;height:16px}.solar-text-button{border:0;background:transparent;color:var(--purple);padding:10px 0;text-align:left;text-decoration:underline;font-size:13px}.solar-callout{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:13px;line-height:1.6}.solar-callout svg{vertical-align:middle}.solar-error{color:#b4233b;font-weight:650}.solar-page .primary-action{min-height:46px;white-space:normal;width:100%;padding:12px 18px}.solar-page details{margin:20px 0;border-top:1px solid var(--line);padding-top:16px;font-size:13px;line-height:1.6}.solar-page summary{cursor:pointer;font-weight:700}.solar-page details li{margin-bottom:10px}.solar-page details a{color:var(--purple)}.solar-badge{display:inline-block;color:var(--purple);background:var(--bg);padding:8px 12px;border-radius:20px;font-size:11px;font-weight:750;margin-bottom:20px}.solar-hero{display:flex;flex-direction:column;gap:8px;border-radius:16px;padding:24px;background:linear-gradient(140deg,#4a25ff,#765fff);color:#fff;margin:20px 0}.solar-hero strong{font-size:clamp(30px,3vw,44px);letter-spacing:-1px}.solar-hero span{font-size:13px}.solar-stats{margin:18px 0}.solar-stats>div{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:12px 0;font-size:13px;flex-wrap:wrap}.solar-stats dt{flex:1;min-width:120px;overflow-wrap:anywhere}.solar-stats dd{margin:0;font-weight:750;max-width:60%;text-align:right;overflow-wrap:anywhere}.solar-bar-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin:16px 0;font-size:13px}.solar-bar-track{grid-column:1/-1;background:var(--bg);height:12px;border-radius:6px;overflow:hidden}.solar-bar-track>div{height:100%;background:var(--purple2);border-radius:6px}.solar-entry{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:26px;margin:24px 0}.solar-entry h2{margin:0 0 8px}.solar-entry p{margin:0;line-height:1.6}.solar-entry button{flex-shrink:0}
 @media(max-width:900px){.solar-grid{grid-template-columns:1fr}.solar-entry{align-items:stretch;flex-direction:column}.solar-inputs,.solar-results{padding:20px}.solar-pair{grid-template-columns:1fr}.solar-page .page-heading h1{font-size:28px}.solar-stats dd{max-width:58%}}
 
 .solar-results{scroll-margin-top:100px}
 .solar-maintenance-note{margin-bottom:26px}
+
+/* The heading matches the Plans page: the same full content width (the page had its own
+   1280px centred column, so on a wide screen it sat narrower and indented), the subtitle
+   in the shared page-subtitle style (.solar-description, in index.css), and "Back to plans"
+   on the right as a .compare-action, like Plans' "Ask Sparky" button. */
+.solar-page .solar-heading h1{margin-bottom:5px}
+.solar-page .solar-heading p{line-height:1.5}
+.solar-back-bar{display:flex;justify-content:flex-end}
+.solar-back.compare-action{flex:none;text-decoration:none}
+/* On a wide screen the right half holds still while the form scrolls: the bar is sticky
+   just under the top bar (it takes no height, so the button overlays the heading's right
+   end as before), and the results card is sticky under the button. */
+@media(min-width:901px){
+  .solar-back-bar{position:sticky;z-index:20;top:96px;height:0}
+  .solar-page .solar-heading h1{padding-right:200px}
+}
+@media(max-width:900px){.solar-back-bar{justify-content:flex-start;margin-bottom:12px}}
+
+/* Explore solar savings, restyled to match the rest of the site.
+   - Headings are bold, like the Plans steps; the scenario's sun sits in an orange badge.
+   - Choices (mode, example system, city, self-use) are chips: grey at rest, lifting on
+     hover, and tinted violet with a check once chosen. No ring on click; a keyboard focus
+     ring only.
+   - Inputs are half the form's width, lined up with the paired fields, instead of running
+     to the card's edge, and show no coloured border when clicked.
+   - Notes are soft grey panels; the collapsible sections have a chevron.
+   - The two buttons are centred at their own width, white with a violet ring until hovered.
+   - The results card stays in view while the form scrolls, and its headline figure sits in
+     the same warm gold panel, with the sun, as the solar card on Plans. */
+.solar-page .solar-inputs,.solar-page .solar-results{padding:clamp(24px,2.2vw,32px)}
+.solar-page .solar-inputs h2,.solar-page .solar-results h2{display:flex;align-items:center;gap:12px;margin:0 0 22px;color:var(--ink);font-size:clamp(19px,1.7vw,23px);font-weight:750;letter-spacing:-.02em}
+.solar-page .solar-inputs h2 svg{box-sizing:border-box;flex:0 0 38px;width:38px;height:38px;padding:9px;border-radius:12px;color:#fe6601;background:#fff2e6}
+.solar-page .solar-inputs>h3,.solar-page .solar-results h3{margin:36px 0 8px;color:var(--ink);font-size:16px;font-weight:750;letter-spacing:-.01em}
+.solar-page fieldset{margin:22px 0 0}
+.solar-page legend,.solar-page .solar-field{color:var(--ink);font-size:13.5px;font-weight:700}
+.solar-page legend{margin-bottom:10px}
+.solar-page .solar-help{margin:10px 0 0;color:#68779f;opacity:1;font-size:12.5px;line-height:1.6}
+.solar-page fieldset>.solar-help:first-of-type{margin:0 0 10px}
+
+.solar-page .solar-choice{display:flex;flex-wrap:wrap;gap:10px}
+.solar-page .solar-choice label{position:relative;display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:10px 16px;border:1px solid #e6e9f5;border-radius:12px;color:#68779f;background:#fff;font-size:13.5px;font-weight:600;cursor:pointer;transition:color .25s ease,background .25s ease,border-color .25s ease,box-shadow .25s ease,transform .25s ease}
+.solar-page .solar-choice input{position:absolute;width:1px;height:1px;margin:0;opacity:0;pointer-events:none}
+.solar-page .solar-choice label>svg{display:none;flex:0 0 15px;width:15px;height:15px;stroke-width:3}
+.solar-page .solar-choice label:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgb(45 62 123 / 10%)}
+.solar-page .solar-choice label:has(input:checked){border-color:#eef0ff;color:#4318ff;background:#eef0ff;box-shadow:none;transform:none;cursor:default}
+.solar-page .solar-choice label:has(input:checked)>svg{display:block}
+.solar-page .solar-choice label:has(input:focus-visible){outline:1.5px solid #4318ff;outline-offset:2px}
+
+.solar-page .solar-field{gap:8px;margin:22px 0 0}
+.solar-page .solar-field input{min-height:46px;padding:0 14px;border:1px solid #e6e9f5;border-radius:12px;color:var(--ink);background:#fff;font-size:14px;font-weight:600;outline:none;transition:border-color .2s ease}
+.solar-page .solar-field input:hover{border-color:#d6dbe8}
+.solar-page .solar-field input:focus,.solar-page .solar-field input:focus-visible{border-color:#e6e9f5;outline:none}
+.solar-page .solar-field input::-webkit-inner-spin-button,.solar-page .solar-field input::-webkit-outer-spin-button{margin:0;-webkit-appearance:none}
+.solar-page .solar-field input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.solar-page .solar-pair{gap:0 16px}
+.solar-page .solar-inputs>.solar-field input{max-width:calc(50% - 8px)}
+
+.solar-page .solar-callout{display:flex;align-items:flex-start;gap:10px;margin:18px 0 0;padding:12px 14px;border:0;border-radius:12px;color:#536184;background:#f5f6f8;font-size:13px;line-height:1.6}
+.solar-page div.solar-callout{display:block}
+.solar-page div.solar-callout h3{margin:0 0 4px}
+.solar-page div.solar-callout p{margin:0}
+.solar-page .solar-callout>svg{flex:0 0 16px;width:16px;height:16px;margin-top:3px;color:#9eadd4}
+
+.solar-page details{margin:28px 0 0;padding-top:18px;border-top:1px solid #eceff5}
+.solar-page summary{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--ink);font-size:14px;font-weight:700;list-style:none}
+.solar-page summary::-webkit-details-marker{display:none}
+.solar-page summary>svg{flex:0 0 18px;width:18px;height:18px;color:#9eadd4;transition:transform .25s ease}
+.solar-page details[open]>summary>svg{transform:rotate(180deg)}
+.solar-page summary:focus-visible{outline:1.5px solid #4318ff;outline-offset:4px;border-radius:4px}
+.solar-page .solar-maintenance-note{margin:22px 0 0}
+
+.solar-page .primary-action{display:flex;width:auto;min-width:240px;margin:26px auto 0;padding:11px 32px}
+.solar-page .primary-action svg{flex:0 0 20px;width:20px;height:20px}
+html:not([data-theme=dark]) .solar-page .primary-action{border:1.5px solid #4318ff;color:#4318ff;background:#fff;box-shadow:0 9px 20px rgb(67 24 255 / 12%);transform:none;outline:none}
+html:not([data-theme=dark]) .solar-page .primary-action:hover,
+html:not([data-theme=dark]) .solar-page .primary-action:focus-visible{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--purple2),var(--purple));background-origin:border-box;box-shadow:0 9px 20px rgb(67 24 255 / 22%);transform:translateY(-1px);outline:none}
+html:not([data-theme=dark]) .solar-page .primary-action:focus-visible{outline:1.5px solid #4318ff;outline-offset:2px}
+
+.solar-page .solar-hero{position:relative;overflow:hidden;gap:6px;margin:4px 0 22px;padding:24px;border-radius:16px;color:#7a5a3c;background:linear-gradient(110deg,#fff8ec 0%,#ffeacc 48%,#ffd6a0 100%);box-shadow:inset 0 0 0 1px #ffe2bd}
+.solar-page .solar-hero>:not(.solar-sun-art){position:relative;z-index:1}
+.solar-page .solar-hero span{max-width:58%;font-size:13px;font-weight:600}
+.solar-page .solar-hero strong{color:var(--kea-orange-ink);font-size:clamp(32px,3vw,44px);font-weight:800;letter-spacing:-.03em}
+.solar-page .solar-hero .solar-sun-art{position:absolute;right:8px;bottom:0;width:min(250px,48%);height:auto;max-width:none;opacity:.85}
+.solar-page .solar-hero-empty{justify-content:center;min-height:132px}
+.solar-page .solar-hero-empty p{max-width:52%;margin:0;color:#6b4f35;font-size:14px;font-weight:600;line-height:1.55}
+/* Before a calculation the results card is short, so on a wide screen it stays in view
+   under "Back to plans" while the form scrolls. Once full results are showing (the card
+   has its stats list) it is taller than the screen, so it scrolls with the page like the
+   form; only the top bar and "Back to plans" hold still. Calculate scrolls the card to
+   just under "Back to plans" either way. */
+@media(min-width:901px){
+  .solar-page .solar-results{scroll-margin-top:158px}
+  .solar-page .solar-results:not(:has(>.solar-stats)){position:sticky;top:158px}
+}
+@media(max-width:900px){.solar-page .solar-inputs>.solar-field input{max-width:none}}
+
+/* The sun: orange lines and sparkles, lighter on the dark theme. */
+.solar-sun-art{stroke:#fe6601;pointer-events:none}
+.solar-sun-art .solar-sun-sparkles{fill:#fe6601}
+html[data-theme=dark] .solar-sun-art{stroke:#ffa766}
+html[data-theme=dark] .solar-sun-art .solar-sun-sparkles{fill:#ffa766}
+html[data-theme=dark] .solar-sun-art circle[fill]{fill-opacity:.06}
+
+html[data-theme=dark] .solar-page .solar-choice label{border-color:#303953;color:#aab5d2;background:#141a30}
+html[data-theme=dark] .solar-page .solar-choice label:has(input:checked){border-color:#241f4d;color:#c8bdff;background:#241f4d}
+html[data-theme=dark] .solar-page .solar-field input{border-color:#303953;color:#eef1ff;background:#141a30}
+html[data-theme=dark] .solar-page .solar-help{color:#aab5d2}
+html[data-theme=dark] .solar-page .solar-callout{color:#c3cdea;background:rgb(255 255 255 / 4%)}
+html[data-theme=dark] .solar-page details{border-top-color:#303953}
+html[data-theme=dark] .solar-page .solar-inputs h2 svg{background:#3a2518}
+html[data-theme=dark] .solar-page .solar-hero{color:#e9caa9;background:linear-gradient(110deg,#1a2039 0%,#2b2236 50%,#4a2c17 100%);box-shadow:inset 0 0 0 1px #4a3526}
+html[data-theme=dark] .solar-page .solar-hero strong{color:#ffad73}
+html[data-theme=dark] .solar-page .solar-hero-empty p{color:#e9caa9}
+
+/* Annual bill comparison: "Before solar" in the site's blue-violet, "After solar" in the
+   solar orange, so the bars read as grid power against solar, in the same pairing as the
+   "Your plan" and solar cards on Plans. The first row is the one followed by another. */
+.solar-page .solar-bar-row:has(+ .solar-bar-row) .solar-bar-track>div{background:linear-gradient(90deg,#8b97ff 0%,#5a4cf5 100%)}
+.solar-page .solar-bar-row + .solar-bar-row .solar-bar-track>div{background:linear-gradient(90deg,#ffc27a 0%,#fe6601 100%)}

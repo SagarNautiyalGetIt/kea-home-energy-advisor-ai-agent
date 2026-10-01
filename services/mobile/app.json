@@ -30,6 +30,7 @@
       "favicon": "./assets/kea/kea-profile.png"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       [
         "expo-splash-screen",

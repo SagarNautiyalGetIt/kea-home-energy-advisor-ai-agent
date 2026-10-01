@@ -1,6 +1,36 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { frameSummary, parseDevices, parseFrameStats, selectDevice } from './android-phone.mjs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { assertBuildDirectory, frameSummary, gradleBuildArgs, parseDevices, parseFrameStats, selectDevice } from './android-phone.mjs';
+
+test('bounds Gradle workers and heap rather than relying on a memory-heavy default', () => {
+  const args = gradleBuildArgs();
+  assert.ok(args.includes('--max-workers=1'));
+  assert.ok(args.includes('--no-parallel'));
+  assert.ok(args.includes('-Dorg.gradle.jvmargs=-Xmx1536m -XX:MaxMetaspaceSize=512m'));
+  assert.ok(gradleBuildArgs(2).includes('--max-workers=2'));
+  for (const workers of [0, 3, NaN]) assert.throws(() => gradleBuildArgs(workers), /must be 1 or 2/);
+});
+
+test('refuses generating native files in the Vault even through a symlink', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'kea-build-path-test-'));
+  try {
+    const vault = path.join(root, 'vault');
+    const mobile = path.join(vault, 'mobile');
+    mkdirSync(mobile, { recursive: true });
+    const outside = path.join(root, 'outside');
+    mkdirSync(outside);
+    const alias = path.join(root, 'alias');
+    symlinkSync(mobile, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => assertBuildDirectory(mobile, vault), /outside the Vault/);
+    assert.throws(() => assertBuildDirectory(alias, vault), /outside the Vault/);
+    assert.doesNotThrow(() => assertBuildDirectory(outside, vault));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('selects only an authorized phone and requires explicit selection for multiple devices', () => {
   const devices = parseDevices('List of devices attached\nphone-a device product:x\nphone-b unauthorized usb:1\n');

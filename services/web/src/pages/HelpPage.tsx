@@ -1,4 +1,5 @@
-import { ChevronDown, CircleHelp, Copy, Mail, MessagesSquare, Phone, Search, Send } from 'lucide-react'
+import { ChevronDown, CircleHelp, Copy, Mail, Phone, Search, Send } from 'lucide-react'
+import SparkyIcon from '../components/SparkyIcon'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -131,7 +132,7 @@ export default function HelpPage({ onToast }: { onToast:(message:string)=>void }
         {groups.length === 0 ? (
           <div className="faq-empty">
             <p>No help topics match “{query}”.</p>
-            <button className="primary-action" onClick={()=>navigate('/assistant')}><MessagesSquare/>Ask Sparky instead</button>
+            <button className="primary-action" onClick={()=>navigate('/assistant')}><SparkyIcon/>Ask Sparky instead</button>
           </div>
         ) : groups.map((group) => (
           <section className="faq-group" key={group.id}>
@@ -151,10 +152,10 @@ export default function HelpPage({ onToast }: { onToast:(message:string)=>void }
 
       <aside className="help-actions">
         <article className="card">
-          <MessagesSquare/>
+          <SparkyIcon/>
           <h3>Ask Sparky AI</h3>
           <p>Get an instant answer about your own usage, bill or plan.</p>
-          <div className="contact-actions"><button className="contact-primary" onClick={()=>navigate('/assistant')}><MessagesSquare/>Ask Sparky</button></div>
+          <div className="contact-actions"><button className="contact-primary" onClick={()=>navigate('/assistant')}><SparkyIcon/>Ask Sparky</button></div>
         </article>
         <article className="card">
           <Phone/>
