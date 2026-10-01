@@ -205,12 +205,6 @@ export default function UsageScreen() {
   const bands = data?.bands ?? unavailableBands;
   const periodTitle = period === 'daily' ? "Today's total" : period === 'weekly' ? "This week's total" : "This month's total";
   useEffect(() => {
-    if (canShowCost || unit !== 'cost') return;
-    const timer = setTimeout(() => setUnit('kwh'), 0);
-    return () => clearTimeout(timer);
-  }, [canShowCost, unit]);
-
-  useEffect(() => {
     const controller = new AbortController();
     if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
       void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
@@ -221,8 +215,8 @@ export default function UsageScreen() {
       .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
-  const formatAmount = (kwh: number | null, costNzd: number | null) => unit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
-  const totalDisplay = unit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
+  const formatAmount = (kwh: number | null, costNzd: number | null) => displayUnit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
+  const totalDisplay = displayUnit === 'cost' ? data?.totalCostNzd == null ? '—' : `$${data.totalCostNzd.toFixed(2)}` : data?.totalKwh == null ? '—' : data.totalKwh.toFixed(1);
 
 
   const refresh = () => {
@@ -469,12 +463,12 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setChartType(item);
                       }}
-                      style={[styles.unitOption, chartType === item && { backgroundColor: colors.surface }]}
+                      style={[styles.unitOption, chartType === item && { backgroundColor: colors.primary }]}
                     >
                       {item === 'line' ? (
-                        <LineChartIcon color={chartType === item ? colors.text : colors.textMuted} />
+                        <LineChartIcon color={chartType === item ? colors.onPrimary : colors.textMuted} />
                       ) : (
-                        <Ionicons color={chartType === item ? colors.text : colors.textMuted} name="bar-chart-outline" size={16} />
+                        <Ionicons color={chartType === item ? colors.onPrimary : colors.textMuted} name="bar-chart-outline" size={16} />
                       )}
                     </Pressable>
                   ))}
@@ -488,9 +482,9 @@ export default function UsageScreen() {
                         void Haptics.selectionAsync();
                         setUnit(item);
                       }}
-                      style={[styles.unitOption, unit === item && { backgroundColor: colors.surface }]}
+                      style={[styles.unitOption, displayUnit === item && { backgroundColor: colors.primary }]}
                     >
-                      <Text style={[styles.unitText, { color: unit === item ? colors.text : colors.textMuted }]}>
+                      <Text style={[styles.unitText, { color: displayUnit === item ? colors.onPrimary : colors.textMuted }]}>
                         {item === 'kwh' ? 'kWh' : '$'}
                       </Text>
                     </Pressable>
@@ -508,18 +502,18 @@ export default function UsageScreen() {
           >
             <View style={styles.fullWidthChartWrap}>
               <UsageChart
-                accessibilityLabel={`${period} electricity usage in ${unit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
+                accessibilityLabel={`${period} electricity usage in ${displayUnit === 'cost' ? 'dollars' : 'kilowatt-hours'}`}
                 active={chartActive}
                 chartType={chartType}
                 leadingDecorativeAnchor
-                key={`${period}-${unit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
+                key={`${period}-${displayUnit}-${chartType}-${date}-${compare}-${comparison?.second ?? ''}-${animationRun}`}
                 axisLabels={chartAxisLabels}
                 labels={chartLabels}
                 onActivate={() => setChartActive(true)}
                 previous={chartPrevious}
                 previousTooltipLabels={previousTooltipLabels}
                 tooltipLabels={tooltipLabels}
-                unit={unit}
+                unit={displayUnit}
                 values={chartValues}
                 xLabelInterval={1}
               />
@@ -527,11 +521,11 @@ export default function UsageScreen() {
                 <View style={styles.chartLegend}>
                   <View style={styles.chartLegendItem}>
                     <View style={[styles.chartLegendDot, { backgroundColor: '#C7F071' }]} />
-                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
+                    <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.first) : ''}</Text>
                   </View>
                   <View style={styles.chartLegendItem}>
                     <View style={[styles.chartLegendDot, { backgroundColor: '#FBBF24' }]} />
-                    <Text style={styles.chartLegendText}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
+                    <Text style={[styles.chartLegendText, { color: colors.textMuted }]}>{comparison ? selectionLabel(period, comparison.second) : ''}</Text>
                   </View>
                 </View>
               ) : null}
@@ -548,7 +542,7 @@ export default function UsageScreen() {
 
       <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
         <Animated.ScrollView
-          contentContainerStyle={[styles.listScrollContent, { backgroundColor: colors.background }]}
+          contentContainerStyle={styles.listScrollContent}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             {
@@ -564,7 +558,7 @@ export default function UsageScreen() {
           style={styles.listScrollView}
         >
           <View pointerEvents="none" style={{ height: breakdownListStart }} />
-          <View style={styles.breakdownContent}>
+          <View style={[styles.breakdownContent, { backgroundColor: colors.background }]}>
             <View style={styles.breakdownList}>
               {energyBreakdown?.categories.length ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>

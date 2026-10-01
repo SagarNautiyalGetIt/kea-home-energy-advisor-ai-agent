@@ -3,12 +3,12 @@ import { BlurView } from 'expo-blur';
 import { router, usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { useAppTheme } from '@/theme';
+import { palette, useAppTheme } from '@/theme';
 
 type Props = {
   includeHome?: boolean;
   listMode?: boolean;
-  billPrediction?: { detail: string; onPress: () => void };
+  billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
 };
 
 function BillingNavIcon({ color, detailColor, size }: { color: string; detailColor: string; size: number }) {
@@ -43,12 +43,16 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
   return <View style={[styles.container, listMode && styles.listContainer, { borderColor: colors.border, backgroundColor: listMode ? 'transparent' : colors.surface, paddingBottom: 0 }]}>
     {!listMode ? <BlurView intensity={72} tint={mode} pointerEvents="none" style={styles.glassBackground} /> : null}
     {!listMode ? <View pointerEvents="none" style={styles.glassTint} /> : null}
-    {items.map((item) => <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
-      {item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
+    {items.map((item) => {
+      const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
+      const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
+      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
+      {item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
-      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: colors.textMuted }]}>{item.detail}</Text></View> : null}
+      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}
-    </Pressable>)}
+    </Pressable>;
+    })}
   </View>;
 }
 
@@ -59,9 +63,14 @@ const styles = StyleSheet.create({
   glassTint: { ...StyleSheet.absoluteFill, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.03)' },
   item: { flex: 1, minHeight: 44, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 999, position: 'relative' },
   listItem: { flex: 0, minHeight: 64, minWidth: 0, width: '100%', flexDirection: 'row', justifyContent: 'flex-start', gap: 14, paddingHorizontal: 12, borderRadius: 14 },
+  warningItem: { borderWidth: 1.5, borderColor: palette.red, backgroundColor: 'rgba(232,33,39,0.14)', marginBottom: 6 },
+  normalItem: { borderWidth: 1, borderColor: 'rgba(48,209,88,0.48)', backgroundColor: 'rgba(48,209,88,0.07)', marginBottom: 6 },
   listCopy: { flex: 1 },
   listLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   listDetail: { color: 'rgba(255,255,255,0.62)', fontSize: 11, marginTop: 2 },
+  warningLabel: { color: '#FFFFFF' },
+  warningDetail: { color: '#FFB8BA', fontSize: 12, fontWeight: '700' },
+  normalDetail: { color: '#A2EFB8', fontSize: 12, fontWeight: '600' },
   selectedItem: { backgroundColor: 'transparent' },
   selectedDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#FFFFFF', position: 'absolute', bottom: 2 },
   pressed: { opacity: 0.58 },
