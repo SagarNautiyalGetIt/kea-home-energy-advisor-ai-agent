@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Keyboard, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { FormField, IconButton, PageHeader, PrimaryButton } from '@/components/ui';
@@ -114,7 +115,7 @@ export default function ProfileScreen() {
     <Screen>
       <PageHeader action={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />} title="Profile" subtitle="Review and manage your contact details" />
       <View style={styles.profileContent}>
-        <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image accessibilityLabel="Illustrative customer portrait" resizeMode="cover" source={customerPortrait} style={styles.portrait} /></View>
+        <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image accessibilityLabel="Illustrative customer portrait" contentFit="cover" source={customerPortrait} style={styles.portrait} /></View>
         <View style={styles.details}>{details.map(([icon, label, value, tint]) => <View key={label} style={[styles.detail, { borderBottomColor: colors.border }]}><Ionicons color={colors.icons[tint]} name={icon} size={22} /><View style={styles.detailCopy}><Text style={[styles.detailLabel, { color: colors.textMuted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.text }]}>{value || 'Not available'}</Text></View></View>)}</View>
         {message ? <Text accessibilityRole={status === 'error' ? 'alert' : 'text'} style={[styles.dataMessage, { color: status === 'error' ? palette.red : colors.textMuted }]}>{message}</Text> : null}
         <PrimaryButton disabled={status === 'loading'} icon="create-outline" label={status === 'loading' ? 'Loading…' : 'Edit profile'} onPress={() => { setDraft(profile); setErrors({}); setEditing(true); }} />
