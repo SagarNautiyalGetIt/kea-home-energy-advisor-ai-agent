@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { BlurTargetView } from 'expo-blur';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
-import { BottomNavigation } from '@/components/bottom-navigation';
+import { HomeNavigationSheet } from '@/components/home-navigation-sheet';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { BillRingGauge, type BillRingTone } from '@/components/bill-ring-gauge';
@@ -18,6 +19,7 @@ export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
+  const homeBlurTarget = useRef<View>(null);
 
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -57,7 +59,7 @@ export default function DashboardScreen() {
   if (pathname !== '/dashboard') return null;
   return (
     <Screen key={pathname} contentStyle={styles.screenContent}>
-      <DemoHomeView customerId={session?.customerId ?? null}
+      <BlurTargetView ref={homeBlurTarget}><DemoHomeView customerId={session?.customerId ?? null}
         onOpenInfo={() => setWelcomeOpen(true)}
         onOpenNotifications={() => setNotificationsOpen(true)}
         onOpenProfile={() => router.push('/profile')}
@@ -66,14 +68,14 @@ export default function DashboardScreen() {
         {dashboard ? <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
         {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
       </View>
-      <BottomNavigation
+      </BlurTargetView>
+      <HomeNavigationSheet
+        blurTarget={homeBlurTarget}
         billPrediction={{
           detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
           onPress: () => setBillShockOpen(true),
           status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
         }}
-        includeHome={false}
-        listMode
       />
 
       <ModalSheet

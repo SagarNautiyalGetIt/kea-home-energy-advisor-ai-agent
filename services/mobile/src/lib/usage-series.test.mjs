@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { canOverlayUsage, isoDay, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries } from './usage-series.ts';
+import { canOverlayUsage, isoDay, selectedTotals, usageBandReading, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries } from './usage-series.ts';
 
 const fixture = () => ({ customer_id: 'A', daily_dates: ['2026-09-29', '2026-10-01'], daily_kwh: [10, 20], daily_quality: ['measured', 'estimated'], daily_peak_kwh: [null, null], daily_off_peak_kwh: [null, null], daily_night_kwh: [null, null], date_source: 'mart', total_kwh: 30, estimated_cost_nzd: 9, available_from: '2026-09-29', available_to: '2026-10-01' });
 const range = { start: '2026-09-01', end: '2026-10-31' };
 
 describe('Frozen dated usage contract', () => {
+  it('preserves measured zero bands and explains demo, missing and estimated bands', () => {
+    const row = { ...fixture(), band_data_source: 'measured', daily_quality: ['measured', 'measured'] };
+    assert.deepEqual(usageBandReading(row, [1], [20, 0]), { kwh: 0, reason: null });
+    assert.equal(usageBandReading(row, [0, 1], [20, null]).kwh, null);
+    assert.match(usageBandReading({ ...row, daily_quality: ['measured', 'estimated'] }, [1], [20, 5]).reason, /estimated/);
+    assert.match(usageBandReading({ ...row, date_source: 'demo' }, [1], [null, null]).reason, /Demo daily totals/);
+    assert.equal(usageBandReading(row, [1], [null, 5]).kwh, 5, 'unselected dates do not erase a selected measured band');
+  });
   it('accepts a single daily total without inventing hours', () => {
     const row = { ...fixture(), daily_dates: ['2026-10-01'], daily_kwh: [20], daily_quality: ['measured'], daily_peak_kwh: [null], daily_off_peak_kwh: [null], daily_night_kwh: [null], total_kwh: 20, estimated_cost_nzd: 6 };
     assert.equal(validateUsageSeries(row, 'A', usageRange('daily', '2026-10-01')).daily_kwh.length, 1);

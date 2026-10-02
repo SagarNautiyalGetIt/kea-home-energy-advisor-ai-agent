@@ -1,40 +1,46 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { PanResponder, View } from 'react-native';
 import { gsap } from 'gsap';
-import { CAMERA_LIMITS, constrainCamera, defaultCamera, type HomeCamera } from '@/lib/home-camera';
-import { useAppTheme } from '@/theme';
+import { dragHomeCamera, defaultCamera, type HomeCamera } from '@/lib/home-camera';
 
-/** Orbit changes the model camera; the rendered view itself stays in the screen plane. */
-export function InteractiveHomeScene({ children, reduceMotion }: { children: (camera: HomeCamera) => ReactNode; reduceMotion: boolean }) {
-  const { colors } = useAppTheme();
+/** Scene-local gestures leave cards and the navigation sheet free to scroll. */
+export function InteractiveHomeScene({ children, reduceMotion }: { children: (camera: HomeCamera, onReady: () => void) => ReactNode; reduceMotion: boolean }) {
   const [camera, setCamera] = useState<HomeCamera>(defaultCamera);
+  const [ready, setReady] = useState(false);
   const current = useRef<HomeCamera>({ ...defaultCamera });
   const origin = useRef<HomeCamera>({ ...defaultCamera });
   const tween = useRef<ReturnType<typeof gsap.to> | null>(null);
+  const touched = useRef(false);
+  const revealed = useRef(false);
+  const onReady = useCallback(() => setReady(true), []);
+  useEffect(() => {
+    if (reduceMotion) { tween.current?.kill(); current.current = { ...defaultCamera }; setCamera(defaultCamera); return; }
+    if (!ready || touched.current || revealed.current) return;
+    revealed.current = true;
+    Object.assign(current.current, { ...defaultCamera, zoom: 2.05, focusX: 0.3, focusY: -0.14, focusZ: 0.45 });
+    setCamera({ ...current.current });
+    const context = gsap.context(() => {
+      tween.current = gsap.to(current.current, { ...defaultCamera, focusX: 0, focusY: 0, focusZ: 0, delay: 0.45, duration: 3.8, ease: 'power2.inOut', onUpdate: () => setCamera({ ...current.current }) });
+    });
+    return () => { context.revert(); if (!touched.current) revealed.current = false; };
+  }, [ready, reduceMotion]);
   useEffect(() => () => { tween.current?.kill(); }, []);
-  const move = (next: HomeCamera) => { tween.current?.kill(); current.current = constrainCamera(next); setCamera(current.current); };
+  const move = useCallback((next: HomeCamera) => { touched.current = true; tween.current?.kill(); current.current = dragHomeCamera(next, 0, 0); setCamera(current.current); }, []);
+  const settle = useCallback(() => {
+    if (current.current.zoom <= 1.18 && !current.current.focusX && !current.current.focusY && !current.current.focusZ) return;
+    tween.current = gsap.to(current.current, { zoom: 1, focusX: 0, focusY: 0, focusZ: 0, duration: reduceMotion ? 0 : 1.2, ease: 'power2.out', onUpdate: () => setCamera({ ...current.current }) });
+  }, [reduceMotion]);
   const responder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => !reduceMotion && Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-    onPanResponderGrant: () => { tween.current?.kill(); origin.current = { ...current.current }; },
-    onPanResponderMove: (_, gesture) => move({ ...origin.current, x: origin.current.x + gesture.dx / 3, y: origin.current.y - gesture.dy / 8 }),
-    onPanResponderTerminationRequest: () => true,
-  }), [reduceMotion]);
-  const reset = () => {
-    tween.current?.kill();
-    tween.current = gsap.to(current.current, { ...defaultCamera, duration: reduceMotion ? 0 : 0.4, ease: 'power3.out', onUpdate: () => setCamera({ ...current.current }) });
-  };
-  return <View style={{ position: 'relative', zIndex: 2 }}>
-    <View {...responder.panHandlers}>{children(camera)}</View>
-    <View style={{ backgroundColor: colors.background }}><View style={[styles.controls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.hint, { color: colors.textMuted }]}>{reduceMotion ? '3D home' : 'Drag to orbit'}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home left" disabled={camera.x <= CAMERA_LIMITS.x[0]} onPress={() => move({ ...current.current, x: current.current.x - 12 })} style={styles.button}><Ionicons name="chevron-back" color={colors.text} size={18} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home right" disabled={camera.x >= CAMERA_LIMITS.x[1]} onPress={() => move({ ...current.current, x: current.current.x + 12 })} style={styles.button}><Ionicons name="chevron-forward" color={colors.text} size={18} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Raise home camera" disabled={camera.y >= CAMERA_LIMITS.y[1]} onPress={() => move({ ...current.current, y: current.current.y + 5 })} style={styles.button}><Ionicons name="chevron-up" color={colors.text} size={18} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Zoom out home" disabled={camera.zoom <= 0.9} onPress={() => move({ ...current.current, zoom: current.current.zoom - 0.1 })} style={styles.button}><Ionicons name="remove" color={colors.text} size={20} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Zoom in home" disabled={camera.zoom >= CAMERA_LIMITS.zoom[1]} onPress={() => move({ ...current.current, zoom: current.current.zoom + 0.1 })} style={styles.button}><Ionicons name="add" color={colors.text} size={20} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Reset home view" onPress={reset} style={styles.button}><Ionicons name="refresh-outline" color={colors.text} size={18} /></Pressable>
-    </View></View>
-  </View>;
+    onMoveShouldSetPanResponder: (_, gesture) => Math.max(Math.abs(gesture.dx), Math.abs(gesture.dy)) > 8,
+    onPanResponderGrant: () => { touched.current = true; tween.current?.kill(); origin.current = { ...current.current }; },
+    onPanResponderMove: (_, gesture) => { current.current = dragHomeCamera(origin.current, gesture.dx, gesture.dy); setCamera({ ...current.current }); },
+    onPanResponderRelease: settle,
+    onPanResponderTerminate: settle,
+    onPanResponderTerminationRequest: () => false,
+  }), [settle]);
+  return <View {...responder.panHandlers} accessible accessibilityRole="adjustable" accessibilityLabel="Explore your 3D home" accessibilityHint="Drag horizontally or vertically to orbit. Accessibility actions rotate or reset the camera." accessibilityActions={[{ name: 'increment', label: 'Rotate right' }, { name: 'decrement', label: 'Rotate left' }, { name: 'raise', label: 'Raise camera' }, { name: 'lower', label: 'Lower camera' }, { name: 'activate', label: 'Reset view' }]} onAccessibilityAction={({ nativeEvent }) => {
+    const action = nativeEvent.actionName;
+    move(action === 'activate' ? defaultCamera : { ...current.current, x: current.current.x + (action === 'increment' ? 12 : action === 'decrement' ? -12 : 0), y: current.current.y + (action === 'raise' ? 5 : action === 'lower' ? -5 : 0) });
+    if (action !== 'activate') settle();
+  }} style={{ position: 'relative' }}>{children(camera, onReady)}</View>;
 }
-const styles = StyleSheet.create({ controls: { alignItems: 'center', flexDirection: 'row', borderWidth: 1, borderRadius: 16, marginHorizontal: 16, marginTop: 5, paddingLeft: 12 }, hint: { flex: 1, fontSize: 11, paddingRight: 6 }, button: { alignItems: 'center', justifyContent: 'center', width: 44, height: 44 } });

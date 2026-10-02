@@ -11,7 +11,7 @@ import { AuroraMotion } from './aurora-motion';
 type Reading = { id: string; label: string; value: string; detail: string; color: string };
 
 export function EnergyReadingRail({ readings, selected, onSelect, cardWidth }: {
-  readings: Reading[]; selected: string; onSelect: (id: string) => void; cardWidth: number;
+  readings: Reading[]; selected?: string; onSelect: (id: string) => void; cardWidth: number;
 }) {
   const { colors } = useAppTheme();
   const scroll = useRef<ScrollView>(null);

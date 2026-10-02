@@ -15,7 +15,7 @@ export function NextMoveCard() {
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.heading}>
-        <Ionicons color={colors.text} name="compass-outline" size={21} />
+        <Ionicons color={colors.icons.info} name="compass-outline" size={21} />
         <Text style={[styles.title, { color: colors.text }]}>Make your next move</Text>
       </View>
       <Text style={[styles.body, { color: colors.textMuted }]}>The aim is to make informed, efficient choices—not to use the least energy at any cost. Review your own usage, then ask Sparky for an idea that fits your situation.</Text>

@@ -1,7 +1,7 @@
 import { hourlyUsage, usage as fixtureUsage } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
 import { hourlyPoints, validateHourlyUsage, type HourlyUsage } from '@/lib/hourly-usage';
-import { canOverlayUsage, selectedIndexes, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
+import { canOverlayUsage, selectedIndexes, selectedTotals, usageBandReading, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
 
 export type UsagePeriod = 'daily' | 'weekly' | 'monthly';
 export type UsageBandKey = 'peak' | 'offPeak' | 'night';
@@ -14,6 +14,7 @@ export type UsagePoint = {
 };
 
 export type UsageBand = {
+  reason?: string | null;
   key: UsageBandKey;
   label: string;
   window: string | null;
@@ -99,11 +100,9 @@ function seriesBands(series: UsageSeries, period: UsagePeriod, selected: string)
   const fields = { peak: series.daily_peak_kwh, offPeak: series.daily_off_peak_kwh, night: series.daily_night_kwh };
   const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
   return bandDefinitions.map((band) => {
-    const values = indexes.map((index) => fields[band.key][index]);
-    const complete = series.band_data_source === 'measured' && values.length > 0 && values.every((value) => value != null);
-    const kwh = complete ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
+    const { kwh, reason } = usageBandReading(series, indexes, fields[band.key]);
     // Tariff time windows are not part of this endpoint's contract.
-    return { ...band, window: null, kwh, costNzd: kwh === null ? null : kwh * rate };
+    return { ...band, window: null, kwh, reason, costNzd: kwh === null ? null : kwh * rate };
   });
 }
 

@@ -82,7 +82,7 @@ export default function ClashScreen() {
                 accessibilityState={{ selected }}
                 key={item.id}
                 onPress={() => selectDistrict(item.id)}
-                style={({ pressed }) => [styles.chip, { backgroundColor: selected ? '#383838' : colors.surfaceRaised, borderColor: selected ? '#686868' : colors.border }, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.chip, { backgroundColor: selected ? colors.input : colors.surfaceRaised, borderColor: selected ? colors.icons.energy : colors.border }, pressed && styles.pressed]}
               >
                 <Text style={[styles.chipText, { color: selected ? colors.text : colors.textMuted }]}>{item.name}</Text>
               </Pressable>

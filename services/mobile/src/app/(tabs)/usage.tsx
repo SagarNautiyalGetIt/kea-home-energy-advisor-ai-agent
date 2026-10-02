@@ -582,7 +582,7 @@ export default function UsageScreen() {
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
                       <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>
-                        {band.window ?? 'No time window supplied'}
+                        {band.reason ?? band.window ?? 'Measured total · tariff window not supplied'}
                       </Text>
                     </View>
                     <View style={styles.breakdownValueWrap}>

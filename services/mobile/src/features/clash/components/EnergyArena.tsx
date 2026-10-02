@@ -12,14 +12,14 @@ const columns: { key: MetricKey; x: number; baseY: number; glyph: string }[] = [
   { key: 'offPeak', x: 206, baseY: 171, glyph: 'OFF' },
 ];
 
-function Pillar({ x, baseY, height, glyph, selected, onPress }: { x: number; baseY: number; height: number; glyph: string; selected: boolean; onPress: () => void }) {
+function Pillar({ x, baseY, height, glyph, selected, tint, onPress }: { x: number; baseY: number; height: number; glyph: string; selected: boolean; tint: string; onPress: () => void }) {
   const topY = baseY - height - (selected ? 5 : 0);
   const bottomY = baseY - (selected ? 5 : 0);
   return (
     <G onPress={onPress}>
-      <Polygon fill={selected ? '#777777' : '#4B4B4B'} points={`${x - 23},${topY} ${x},${topY + 11} ${x},${bottomY + 11} ${x - 23},${bottomY}`} />
-      <Polygon fill={selected ? '#555555' : '#303030'} points={`${x},${topY + 11} ${x + 23},${topY} ${x + 23},${bottomY} ${x},${bottomY + 11}`} />
-      <Polygon fill={selected ? '#E0E0E0' : '#A2A2A2'} points={`${x},${topY - 11} ${x + 23},${topY} ${x},${topY + 11} ${x - 23},${topY}`} stroke={selected ? '#FFFFFF' : '#BBBBBB'} strokeWidth={selected ? 2 : 1} />
+      <Polygon fill={tint} fillOpacity={0.65} points={`${x - 23},${topY} ${x},${topY + 11} ${x},${bottomY + 11} ${x - 23},${bottomY}`} />
+      <Polygon fill={tint} fillOpacity={0.4} points={`${x},${topY + 11} ${x + 23},${topY} ${x + 23},${bottomY} ${x},${bottomY + 11}`} />
+      <Polygon fill={tint} points={`${x},${topY - 11} ${x + 23},${topY} ${x},${topY + 11} ${x - 23},${topY}`} stroke={tint} strokeWidth={selected ? 2 : 1} />
       <SvgText fill="#171717" fontSize={glyph.length > 1 ? 8 : 10} fontWeight="800" textAnchor="middle" x={x} y={topY + 3}>{glyph}</SvgText>
     </G>
   );
@@ -28,6 +28,7 @@ function Pillar({ x, baseY, height, glyph, selected, onPress }: { x: number; bas
 export function EnergyArena({ metrics, selected, onSelect }: { metrics: DemoMetrics; selected: MetricKey; onSelect: (key: MetricKey) => void }) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const tints = { ev: colors.icons.info, solar: colors.icons.money, conservation: colors.icons.success, offPeak: colors.icons.warm };
   const parts = demoScoreParts(metrics);
   const tiltX = useSharedValue(0);
   const tiltY = useSharedValue(0);
@@ -55,12 +56,12 @@ export function EnergyArena({ metrics, selected, onSelect }: { metrics: DemoMetr
         <Text style={[styles.demo, { color: colors.textMuted }]}>3D DEMO</Text>
       </View>
       <GestureDetector gesture={pan}>
-        <Animated.View accessibilityLabel="Interactive isometric energy score board. Use the score categories below for accessible details." accessibilityRole="image" style={[styles.boardFrame, tiltStyle]}>
+        <Animated.View accessibilityLabel="Interactive isometric energy score board. Use the score categories below for accessible details." accessibilityRole="image" style={[styles.boardFrame, { backgroundColor: colors.surfaceRaised }, tiltStyle]}>
           <Svg height="100%" viewBox="0 0 300 245" width="100%">
-            <Polygon fill="#111111" points="15,105 150,211 150,230 15,124" />
-            <Polygon fill="#0D0D0D" points="150,211 285,105 285,124 150,230" />
-            <Polygon fill="#292929" points="150,29 285,105 150,211 15,105" stroke="#535353" strokeWidth="1.5" />
-            <Polygon fill="none" points="150,47 265,108 150,194 35,108" stroke="#454545" strokeWidth="1" />
+            <Polygon fill={colors.border} points="15,105 150,211 150,230 15,124" />
+            <Polygon fill={colors.border} points="150,211 285,105 285,124 150,230" />
+            <Polygon fill={colors.surface} points="150,29 285,105 150,211 15,105" stroke={colors.border} strokeWidth="1.5" />
+            <Polygon fill="none" points="150,47 265,108 150,194 35,108" stroke={colors.border} strokeWidth="1" />
             {columns.map(({ key, x, baseY, glyph }) => (
               <Pillar
                 baseY={baseY}
@@ -69,6 +70,7 @@ export function EnergyArena({ metrics, selected, onSelect }: { metrics: DemoMetr
                 key={key}
                 onPress={() => onSelect(key)}
                 selected={key === selected}
+                tint={tints[key]}
                 x={x}
               />
             ))}

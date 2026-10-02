@@ -10,7 +10,7 @@ export function SuburbLeagueHeader({ district, rank, total, score }: { district:
         <View style={[styles.demoBadge, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           <Text style={[styles.demoBadgeText, { color: colors.text }]}>MONTHLY DEMO</Text>
         </View>
-        <Ionicons color={colors.textMuted} name="trophy-outline" size={20} />
+        <Ionicons color={colors.icons.money} name="trophy-outline" size={20} />
       </View>
       <Text style={[styles.title, { color: colors.text }]}>Your suburb. Your progress.</Text>
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>Compare a weighted energy score with other people in the same suburb.</Text>

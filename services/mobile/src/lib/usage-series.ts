@@ -3,6 +3,14 @@ import type { components } from '../api';
 export type UsageSeries = components['schemas']['HouseholdUsageSeries'];
 export type SeriesPeriod = 'daily' | 'weekly' | 'monthly';
 
+/** Daily totals cannot recover a customer's time-of-use split. */
+export function usageBandReading(series: UsageSeries, indexes: number[], values: (number | null)[]) {
+  const complete = series.band_data_source === 'measured' && indexes.length > 0 && indexes.every(index => series.daily_quality[index] === 'measured' && values[index] != null);
+  if (complete) return { kwh: indexes.reduce((sum, index) => sum + values[index]!, 0), reason: null };
+  const demo = series.date_source === 'demo' || indexes.some(index => series.daily_quality[index] === 'demo');
+  return { kwh: null, reason: demo ? 'Demo daily totals do not include measured time-band readings.' : 'Measured time-band readings are missing or estimated for the selected dates.' };
+}
+
 export function isoDay(value: string): Date {
   const day = new Date(`${value}T12:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== value) {
