@@ -4,20 +4,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { InteractiveHomeScene } from './interactive-home-scene';
+import { HomeModelScene, type HomeFlow } from './home-model-scene';
 import { homeCardReading } from '@/lib/home-card-reading';
-import { AccessibilityInfo, Animated, AppState, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import Reanimated, { cancelAnimation, Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { AccessibilityInfo, Animated, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useActiveAnimation } from '@/lib/use-active-animation';
 import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
-import { HIGHLIGHT_COLOR, HOME_OUTLINE, VisualHighlight, type HighlightTarget } from './visual-highlight';
+import { HIGHLIGHT_COLOR, type HighlightTarget } from './visual-highlight';
 
 type Device = HighlightTarget;
-type Source = 'solar' | 'battery' | 'grid' | 'load';
 
 type Props = {
   customerId: string | null;
@@ -28,51 +26,7 @@ type Props = {
   sceneOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value | number;
 };
 
-// Traced on Akash Nair's architectural image, in its 2048 × 1117.091 viewBox.
-const PIPE_PATHS = {
-  solar: 'M1460 311 Q1471 316 1459 321 L1338 363 Q1323 368 1333 379 L1425 461 Q1433 467 1433 480 L1432 571 Q1432 581 1422 584 L1410 587 Q1399 590 1399 601 L1399 628',
-  battery: 'M1393 697 L1393 768 Q1393 776 1385 781 L1291 817 Q1281 821 1281 812 L1281 800',
-  grid: 'M1401 697 L1401 770 Q1401 778 1409 782 L1425 789 Q1432 793 1435 801 L1525 832 Q1538 837 1550 832 L1805 727',
-  car: 'M1155 768 C1156 811 1155 850 1144 872 C1139 883 1131 891 1118 899 C1065 930 994 961 950 965 C920 969 906 956 902 939 C898 922 900 905 888 895 L883 892',
-} as const;
-
 const POWER_COLOR = HIGHLIGHT_COLOR.home;
-const COLORS: Record<Source, string> = { solar: HIGHLIGHT_COLOR.solar, battery: HIGHLIGHT_COLOR.battery, grid: HIGHLIGHT_COLOR.grid, load: HIGHLIGHT_COLOR.car };
-const AnimatedPath = Reanimated.createAnimatedComponent(Path);
-
-function FlowPath({ id, source, reverse, watts, active }: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; watts: number; active: boolean }) {
-  const measureRef = useRef<Path>(null);
-  const [length, setLength] = useState(0);
-  const offset = useSharedValue(0);
-  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: offset.value }));
-
-  useEffect(() => {
-    // The SVG geometry is shared with Kea Energy Home. Measure the actual
-    // native path so the streak travels precisely one full route per cycle.
-    const measured = measureRef.current?.getTotalLength();
-    if (measured && Number.isFinite(measured)) setLength(measured);
-  }, [id]);
-
-  useEffect(() => {
-    cancelAnimation(offset);
-    offset.set(reverse ? -length : 0);
-    if (!active || length <= 0) return;
-    const seconds = Math.max(1.9, 3.2 - Math.min(watts / 1000, 6) * 0.17);
-    offset.set(withRepeat(withTiming(reverse ? 0 : -length, { duration: seconds * 1000, easing: ReanimatedEasing.linear }), -1, false));
-    return () => cancelAnimation(offset);
-  }, [active, length, offset, reverse, watts]);
-
-  const color = COLORS[source];
-  const streak = Math.min(23, length * 0.12);
-  const gap = length / 3 - streak;
-  return <>
-    <Path d={PIPE_PATHS[id]} fill="none" opacity={0} ref={measureRef} stroke={color} />
-    <Path d={PIPE_PATHS[id]} fill="none" opacity={0.68} stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={6} />
-    {active && length > 0
-      ? <AnimatedPath animatedProps={animatedProps} d={PIPE_PATHS[id]} fill="none" opacity={0.96} stroke={color} strokeDasharray={`${streak} ${gap}`} strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.4} />
-      : <Path d={PIPE_PATHS[id]} fill="none" opacity={0.43} stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.4} />}
-  </>;
-}
 
 function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
   if (!weather) return 'cloud-outline';
@@ -111,7 +65,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
   const sceneWidth = Math.min(width, 760);
-  const sceneHeight = sceneWidth * 1117.091 / 2048;
+  const sceneHeight = sceneWidth * 0.7;
   const bottomFadeHeight = Math.min(98, sceneHeight * 0.4);
   const chipWidth = Math.min(220, Math.round(111 * fontScale));
   const reportProtectedHeader = () => onProtectedHeaderHeightChange?.(sceneTop.current + weatherBottom.current + 8);
@@ -186,11 +140,11 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   // Each lit segment corresponds to a fresh sensor for this household. The
   // animation does not infer source allocation between solar, battery and grid.
   const hasLiveSensors = Object.keys(live).length > 0;
-  const routes: { id: keyof typeof PIPE_PATHS; source: Source; reverse: boolean; watts: number }[] = [
-    ...(live.solar_generation !== undefined && live.solar_generation > 20 ? [{ id: 'solar' as const, source: 'solar' as const, reverse: false, watts: live.solar_generation }] : []),
-    ...(live.battery_discharge !== undefined && live.battery_discharge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: true, watts: live.battery_discharge }] : live.battery_charge !== undefined && live.battery_charge > 20 ? [{ id: 'battery' as const, source: 'battery' as const, reverse: false, watts: live.battery_charge }] : []),
-    ...(live.grid_import !== undefined && live.grid_import > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: true, watts: live.grid_import }] : live.grid_export !== undefined && live.grid_export > 20 ? [{ id: 'grid' as const, source: 'grid' as const, reverse: false, watts: live.grid_export }] : []),
-    ...(live.ev_charger !== undefined && live.ev_charger > 20 ? [{ id: 'car' as const, source: 'load' as const, reverse: false, watts: live.ev_charger }] : []),
+  const routes: HomeFlow[] = [
+    ...(live.solar_generation !== undefined && live.solar_generation > 20 ? [{ id: 'solar' as const, reverse: false, watts: live.solar_generation }] : []),
+    ...(live.battery_discharge !== undefined && live.battery_discharge > 20 ? [{ id: 'battery' as const, reverse: true, watts: live.battery_discharge }] : live.battery_charge !== undefined && live.battery_charge > 20 ? [{ id: 'battery' as const, reverse: false, watts: live.battery_charge }] : []),
+    ...(live.grid_import !== undefined && live.grid_import > 20 ? [{ id: 'grid' as const, reverse: true, watts: live.grid_import }] : live.grid_export !== undefined && live.grid_export > 20 ? [{ id: 'grid' as const, reverse: false, watts: live.grid_export }] : []),
+    ...(live.ev_charger !== undefined && live.ev_charger > 20 ? [{ id: 'car' as const, reverse: false, watts: live.ev_charger }] : []),
   ];
   const dayLabel = scene?.day
     ? new Date(`${scene.day}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -229,14 +183,9 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (sceneWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
           {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
           <InteractiveHomeScene reduceMotion={reduceMotion}>
-          <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-            <Image accessible={false} source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
-            <Svg height={sceneHeight} style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
-              <VisualHighlight active={animationActive} reduceMotion={reduceMotion} selected={selected} />
-              {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} {...route} />)}
-              {(['home', 'solar', 'battery', 'grid', 'car'] as Device[]).map((device) => <Path key={'select-' + device} d={HOME_OUTLINE[device]} fill="transparent" onPress={() => setSelected(device)} />)}
-            </Svg>
-          </View>
+            {(camera) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
+              <HomeModelScene camera={camera} width={sceneWidth} height={sceneHeight} selected={selected} onSelect={setSelected} flows={routes} animate={!reduceMotion && animationActive} />
+            </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
@@ -246,7 +195,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
           const metric = { ...homeCardReading(scene, live, device), color: HIGHLIGHT_COLOR[device] };
-          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the home picture; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth, backgroundColor: colors.surface, borderColor: colors.border }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
+          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the 3D home; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth, backgroundColor: colors.surface, borderColor: colors.border }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
             <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={[styles.deviceName, { color: colors.textMuted }]}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
             <Text style={[styles.deviceValue, { color: colors.text }]}>{metric.value}</Text><Text numberOfLines={3} style={[styles.deviceDetail, { color: colors.textMuted }]}>{sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail}</Text>
           </Pressable>;
@@ -258,7 +207,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         <Ionicons name="chevron-forward" color={colors.textMuted} size={16} />
       </Pressable>
       {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home readings unavailable · Retry</Text></Pressable> : null}
-      <Text style={[styles.demoNote, { color: colors.textMuted }]}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the picture. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
+      <Text style={[styles.demoNote, { color: colors.textMuted }]}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the 3D home. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
     </View>
   </View>;
 }

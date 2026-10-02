@@ -94,11 +94,11 @@ test('zero measured device energy stays measured and uses its own day', () => {
   assert.equal(reading.homeCardReading(null, {}, 'solar').detail, 'Link a sensor in Settings');
 });
 test('interactive home bounds excessive, invalid and repeated camera movements', () => {
-  assert.deepEqual(camera.constrainCamera({ x: 100, y: -100, zoom: 100 }), { x: 12, y: -9, zoom: 1.45 });
+  assert.deepEqual(camera.constrainCamera({ x: 1000, y: -100, zoom: 100 }), { x: 100, y: -12, zoom: 1.45 });
   assert.deepEqual(camera.constrainCamera({ x: NaN, y: Infinity, zoom: -Infinity }), camera.defaultCamera);
   for (let i = -100; i <= 100; i++) {
     const actual = camera.constrainCamera({ x: i, y: i, zoom: i / 10 });
-    assert.ok(Math.abs(actual.x) <= 12 && Math.abs(actual.y) <= 9 && actual.zoom >= 0.9 && actual.zoom <= 1.45);
+    assert.ok(Math.abs(actual.x) <= 100 && actual.y >= -12 && actual.y <= 24 && actual.zoom >= 0.9 && actual.zoom <= 1.45);
   }
 });
 test('mouth position and shape do not inherit blinking or eye opacity', () => {
