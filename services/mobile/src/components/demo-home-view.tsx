@@ -1,16 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { InteractiveHomeScene } from './interactive-home-scene';
-import { HomeModelScene, type HomeFlow } from './home-model-scene';
+import { GltfHomeScene } from './gltf-home-scene';
+import { OutageNotice } from './outage-notice';
+import { EnergyReadingRail } from './energy-reading-rail';
 import { homeCardReading } from '@/lib/home-card-reading';
-import { AccessibilityInfo, Animated, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, AppState, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
-import { useActiveAnimation } from '@/lib/use-active-animation';
 import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
 import { HIGHLIGHT_COLOR, type HighlightTarget } from './visual-highlight';
@@ -61,7 +61,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>('home');
   const [reduceMotion, setReduceMotion] = useState(true);
-  const animationActive = useActiveAnimation();
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
   const sceneWidth = Math.min(width, 760);
@@ -137,15 +136,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => subscription.remove();
   }, []);
-  // Each lit segment corresponds to a fresh sensor for this household. The
-  // animation does not infer source allocation between solar, battery and grid.
-  const hasLiveSensors = Object.keys(live).length > 0;
-  const routes: HomeFlow[] = [
-    ...(live.solar_generation !== undefined && live.solar_generation > 20 ? [{ id: 'solar' as const, reverse: false, watts: live.solar_generation }] : []),
-    ...(live.battery_discharge !== undefined && live.battery_discharge > 20 ? [{ id: 'battery' as const, reverse: true, watts: live.battery_discharge }] : live.battery_charge !== undefined && live.battery_charge > 20 ? [{ id: 'battery' as const, reverse: false, watts: live.battery_charge }] : []),
-    ...(live.grid_import !== undefined && live.grid_import > 20 ? [{ id: 'grid' as const, reverse: true, watts: live.grid_import }] : live.grid_export !== undefined && live.grid_export > 20 ? [{ id: 'grid' as const, reverse: false, watts: live.grid_export }] : []),
-    ...(live.ev_charger !== undefined && live.ev_charger > 20 ? [{ id: 'car' as const, reverse: false, watts: live.ev_charger }] : []),
-  ];
   const dayLabel = scene?.day
     ? new Date(`${scene.day}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
@@ -184,7 +174,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
           <InteractiveHomeScene reduceMotion={reduceMotion}>
             {(camera) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-              <HomeModelScene camera={camera} width={sceneWidth} height={sceneHeight} selected={selected} onSelect={setSelected} flows={routes} animate={!reduceMotion && animationActive} />
+              <GltfHomeScene camera={camera} width={sceneWidth} height={sceneHeight} />
             </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
@@ -192,22 +182,18 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       </Animated.View>
       <View onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color={mode === 'dark' ? '#E9F5FB' : colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: mode === 'dark' ? '#E9F5FB' : colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
       <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
-      <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
-        {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
-          const metric = { ...homeCardReading(scene, live, device), color: HIGHLIGHT_COLOR[device] };
-          return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the 3D home; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth, backgroundColor: colors.surface, borderColor: colors.border }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
-            <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={[styles.deviceName, { color: colors.textMuted }]}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
-            <Text style={[styles.deviceValue, { color: colors.text }]}>{metric.value}</Text><Text numberOfLines={3} style={[styles.deviceDetail, { color: colors.textMuted }]}>{sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail}</Text>
-          </Pressable>;
-        })}
-      </ScrollView>
+      <EnergyReadingRail cardWidth={chipWidth} selected={selected} onSelect={(device) => setSelected(device as Device)} readings={(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
+        const metric = homeCardReading(scene, live, device);
+        return { id: device, label: device === 'car' ? 'EV' : device.toUpperCase(), value: metric.value, color: HIGHLIGHT_COLOR[device], detail: sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail };
+      })} />
       <Pressable accessibilityRole="button" onPress={() => router.push(selected === 'home' || selected === 'grid' ? '/usage' : '/settings')} style={[styles.readingAction, { borderColor: colors.border }]}>
         <Ionicons name={selected === 'home' || selected === 'grid' ? 'bar-chart-outline' : 'link-outline'} color={colors.text} size={18} />
         <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>{selected === 'home' || selected === 'grid' ? 'View dated household imports' : `Connect or sync ${selected === 'car' ? 'EV charger' : selected} sensors`}</Text>
         <Ionicons name="chevron-forward" color={colors.textMuted} size={16} />
       </Pressable>
       {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home readings unavailable · Retry</Text></Pressable> : null}
-      <Text style={[styles.demoNote, { color: colors.textMuted }]}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the 3D home. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
+      <OutageNotice />
+      <Text style={[styles.demoNote, { color: colors.textMuted }]}>Selected reading: {selected === 'car' ? 'the EV' : `the ${selected}`} · model is illustrative. Energy cards show available meter and sensor readings.</Text>
     </View>
   </View>;
 }

@@ -11,6 +11,7 @@ node_modules/
 # Local cache-backed symlinks are files to Git; the trailing-slash rule above
 # only ignores real directories.
 node_modules
+.expo
 dist/
 .vite/
 *.tsbuildinfo

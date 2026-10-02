@@ -13,8 +13,11 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import voice
+from app.alerts.store import PreferencesUnavailable
+from app.api.experience import router as experience_router
 from app.api.routes import router
 from app.config import get_provider, settings
 
@@ -27,6 +30,9 @@ log = logging.getLogger("kea")
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from app.security import validate_production
+
+    validate_production()
     provider = get_provider()
     log.info("provider=%s model=%s", provider.name, provider.model)
 
@@ -95,4 +101,46 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
 
+
 app.include_router(router, prefix="/api")
+app.include_router(experience_router, prefix="/api")
+
+
+@app.middleware("http")
+async def production_authorization(request: Request, call_next):
+    if not settings.production or request.method == "OPTIONS":
+        return await call_next(request)
+    path = request.url.path
+    public = {"/api/health", "/api/auth/config"}
+    if not path.startswith("/api/") or path in public or path.startswith("/api/internal/"):
+        return await call_next(request)
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from app.security import identity
+
+    try:
+        claims = await asyncio.to_thread(identity, request.headers.get("authorization"))
+        parts = path.split("/")
+        unavailable = {"/api/households", "/api/auth/login", "/api/auth/demo-accounts"}
+        if path in unavailable or path.startswith("/api/vapi/"):
+            raise HTTPException(403, "This route is unavailable in customer deployments.")
+        if len(parts) > 3 and parts[2] == "households" and parts[3] != claims["customer_id"]:
+            raise HTTPException(403, "This account cannot access that household.")
+        if path in {"/api/chat", "/api/chat/stream"}:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise HTTPException(400, "Invalid request.")
+            if body.get("customer_id") != claims["customer_id"]:
+                raise HTTPException(403, "This account cannot access that household.")
+    except HTTPException as error:
+        return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
+    except (ValueError, TypeError):
+        return JSONResponse(status_code=400, content={"detail": "Invalid request."})
+    return await call_next(request)
+
+
+@app.exception_handler(PreferencesUnavailable)
+async def unavailable_preferences(request: Request, error: PreferencesUnavailable):
+    return JSONResponse(status_code=503, content={"detail": str(error)})

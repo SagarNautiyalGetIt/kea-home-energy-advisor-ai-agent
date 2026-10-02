@@ -1,8 +1,10 @@
-import * as Haptics from 'expo-haptics';
+import { tactile } from '@/lib/haptics';
+
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AuthShell } from '@/components/auth-shell';
+import { HostedSignIn } from '@/components/hosted-sign-in';
 import { ModalSheet } from '@/components/modal-sheet';
 import { FormField, PrimaryButton } from '@/components/ui';
 import { loadDemoAccounts, type DemoAccount } from '@/lib/account-api';
@@ -29,16 +31,16 @@ export default function LoginScreen() {
     const next = { email: validateEmail(email), password: validateRequired(password, 'Password') };
     setErrors(next);
     if (next.email || next.password) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      tactile('error');
       return;
     }
     setBusy(true);
     try {
       await signIn(email, password);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      tactile('success');
       router.replace('/dashboard');
     } catch (error: unknown) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      tactile('error');
       showToast(error instanceof Error ? error.message : 'Sign in could not be completed.', 'warning');
     } finally {
       setBusy(false);
@@ -63,11 +65,11 @@ export default function LoginScreen() {
     setBusy(true);
     try {
       await signIn(account.email, account.password);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      tactile('success');
       setDemoOpen(false);
       router.replace('/dashboard');
     } catch (error: unknown) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      tactile('error');
       showToast(error instanceof Error ? error.message : 'Demo sign-in could not be completed.', 'warning');
     } finally {
       setBusy(false);
@@ -80,6 +82,7 @@ export default function LoginScreen() {
       title="Login"
       subtitle="Sign in to your Kea account."
       footer={null}>
+      {process.env.EXPO_PUBLIC_OIDC_ISSUER ? <HostedSignIn onComplete={() => router.replace('/dashboard')} /> : <>
       <FormField error={errors.email} keyboardType="email-address" label="Email *" onChangeText={(value) => { setEmail(value); setErrors((current) => ({ ...current, email: undefined })); }} placeholder="name@example.com" value={email} />
       <FormField error={errors.password} label="Password *" onChangeText={(value) => { setPassword(value); setErrors((current) => ({ ...current, password: undefined })); }} placeholder="Min. 8 characters" secure value={password} />
       <PrimaryButton label="Login" loading={busy} onPress={() => void submit()} />
@@ -89,6 +92,7 @@ export default function LoginScreen() {
         {demoLoading ? <Text style={[styles.demoIntro, { color: colors.textMuted }]}>Loading demo accounts…</Text> : null}
         <View style={styles.demoList}>{demoAccounts.map((account) => <Pressable accessibilityRole="button" disabled={busy} key={account.customer_id} onPress={() => void signInAsDemo(account)} style={({ pressed }) => [styles.demoRow, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}><View style={styles.demoCopy}><Text style={[styles.demoName, { color: colors.text }]}>{account.display_name}</Text><Text style={[styles.demoScenario, { color: colors.textMuted }]}>{account.scenario}</Text></View><Text style={styles.demoUse}>Use</Text></Pressable>)}</View>
       </ModalSheet>
+      </>}
     </AuthShell>
   );
 }

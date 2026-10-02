@@ -1,6 +1,7 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
@@ -219,7 +220,7 @@ export default function UsageScreen() {
   const refresh = () => {
     setReloadToken((token) => token + 1);
     setAnimationRun((run) => run + 1);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   useEffect(() => {
@@ -283,7 +284,7 @@ export default function UsageScreen() {
         setDate((current) => shiftPeriodDate(period, current, amount));
       }
       setAnimationRun((run) => run + 1);
-      void Haptics.selectionAsync();
+      tactile();
       graphTranslateX.setValue(enterX);
       graphScale.setValue(0.985);
       requestAnimationFrame(() => {
@@ -349,13 +350,13 @@ export default function UsageScreen() {
     setDate(firstPeriod);
     setComparisons((current) => ({ ...current, [period]: { first: firstPeriod, second: secondPeriod } }));
     setCompareOpen(false);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   const clearComparison = () => {
     setComparisons((current) => ({ ...current, [period]: null }));
     setCompareOpen(false);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   return (
@@ -461,7 +462,7 @@ export default function UsageScreen() {
                       hitSlop={8}
                       key={item}
                       onPress={() => {
-                        void Haptics.selectionAsync();
+                        tactile();
                         setChartType(item);
                       }}
                       style={[styles.unitOption, chartType === item && { backgroundColor: colors.primary }]}
@@ -480,7 +481,7 @@ export default function UsageScreen() {
                       hitSlop={8}
                       key={item}
                       onPress={() => {
-                        void Haptics.selectionAsync();
+                        tactile();
                         setUnit(item);
                       }}
                       style={[styles.unitOption, displayUnit === item && { backgroundColor: colors.primary }]}

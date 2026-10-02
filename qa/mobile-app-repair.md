@@ -1,5 +1,9 @@
 # Mobile app repair verification
 
+> Historical PR #286 evidence. The supplied GLB, outage page, production identity,
+> voice and notification integrations are covered by [replacement acceptance](sparky-release.md).
+> The authored mesh and inactive reward descriptions below describe the earlier build.
+
 Issues: KEA-274 through KEA-285, KEA-288 and KEA-289. Base: `cd4f48b` (`main`).
 
 ## Behaviour

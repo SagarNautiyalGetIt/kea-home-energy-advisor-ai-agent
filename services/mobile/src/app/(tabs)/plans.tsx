@@ -1,6 +1,7 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
+
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
@@ -38,9 +39,9 @@ export default function PlansScreen() {
   const plan = plans.find((item) => item.id === planId); const term = terms.find((item) => item.id === termId); const isCurrent = planId === current.pricingStyle && termId === current.term;
   useEffect(() => { const controller = new AbortController(); void loadPlans(session?.customerId ?? '', controller.signal).then((data) => { setPlans(data.pricingStyles); setTerms(data.commitmentTerms); setCurrent(data.currentPlan); const recommended = data.pricingStyles.find((item) => item.badge) ?? data.pricingStyles[0]; const initialPlan = data.currentPlan.pricingStyle || recommended?.id || data.pricingStyles[0]?.id || ''; const initialTerm = data.currentPlan.term || data.commitmentTerms[0]?.id || ''; const initialIndex = Math.max(0, data.pricingStyles.findIndex((item) => item.id === initialPlan)); setViewedIndex(initialIndex); setPlanId(initialPlan); setTermId(initialTerm); }).catch((value: unknown) => { if (value instanceof Error && value.name !== 'AbortError') setError(value.message); }); return () => controller.abort(); }, [session?.customerId]);
   const viewPlan = (index: number) => { if (!plans[index]) return; setViewedIndex(index); list.current?.scrollToOffset({ offset: index * interval, animated: true }); };
-  const choosePlan = (id: string) => { setPlanId(id); void Haptics.selectionAsync(); };
+  const choosePlan = (id: string) => { setPlanId(id); tactile(); };
   const onEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => setViewedIndex(Math.max(0, Math.min(plans.length - 1, Math.round(event.nativeEvent.contentOffset.x / interval))));
-  const selectTerm = (id: string) => { setTermId(id); void Haptics.selectionAsync(); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 300, animated: true })); };
+  const selectTerm = (id: string) => { setTermId(id); tactile(); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 300, animated: true })); };
   const switchPlan = async () => { if (!plan || !term) return; try { await requestPlanSwitch(session?.customerId ?? '', plan.id, term.id); showToast(`${plan.name} with the ${term.name} term requested`); } catch (value: unknown) { showToast(value instanceof Error ? value.message : 'Plan switch could not be requested.', 'warning'); } };
   if (!plan || !term) return <Screen scrollRef={scrollRef}><PageHeader title="Plans" /><Text style={[styles.loading, { color: error ? palette.red : colors.textMuted }]}>{error ?? 'Loading plans…'}</Text></Screen>;
   return <Screen scrollRef={scrollRef} contentStyle={styles.content}>

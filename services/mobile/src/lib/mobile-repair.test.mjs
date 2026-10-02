@@ -14,17 +14,47 @@ const reading = await moduleFrom(source('./home-card-reading.ts'));
 const camera = await moduleFrom(source('./home-camera.ts'));
 const mouth = await moduleFrom(source('./sparky-mouth.ts'));
 
-async function client(platform = 'ios', transport = async () => new Response('{}')) {
+async function client(platform = 'ios', transport = async () => new Response('{}'), auth = null) {
   // Run the real client with only native storage/platform/network adapters replaced.
   const key = 'repair-' + Math.random();
-  globalThis[key] = { data: new Map(), fetch: transport };
+  globalThis[key] = { data: new Map(), fetch: transport, auth };
   let code = source('./backend-client.ts')
     .replace("import * as SecureStore from 'expo-secure-store';", `const fixture = globalThis[${JSON.stringify(key)}]; const SecureStore = { getItemAsync: async k => fixture.data.get(k) ?? null, setItemAsync: async (k,v) => { fixture.data.set(k,v); }, deleteItemAsync: async k => { fixture.data.delete(k); } }; const fetch = fixture.fetch; const sessionStorage = { getItem: k => fixture.data.get(k) ?? null, setItem: (k,v) => fixture.data.set(k,v), removeItem: k => fixture.data.delete(k) };`)
     .replace("import { Platform } from 'react-native';", `const Platform = { OS: '${platform}' };`)
+    .replace("import * as AuthSession from 'expo-auth-session';", `const AuthSession = fixture.auth ?? { fetchDiscoveryAsync: async () => { throw new Error('OIDC is not configured in this fixture'); } };`)
     .replace("import { shouldExpireSession } from './session-policy';", policy.shouldExpireSession.toString());
   const api = await moduleFrom(code);
   return { api, data: globalThis[key].data };
 }
+
+test('OIDC refresh retries with the verified identity token and cannot resurrect sign-out', async () => {
+  const names = ['EXPO_PUBLIC_OIDC_ISSUER', 'EXPO_PUBLIC_OIDC_CLIENT_ID'];
+  const previous = names.map(name => process.env[name]);
+  process.env[names[0]] = 'https://identity.test';
+  process.env[names[1]] = 'fixture-client';
+  try {
+    let calls = 0;
+    const { api } = await client('web', async (_, init) => {
+      calls++;
+      return new Response('{}', { status: init.headers.get('Authorization') === 'Bearer fresh' ? 200 : 401 });
+    }, { fetchDiscoveryAsync: async () => ({}), refreshAsync: async () => ({ idToken: 'fresh' }) });
+    await api.storeTokenPair('expired', 'refresh');
+    assert.equal((await api.apiFetch('/api/households/H-A/clash')).status, 200);
+    assert.equal(calls, 2);
+    let complete;
+    const delayed = await client('ios', async () => new Response('{}', { status: 401 }), {
+      fetchDiscoveryAsync: async () => ({}),
+      refreshAsync: () => new Promise(resolve => { complete = resolve; }),
+    });
+    await delayed.api.storeTokenPair('expired', 'refresh');
+    const pending = delayed.api.apiFetch('/api/households/H-A/clash');
+    while (!complete) await new Promise(resolve => setImmediate(resolve));
+    await delayed.api.storeTokenPair(null);
+    complete({ idToken: 'late' });
+    assert.equal((await pending).status, 401);
+    assert.equal(await delayed.api.loadAccessToken(), null);
+  } finally { names.forEach((name, i) => { if (previous[i] === undefined) delete process.env[name]; else process.env[name] = previous[i]; }); }
+});
 
 test('authorized usage carries the signed-in token on native and web', async () => {
   for (const platform of ['ios', 'android', 'web']) {

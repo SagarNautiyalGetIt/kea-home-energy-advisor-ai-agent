@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppIntro } from '@/components/app-intro';
 import { useNotificationResponseRouting } from '@/lib/notifications';
+import { ExperiencePreferences } from '@/lib/experience-preferences';
 import { AuthProvider } from '@/providers/auth';
 import { ToastProvider } from '@/providers/toast';
 import { AppThemeProvider, useAppTheme } from '@/theme';
@@ -25,7 +26,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppThemeProvider>
-        <AuthProvider>
+        <ExperiencePreferences><AuthProvider>
           <ToastProvider>
             <View style={styles.appRoot}>
               <View style={styles.navigationLayer}>
@@ -34,7 +35,7 @@ export default function RootLayout() {
             </View>
             {introVisible ? <AppIntro onDone={() => setIntroVisible(false)} /> : null}
           </ToastProvider>
-        </AuthProvider>
+        </AuthProvider></ExperiencePreferences>
       </AppThemeProvider>
     </GestureHandlerRootView>
   );

@@ -1,0 +1,42 @@
+{
+  "Version": "2019-10-30",
+  "StartAction": "notice",
+  "Metadata": {"entryPointPosition": {"x": 20, "y": 20}, "ActionMetadata": {}},
+  "Actions": [
+    {"Identifier": "notice", "Type": "GetParticipantInput", "Parameters": {
+      "Media": {"Uri": "$.Attributes.kea_notice_audio", "SourceType": "S3", "MediaType": "Audio"},
+      "InputTimeLimitSeconds": "8", "StoreInput": "False"
+    }, "Transitions": {"NextAction": "end", "Conditions": [
+      {"NextAction": "care_queue", "Condition": {"Operator": "Equals", "Operands": ["1"]}},
+      {"NextAction": "opt_out", "Condition": {"Operator": "Equals", "Operands": ["9"]}}
+    ], "Errors": [
+      {"NextAction": "end", "ErrorType": "NoMatchingCondition"},
+      {"NextAction": "end", "ErrorType": "InputTimeLimitExceeded"},
+      {"NextAction": "app_help", "ErrorType": "NoMatchingError"}
+    ]}},
+    {"Identifier": "opt_out", "Type": "InvokeLambdaFunction", "Parameters": {
+      "LambdaFunctionARN": "${worker_arn}", "InvocationTimeLimitSeconds": "8",
+      "InvocationType": "SYNCHRONOUS", "LambdaInvocationAttributes": {"action": "opt_out"},
+      "ResponseValidation": {"ResponseType": "STRING_MAP"}
+    }, "Transitions": {"NextAction": "saved", "Errors": [
+      {"NextAction": "manual_opt_out", "ErrorType": "NoMatchingError"}
+    ]}},
+    {"Identifier": "saved", "Type": "MessageParticipant", "Parameters": {
+      "Text": "Automated bill warning calls are now switched off. Goodbye."
+    }, "Transitions": {"NextAction": "end", "Errors": [{"NextAction": "end", "ErrorType": "NoMatchingError"}]}},
+    {"Identifier": "manual_opt_out", "Type": "MessageParticipant", "Parameters": {
+      "Text": "I could not save that change. Please turn off voice alerts in the Kea app settings or contact customer care. Goodbye."
+    }, "Transitions": {"NextAction": "end", "Errors": [{"NextAction": "end", "ErrorType": "NoMatchingError"}]}},
+    {"Identifier": "care_queue", "Type": "UpdateContactTargetQueue", "Parameters": {"QueueId": "${care_queue_arn}"},
+      "Transitions": {"NextAction": "care", "Errors": [{"NextAction": "app_help", "ErrorType": "NoMatchingError"}]}},
+    {"Identifier": "care", "Type": "TransferContactToQueue", "Parameters": {}, "Transitions": {
+      "NextAction": "end", "Errors": [
+        {"NextAction": "app_help", "ErrorType": "QueueAtCapacity"},
+        {"NextAction": "app_help", "ErrorType": "NoMatchingError"}
+      ]}},
+    {"Identifier": "app_help", "Type": "MessageParticipant", "Parameters": {
+      "Text": "Please open the Kea app to read your notice or contact customer care. For urgent danger, call emergency services. Goodbye."
+    }, "Transitions": {"NextAction": "end", "Errors": [{"NextAction": "end", "ErrorType": "NoMatchingError"}]}},
+    {"Identifier": "end", "Type": "DisconnectParticipant", "Parameters": {}, "Transitions": {}}
+  ]
+}

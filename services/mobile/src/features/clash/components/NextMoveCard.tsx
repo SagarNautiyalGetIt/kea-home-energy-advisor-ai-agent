@@ -1,5 +1,6 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
+
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '@/theme';
@@ -8,7 +9,7 @@ export function NextMoveCard() {
   const { colors } = useAppTheme();
   const router = useRouter();
   const open = (route: '/usage' | '/assistant') => {
-    if (Platform.OS !== 'web') void Haptics.selectionAsync().catch(() => undefined);
+    if (Platform.OS !== 'web') tactile();
     router.push(route);
   };
   return (

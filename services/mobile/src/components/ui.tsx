@@ -1,3 +1,4 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
@@ -16,18 +17,18 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   );
 }
 
-export function PrimaryButton({ label, onPress, icon, disabled = false, loading = false, variant = 'primary' }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean; loading?: boolean; variant?: 'primary' | 'secondary' | 'danger' | 'blue' }) {
+export function PrimaryButton({ label, onPress, icon, leading, disabled = false, loading = false, variant = 'primary' }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; leading?: ReactNode; disabled?: boolean; loading?: boolean; variant?: 'primary' | 'secondary' | 'danger' | 'blue' }) {
   const { colors } = useAppTheme();
   const foreground = variant === 'danger' || variant === 'blue' ? '#FFFFFF' : variant === 'primary' ? colors.onPrimary : colors.text;
   const content = (
     <View style={styles.buttonContent}>
-      {loading ? <ActivityIndicator color={foreground} /> : icon ? <Ionicons name={icon} size={19} color={foreground} /> : null}
+      {loading ? <ActivityIndicator color={foreground} /> : leading ? leading : icon ? <Ionicons name={icon} size={19} color={foreground} /> : null}
       <Text style={[styles.buttonText, { color: foreground }]}>{label}</Text>
     </View>
   );
 
   return (
-    <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.buttonFrame, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={() => { tactile(); onPress(); }} style={({ pressed }) => [styles.buttonFrame, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
       {variant === 'primary' ? (
         <View style={[styles.buttonFill, { backgroundColor: colors.primary }]}>{content}</View>
       ) : (

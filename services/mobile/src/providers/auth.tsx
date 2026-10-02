@@ -13,6 +13,7 @@ type AuthContextValue = {
   ready: boolean;
   session: LocalSession | null;
   signIn: (email: string, password: string) => Promise<void>;
+  acceptIdentity: (token: string, refreshToken: string | null) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -99,6 +100,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         displayName: authenticated.displayName,
         email: email.trim().toLowerCase(),
       });
+    },
+    acceptIdentity: async (token, refreshToken) => {
+      await storeTokenPair(token, refreshToken);
+      try {
+        const claims = await apiJson<{ customer_id: string; display_name?: string; email?: string }>('/api/auth/session');
+        if (!claims.customer_id) throw new Error('Your account has no linked household.');
+        await persist({ customerId: claims.customer_id, displayName: claims.display_name ?? 'Kea customer', email: claims.email ?? '' });
+      } catch (error) { await storeTokenPair(null, null); throw error; }
     },
     signUp: async () => {
       throw new Error('Account registration is not available from the current Kea backend. Please use an approved demo account or contact Customer Care.');

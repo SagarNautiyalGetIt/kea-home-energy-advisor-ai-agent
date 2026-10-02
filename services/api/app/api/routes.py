@@ -286,6 +286,9 @@ async def demo_accounts() -> list[DemoAccountCard]:
 async def demo_session(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, str]:
+    if settings.oidc_issuer:
+        from app.security import identity
+        return identity(authorization)
     if not settings.demo_logins:
         raise HTTPException(status_code=503, detail="Demo sessions are disabled.")
     token = authorization.removeprefix("Bearer ") if authorization else ""
@@ -707,9 +710,9 @@ async def _preferences_for(customer_id: str) -> AlertPreferences:
     """
     prefs = await get_preferences_store().get(customer_id)
     patch: dict[str, str] = {}
-    if not prefs.email and settings.demo_recipient:
+    if settings.demo_logins and not prefs.email and settings.demo_recipient:
         patch["email"] = settings.demo_recipient
-    if not prefs.phone_e164 and settings.demo_phone:
+    if settings.demo_logins and not prefs.phone_e164 and settings.demo_phone:
         patch["phone_e164"] = settings.demo_phone
     return prefs.model_copy(update=patch) if patch else prefs
 
@@ -947,7 +950,11 @@ class EvOwnershipAnswer(_VapiBaseModel):
 
 
 def _demo_household_access(customer_id: str, authorization: str | None) -> None:
-    """Scope sensitive demo reads and writes; production needs real household auth."""
+    """Scope sensitive demo and production reads and writes."""
+    if settings.oidc_issuer:
+        from app.security import household_access
+        household_access(customer_id, authorization)
+        return
     if not settings.demo_logins:
         raise HTTPException(status_code=503, detail="Household access needs production auth.")
     token = authorization.removeprefix("Bearer ") if authorization else ""
@@ -1465,7 +1472,17 @@ async def voice_stream(websocket: WebSocket) -> None:
             kind = payload.get("type")
 
             if kind == "hello":
-                session.customer_id = str(payload.get("customer_id") or "")
+                if session.customer_id:
+                    await session.error("Voice account is already set.", fatal=True)
+                    break
+                account = str(payload.get("customer_id") or "")
+                from app.security import household_access
+                try:
+                    household_access(account, "Bearer " + str(payload.get("access_token") or ""))
+                except HTTPException:
+                    await session.error("Sign in to access this voice session.", fatal=True)
+                    break
+                session.customer_id = account
                 await session.send_ready()
             elif not session.customer_id:
                 await session.error("send hello first", fatal=True)

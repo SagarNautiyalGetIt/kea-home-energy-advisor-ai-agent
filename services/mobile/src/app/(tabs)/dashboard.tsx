@@ -297,7 +297,7 @@ export default function DashboardScreen() {
       <ModalSheet
         footer={
           <PrimaryButton
-            icon="sparkles-outline"
+            leading={<SparkyPresence size={36} />}
             label="Ask Sparky AI to help"
             onPress={() => {
               setBillShockOpen(false);
@@ -311,7 +311,7 @@ export default function DashboardScreen() {
         visible={billShockOpen}
       >
         <View style={styles.shockModal}>
-          <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence mode="static" size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
           <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />

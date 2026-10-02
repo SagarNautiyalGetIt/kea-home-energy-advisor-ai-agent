@@ -175,3 +175,22 @@ class GeminiSpeechToText:
         # bracketed non-speech annotations, and a model told to output nothing for silence
         # sometimes writes "(no speech)" instead — the same shape, so the same filter.
         return Transcript(text=_clean(text.strip()), latency_ms=latency, language=language)
+
+    async def transcribe_encoded(self, audio: bytes, mime_type: str) -> Transcript:
+        """Device-recorded AAC/WebM uses the same verbatim transcription contract."""
+        import asyncio
+
+        from google.genai import types
+
+        if not self.available or not audio:
+            raise RuntimeError('Recorded transcription is unavailable.')
+        started = time.perf_counter()
+        response = await asyncio.wait_for(self._genai().aio.models.generate_content(
+            model=self._model, contents=[_PROMPT, types.Part.from_bytes(
+                data=audio, mime_type=mime_type)], config=types.GenerateContentConfig(
+                temperature=0, max_output_tokens=512, response_mime_type='application/json')),
+            timeout=TRANSCRIBE_TIMEOUT_S)
+        parsed = json.loads(response.text or '{}')
+        return Transcript(text=_clean(str(parsed.get('text') or '').strip()),
+                          latency_ms=(time.perf_counter() - started) * 1000,
+                          language=parsed.get('language'))

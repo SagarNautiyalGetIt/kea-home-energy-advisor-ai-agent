@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ClashCoach } from '@/components/clash-coach';
+import { tactile } from '@/lib/haptics';
 import { Screen } from '@/components/screen';
 import { PageHeader } from '@/components/ui';
 import { EnergyArena } from '@/features/clash/components/EnergyArena';
@@ -16,8 +17,7 @@ import { demoDistricts, demoLeaderboard, locationOutcomeCopy, nearbyDemoDistrict
 import { useAppTheme } from '@/theme';
 
 function selectionFeedback() {
-  if (Platform.OS === 'web') return;
-  void Haptics.selectionAsync().catch(() => undefined);
+  tactile();
 }
 
 export default function ClashScreen() {
@@ -103,6 +103,7 @@ export default function ClashScreen() {
         {locationOutcome ? <Text accessibilityLiveRegion="polite" style={[styles.locationResult, { color: colors.textMuted }]}>{locationOutcomeCopy(locationOutcome)} {locationOutcome === 'nearby' ? `Showing ${district.name} as an example.` : ''}</Text> : null}
       </View>
 
+      <ClashCoach />
       <EnergyArena metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} />
       <ScoreBreakdown metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} />
       <SuburbLeaderboard districtId={selectedId} districtName={district.name} />

@@ -1235,6 +1235,314 @@
           }
         }
       }
+    },
+    "/api/auth/config": {
+      "get": {
+        "summary": "Auth Config",
+        "operationId": "auth_config_api_auth_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Auth Config Api Auth Config Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{account}/scheduled-outages": {
+      "get": {
+        "summary": "Scheduled Outages",
+        "operationId": "scheduled_outages_api_households__account__scheduled_outages_get",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/scheduled-outages": {
+      "post": {
+        "summary": "Receive Outages",
+        "operationId": "receive_outages_api_internal_scheduled_outages_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{account}/clash": {
+      "get": {
+        "summary": "Clash Progress",
+        "operationId": "clash_progress_api_households__account__clash_get",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClashProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{account}/clash/plans": {
+      "post": {
+        "summary": "Plan Action",
+        "operationId": "plan_action_api_households__account__clash_plans_post",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClashProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/clash/receipts": {
+      "post": {
+        "summary": "Receive Action",
+        "operationId": "receive_action_api_internal_clash_receipts_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/alerts/delivery": {
+      "post": {
+        "summary": "Receive Delivery",
+        "operationId": "receive_delivery_api_internal_alerts_delivery_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{account}/voice/turn": {
+      "post": {
+        "summary": "Voice Turn",
+        "operationId": "voice_turn_api_households__account__voice_turn_post",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_voice_turn_api_households__account__voice_turn_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceTurn"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1966,6 +2274,20 @@
         ],
         "title": "Body_analyse_bill_api_bills_analyse_post"
       },
+      "Body_voice_turn_api_households__account__voice_turn_post": {
+        "properties": {
+          "audio": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Audio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "audio"
+        ],
+        "title": "Body_voice_turn_api_households__account__voice_turn_post"
+      },
       "CauseBreakdown": {
         "properties": {
           "explained": {
@@ -2184,6 +2506,79 @@
         ],
         "title": "ClarifyingQuestion",
         "description": "One question, and the arithmetic that justifies asking it."
+      },
+      "ClashProgress": {
+        "properties": {
+          "total_xp": {
+            "type": "integer",
+            "title": "Total Xp"
+          },
+          "planning_xp": {
+            "type": "integer",
+            "title": "Planning Xp"
+          },
+          "verified_xp": {
+            "type": "integer",
+            "title": "Verified Xp"
+          },
+          "estimated_shift_savings_nzd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Estimated Shift Savings Nzd"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/RewardEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "missions": {
+            "items": {
+              "$ref": "#/components/schemas/Mission"
+            },
+            "type": "array",
+            "title": "Missions",
+            "default": [
+              {
+                "id": "ev_off_peak",
+                "title": "Plan a cheaper EV charge",
+                "question": "Help me plan EV charging using my actual off-peak tariff, departure time and battery target.",
+                "planning_xp": 5
+              },
+              {
+                "id": "shift_flexible_load",
+                "title": "Move one flexible task",
+                "question": "Which flexible energy task could I move off peak without changing my comfort or routine?",
+                "planning_xp": 5
+              },
+              {
+                "id": "review_energy_plan",
+                "title": "Check my energy plan",
+                "question": "Compare my plan using measured usage and tell me if the evidence supports a cheaper option.",
+                "planning_xp": 5
+              }
+            ]
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "database",
+              "memory"
+            ],
+            "title": "Storage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_xp",
+          "planning_xp",
+          "verified_xp",
+          "estimated_shift_savings_nzd",
+          "events",
+          "storage"
+        ],
+        "title": "ClashProgress"
       },
       "Confidence": {
         "type": "string",
@@ -3314,6 +3709,39 @@
         "title": "LoginResponse",
         "description": "Who signed in, and which household to show them.\n\nThe token is temporary and valid only for synthetic demo accounts. It authorizes\nnew household write paths, not real customer access."
       },
+      "Mission": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "ev_off_peak",
+              "shift_flexible_load",
+              "review_energy_plan"
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "planning_xp": {
+            "type": "integer",
+            "title": "Planning Xp",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "question"
+        ],
+        "title": "Mission"
+      },
       "MobileCommitmentTerm": {
         "properties": {
           "id": {
@@ -3630,6 +4058,117 @@
         "title": "OfflinePack",
         "description": "Everything a device needs to answer without a network.\n\nCarries no raw meter series, and that is deliberate rather than a size optimisation.\nA device holding `daily_kwh` is a device whose model can be asked to add it up, and\nthe first time someone wires the chat box straight to the readings \"to make offline\nsmarter\", the no-arithmetic guarantee is gone on the platform where it is hardest to\naudit."
       },
+      "OutageSnapshot": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "title": "Account Ref"
+          },
+          "distributor": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Distributor"
+          },
+          "source_url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Source Url"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          },
+          "valid_until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Valid Until"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledOutage"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref",
+          "distributor",
+          "source_url",
+          "fetched_at",
+          "valid_until",
+          "revision",
+          "events"
+        ],
+        "title": "OutageSnapshot"
+      },
+      "OutageView": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_linked",
+              "current",
+              "stale"
+            ],
+            "title": "Status"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutageSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "database",
+              "memory"
+            ],
+            "title": "Storage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "storage"
+        ],
+        "title": "OutageView"
+      },
+      "PlanAction": {
+        "properties": {
+          "mission_id": {
+            "type": "string",
+            "enum": [
+              "ev_off_peak",
+              "shift_flexible_load",
+              "review_energy_plan"
+            ],
+            "title": "Mission Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mission_id"
+        ],
+        "title": "PlanAction"
+      },
       "Provider": {
         "type": "string",
         "enum": [
@@ -3687,6 +4226,105 @@
         ],
         "title": "QuestionResponse",
         "description": "What the customer sent back."
+      },
+      "RewardEvent": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "mission_id": {
+            "type": "string",
+            "title": "Mission Id"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "verified"
+            ],
+            "title": "Evidence"
+          },
+          "xp": {
+            "type": "integer",
+            "title": "Xp"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "savings_nzd": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Savings Nzd",
+            "default": "0"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "mission_id",
+          "evidence",
+          "xp",
+          "day",
+          "source"
+        ],
+        "title": "RewardEvent"
+      },
+      "ScheduledOutage": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Event Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "completed"
+            ],
+            "title": "Status",
+            "default": "scheduled"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "title",
+          "start",
+          "end"
+        ],
+        "title": "ScheduledOutage"
       },
       "SourceRef": {
         "properties": {
@@ -3773,6 +4411,59 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VoiceTurn": {
+        "properties": {
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "audio_wav_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Wav Base64"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          },
+          "speech_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transcript",
+          "answer",
+          "audio_wav_base64",
+          "sample_rate"
+        ],
+        "title": "VoiceTurn"
       },
       "_VapiCompletionRequest": {
         "properties": {

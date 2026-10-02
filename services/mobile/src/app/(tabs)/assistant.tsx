@@ -1,6 +1,7 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -98,7 +99,7 @@ export default function AssistantScreen() {
     const user: Message = { id: nextId.current++, role: 'user', text: clean };
     const replyId = nextId.current++;
     setMessages((current) => [...current, user]);
-    void Haptics.selectionAsync();
+    tactile();
     let completed = false;
     let shouldEscalate = false;
 
@@ -127,7 +128,7 @@ export default function AssistantScreen() {
       }
       if (!answeredOnPhone) await new Promise<void>((resolve) => {
         const stream = streamAssistantReply(session?.customerId ?? '', clean, {
-          onText: (chunk) => patch((m) => ({ ...m, text: m.text + chunk, streaming: true })),
+          onText: (chunk) => { tactile('response'); patch((m) => ({ ...m, text: m.text + chunk, streaming: true })); },
           // That round turned out to be a lookup, so its text was a preamble.
           onReset: () => patch((m) => ({ ...m, text: '' })),
           onTool: (name) => patch((m) => ({ ...m, activity: [...(m.activity ?? []), toolLabel(name)] })),
@@ -183,7 +184,7 @@ export default function AssistantScreen() {
     setBusy(false);
     setKeyboardVisible(false);
     Keyboard.dismiss();
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   const copyReply = async (message: Message) => {
@@ -194,12 +195,13 @@ export default function AssistantScreen() {
   return (
     <AuroraMotion><Screen contentStyle={styles.screen} scroll={false}>
       <AuroraBackground />
-      <PageHeader action={<IconButton icon="create-outline" label="New chat" onPress={newChat} />} title="Sparky AI" subtitle={isDemoMode ? 'Preview data on screens · live assistant needs the API' : 'Energy answers with clear limits'} />
+      <PageHeader action={<View style={{ flexDirection: 'row', gap: 8 }}><IconButton icon="call" label="Talk with Sparky" onPress={() => router.push('/voice')} /><IconButton icon="create-outline" label="New chat" onPress={newChat} /></View>} title="Sparky AI" subtitle={isDemoMode ? 'Preview data on screens · live assistant needs the API' : 'Energy answers with clear limits'} />
+      {started ? <View style={{ alignItems: 'center', paddingVertical: 4 }}><SparkyPresence auroraTint mode={busy ? 'replying' : 'idle'} size={112} /></View> : null}
       {started ? (
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
           {messages.map((message) => (
             <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
-              {message.role === 'assistant' ? <SparkyPresence auroraTint mode={message.streaming ? 'replying' : 'happy'} size={34} /> : null}
+              {message.role === 'assistant' ? <SparkyPresence auroraTint mode={message.streaming ? 'replying' : 'static'} size={48} /> : null}
               <View style={[styles.bubble, message.role === 'user' ? [styles.userBubble, { backgroundColor: colors.primary, borderColor: colors.primary }] : { backgroundColor: colors.surface, borderColor: message.failed ? palette.red : colors.border }]}>
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />
@@ -217,7 +219,7 @@ export default function AssistantScreen() {
               </View>
             </View>
           ))}
-          {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence auroraTint mode="thinking" size={34} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
+          {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence auroraTint mode="thinking" size={48} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
         </ScrollView>
       ) : <View style={[styles.startState, compactQuestions && styles.startStateCompact]}><SparkyPresence auroraTint size={compactQuestions ? 112 : 220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View>}
 

@@ -31,15 +31,20 @@ export function SparkyPresence({ size = 168, mode = 'idle', auroraTint = false }
   }, []);
 
   useEffect(() => {
-    engine.current.setState(mode === 'thinking' ? 'thinking' : 'idle', time.current);
+    engine.current.setState('idle', time.current);
+    engine.current.setLook({ yaw: 0, pitch: 0, mix: 1, spin: 0, wander: reduceMotion ? 0 : 0.12 }, time.current);
     engine.current.setExpression(EXPRESSION_BY_ID.get(mode === 'happy' ? 'heureux' : mode === 'replying' ? 'attentif' : 'neutre') ?? null, time.current);
-    if (reduceMotion || mode === 'static' || !active) {
+    if (reduceMotion || !active || mode === 'static') {
       setFrame(engine.current.sample(time.current + 0.5));
       return;
     }
     // Cap sampling at 30 fps and pause on hidden screens.
     const timer = setInterval(() => {
       time.current += 1 / 30;
+      if (mode === 'idle' && Math.floor(time.current * 30) % 240 === 0) {
+        const expression = Math.floor(time.current / 8) % 2 ? 'heureux' : 'neutre';
+        engine.current.setExpression(EXPRESSION_BY_ID.get(expression) ?? null, time.current);
+      }
       setFrame(engine.current.sample(time.current));
     }, 1000 / 30);
     return () => clearInterval(timer);

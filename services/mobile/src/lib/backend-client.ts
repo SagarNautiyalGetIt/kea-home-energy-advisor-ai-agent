@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import * as AuthSession from 'expo-auth-session';
 import { Platform } from 'react-native';
 import { shouldExpireSession } from './session-policy';
 
@@ -84,18 +85,30 @@ export async function storeTokenPair(accessToken: string | null, refreshToken: s
 }
 
 async function refreshAccessToken() {
-  if (!memoryRefreshToken && Platform.OS !== 'web') memoryRefreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  const revision = tokenRevision;
+  if (!memoryRefreshToken) memoryRefreshToken = Platform.OS === 'web'
+    ? typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(REFRESH_TOKEN_KEY)
+    : await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
   if (!memoryRefreshToken) return null;
-  // The current Kea API has no token-refresh endpoint. A future authenticated
-  // deployment must opt in by supplying its exact route rather than causing a
-  // misleading request to a path this backend does not expose.
+  const issuer = process.env.EXPO_PUBLIC_OIDC_ISSUER?.trim();
+  const clientId = process.env.EXPO_PUBLIC_OIDC_CLIENT_ID?.trim();
+  if (issuer && clientId) {
+    try {
+      const discovery = await AuthSession.fetchDiscoveryAsync(issuer);
+      const tokens = await AuthSession.refreshAsync({ clientId, refreshToken: memoryRefreshToken }, discovery);
+      if (!tokens.idToken || revision !== tokenRevision) return null;
+      await storeTokenPair(tokens.idToken, tokens.refreshToken ?? memoryRefreshToken);
+      return tokens.idToken;
+    } catch { return null; }
+  }
+  // Optional route for deployments using a different authenticated token service.
   const path = process.env.EXPO_PUBLIC_REFRESH_TOKEN_PATH?.trim();
   if (!path) return null;
   const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: memoryRefreshToken }) });
   if (!response.ok) return null;
   const body = await response.json() as Record<string, unknown>;
   const accessToken = body.access_token;
-  if (typeof accessToken !== 'string' || !accessToken) return null;
+  if (typeof accessToken !== 'string' || !accessToken || revision !== tokenRevision) return null;
   await storeTokenPair(accessToken, typeof body.refresh_token === 'string' ? body.refresh_token : memoryRefreshToken);
   return accessToken;
 }
