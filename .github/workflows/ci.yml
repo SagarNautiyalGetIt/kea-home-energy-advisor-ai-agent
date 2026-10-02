@@ -69,6 +69,8 @@ jobs:
       # committed as a symlink and broke every run of this job with
       # "[Errno 17] File exists" before a single test ran.
       - run: rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install -q --upgrade pip
+      - name: Install Connect audio test dependency
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: .venv/bin/pip install -q -e ".[dev]"
       - run: .venv/bin/ruff check app tests
       - run: .venv/bin/pytest
