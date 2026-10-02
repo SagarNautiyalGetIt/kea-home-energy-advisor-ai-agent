@@ -12,6 +12,7 @@ const source = (name) => readFileSync(new URL(name, import.meta.url), 'utf8');
 const policy = await moduleFrom(source('./session-policy.ts'));
 const reading = await moduleFrom(source('./home-card-reading.ts'));
 const camera = await moduleFrom(source('./home-camera.ts'));
+const mouth = await moduleFrom(source('./sparky-mouth.ts'));
 
 async function client(platform = 'ios', transport = async () => new Response('{}')) {
   // Run the real client with only native storage/platform/network adapters replaced.
@@ -98,5 +99,21 @@ test('interactive home bounds excessive, invalid and repeated camera movements',
   for (let i = -100; i <= 100; i++) {
     const actual = camera.constrainCamera({ x: i, y: i, zoom: i / 10 });
     assert.ok(Math.abs(actual.x) <= 12 && Math.abs(actual.y) <= 9 && actual.zoom >= 0.9 && actual.zoom <= 1.45);
+  }
+});
+test('mouth position and shape do not inherit blinking or eye opacity', () => {
+  const open = [{ matrix: 'matrix(0.8,-0.2,0.2,0.9,20,-45)', alpha: 1 }, { matrix: 'matrix(0.6,-0.2,0.2,0.9,60,-55)', alpha: 1 }];
+  const shut = [{ matrix: 'matrix(0.8,-0.012,0.2,0.054,20,-45)', alpha: 0 }, { matrix: 'matrix(0.6,-0.012,0.2,0.054,60,-55)', alpha: 0 }];
+  assert.equal(mouth.mouthPose(open), mouth.mouthPose(shut));
+  assert.ok(!mouth.mouthPose(shut).includes('matrix'));
+  assert.deepEqual(mouth.mouthShape('idle', 1.4), mouth.mouthShape('idle', 1.48));
+  assert.equal(mouth.mouthPose([]), 'translate(0 34)');
+});
+test('responding articulates independently and reduced motion stays still', () => {
+  assert.notEqual(mouth.mouthShape('replying', 0).d, mouth.mouthShape('replying', 0.5).d);
+  assert.deepEqual(mouth.mouthShape('replying', 0, false), mouth.mouthShape('replying', 5, false));
+  for (const mode of ['idle', 'happy', 'thinking']) {
+    assert.equal(mouth.mouthShape(mode, 0).fill, false);
+    assert.ok(mouth.mouthShape(mode, 0).strokeWidth > 0);
   }
 });
