@@ -9,6 +9,7 @@ import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import SemiCircleGauge from '@/components/SemiCircleGauge';
 import { BillRingGauge, type BillRingTone } from '@/components/bill-ring-gauge';
+import { SparkyPresence } from '@/components/sparky-presence';
 import { PrimaryButton } from '@/components/ui';
 import { getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
 import { useAuth } from '@/providers/auth';
@@ -310,6 +311,7 @@ export default function DashboardScreen() {
         visible={billShockOpen}
       >
         <View style={styles.shockModal}>
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence mode="static" size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
           <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />

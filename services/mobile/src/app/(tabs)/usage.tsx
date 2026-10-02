@@ -59,10 +59,6 @@ function addDays(date: Date, days: number) {
   return shifted;
 }
 
-function startOfWeek(date: Date) {
-  return addDays(date, -((date.getDay() + 6) % 7));
-}
-
 function shortDate(date: Date) {
   return `${date.getDate()} ${monthLabels[date.getMonth()]}`;
 }
@@ -243,10 +239,8 @@ export default function UsageScreen() {
           const initialSelection = initialDateCustomer.current !== session?.customerId;
           initialDateCustomer.current = session?.customerId ?? null;
           if (initialSelection && !comparison && result.totalKwh === null && result.availableTo) {
-            const latest = parseDate(result.availableTo);
-            const fallbackDate = period === 'weekly'
-              ? toDateValue(addDays(startOfWeek(latest), -1))
-              : result.availableTo;
+            // Choose a populated window even with less than a week of history.
+            const fallbackDate = result.availableTo;
             if (fallbackDate !== date) setDate(fallbackDate);
           }
         }

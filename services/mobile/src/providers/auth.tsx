@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiJson, jsonRequest, loadAccessToken, storeTokenPair } from '@/lib/backend-client';
+import { apiFetch, apiJson, jsonRequest, loadAccessToken, onSessionExpired, storeTokenPair } from '@/lib/backend-client';
+import { sessionMatches } from '@/lib/session-policy';
 
 export type LocalSession = {
   customerId: string;
@@ -53,18 +54,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<LocalSession | null>(null);
 
   useEffect(() => {
+    let active = true;
+    const unsubscribe = onSessionExpired(() => {
+      setSession(null);
+      void AsyncStorage.removeItem(STORAGE_KEY);
+    });
     Promise.all([AsyncStorage.getItem(STORAGE_KEY), loadAccessToken()])
-      .then(([saved, token]) => {
+      .then(async ([saved, token]) => {
         if (!saved) return;
         const parsed: unknown = JSON.parse(saved);
         if (!isRecord(parsed) || typeof parsed.customerId !== 'string' || typeof parsed.displayName !== 'string' || typeof parsed.email !== 'string') return;
-        // A token-bearing session must not be restored after its secure token has gone.
-        // Tokenless sessions are the documented demo-backend mode.
-        if (token === null && parsed.email.endsWith('@kea.example') === false) return;
-        setSession(parsed as LocalSession);
+        if (!token) { await AsyncStorage.removeItem(STORAGE_KEY); return; }
+        try {
+          const response = await apiFetch('/api/auth/session');
+          if (response.status === 401 || response.status === 403) return;
+          if (response.ok && !sessionMatches(await response.json(), parsed.customerId)) {
+            await storeTokenPair(null, null);
+            await AsyncStorage.removeItem(STORAGE_KEY);
+            return;
+          }
+        } catch {
+          // Preserve an authenticated offline session on a network failure;
+          // an authorization rejection is handled above and by the listener.
+        }
+        if (active) setSession(parsed as LocalSession);
       })
       .catch(() => undefined)
-      .finally(() => setReady(true));
+      .finally(() => { if (active) setReady(true); });
+    return () => { active = false; unsubscribe(); };
   }, []);
 
   const persist = async (next: LocalSession) => {

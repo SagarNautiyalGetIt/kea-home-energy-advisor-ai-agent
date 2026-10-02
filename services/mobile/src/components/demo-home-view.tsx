@@ -1,7 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { InteractiveHomeScene } from './interactive-home-scene';
+import { homeCardReading } from '@/lib/home-card-reading';
 import { AccessibilityInfo, Animated, AppState, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import Reanimated, { cancelAnimation, Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -11,7 +14,7 @@ import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useActiveAnimation } from '@/lib/use-active-animation';
 import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
-import { HIGHLIGHT_COLOR, VisualHighlight, type HighlightTarget } from './visual-highlight';
+import { HIGHLIGHT_COLOR, HOME_OUTLINE, VisualHighlight, type HighlightTarget } from './visual-highlight';
 
 type Device = HighlightTarget;
 type Source = 'solar' | 'battery' | 'grid' | 'load';
@@ -90,49 +93,6 @@ function sceneColors(weather: AucklandWeather | null): [string, string, string, 
   return ['#1C374A', '#4EA4CF', '#95D4EE', '#111111'];
 }
 
-function deviceEnergy(scene: HomeSceneData | null, deviceClass: string): number | null {
-  if (!scene) return null;
-  const values = scene.devices.filter((item) => item.deviceClass === deviceClass);
-  return values.length ? values.reduce((sum, item) => sum + item.energyKwh, 0) : null;
-}
-
-function reading(scene: HomeSceneData | null, live: LivePower, device: Device): { value: string; detail: string; color: string } {
-  const meterKwh = scene?.meterImportKwh ?? null;
-  const measured = (value: number | null) => value === null ? '—' : `${value.toFixed(1)} kWh`;
-  const current = (watts: number | undefined) => watts === undefined ? null : `${(watts / 1000).toFixed(2)} kW`;
-  switch (device) {
-    case 'solar': {
-      const solarEnergy = deviceEnergy(scene, 'solar_generation');
-      if (live.solar_generation !== undefined) return { value: current(live.solar_generation)!, detail: 'Solar output · live', color: COLORS.solar };
-      if (solarEnergy !== null) return { value: measured(solarEnergy), detail: 'Solar meter · latest day', color: COLORS.solar };
-      return { value: 'N/A', detail: 'No solar connected', color: COLORS.solar };
-    }
-    case 'home': return { value: current(live.home_load) ?? '—', detail: live.home_load !== undefined ? 'Home load · live' : 'No home power sensor', color: POWER_COLOR };
-    case 'car': {
-      const evEnergy = deviceEnergy(scene, 'ev_charger');
-      if (live.ev_charger !== undefined) return { value: current(live.ev_charger)!, detail: 'Charger · live', color: POWER_COLOR };
-      if (evEnergy !== null) return { value: measured(evEnergy), detail: 'Charger meter · latest day', color: POWER_COLOR };
-      return { value: 'N/A', detail: 'No EV charger', color: HIGHLIGHT_COLOR.car };
-    }
-    case 'battery': {
-      const charge = deviceEnergy(scene, 'battery_charge');
-      const discharge = deviceEnergy(scene, 'battery_discharge');
-      if (live.battery_charge !== undefined && live.battery_charge > 20) return { value: current(live.battery_charge)!, detail: 'Charging · live', color: COLORS.battery };
-      if (live.battery_discharge !== undefined && live.battery_discharge > 20) return { value: current(live.battery_discharge)!, detail: 'Supplying · live', color: COLORS.battery };
-      if (live.battery_charge !== undefined || live.battery_discharge !== undefined) return { value: current(live.battery_charge ?? live.battery_discharge)!, detail: 'Idle · live', color: COLORS.battery };
-      if (charge !== null) return { value: measured(charge), detail: 'Charged · latest day', color: COLORS.battery };
-      if (discharge !== null) return { value: measured(discharge), detail: 'Discharged · latest day', color: COLORS.battery };
-      return { value: 'N/A', detail: 'No battery connected', color: COLORS.battery };
-    }
-    case 'grid': {
-      if (live.grid_import !== undefined && live.grid_import > 20) return { value: current(live.grid_import)!, detail: 'Importing · live', color: COLORS.grid };
-      if (live.grid_export !== undefined && live.grid_export > 20) return { value: current(live.grid_export)!, detail: 'Exporting · live', color: COLORS.grid };
-      if (live.grid_import !== undefined || live.grid_export !== undefined) return { value: current(live.grid_import ?? live.grid_export)!, detail: 'Idle · live', color: COLORS.grid };
-      return { value: measured(meterKwh), detail: meterKwh !== null ? scene?.dateSource === 'demo' ? 'Demo import · latest day' : 'Imported · latest day' : 'No grid reading yet', color: COLORS.grid };
-    }
-  }
-}
-
 export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOpenProfile, onProtectedHeaderHeightChange, sceneOpacity }: Props) {
   const { colors, mode } = useAppTheme();
   const { width, fontScale } = useWindowDimensions();
@@ -159,16 +119,20 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     ? Math.max(0.08, Math.min((weather.observedAt - weather.sunriseAt) / (weather.sunsetAt - weather.sunriseAt), 0.92))
     : 0.65;
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!customerId) return;
     const controller = new AbortController();
+    setScene(null);
+    setSceneError(null);
     void loadHomeScene(customerId, controller.signal).then((next) => {
       if (!controller.signal.aborted) { setScene(next); setSceneError(null); }
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) setSceneError(error instanceof Error ? error.message : 'Home readings unavailable.');
     });
     return () => controller.abort();
-  }, [customerId, reload]);
+    // reload deliberately invalidates the focused screen's request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, reload]));
 
   useEffect(() => {
     if (!customerId) return;
@@ -264,13 +228,16 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           />
           <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (sceneWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
           {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
+          <InteractiveHomeScene reduceMotion={reduceMotion}>
           <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
             <Image accessible={false} source={require('../../assets/kea/kea-home.png')} style={{ height: sceneHeight, width: sceneWidth }} />
-            <Svg height={sceneHeight} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
+            <Svg height={sceneHeight} style={StyleSheet.absoluteFill} viewBox="0 0 2048 1117.091" width={sceneWidth}>
               <VisualHighlight active={animationActive} reduceMotion={reduceMotion} selected={selected} />
               {routes.map((route) => <FlowPath active={!reduceMotion && animationActive && Platform.OS !== 'web'} key={route.id} {...route} />)}
+              {(['home', 'solar', 'battery', 'grid', 'car'] as Device[]).map((device) => <Path key={'select-' + device} d={HOME_OUTLINE[device]} fill="transparent" onPress={() => setSelected(device)} />)}
             </Svg>
           </View>
+          </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
       </Animated.View>
@@ -278,13 +245,18 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
       <ScrollView contentContainerStyle={styles.deviceRail} horizontal showsHorizontalScrollIndicator={false}>
         {(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
-          const metric = reading(scene, live, device);
+          const metric = { ...homeCardReading(scene, live, device), color: HIGHLIGHT_COLOR[device] };
           return <Pressable key={device} accessibilityLabel={`${device === 'car' ? 'EV' : device}: ${metric.value}, ${metric.detail}`} accessibilityHint={`Visual highlight locates ${device === 'car' ? 'the EV' : `the ${device}`} in the home picture; it is not a power reading.`} accessibilityRole="button" accessibilityState={{ selected: selected === device }} onPress={() => { setSelected(device); if (Platform.OS !== 'web') void Haptics.selectionAsync(); }} style={[styles.deviceChip, { width: chipWidth, backgroundColor: colors.surface, borderColor: colors.border }, selected === device && { borderColor: HIGHLIGHT_COLOR[device] }]}>
             <View style={styles.deviceHeading}><View style={[styles.deviceDot, { backgroundColor: metric.color }]} /><Text style={[styles.deviceName, { color: colors.textMuted }]}>{device === 'car' ? 'EV' : device.toUpperCase()}</Text></View>
-            <Text style={[styles.deviceValue, { color: colors.text }]}>{metric.value}</Text><Text numberOfLines={fontScale > 1.3 ? 2 : 1} style={[styles.deviceDetail, { color: colors.textMuted }]}>{metric.detail}</Text>
+            <Text style={[styles.deviceValue, { color: colors.text }]}>{metric.value}</Text><Text numberOfLines={3} style={[styles.deviceDetail, { color: colors.textMuted }]}>{sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail}</Text>
           </Pressable>;
         })}
       </ScrollView>
+      <Pressable accessibilityRole="button" onPress={() => router.push(selected === 'home' || selected === 'grid' ? '/usage' : '/settings')} style={[styles.readingAction, { borderColor: colors.border }]}>
+        <Ionicons name={selected === 'home' || selected === 'grid' ? 'bar-chart-outline' : 'link-outline'} color={colors.text} size={18} />
+        <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>{selected === 'home' || selected === 'grid' ? 'View dated household imports' : `Connect or sync ${selected === 'car' ? 'EV charger' : selected} sensors`}</Text>
+        <Ionicons name="chevron-forward" color={colors.textMuted} size={16} />
+      </Pressable>
       {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home readings unavailable · Retry</Text></Pressable> : null}
       <Text style={[styles.demoNote, { color: colors.textMuted }]}>Visual highlight locates {selected === 'car' ? 'the EV' : `the ${selected}`} in the picture. {routes.length > 0 ? 'Live flow follows your connected power sensors.' : hasLiveSensors ? 'Your power sensors are idle right now.' : 'Connect a power sensor to see live energy flow.'}</Text>
     </View>
@@ -312,16 +284,17 @@ const styles = StyleSheet.create({
   skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
   skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2, elevation: 2 },
   topFade: { top: 0, height: 140, left: 0, position: 'absolute', right: 0, zIndex: 1, elevation: 1 },
-  bottomFade: { bottom: 0, left: 0, position: 'absolute', right: 0, zIndex: 3 },
+  bottomFade: { bottom: 51, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#8E8E8E', fontSize: 11, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },
-  deviceChip: { backgroundColor: '#1A1A1A', borderColor: '#303030', borderRadius: 14, borderWidth: 1, minHeight: 85, paddingHorizontal: 11, paddingVertical: 9, width: 111 },
+  deviceChip: { backgroundColor: '#1A1A1A', borderColor: '#303030', borderRadius: 14, borderWidth: 1, minHeight: 116, paddingHorizontal: 11, paddingVertical: 9, width: 111 },
   deviceHeading: { alignItems: 'center', flexDirection: 'row', gap: 6 },
   deviceDot: { borderRadius: 4, height: 7, width: 7 },
   deviceName: { color: '#A8A8A8', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   deviceValue: { color: '#F7F8F9', fontSize: 17, fontWeight: '800', marginTop: 6 },
   deviceDetail: { color: '#8E8E8E', fontSize: 10, marginTop: 3 },
   demoNote: { color: '#8E8E8E', fontSize: 11, paddingHorizontal: 18, paddingTop: 8 },
+  readingAction: { alignItems: 'center', flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, minHeight: 44 },
   retry: { alignItems: 'center', flexDirection: 'row', gap: 7, marginHorizontal: 18, marginTop: 10 },
   retryText: { color: '#D8D8D8', fontSize: 11 },
 });

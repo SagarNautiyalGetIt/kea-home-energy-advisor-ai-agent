@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { shouldExpireSession } from './session-policy';
 
 /**
  * Where the backend is, per platform.
@@ -31,31 +32,55 @@ const REFRESH_TOKEN_KEY = 'kea-mobile-refresh-token';
 let memoryToken: string | null = null;
 let memoryRefreshToken: string | null = null;
 let refreshRequest: Promise<string | null> | null = null;
+let tokenLoaded = false;
+let tokenRevision = 0;
+let storageWrites: Promise<void> = Promise.resolve();
+const expiredListeners = new Set<() => void>();
+
+export function onSessionExpired(listener: () => void) {
+  expiredListeners.add(listener);
+  return () => { expiredListeners.delete(listener); };
+}
+
+function persistToken(key: string, value: string | null) {
+  const write = async () => {
+    if (Platform.OS === 'web') {
+      if (typeof sessionStorage !== 'undefined') {
+        if (value) sessionStorage.setItem(key, value);
+        else sessionStorage.removeItem(key);
+      }
+    } else if (value) await SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
+    else await SecureStore.deleteItemAsync(key);
+  };
+  storageWrites = storageWrites.catch(() => undefined).then(write);
+  return storageWrites;
+}
 
 export function apiPath(template: string, values: Record<string, string> = {}) {
   return Object.entries(values).reduce((path, [key, value]) => path.replace(`{${key}}`, encodeURIComponent(value)), template);
 }
 
 export async function loadAccessToken() {
-  if (memoryToken) return memoryToken;
-  if (Platform.OS === 'web') return null;
-  memoryToken = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (tokenLoaded) return memoryToken;
+  const revision = tokenRevision;
+  const saved = Platform.OS === 'web'
+    ? typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(TOKEN_KEY)
+    : await SecureStore.getItemAsync(TOKEN_KEY);
+  if (revision === tokenRevision) { memoryToken = saved; tokenLoaded = true; }
   return memoryToken;
 }
 
 export async function storeAccessToken(token: string | null) {
+  tokenRevision += 1;
+  tokenLoaded = true;
   memoryToken = token;
-  if (Platform.OS === 'web') return;
-  if (token) await SecureStore.setItemAsync(TOKEN_KEY, token, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
-  else await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await persistToken(TOKEN_KEY, token);
 }
 
 export async function storeTokenPair(accessToken: string | null, refreshToken: string | null = null) {
   await storeAccessToken(accessToken);
   memoryRefreshToken = refreshToken;
-  if (Platform.OS === 'web') return;
-  if (refreshToken) await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
-  else await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await persistToken(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 async function refreshAccessToken() {
@@ -82,10 +107,17 @@ export async function apiFetch(path: string, init: RequestInit = {}, retry = tru
   headers.set('Accept', headers.get('Accept') ?? 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
-  if (response.status !== 401 || !retry) return response;
-  refreshRequest ??= refreshAccessToken().finally(() => { refreshRequest = null; });
-  const refreshed = await refreshRequest;
-  return refreshed ? apiFetch(path, init, false) : response;
+  if (response.status !== 401) return response;
+  if (retry) refreshRequest ??= refreshAccessToken().finally(() => { refreshRequest = null; });
+  const refreshed = retry ? await refreshRequest : null;
+  if (refreshed) return apiFetch(path, init, false);
+  if (shouldExpireSession(response.status, token, memoryToken, path)) {
+    // Memory is cleared before another request can reuse the rejected bearer.
+    const clearing = storeTokenPair(null, null);
+    expiredListeners.forEach((listener) => listener());
+    await clearing;
+  }
+  return response;
 }
 
 export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {

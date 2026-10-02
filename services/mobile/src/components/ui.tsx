@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { useState, type ReactNode } from 'react';
 import { GlassSegmented } from '@/components/glass-segment';
@@ -69,17 +68,11 @@ export function FormField({ label, value, onChangeText, placeholder, error, secu
   );
 }
 
-export function PageHeader({ title, subtitle, action, hideMenuButton = false }: { title: string; subtitle?: string; action?: ReactNode; hideMenuButton?: boolean }) {
+export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode; hideMenuButton?: boolean }) {
   const { colors } = useAppTheme();
-  const router = useRouter();
 
   return (
     <View style={styles.header}>
-      {hideMenuButton ? null : (
-      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.push('/dashboard')} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}>
-        <Ionicons color={colors.text} name="home-outline" size={21} />
-      </Pressable>
-      )}
       <View style={styles.headerCopy}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}

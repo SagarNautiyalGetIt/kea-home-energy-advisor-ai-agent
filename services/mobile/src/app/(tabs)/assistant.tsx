@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/screen';
 import { AssistantAnswer } from '@/components/assistant-answer';
+import { AuroraBackground } from '@/components/aurora-background';
 import { SparkyPresence } from '@/components/sparky-presence';
 import { IconButton, PageHeader } from '@/components/ui';
 import { streamAssistantReply, toolLabel } from '@/lib/assistant-api';
@@ -31,7 +32,12 @@ type Message = {
   handover?: boolean;
 };
 
-const prompts = ['Why is my power bill so high?', 'Which day was my highest usage?', 'Was that just the cold snap?', 'Could another plan save me money?'];
+const prompts = [
+  { text: 'Why is my power bill so high?', icon: 'flash-outline' as const },
+  { text: 'Which day was my highest usage?', icon: 'analytics-outline' as const },
+  { text: 'Was that just the cold snap?', icon: 'partly-sunny-outline' as const },
+  { text: 'Could another plan save me money?', icon: 'wallet-outline' as const },
+];
 const initialMessage: Message = { id: 1, role: 'assistant', text: 'Kia ora! I’m Sparky. What would you like to understand about your energy account?' };
 
 export default function AssistantScreen() {
@@ -50,13 +56,15 @@ export default function AssistantScreen() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const [billPromptPending, setBillPromptPending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const started = messages.length > 1;
+  const compactQuestions = keyboardVisible || inputFocused;
 
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => { setKeyboardVisible(false); setInputFocused(false); });
     return () => { show.remove(); hide.remove(); };
   }, []);
 
@@ -184,9 +192,10 @@ export default function AssistantScreen() {
 
   return (
     <Screen contentStyle={styles.screen} scroll={false}>
+      <AuroraBackground />
       <PageHeader action={<IconButton icon="create-outline" label="New chat" onPress={newChat} />} title="Sparky AI" subtitle={isDemoMode ? 'Preview data on screens · live assistant needs the API' : 'Energy answers with clear limits'} />
       {started ? (
-        <ScrollView contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
           {messages.map((message) => (
             <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
               {message.role === 'assistant' ? <SparkyPresence mode={message.streaming ? 'replying' : 'happy'} size={34} /> : null}
@@ -209,13 +218,13 @@ export default function AssistantScreen() {
           ))}
           {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence mode="thinking" size={34} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
         </ScrollView>
-      ) : <View style={[styles.startState, keyboardVisible && styles.startStateCompact]}><SparkyPresence size={keyboardVisible ? 96 : 176} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View>}
+      ) : <View style={[styles.startState, compactQuestions && styles.startStateCompact]}><SparkyPresence size={compactQuestions ? 112 : 220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View>}
 
-      {(!started || billPromptPending) && !keyboardVisible ? <View style={styles.prompts}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable accessibilityRole="button" key={prompt} onPress={() => void send(prompt)} style={[styles.prompt, { borderColor: colors.border, backgroundColor: colors.surface }, billPromptPending && index === 0 && styles.billPrompt]}><Text style={[styles.promptText, { color: colors.text }]}>{prompt}</Text></Pressable>)}</View> : null}
+      {(!started || billPromptPending) && !compactQuestions ? <View style={styles.prompts}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable accessibilityRole="button" disabled={busy} key={prompt.text} onPress={() => void send(prompt.text)} style={({ pressed }) => [styles.prompt, { borderColor: colors.border, backgroundColor: colors.surface }, billPromptPending && index === 0 && styles.billPrompt, pressed && { opacity: 0.65 }]}><Ionicons name={prompt.icon} color={colors.textMuted} size={20} /><Text style={[styles.promptText, { color: colors.text }]}>{prompt.text}</Text><Ionicons name="arrow-up-outline" color={colors.textMuted} size={16} /></Pressable>)}</View> : null}
       <View>
-        {(!started || billPromptPending) && keyboardVisible ? <ScrollView contentContainerStyle={styles.promptsHorizontal} horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} style={styles.promptsHorizontalWrap}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable accessibilityRole="button" key={prompt} onPress={() => void send(prompt)} style={[styles.promptChip, { backgroundColor: colors.surface, borderColor: colors.border }, billPromptPending && index === 0 && styles.billPrompt]}><Text style={[styles.promptChipText, { color: colors.text }]}>{prompt}</Text></Pressable>)}</ScrollView> : null}
+        {compactQuestions ? <ScrollView accessibilityLabel="Suggested questions" contentContainerStyle={styles.promptsHorizontal} horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} style={styles.promptsHorizontalWrap}>{prompts.map((prompt, index) => <Pressable accessibilityRole="button" disabled={busy} key={prompt.text} onPress={() => void send(prompt.text)} style={[styles.promptChip, { backgroundColor: colors.surface, borderColor: colors.border }, billPromptPending && index === 0 && styles.billPrompt]}><Ionicons name={prompt.icon} color={colors.textMuted} size={16} /><Text style={[styles.promptChipText, { color: colors.text }]}>{prompt.text}</Text></Pressable>)}</ScrollView> : null}
         <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TextInput blurOnSubmit={false} multiline onChangeText={setText} onFocus={() => setKeyboardVisible(true)} onSubmitEditing={() => void send(text)} placeholder="Ask about your energy…" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text }]} value={text} />
+          <TextInput accessibilityLabel="Ask Sparky AI" blurOnSubmit={false} multiline onChangeText={setText} onFocus={() => setInputFocused(true)} onBlur={() => setInputFocused(false)} onSubmitEditing={() => void send(text)} placeholder="Ask about your energy…" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text }]} value={text} />
           <Pressable accessibilityLabel="Contact support" onPress={() => router.push('/help')}>
             <Ionicons color={colors.text} name="person-outline" size={23} />
           </Pressable>
@@ -232,6 +241,6 @@ const styles = StyleSheet.create({
   thread: { flexGrow: 1, paddingVertical: 16, gap: 13 }, messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '90%' }, userRow: { alignSelf: 'flex-end', justifyContent: 'flex-end' }, avatar: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#2C2C2E' },
   bubble: { maxWidth: '92%', borderWidth: 1, borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 11 }, userBubble: { backgroundColor: palette.violet, borderColor: palette.violet, borderBottomLeftRadius: 18, borderBottomRightRadius: 6 }, bubbleText: { fontSize: 14, lineHeight: 20 }, replyActions: { flexDirection: 'row', alignItems: 'center', gap: 13, marginTop: 8 }, replyAction: { minWidth: 24, minHeight: 24, alignItems: 'center', justifyContent: 'center' },
   escalationAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 11, borderRadius: 13, backgroundColor: palette.violet, paddingHorizontal: 12 }, escalationText: { color: '#000000', fontSize: 12, fontWeight: '900' }, thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 }, thinkingBubble: { borderWidth: 1, borderRadius: 17, paddingHorizontal: 14, paddingVertical: 11 },
-  prompts: { alignItems: 'flex-end', gap: 8, paddingBottom: 10 }, prompt: { maxWidth: '84%', minHeight: 42, justifyContent: 'center', borderWidth: 1, borderRadius: 17, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10 }, promptText: { fontSize: 12, lineHeight: 17, fontWeight: '700', textAlign: 'right' }, promptsHorizontalWrap: { flexGrow: 0, marginBottom: 9 }, promptsHorizontal: { alignItems: 'center', gap: 8, paddingHorizontal: 2 }, promptChip: { minHeight: 42, justifyContent: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 8 }, promptChipText: { fontSize: 12, fontWeight: '700' }, composer: { minHeight: 48, maxHeight: 100, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 22, paddingHorizontal: 12, paddingVertical: 7 }, input: { flex: 1, maxHeight: 88, fontSize: 16, lineHeight: 22 }, send: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, sendDisabled: { opacity: 0.35 },
+  prompts: { gap: 8, paddingBottom: 12 }, prompt: { width: '100%', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 }, promptText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' }, promptsHorizontalWrap: { flexGrow: 0, marginBottom: 9 }, promptsHorizontal: { alignItems: 'center', gap: 8, paddingHorizontal: 2 }, promptChip: { minHeight: 44, flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 8 }, promptChipText: { fontSize: 12, fontWeight: '700' }, composer: { minHeight: 48, maxHeight: 100, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 22, paddingHorizontal: 12, paddingVertical: 7 }, input: { flex: 1, maxHeight: 88, fontSize: 16, lineHeight: 22 }, send: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, sendDisabled: { opacity: 0.35 },
   billPrompt: { borderColor: palette.red, borderWidth: 2, backgroundColor: 'rgba(232,33,39,0.16)', shadowColor: palette.red, shadowOpacity: 0.5 },
 });
