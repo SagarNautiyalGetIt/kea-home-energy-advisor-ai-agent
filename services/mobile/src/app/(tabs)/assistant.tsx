@@ -7,6 +7,7 @@ import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput,
 import { Screen } from '@/components/screen';
 import { AssistantAnswer } from '@/components/assistant-answer';
 import { AuroraBackground } from '@/components/aurora-background';
+import { AuroraMotion } from '@/components/aurora-motion';
 import { SparkyPresence } from '@/components/sparky-presence';
 import { IconButton, PageHeader } from '@/components/ui';
 import { streamAssistantReply, toolLabel } from '@/lib/assistant-api';
@@ -191,14 +192,14 @@ export default function AssistantScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.screen} scroll={false}>
+    <AuroraMotion><Screen contentStyle={styles.screen} scroll={false}>
       <AuroraBackground />
       <PageHeader action={<IconButton icon="create-outline" label="New chat" onPress={newChat} />} title="Sparky AI" subtitle={isDemoMode ? 'Preview data on screens · live assistant needs the API' : 'Energy answers with clear limits'} />
       {started ? (
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
           {messages.map((message) => (
             <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
-              {message.role === 'assistant' ? <SparkyPresence mode={message.streaming ? 'replying' : 'happy'} size={34} /> : null}
+              {message.role === 'assistant' ? <SparkyPresence auroraTint mode={message.streaming ? 'replying' : 'happy'} size={34} /> : null}
               <View style={[styles.bubble, message.role === 'user' ? [styles.userBubble, { backgroundColor: colors.primary, borderColor: colors.primary }] : { backgroundColor: colors.surface, borderColor: message.failed ? palette.red : colors.border }]}>
                 {message.role === 'assistant'
                   ? <AssistantAnswer color={colors.text} text={message.text} />
@@ -216,9 +217,9 @@ export default function AssistantScreen() {
               </View>
             </View>
           ))}
-          {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence mode="thinking" size={34} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
+          {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence auroraTint mode="thinking" size={34} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
         </ScrollView>
-      ) : <View style={[styles.startState, compactQuestions && styles.startStateCompact]}><SparkyPresence size={compactQuestions ? 112 : 220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View>}
+      ) : <View style={[styles.startState, compactQuestions && styles.startStateCompact]}><SparkyPresence auroraTint size={compactQuestions ? 112 : 220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text></View>}
 
       {(!started || billPromptPending) && !compactQuestions ? <View style={styles.prompts}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable accessibilityRole="button" disabled={busy} key={prompt.text} onPress={() => void send(prompt.text)} style={({ pressed }) => [styles.prompt, { borderColor: colors.border, backgroundColor: colors.surface }, billPromptPending && index === 0 && styles.billPrompt, pressed && { opacity: 0.65 }]}><Ionicons name={prompt.icon} color={colors.textMuted} size={20} /><Text style={[styles.promptText, { color: colors.text }]}>{prompt.text}</Text><Ionicons name="arrow-up-outline" color={colors.textMuted} size={16} /></Pressable>)}</View> : null}
       <View>
@@ -231,7 +232,7 @@ export default function AssistantScreen() {
           <Pressable accessibilityLabel="Send message" disabled={!text.trim() || busy} onPress={() => void send(text)} style={[styles.send, { backgroundColor: colors.primary }, (!text.trim() || busy) && styles.sendDisabled]}><Ionicons color={colors.onPrimary} name="arrow-up" size={20} /></Pressable>
         </View>
       </View>
-    </Screen>
+    </Screen></AuroraMotion>
   );
 }
 
