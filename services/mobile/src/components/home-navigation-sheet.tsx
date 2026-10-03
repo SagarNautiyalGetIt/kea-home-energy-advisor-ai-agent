@@ -15,13 +15,13 @@ export function HomeNavigationSheet({ billPrediction, blurTarget }: { blurTarget
   const afterDismiss = useRef<(() => void) | null>(null);
   const show = () => { tactile(); setOpen(true); };
   const hide = () => setOpen(false);
-  const dock = PanResponder.create({ onMoveShouldSetPanResponder: (_, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx), onPanResponderRelease: (_, g) => { if (g.dy < -30) show(); } });
+  const dock = PanResponder.create({ onMoveShouldSetPanResponderCapture: (_, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx), onPanResponderRelease: (_, g) => { if (g.dy < -30) show(); } });
   const handle = PanResponder.create({ onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx), onPanResponderRelease: (_, g) => { if (g.dy > 35) hide(); } });
   return <>
-    <Pressable {...dock.panHandlers} accessibilityRole="button" accessibilityLabel="Open Home navigation" accessibilityHint="Swipe up or activate to show Kea pages" accessibilityState={{ expanded: open }} onPress={show} style={[styles.dock, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View {...dock.panHandlers} style={[styles.dock, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable accessibilityRole="button" accessibilityLabel="Open Home navigation" accessibilityHint="Swipe up or activate to show Kea pages" accessibilityState={{ expanded: open }} onPress={show}>
       <View style={[styles.grabber, { backgroundColor: colors.border }]} />
       <View style={styles.dockRow}><Ionicons name="apps-outline" color={colors.icons.info} size={22} /><View style={{ flex: 1 }}><Text style={[styles.title, { color: colors.text }]}>Explore Kea</Text><Text style={{ color: colors.textMuted, fontSize: 12 }}>Swipe up · predictions, usage, Sparky and more</Text></View><Ionicons name="chevron-up" color={colors.icons.energy} size={22} /></View>
-    </Pressable>
+    </Pressable></View>
     <Modal visible={open} transparent presentationStyle="overFullScreen" animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={hide} onDismiss={() => { const next = afterDismiss.current; afterDismiss.current = null; next?.(); }}>
       <View style={styles.modal}>
         <BlurView pointerEvents="none" blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={65} tint={mode} style={StyleSheet.absoluteFill} />
