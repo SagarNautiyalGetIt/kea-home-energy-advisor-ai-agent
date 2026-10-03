@@ -83,6 +83,7 @@ from app.schemas import (
     EnergyCategory,
     ForecastSummary,
     HouseholdBilling,
+    HouseholdHourlyUsage,
     HouseholdSummary,
     HouseholdUsageSeries,
     LoginRequest,
@@ -329,6 +330,23 @@ async def get_household_usage_series(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return usage_series_from_context(customer_id, ctx, start, end)
+
+
+@router.get("/households/{customer_id}/hourly-usage", response_model=HouseholdHourlyUsage)
+async def get_household_hourly_usage(
+    customer_id: str,
+    day: dt.date,
+    authorization: Annotated[str | None, Header()] = None,
+) -> HouseholdHourlyUsage:
+    from app.analytics.hourly_usage import load_hourly
+
+    _demo_household_access(customer_id, authorization)
+    repo = get_repository()
+    try:
+        ctx = await repo.context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await load_hourly(customer_id, day, ctx, repo.name)
 
 
 @router.get("/households/{customer_id}/plans", response_model=MobilePlansView)

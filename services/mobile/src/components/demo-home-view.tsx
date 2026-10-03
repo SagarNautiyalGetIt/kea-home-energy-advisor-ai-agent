@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { InteractiveHomeScene } from './interactive-home-scene';
 import { GltfHomeScene } from './gltf-home-scene';
 import { OutageNotice } from './outage-notice';
 import { EnergyReadingRail } from './energy-reading-rail';
 import { homeCardReading } from '@/lib/home-card-reading';
+import { homeFlows } from '@/lib/home-flows';
 import { AccessibilityInfo, Animated, AppState, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
@@ -60,6 +61,9 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const [weatherError, setWeatherError] = useState(false);
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>('home');
+  const [previewFlows, setPreviewFlows] = useState<boolean | null>(null);
+  const isPreviewingFlows = previewFlows ?? scene?.dateSource === 'demo';
+  const flows = useMemo(() => homeFlows(liveState?.customerId === customerId ? liveState.power : {}, isPreviewingFlows), [customerId, liveState, isPreviewingFlows]);
   const [reduceMotion, setReduceMotion] = useState(true);
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
@@ -170,11 +174,9 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
             pointerEvents="none"
             style={styles.topFade}
           />
-          <View pointerEvents="none" style={[styles.skyOrb, !weather?.isDay && styles.skyMoon, { left: 24 + (sceneWidth - 96) * sunProgress, opacity: weather ? Math.max(0.3, 1 - weather.cloudCoverPercent / 140) : 0 }]} />
-          {weather && weather.cloudCoverPercent > 35 ? <View pointerEvents="none" style={styles.skyCloud} /> : null}
           <InteractiveHomeScene reduceMotion={reduceMotion}>
             {(camera) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-              <GltfHomeScene camera={camera} width={sceneWidth} height={sceneHeight} />
+              <GltfHomeScene camera={camera} width={sceneWidth} height={sceneHeight} weather={weather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
             </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
@@ -186,6 +188,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
         const metric = homeCardReading(scene, live, device);
         return { id: device, label: device === 'car' ? 'EV' : device.toUpperCase(), value: metric.value, color: HIGHLIGHT_COLOR[device], detail: sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail };
       })} />
+      <Pressable accessibilityRole="button" accessibilityLabel={isPreviewingFlows ? 'Stop illustrative flow preview' : 'Preview illustrative energy flows'} onPress={() => setPreviewFlows(!isPreviewingFlows)} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, paddingHorizontal: 18 }}><Ionicons name="git-network-outline" color={POWER_COLOR} size={15} /><Text style={{ color: colors.textMuted, fontSize: 11 }}>{flows.some(flow => flow.watts !== null) ? 'Live sensor flow · illustrative paths' : isPreviewingFlows ? 'Illustrative flows · no live power readings' : 'Preview energy flows · connect live sensors'}</Text></Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push(selected === 'home' || selected === 'grid' ? '/usage' : '/settings')} style={[styles.readingAction, { borderColor: colors.border }]}>
         <Ionicons name={selected === 'home' || selected === 'grid' ? 'bar-chart-outline' : 'link-outline'} color={colors.text} size={18} />
         <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>{selected === 'home' || selected === 'grid' ? 'View dated household imports' : `Connect or sync ${selected === 'car' ? 'EV charger' : selected} sensors`}</Text>
@@ -215,9 +218,6 @@ const styles = StyleSheet.create({
   sceneArt: { position: 'relative', zIndex: 2, elevation: 2 },
   weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', right: 20, top: 12, zIndex: 20, elevation: 20 },
   weatherInSceneText: { color: '#E9F5FB', flexShrink: 1, fontSize: 11, fontWeight: '700' },
-  skyOrb: { backgroundColor: '#FFF0BD', borderRadius: 38, height: 51, position: 'absolute', top: 28, width: 51, zIndex: 2, elevation: 2, shadowColor: '#FFF0BD', shadowOpacity: 0.5, shadowRadius: 22 },
-  skyMoon: { backgroundColor: '#E8F0F7', height: 33, width: 33, borderRadius: 20, shadowColor: '#DDE9FF' },
-  skyCloud: { backgroundColor: '#EFF7FA', borderRadius: 50, height: 20, opacity: 0.3, position: 'absolute', right: 68, top: 77, width: 102, zIndex: 2, elevation: 2 },
   topFade: { top: 0, height: 140, left: 0, position: 'absolute', right: 0, zIndex: 1, elevation: 1 },
   bottomFade: { bottom: 51, left: 0, position: 'absolute', right: 0, zIndex: 3 },
   readingDate: { color: '#8E8E8E', fontSize: 11, paddingHorizontal: 18, paddingTop: 3 },

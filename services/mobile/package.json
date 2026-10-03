@@ -63,7 +63,7 @@
     "web": "node ./node_modules/expo/bin/cli start --web",
     "lint": "node ./node_modules/expo/bin/cli lint && eslint scripts/android-phone.mjs scripts/android-phone.test.mjs",
     "types": "openapi-typescript ../../contracts/openapi.json -o src/api.d.ts",
-    "test": "node --experimental-strip-types --test src/lib/*.test.mjs scripts/android-phone.test.mjs",
+    "test": "node --experimental-strip-types --test src/lib/*.test.mjs scripts/android-phone.test.mjs scripts/prepare-home-model.test.mjs",
     "typecheck": "node scripts/generate-route-types.mjs && npm run types && tsc --noEmit",
     "android:phone": "node scripts/android-phone.mjs",
     "export:web": "expo export --platform web",

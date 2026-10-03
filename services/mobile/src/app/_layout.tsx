@@ -4,6 +4,7 @@ import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppIntro } from '@/components/app-intro';
+import { EdgeBackBoundary } from '@/components/edge-back-boundary';
 import { useNotificationResponseRouting } from '@/lib/notifications';
 import { ExperiencePreferences } from '@/lib/experience-preferences';
 import { AuthProvider } from '@/providers/auth';
@@ -16,7 +17,7 @@ function Navigation() {
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+      <EdgeBackBoundary><Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false }} /></EdgeBackBoundary>
     </ThemeProvider>
   );
 }

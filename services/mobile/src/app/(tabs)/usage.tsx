@@ -1,9 +1,8 @@
 import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { BlurView } from 'expo-blur';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
@@ -141,9 +140,8 @@ function energyCategoryPresentation(key: string) {
 }
 
 export default function UsageScreen() {
-  const { colors, mode } = useAppTheme();
+  const { colors } = useAppTheme();
   const { session } = useAuth();
-  const { height: screenHeight } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
   const [unit, setUnit] = useState<Unit>('cost');
   const [chartType, setChartType] = useState<ChartType>('line');
@@ -167,12 +165,6 @@ export default function UsageScreen() {
   const [graphOpacity] = useState(() => new Animated.Value(1));
   const [graphScale] = useState(() => new Animated.Value(1));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
-  const [listInForeground, setListInForeground] = useState(false);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
-  const breakdownListPeekHeight = 62 * 4.6;
-  const breakdownListStart = Math.max(0, screenHeight - breakdownListPeekHeight);
-
   const comparison = comparisons[period];
   const compare = comparison !== null;
   const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
@@ -194,8 +186,7 @@ export default function UsageScreen() {
   }, [data, displayUnit]);
   const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
   const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
-  // The official API publishes daily meter totals, so the X axis must follow the
-  // actual returned dates. Hour labels would imply readings the backend does not send.
+  // Day points come only from the dated hourly endpoint; week/month stay dated totals.
   const chartAxisLabels = chartLabels;
   const tooltipLabels = data?.points.map((point) => point.tooltipLabel);
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
@@ -360,14 +351,14 @@ export default function UsageScreen() {
   };
 
   return (
-    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)} scroll={false}>
+    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)}>
       <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
       <View
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20 }]}
+        style={{ paddingTop: 12, backgroundColor: colors.background }}
       >
         <Animated.View style={styles.chartContainer}>
           <View style={styles.headerControls}>
@@ -439,7 +430,7 @@ export default function UsageScreen() {
             <UsageChartLoader />
           ) : loadError ? (
             <View style={styles.usageStatus}><Text accessibilityRole="alert" style={[styles.usageStatusText, { color: colors.text }]}>{loadError}</Text><PrimaryButton label="Retry usage" onPress={refresh} /></View>
-          ) : !data || data.points.length === 0 ? (
+          ) : !data ? (
             <View style={styles.usageStatus}><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>No dated readings are available for this selection. Choose another date.</Text></View>
           ) : (
           <>
@@ -498,6 +489,7 @@ export default function UsageScreen() {
           </View>
 
           {/* Interactive Graph Area with Swipe PanResponder */}
+          {chartValues.length > 0 ? (
           <Animated.View
             {...chartPanResponder.panHandlers}
             style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}
@@ -533,33 +525,13 @@ export default function UsageScreen() {
               ) : null}
             </View>
           </Animated.View>
+          ) : <View style={styles.usageStatus}><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>{period === 'daily' ? data.points.length ? 'Hourly costs are unavailable. Select kWh to view the measured energy chart.' : 'The hourly chart needs complete interval readings. Available hours and missing slots are listed below.' : 'No dated readings are available for this selection.'}</Text></View>}
+          {period === 'daily' ? <View style={{ paddingHorizontal: 18, marginBottom: 20 }}><Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginVertical: 12 }}>Hourly breakdown</Text><Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 17, marginBottom: 8 }}>New Zealand time · import energy. Missing readings stay blank. Available costs use a blended estimate.</Text>{data.hourly ? data.hourly.hours.map(hour => <View key={hour.start} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 10 }}><View><Text style={{ color: colors.text, fontSize: 12, fontWeight: '700' }}>{hour.label}</Text><Text style={{ color: colors.textMuted, fontSize: 10 }}>{hour.quality === 'missing' ? hour.expected_intervals > 0 ? `Missing · ${hour.intervals_received}/${hour.expected_intervals} intervals` : 'No interval source' : hour.quality === 'demo' ? 'Illustrative demo' : hour.quality === 'estimated' ? 'Estimated reading' : 'Measured import'}</Text></View><Text style={{ color: colors.text, fontSize: 13, fontWeight: '800' }}>{hour.kwh === null ? '—' : `${hour.kwh.toFixed(2)} kWh`}</Text></View>) : <Text style={{ color: colors.textMuted, fontSize: 13 }}>Hourly readings are unavailable for this source. The daily total remains above.</Text>}</View> : null}
           </>
           )}
         </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
-          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
-          <View pointerEvents="none" style={[styles.backdropBlurShade, { backgroundColor: mode === 'dark' ? 'rgba(0,0,0,0.48)' : 'rgba(238,238,238,0.48)' }]} />
-        </Animated.View>
       </View>
-
-      <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
-        <Animated.ScrollView
-          contentContainerStyle={styles.listScrollContent}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            {
-              listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-                const nextForeground = event.nativeEvent.contentOffset.y > 2;
-                setListInForeground((current) => current === nextForeground ? current : nextForeground);
-              },
-              useNativeDriver: true,
-            },
-          )}
-          scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
-          style={styles.listScrollView}
-        >
-          <View pointerEvents="none" style={{ height: breakdownListStart }} />
+      <View>
           <View style={[styles.breakdownContent, { backgroundColor: colors.background }]}>
             <View style={styles.breakdownList}>
               {energyBreakdown?.categories.length ? (
@@ -625,7 +597,6 @@ export default function UsageScreen() {
             </View>
 
           </View>
-        </Animated.ScrollView>
       </View>
 
       {/* MODALS */}
@@ -739,9 +710,9 @@ const styles = StyleSheet.create({
   usageSource: { fontSize: 12, lineHeight: 17, paddingHorizontal: 8, paddingTop: 10 },
   usageStatus: { paddingVertical: 30, paddingHorizontal: 16, gap: 16 },
   usageStatusText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  screenEnter: { flex: 1 },
+  screenEnter: { width: '100%' },
   screenRoot: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,

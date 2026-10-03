@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { gsap } from 'gsap';
-import { constrainCamera, defaultCamera, type HomeCamera } from '@/lib/home-camera';
+import { CAMERA_LIMITS, constrainCamera, defaultCamera, type HomeCamera } from '@/lib/home-camera';
 import { useAppTheme } from '@/theme';
 
 /** Orbit changes the model camera; the rendered view itself stays in the screen plane. */
@@ -28,10 +28,11 @@ export function InteractiveHomeScene({ children, reduceMotion }: { children: (ca
     <View {...responder.panHandlers}>{children(camera)}</View>
     <View style={{ backgroundColor: colors.background }}><View style={[styles.controls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.hint, { color: colors.textMuted }]}>{reduceMotion ? '3D home' : 'Drag to orbit'}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home left" disabled={camera.x <= -100} onPress={() => move({ ...current.current, x: current.current.x - 25 })} style={styles.button}><Ionicons name="chevron-back" color={colors.text} size={18} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home right" disabled={camera.x >= 100} onPress={() => move({ ...current.current, x: current.current.x + 25 })} style={styles.button}><Ionicons name="chevron-forward" color={colors.text} size={18} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home left" disabled={camera.x <= CAMERA_LIMITS.x[0]} onPress={() => move({ ...current.current, x: current.current.x - 12 })} style={styles.button}><Ionicons name="chevron-back" color={colors.text} size={18} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Rotate home right" disabled={camera.x >= CAMERA_LIMITS.x[1]} onPress={() => move({ ...current.current, x: current.current.x + 12 })} style={styles.button}><Ionicons name="chevron-forward" color={colors.text} size={18} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Raise home camera" disabled={camera.y >= CAMERA_LIMITS.y[1]} onPress={() => move({ ...current.current, y: current.current.y + 5 })} style={styles.button}><Ionicons name="chevron-up" color={colors.text} size={18} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Zoom out home" disabled={camera.zoom <= 0.9} onPress={() => move({ ...current.current, zoom: current.current.zoom - 0.1 })} style={styles.button}><Ionicons name="remove" color={colors.text} size={20} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Zoom in home" disabled={camera.zoom >= 1.45} onPress={() => move({ ...current.current, zoom: current.current.zoom + 0.1 })} style={styles.button}><Ionicons name="add" color={colors.text} size={20} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Zoom in home" disabled={camera.zoom >= CAMERA_LIMITS.zoom[1]} onPress={() => move({ ...current.current, zoom: current.current.zoom + 0.1 })} style={styles.button}><Ionicons name="add" color={colors.text} size={20} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Reset home view" onPress={reset} style={styles.button}><Ionicons name="refresh-outline" color={colors.text} size={18} /></Pressable>
     </View></View>
   </View>;

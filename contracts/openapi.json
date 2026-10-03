@@ -275,6 +275,71 @@
         }
       }
     },
+    "/api/households/{customer_id}/hourly-usage": {
+      "get": {
+        "summary": "Get Household Hourly Usage",
+        "operationId": "get_household_hourly_usage_api_households__customer_id__hourly_usage_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "day",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdHourlyUsage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/households/{customer_id}/plans": {
       "get": {
         "summary": "Get Mobile Plans",
@@ -3208,6 +3273,58 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HourlyUsageSlot": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kwh"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "estimated",
+              "demo",
+              "missing"
+            ],
+            "title": "Quality"
+          },
+          "intervals_received": {
+            "type": "integer",
+            "title": "Intervals Received"
+          },
+          "expected_intervals": {
+            "type": "integer",
+            "title": "Expected Intervals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "label",
+          "kwh",
+          "quality",
+          "intervals_received",
+          "expected_intervals"
+        ],
+        "title": "HourlyUsageSlot"
+      },
       "HouseholdBilling": {
         "properties": {
           "customer": {
@@ -3356,6 +3473,53 @@
         ],
         "title": "HouseholdContext",
         "description": "What the customer has told us about their home, as typed facts.\n\nFed back into layer 1, never into the prompt. A confirmed new appliance since a date\nlets the attribution *name* the step it already found rather than leaving it in the\nunexplained bucket \u2014 and that is the entire payoff of asking.\n\nEvery field is nullable and null means \"never asked\", which is deliberately different\nfrom `False` meaning \"asked and denied\". See the module docstring."
+      },
+      "HouseholdHourlyUsage": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Pacific/Auckland"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "intervals",
+              "demo",
+              "unavailable"
+            ],
+            "title": "Source"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "hours": {
+            "items": {
+              "$ref": "#/components/schemas/HourlyUsageSlot"
+            },
+            "type": "array",
+            "title": "Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "day",
+          "source",
+          "note",
+          "hours"
+        ],
+        "title": "HouseholdHourlyUsage"
       },
       "HouseholdSummary": {
         "properties": {
@@ -3851,6 +4015,40 @@
         ],
         "title": "MobilePlansView"
       },
+      "MobilePricingRate": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "/kWh"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "MobilePricingRate"
+      },
       "MobilePricingStyle": {
         "properties": {
           "id": {
@@ -3868,6 +4066,13 @@
           "rate": {
             "type": "string",
             "title": "Rate"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/MobilePricingRate"
+            },
+            "type": "array",
+            "title": "Rates"
           },
           "daily": {
             "type": "string",
@@ -3891,6 +4096,7 @@
           "name",
           "eyebrow",
           "rate",
+          "rates",
           "daily",
           "best_for",
           "highlights"

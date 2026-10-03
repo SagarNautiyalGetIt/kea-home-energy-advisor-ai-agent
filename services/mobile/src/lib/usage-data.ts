@@ -1,5 +1,6 @@
 import { hourlyUsage, usage as fixtureUsage } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
+import { hourlyPoints, validateHourlyUsage, type HourlyUsage } from '@/lib/hourly-usage';
 import { canOverlayUsage, selectedIndexes, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
 
 export type UsagePeriod = 'daily' | 'weekly' | 'monthly';
@@ -21,6 +22,7 @@ export type UsageBand = {
 };
 
 export type UsageViewData = {
+  hourly?: HourlyUsage | null;
   period: UsagePeriod;
   selectedDate: string;
   sourcePeriod: string;
@@ -119,8 +121,16 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
     return validateUsageSeries(value, query.customerId, range);
   };
   const [series, previous] = await Promise.all([load(query.date), query.compareDate ? load(query.compareDate) : Promise.resolve(null)]);
-  const points = seriesPoints(series, query.period);
-  const comparisonPoints = previous ? seriesPoints(previous, query.period) : null;
+  const loadHours = async (day: string) => {
+    if (query.period !== 'daily') return null;
+    try { return validateHourlyUsage(await fetchJson(`/api/households/${encodeURIComponent(query.customerId)}/hourly-usage?day=${day}`, query.signal), query.customerId, day); }
+    catch (error) { if (query.signal?.aborted) throw error; return null; }
+  };
+  const [hourly, previousHourly] = await Promise.all([loadHours(query.date), query.compareDate ? loadHours(query.compareDate) : Promise.resolve(null)]);
+  const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : null;
+  const previousRate = previous && previous.total_kwh > 0 ? previous.estimated_cost_nzd / previous.total_kwh : null;
+  const points = query.period === 'daily' ? hourlyPoints(hourly, rate) : seriesPoints(series, query.period);
+  const comparisonPoints = query.period === 'daily' ? hourlyPoints(previousHourly, previousRate) : previous ? seriesPoints(previous, query.period) : null;
   const totals = selectedTotals(series, query.period, query.date);
   const source = usageSource(series);
   const previousSource = previous ? usageSource(previous) : null;
@@ -132,19 +142,20 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
     : '';
 
   return {
+    hourly,
     period: query.period,
     selectedDate: query.date,
     sourcePeriod: query.date.slice(0, 7),
-    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${comparisonLabel}`,
+    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${query.period === 'daily' ? ` · ${hourly ? `${hourly.hours.filter(hour => hour.kwh !== null).length}/${hourly.hours.length} hours available · ${hourly.note}` : 'Hourly source unavailable'}` : ''}${comparisonLabel}`,
     points,
-    comparisonPoints: overlayAvailable && comparisonPoints?.length ? comparisonPoints : null,
+    comparisonPoints: overlayAvailable && comparisonPoints?.length && comparisonPoints.length === points.length ? comparisonPoints : null,
     totalKwh: totals.kwh,
     totalCostNzd: totals.costNzd,
     trendPercent: previous ? usageTrendPercent(series, previous, query.period, query.date, query.compareDate!) : null,
     bands: seriesBands(series, query.period, query.date),
     availableFrom: series.available_from ?? null,
     availableTo: series.available_to ?? null,
-    isDemo: source.isDemo || previousSource?.isDemo === true,
+    isDemo: source.isDemo || previousSource?.isDemo === true || hourly?.source === 'demo',
   };
 }
 
