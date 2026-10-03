@@ -6,7 +6,7 @@ export function MonthlyRewardCard() {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={colors.text} name="receipt-outline" size={23} /></View>
+      <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={colors.icons.money} name="receipt-outline" size={23} /></View>
       <View style={styles.copy}>
         <Text style={[styles.eyebrow, { color: colors.textMuted }]}>PLANNED MONTHLY REWARD</Text>
         <Text style={[styles.title, { color: colors.text }]}>Bill credit for the top three</Text>
@@ -24,9 +24,9 @@ const styles = StyleSheet.create({
   card: { borderRadius: 22, padding: 17, flexDirection: 'row', gap: 13 },
   iconWrap: { width: 45, height: 45, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1 },
-  eyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7 },
   title: { fontSize: 16, lineHeight: 20, fontWeight: '800', marginTop: 5 },
-  body: { fontSize: 11, lineHeight: 17, marginTop: 6 },
+  body: { fontSize: 14, lineHeight: 21, marginTop: 6 },
   status: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 },
-  statusText: { fontSize: 10, fontWeight: '700' },
+  statusText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
 });

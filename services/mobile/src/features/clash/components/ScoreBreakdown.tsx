@@ -18,6 +18,7 @@ function amount(key: MetricKey, metrics: DemoMetrics): string {
 export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoMetrics; selected: MetricKey; onSelect: (key: MetricKey) => void }) {
   const { colors } = useAppTheme();
   const parts = demoScoreParts(metrics);
+  const tint = { conservation: colors.icons.success, ev: colors.icons.info, offPeak: colors.icons.warm, solar: colors.icons.money };
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <Text style={[styles.title, { color: colors.text }]}>How the score adds up</Text>
@@ -32,17 +33,17 @@ export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoM
             accessibilityState={{ selected: active }}
             key={key}
             onPress={() => onSelect(key)}
-            style={({ pressed }) => [styles.row, { borderColor: active ? '#606060' : colors.border, backgroundColor: active ? colors.surfaceRaised : colors.surface }, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.row, { borderColor: active ? tint[key] : colors.border, backgroundColor: active ? colors.surfaceRaised : colors.surface }, pressed && styles.pressed]}
           >
             <View style={styles.rowTop}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={colors.text} name={icons[key]} size={19} /></View>
+              <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={tint[key]} name={icons[key]} size={19} /></View>
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowName, { color: colors.text }]}>{metricDetails[key].label}</Text>
                 <Text style={[styles.amount, { color: colors.textMuted }]}>{amount(key, metrics)}</Text>
               </View>
               <Text style={[styles.points, { color: colors.text }]}>{parts[key].toFixed(1)}<Text style={[styles.max, { color: colors.textMuted }]}>/{weight}</Text></Text>
             </View>
-            <View style={[styles.track, { backgroundColor: colors.border }]}><View style={[styles.fill, { width: `${Math.min(100, parts[key] / weight * 100)}%`, backgroundColor: colors.text }]} /></View>
+            <View style={[styles.track, { backgroundColor: colors.border }]}><View style={[styles.fill, { width: `${Math.min(100, parts[key] / weight * 100)}%`, backgroundColor: tint[key] }]} /></View>
           </Pressable>
         );
       })}
@@ -58,20 +59,20 @@ export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoM
 const styles = StyleSheet.create({
   card: { borderRadius: 22, padding: 18, gap: 9 },
   title: { fontSize: 18, fontWeight: '800' },
-  caption: { fontSize: 11, lineHeight: 16, marginBottom: 4 },
+  caption: { fontSize: 14, lineHeight: 21, marginBottom: 4 },
   row: { borderWidth: 1, borderRadius: 14, padding: 11, minHeight: 70 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconWrap: { width: 35, height: 35, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1 },
-  rowName: { fontSize: 12, fontWeight: '800' },
-  amount: { fontSize: 10, marginTop: 3 },
-  points: { fontSize: 13, fontWeight: '800' },
-  max: { fontSize: 10, fontWeight: '500' },
+  rowName: { fontSize: 14, fontWeight: '800' },
+  amount: { fontSize: 12, lineHeight: 18, marginTop: 3 },
+  points: { fontSize: 14, fontWeight: '800' },
+  max: { fontSize: 12, fontWeight: '500' },
   track: { height: 3, borderRadius: 3, marginTop: 9, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
   method: { borderRadius: 13, padding: 12, marginTop: 2 },
-  methodLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
-  methodText: { fontSize: 11, lineHeight: 16, marginTop: 5 },
-  disclaimer: { fontSize: 10, lineHeight: 15, marginTop: 2 },
+  methodLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
+  methodText: { fontSize: 14, lineHeight: 21, marginTop: 5 },
+  disclaimer: { fontSize: 12, lineHeight: 18, marginTop: 2 },
   pressed: { opacity: 0.75 },
 });

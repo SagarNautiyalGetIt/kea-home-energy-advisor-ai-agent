@@ -6,7 +6,7 @@ which was honest but left two thirds of the product's headline feature as a diag
 
 ## Why third-party gateways rather than AWS
 
-The university AWS account cannot use SES, SNS or Connect — the services that would
+Earlier university-account constraints excluded SES, SNS and Connect — the services that would
 otherwise be the obvious answer, and the ones a production Kea deployment would use. So
 every gateway here is a free-tier third party behind the same `Gateway` protocol that an
 `SesGateway` will slot into later. Swapping to AWS is a new class and one environment
@@ -77,6 +77,7 @@ class Notification:
     #: a phone call cannot, and reading a footer aloud is how an automated call starts
     #: sounding like a scam.
     voice_script: str | None = None
+    delivery_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,7 @@ class Outcome:
     #: so the demo can point at the artefact rather than asserting it exists.
     destination: str | None = None
     provider: str | None = None
+    accepted: bool = False
 
 
 class Gateway(Protocol):
@@ -464,6 +466,13 @@ def build_registry(
     twilio_account_sid: str = "",
     twilio_auth_token: str = "",
     twilio_from_number: str = "",
+    aws_region: str = "ap-southeast-2",
+    ses_configuration_set: str = "",
+    sns_sender_id: str = "",
+    connect_instance_id: str = "",
+    connect_flow_id: str = "",
+    connect_source_number: str = "",
+    connect_prompt_builder=None,
 ) -> GatewayRegistry:
     def _file(channel: str) -> Gateway:
         return FileGateway(outbox=outbox, channel=channel, sender=email_from)
@@ -492,7 +501,7 @@ def build_registry(
             api_key=resend_api_key, sender=email_from,
         ))
     else:
-        if email_backend != "file":
+        if email_backend not in {"file", "ses"}:
             log.warning("unknown KEA_EMAIL_BACKEND %r — using file", email_backend)
         gateways["email"] = _file("email")
 
@@ -504,7 +513,7 @@ def build_registry(
     elif sms_backend == "textbelt":
         gateways["sms"] = TextbeltGateway(api_key=textbelt_key)
     else:
-        if sms_backend != "file":
+        if sms_backend not in {"file", "sns"}:
             log.warning("unknown KEA_SMS_BACKEND %r — using file", sms_backend)
         gateways["sms"] = _file("sms")
 
@@ -514,8 +523,31 @@ def build_registry(
             from_number=twilio_from_number,
         ))
     else:
-        if voice_backend != "file":
+        if voice_backend not in {"file", "connect"}:
             log.warning("unknown KEA_VOICE_BACKEND %r — using file", voice_backend)
         gateways["voice"] = _file("voice")
+
+    from app.alerts.aws_channels import (
+        ConnectGateway,
+        SesGateway,
+        SnsGateway,
+        UnavailableGateway,
+    )
+
+    builders = {
+        "email": (email_backend, "ses", lambda: SesGateway(
+            region=aws_region, sender=email_from, configuration_set=ses_configuration_set)),
+        "sms": (sms_backend, "sns", lambda: SnsGateway(
+            region=aws_region, sender_id=sns_sender_id)),
+        "voice": (voice_backend, "connect", lambda: ConnectGateway(
+            region=aws_region, instance_id=connect_instance_id, flow_id=connect_flow_id,
+            source_number=connect_source_number, prompt_builder=connect_prompt_builder)),
+    }
+    for channel, (selected, backend, build) in builders.items():
+        if selected == backend:
+            try:
+                gateways[channel] = build()
+            except RuntimeError:
+                gateways[channel] = UnavailableGateway(channel, backend)
 
     return GatewayRegistry(gateways)

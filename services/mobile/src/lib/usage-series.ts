@@ -3,6 +3,46 @@ import type { components } from '../api';
 export type UsageSeries = components['schemas']['HouseholdUsageSeries'];
 export type SeriesPeriod = 'daily' | 'weekly' | 'monthly';
 
+export function usageUnitRate(series: UsageSeries) {
+  if (!series.daily_dates.length) return null;
+  return series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : series.estimated_cost_nzd === 0 ? 0 : null;
+}
+
+/** Daily totals cannot recover a customer's time-of-use split. */
+export function usageBandReading(series: UsageSeries, indexes: number[], values: (number | null)[]) {
+  const demoBands = series.band_data_source === 'demo' && series.date_source === 'demo';
+  const quality = demoBands ? 'demo' : 'measured';
+  const complete = (demoBands || series.band_data_source === 'measured') && indexes.length > 0 && indexes.every(index => series.daily_quality[index] === quality && values[index] != null);
+  if (complete) return { kwh: indexes.reduce((sum, index) => sum + values[index]!, 0), reason: demoBands ? 'Illustrative demo interval profile' : null };
+  const demo = series.date_source === 'demo' || indexes.some(index => series.daily_quality[index] === 'demo');
+  return { kwh: null, reason: demo ? 'Demo daily totals do not include measured time-band readings.' : 'Measured time-band readings are missing or estimated for the selected dates.' };
+}
+
+/** Keep missing dates/months in their calendar slots; never plot them as zero. */
+export function usageChartPoints(series: UsageSeries, period: 'weekly' | 'monthly', selected: string) {
+  const range = usageRange(period, selected);
+  const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
+  const byDate = new Map(series.daily_dates.map((day, index) => [day, index]));
+  const day = isoDay(range.start);
+  const points: { axisLabel: string; tooltipLabel: string; kwh: number | null; costNzd: number | null }[] = [];
+  while (dateValue(day) <= range.end) {
+    const date = dateValue(day);
+    if (period === 'weekly') {
+      const index = byDate.get(date);
+      const kwh = index === undefined ? null : series.daily_kwh[index]!;
+      points.push({ axisLabel: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getUTCDay()]!, tooltipLabel: `${date} · ${index === undefined ? 'missing' : series.daily_quality[index]}`, kwh, costNzd: kwh === null ? null : kwh * rate });
+      day.setUTCDate(day.getUTCDate() + 1);
+    } else {
+      const indexes = series.daily_dates.flatMap((value, index) => value.slice(0, 7) === date.slice(0, 7) ? [index] : []);
+      const kwh = indexes.length ? indexes.reduce((sum, index) => sum + series.daily_kwh[index]!, 0) : null;
+      const expected = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate();
+      points.push({ axisLabel: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][day.getUTCMonth()]!, tooltipLabel: `${date.slice(0, 7)} · ${indexes.length}/${expected} days`, kwh, costNzd: kwh === null ? null : kwh * rate });
+      day.setUTCMonth(day.getUTCMonth() + 1);
+    }
+  }
+  return points;
+}
+
 export function isoDay(value: string): Date {
   const day = new Date(`${value}T12:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== value) {

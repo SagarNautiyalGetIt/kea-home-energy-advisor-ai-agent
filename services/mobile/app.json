@@ -60,7 +60,15 @@
           "forceCxx20": true
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Kea Energy to record your question while you talk with Sparky. Audio is sent only when you choose to send it.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

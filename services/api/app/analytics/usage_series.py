@@ -9,7 +9,12 @@ from app.schemas import HouseholdUsageSeries
 
 
 def from_context(
-    customer_id: str, ctx: UsageContext, start: dt.date, end: dt.date
+    customer_id: str,
+    ctx: UsageContext,
+    start: dt.date,
+    end: dt.date,
+    *,
+    demo_intervals: bool = False,
 ) -> HouseholdUsageSeries:
     """Use stored mart dates when present; otherwise expose the labelled demo period.
 
@@ -35,8 +40,19 @@ def from_context(
         ]
         date_source = "mart"
     elif isinstance(ctx.period_start, dt.date):
+        from app.analytics.demo_intervals import bands
+
         rows = [
-            (ctx.period_start + dt.timedelta(days=index), kwh, None, None, None, "demo")
+            (
+                ctx.period_start + dt.timedelta(days=index),
+                kwh,
+                *(
+                    bands(ctx.period_start + dt.timedelta(days=index), kwh)
+                    if demo_intervals
+                    else (None, None, None)
+                ),
+                "demo",
+            )
             for index, kwh in enumerate(ctx.window.daily_kwh)
         ]
         date_source = "demo"
@@ -58,7 +74,9 @@ def from_context(
         daily_off_peak_kwh=off_peak,
         daily_night_kwh=night,
         band_data_source=(
-            "measured" if any(value is not None for value in peak + off_peak + night) else None
+            ("demo" if date_source == "demo" else "measured")
+            if any(value is not None for value in peak + off_peak + night)
+            else None
         ),
         date_source=date_source,
         total_kwh=total_kwh,

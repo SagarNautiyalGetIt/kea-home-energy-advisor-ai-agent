@@ -45,6 +45,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class OutageSnapshotRow(Base):
+    __tablename__ = "outage_snapshot"
+    __table_args__ = {"schema": "app"}
+    account_ref: Mapped[str] = mapped_column(String(64), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class RewardEventRow(Base):
+    __tablename__ = "reward_event"
+    __table_args__ = {"schema": "app"}
+    account_ref: Mapped[str] = mapped_column(String(64), primary_key=True)
+    event_key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 def _pk() -> Mapped[int]:
     return mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
