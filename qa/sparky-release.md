@@ -7,8 +7,13 @@ issues #303–#310 cover the model, scene, cards, hourly Usage and edge-back fol
 ## Local verification, 3 October 2026
 
 - Root `make check`: API/web lint and types, API suite, attribution check.
-- Mobile: strict route/type generation, lint and 59 tests passed, including all seven
-  decoded native-model buffer views and source/texture metadata preservation.
+- Mobile: strict route/type generation, lint and 61 tests passed, including all seven
+  decoded native-model buffer views and source/texture metadata preservation. The
+  native-runtime regression reproduces Three's Node-only CommonJS entry failure and
+  evaluates the resolved Three/GLTF/Meshopt graph without Node globals/WebAssembly.
+- Fresh served iOS/Android development bundles exclude the Node-only Three wrapper.
+  The requester confirmed Login/Home opens in Expo Go on iPhone after the fix.
+  This startup check does not complete the native performance/input acceptance below.
 - API: 938 tests passed, 5 skipped. Hourly regressions cover own-household access,
   23/25-hour NZ days, all import registers, missing/duplicate/invalid reads and the
   serving schema's validated-read quality. Web client types/lint remain passing.
@@ -26,6 +31,10 @@ branches and worker failures. No fixture test proves a paid-provider or device r
 
 1. Run the startup sequence and original Usage/session checks. Missing measurements
    remain unavailable; dated imports do not become appliance consumption.
+   Cold-launch Expo Go on iOS and Android: Login and Home must load without the
+   `process.emitWarning` import error or its missing-Home-default-export warning.
+   Clear Metro's resolution cache after changing its config; keep a single Three
+   module shared by the app, Fiber and loader. Remote push is not supported by Expo Go.
 2. Open Home in both themes. Confirm textured unlit defaults, genuine orbit, zoom and
    reset. Switch holographic mode and restart; confirm preference persistence. Measure
    model load/memory/frame time on a low-end phone and exercise the fallback.
