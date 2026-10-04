@@ -115,13 +115,15 @@ function WorldSky({ atmosphere, progress }: { atmosphere: ReturnType<typeof home
 function EnergyPaths({ flows }: { flows: HomeFlow[] }) {
   const paths = useMemo(() => flows.map(flow => {
     const points = conduitPoints[flow.id].map(point => new Vector3(...point));
-    const geometry = new TubeGeometry(new CatmullRomCurve3(points, false, 'centripetal'), 120, 0.0065, 6, false);
+    const geometry = new TubeGeometry(new CatmullRomCurve3(points, false, 'centripetal'), 120, 0.009, 6, false);
     const material = new ShaderMaterial({ transparent: true, depthTest: true, depthWrite: false, uniforms: { phase: { value: 0 }, tint: { value: new Color(flow.color) }, flowing: { value: flow.active ? 1 : 0 } }, vertexShader: 'varying vec2 pathUv;void main(){pathUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}', fragmentShader: `uniform float phase;uniform vec3 tint;uniform float flowing;varying vec2 pathUv;
       void main(){
         // Twice as many soft pulses; double phase preserves the original speed.
         float pulse=pow(max(0.0,cos((pathUv.x*6.0-phase*2.0)*6.2831853)),3.0);
-        vec3 core=mix(tint,vec3(1.0),pulse*0.22);
-        gl_FragColor=vec4(core,(0.3+pulse*0.7)*flowing);
+        // Saturated opaque centre and soft coloured rim retain each path's hue.
+        float rim=0.5+0.5*sin(pathUv.y*6.2831853);
+        vec3 core=tint*(0.9+pulse*0.32);
+        gl_FragColor=vec4(core,(0.72+pulse*0.28)*(0.76+rim*0.24)*flowing);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }` });

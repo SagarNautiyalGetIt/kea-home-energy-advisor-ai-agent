@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
@@ -7,11 +8,11 @@ import { GltfHomeScene } from './gltf-home-scene';
 import { OutageNotice } from './outage-notice';
 import { EnergyReadingRail } from './energy-reading-rail';
 import { homeCardReading } from '@/lib/home-card-reading';
-import { homeFlows } from '@/lib/home-flows';
+import { homeFlows, freshHomePower } from '@/lib/home-flows';
 import { toggleHomeSelection } from '@/lib/home-camera';
 import { useExperience } from '@/lib/experience-preferences';
 import { AccessibilityInfo, Animated, AppState, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { fetchHouseholdWeather, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
+import { fetchHouseholdWeather, restoreWeatherCache, isWeatherFresh, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
 import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useAppTheme } from '@/theme';
@@ -57,17 +58,24 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const { width, fontScale } = useWindowDimensions();
   const [sceneState, setScene] = useState<HomeSceneData | null>(null);
   const scene = sceneState?.customerId === customerId ? sceneState : null;
-  const [liveState, setLiveState] = useState<{ customerId: string; power: LivePower } | null>(null);
-  const live = liveState?.customerId === customerId ? liveState.power : {};
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(timer); }, []);
+  const [liveState, setLiveState] = useState<{ customerId: string; power: LivePower; fetchedAt: number } | null>(null);
+  // The periodic clock triggers expiry, but a new async poll may be newer than
+  // that snapshot. Evaluate against receipt/current wall time to avoid flicker.
+  const liveNow = Math.max(now, liveState?.fetchedAt ?? 0);
+  const live = useMemo(() => liveState?.customerId === customerId ? freshHomePower(liveState.power, liveState.fetchedAt, liveNow) : {}, [customerId, liveState, liveNow]);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [weatherState, setWeather] = useState<{ region: string; data: AucklandWeather } | null>(null);
   const weather = weatherState && weatherState.region === scene?.region ? weatherState.data : null;
-  const [weatherError, setWeatherError] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherReload, setWeatherReload] = useState(0);
+  const currentWeather = weather && isWeatherFresh(weather, now) ? weather : null;
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>();
   const [previewFlows, setPreviewFlows] = useState<boolean | null>(null);
   const isPreviewingFlows = previewFlows ?? scene?.dateSource === 'demo';
-  const flows = useMemo(() => homeFlows(liveState?.customerId === customerId ? liveState.power : {}, isPreviewingFlows), [customerId, liveState, isPreviewingFlows]);
+  const flows = useMemo(() => homeFlows(live, isPreviewingFlows), [live, isPreviewingFlows]);
   const [reduceMotion, setReduceMotion] = useState(true);
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
@@ -101,9 +109,9 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     async function refresh() {
       try {
         const next = await loadLiveHomePower(customerId!);
-        if (active) setLiveState({ customerId: customerId!, power: next });
+        if (active) setLiveState({ customerId: customerId!, power: next, fetchedAt: Date.now() });
       } catch {
-        if (active) setLiveState({ customerId: customerId!, power: {} });
+        if (active) setLiveState({ customerId: customerId!, power: {}, fetchedAt: Date.now() });
       }
     }
     void refresh();
@@ -119,14 +127,21 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     const controller = new AbortController();
     let active = true;
     let refreshing = false;
+    const cacheKey = `kea-regional-weather-v1-${safeRegion.trim().toLowerCase()}`;
+    setWeatherError(null);
+    void AsyncStorage.getItem(cacheKey).then(raw => {
+      const cached = raw ? restoreWeatherCache(JSON.parse(raw)) : null;
+      if (active && cached) setWeather(old => old?.region === safeRegion && old.data.observedAt > cached.observedAt ? old : { region: safeRegion, data: cached });
+    }).catch(() => { /* Optional cache cannot block fresh weather. */ });
     async function refresh() {
       if (refreshing) return;
       refreshing = true;
       try {
         const next = await fetchHouseholdWeather(safeRegion, controller.signal);
-        if (active) { setWeather({ region: safeRegion, data: next }); setWeatherError(false); }
-      } catch {
-        if (active) setWeatherError(true);
+        if (active) { setWeather({ region: safeRegion, data: next }); setWeatherError(null); }
+        void AsyncStorage.setItem(cacheKey, JSON.stringify(next)).catch(() => { /* Optional cache. */ });
+      } catch (error) {
+        if (active) setWeatherError(error instanceof Error ? error.message : 'Regional weather could not be loaded.');
       } finally {
         refreshing = false;
       }
@@ -137,7 +152,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       if (state === 'active') void refresh();
     });
     return () => { active = false; controller.abort(); clearInterval(interval); appSubscription.remove(); };
-  }, [scene?.region, reload]);
+  }, [scene?.region, reload, weatherReload]);
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -163,7 +178,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     <View onLayout={({ nativeEvent: { layout } }) => { sceneTop.current = layout.y; reportProtectedHeader(); }} style={styles.sceneWrapper}>
       <Animated.View style={{ opacity: sceneOpacity ?? 1 }}>
         <View style={styles.sceneCard}>
-          <LinearGradient colors={sceneColors(weather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={sceneColors(currentWeather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
           <LinearGradient
             colors={mode === 'dark' ? [
               '#111111', 'rgba(17,17,17,0.96)', 'rgba(17,17,17,0.85)',
@@ -180,13 +195,13 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           />
           <InteractiveHomeScene reduceMotion={reduceMotion} pinnedHolographic={preferences.holographic} onInteractionChange={onSceneInteractionChange}>
             {(camera, onReady, holographicMix) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} weather={weather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
+              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} weather={currentWeather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
             </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
       </Animated.View>
-      <View onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={styles.weatherInScene}><Ionicons name={weatherIcon(weather)} color={mode === 'dark' ? '#E9F5FB' : colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: mode === 'dark' ? '#E9F5FB' : colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}` : weatherError ? 'Weather unavailable' : 'Finding weather'}` : 'Location unavailable'}</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Regional weather. ${weatherError ?? 'Refresh weather'}. Tap to retry.`} onPress={() => setWeatherReload(value => value + 1)} onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={[styles.weatherInScene, { minHeight: 36 }]}><Ionicons name={weatherIcon(currentWeather)} color={mode === 'dark' ? '#E9F5FB' : colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: mode === 'dark' ? '#E9F5FB' : colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}${!currentWeather || weatherError ? ' · Last known · tap to retry' : ''}` : weatherError ? 'Weather unavailable · tap to retry' : 'Finding weather'}` : 'Location unavailable'}</Text>{weatherError ? <Ionicons name="refresh-outline" size={13} color={colors.textMuted} /> : null}</Pressable>
       <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
       <EnergyReadingRail cardWidth={chipWidth} selected={selected} onSelect={(device) => setSelected(current => toggleHomeSelection(current, device as Device))} readings={(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
         const metric = homeCardReading(scene, live, device);

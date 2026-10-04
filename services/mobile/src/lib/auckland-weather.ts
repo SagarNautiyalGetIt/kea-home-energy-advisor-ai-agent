@@ -15,6 +15,22 @@ export type AucklandWeather = {
 
 export const WEATHER_REFRESH_MS = 15 * 60 * 1000;
 export const WEATHER_SOURCE_URL = 'https://open-meteo.com/';
+export const WEATHER_FRESH_MS = 90 * 60 * 1000;
+/** City-centre regional weather, not GPS or a claim about the customer's address. */
+const aucklandLocation = { latitude: -36.84853, longitude: 174.76349 };
+const locationsCache = new Map<string, { latitude: number; longitude: number }>();
+const queryUrl = (base: string, parameters: Record<string, string>) => `${base}?${Object.entries(parameters).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')}`;
+
+export function isWeatherFresh(weather: AucklandWeather, now = Date.now()) {
+  return weather.observedAt <= now + 60_000 && now - weather.observedAt < WEATHER_FRESH_MS;
+}
+export function restoreWeatherCache(body: unknown): AucklandWeather | null {
+  const row = record(body);
+  if (!row || !finite(row.observedAt) || !finite(row.fetchedAt) || typeof row.isDay !== 'boolean') return null;
+  try {
+    return parseAucklandWeather({ current: { time: row.observedAt / 1000, temperature_2m: row.temperatureC, is_day: row.isDay ? 1 : 0, weather_code: row.weatherCode, cloud_cover: row.cloudCoverPercent, shortwave_radiation_instant: row.solarRadiationWm2 }, daily: { sunrise: [finite(row.sunriseAt) ? row.sunriseAt / 1000 : null], sunset: [finite(row.sunsetAt) ? row.sunsetAt / 1000 : null] } }, row.fetchedAt);
+  } catch { return null; }
+}
 
 const regionalCity: Record<string, string> = {
   northland: 'Whangarei', auckland: 'Auckland', waikato: 'Hamilton',
@@ -83,28 +99,27 @@ export async function fetchHouseholdWeather(region: string, signal?: AbortSignal
   if (signal?.aborted) forwardAbort();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const search = new URL('https://geocoding-api.open-meteo.com/v1/search');
-    search.searchParams.set('name', weatherCity(region));
-    search.searchParams.set('countryCode', 'NZ');
-    search.searchParams.set('count', '5');
-    const locationResponse = await fetch(search.toString(), { signal: controller.signal });
-    if (!locationResponse.ok) throw new Error('Weather location could not be found.');
-    const locations = await locationResponse.json() as { results?: { name: string; latitude: number; longitude: number }[] };
     const city = weatherCity(region).toLowerCase();
-    const location = locations.results?.find((item) => item.name.toLowerCase() === city) ?? locations.results?.[0];
-    if (!location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) throw new Error('This account’s weather region could not be located.');
-    const url = new URL('https://api.open-meteo.com/v1/forecast');
-    url.searchParams.set('latitude', String(location.latitude));
-    url.searchParams.set('longitude', String(location.longitude));
-    url.searchParams.set('current', 'temperature_2m,is_day,weather_code,cloud_cover,shortwave_radiation_instant');
-    url.searchParams.set('daily', 'sunrise,sunset');
-    url.searchParams.set('timezone', 'auto');
-    url.searchParams.set('timeformat', 'unixtime');
-    url.searchParams.set('forecast_days', '1');
-    url.searchParams.set('temperature_unit', 'celsius');
-    const response = await fetch(url.toString(), { signal: controller.signal });
+    let location = city === 'auckland' ? aucklandLocation : locationsCache.get(city);
+    if (!location) {
+      const search = queryUrl('https://geocoding-api.open-meteo.com/v1/search', { name: weatherCity(region), countryCode: 'NZ', count: '5' });
+      const locationResponse = await fetch(search, { signal: controller.signal });
+      if (!locationResponse.ok) throw new Error('Weather location could not be found.');
+      const results = record(await locationResponse.json())?.results;
+      const rows = Array.isArray(results) ? results.map(record).filter(item => item && item.country_code === 'NZ' && finite(item.latitude) && finite(item.longitude) && Math.abs(item.latitude) <= 90 && Math.abs(item.longitude) <= 180) : [];
+      const item = rows.find(item => typeof item?.name === 'string' && item.name.toLowerCase() === city) ?? rows[0];
+      if (!item) throw new Error('This account’s weather region could not be located in New Zealand.');
+      location = { latitude: item.latitude as number, longitude: item.longitude as number };
+      if (locationsCache.size >= 32) locationsCache.clear();
+      locationsCache.set(city, location);
+    }
+    const url = queryUrl('https://api.open-meteo.com/v1/forecast', { latitude: String(location.latitude), longitude: String(location.longitude), current: 'temperature_2m,is_day,weather_code,cloud_cover,shortwave_radiation_instant', daily: 'sunrise,sunset', timezone: 'auto', timeformat: 'unixtime', forecast_days: '1', temperature_unit: 'celsius' });
+    if (controller.signal.aborted) throw new Error('Regional weather request cancelled.');
+    const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) throw new Error(`Weather service returned HTTP ${response.status}.`);
-    return parseAucklandWeather(await response.json() as unknown);
+    const weather = parseAucklandWeather(await response.json() as unknown);
+    if (!isWeatherFresh(weather)) throw new Error('Weather service returned an outdated observation.');
+    return weather;
   } catch (error) {
     if (signal?.aborted) throw error;
     if (controller.signal.aborted) throw new Error('Regional weather timed out.');
