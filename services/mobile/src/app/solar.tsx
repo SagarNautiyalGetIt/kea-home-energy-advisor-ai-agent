@@ -149,7 +149,10 @@ export default function SolarScreen() {
     : (plan?.name ?? 'This plan') + ' needs interval pricing. This is an example flat-rate calculation, not your account-specific bill forecast; it does not price free weekend hours or time-of-use bands.';
 
   return <Screen contentStyle={styles.content}>
-    <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}><Ionicons color={colors.text} name="arrow-back" size={19} /><Text style={[styles.backText, { color: colors.text }]}>Back to plans</Text></Pressable>
+    <View style={styles.topNavigation}>
+      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" onPress={() => router.replace('/dashboard')} style={styles.back}><Ionicons color={colors.text} name="home-outline" size={20} /><Text style={[styles.backText, { color: colors.text }]}>Home</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}><Ionicons color={colors.text} name="arrow-back" size={19} /><Text style={[styles.backText, { color: colors.text }]}>Back to plans</Text></Pressable>
+    </View>
     <View style={styles.heading}><Ionicons color={colors.icons.energy} name="sunny-outline" size={27} /><Text style={[styles.title, { color: colors.text }]}>Explore solar savings</Text></View>
     <Text style={[styles.intro, { color: colors.textMuted }]}>See how rooftop solar could affect your bill, using your electricity usage and a few details about your home.</Text>
     {planError ? <Text accessibilityRole="alert" style={styles.error}>{planError}</Text> : !plan ? <Text style={{ color: colors.textMuted }}>Loading plan rates…</Text> : <>
@@ -211,6 +214,7 @@ export default function SolarScreen() {
         {!result ? <Text style={[styles.help, { color: colors.textMuted }]}>Choose your inputs and calculate to see annual savings and simple payback.</Text> : stale ? <Text style={[styles.callout, { color: colors.text, backgroundColor: colors.surfaceRaised }]}>Results are outdated. Recalculate after changing your inputs.</Text> : <>
           <Text style={[styles.help, { color: colors.textMuted }]}>{rateNote} {demandOrigin}.</Text>
           <View style={styles.hero}><Text style={styles.heroLabel}>Estimated annual net savings</Text><Text style={styles.heroValue}>{result.display.netBenefit}</Text><Text style={styles.heroNote}>After {money(result.input.operatingCost)}/year maintenance and replacement allowance</Text></View>
+          <PrimaryButton label="Ask Sparky about my solar" onPress={() => router.push({ pathname: '/assistant', params: { question: `Please explain my solar example: ${result.input.panelKw} kW panels costing ${result.display.upfront}, ${energy(result.input.annualDemand)} annual household demand, ${result.display.netBenefit} estimated annual net savings after ${money(result.input.operatingCost)} yearly maintenance, and ${result.display.payback} simple payback. What assumptions and uncertainties matter most? This is an estimate, not an installation quote.` } })} />
           <Stat label="Estimated simple payback" value={result.display.payback} />
           <Stat label="Upfront system cost" value={result.display.upfront} />
           <Stat label="Annual bill savings before maintenance" value={result.display.saving} />
@@ -247,6 +251,7 @@ export default function SolarScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 16, paddingBottom: 55 },
+  topNavigation: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   back: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
   backText: { fontSize: 14, fontWeight: '700' },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 10 },

@@ -448,7 +448,7 @@ export function UsageChart({
           if (index % xLabelInterval !== 0 && index !== displayLabels.length - 1) return null;
           const x = leadingDataInset + xForIndex(index, displayLabels.length, plotWidth - leadingDataInset, horizontalPadding);
           const isHourlyAxis = displayLabels.length >= 20;
-          const labelX = isHourlyAxis && index === 3 ? x + 4 : x;
+          const labelX = isHourlyAxis && index === 0 ? Math.max(0, x - 10) : isHourlyAxis && index === 3 ? x + 4 : x;
           const textAnchor = displayLabels.length === 1 || (isBar && !isHourlyAxis)
             ? 'middle'
             : index === 0

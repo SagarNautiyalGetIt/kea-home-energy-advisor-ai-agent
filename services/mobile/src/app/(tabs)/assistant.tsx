@@ -196,7 +196,7 @@ export default function AssistantScreen() {
     <AuroraMotion><Screen contentStyle={styles.screen} scroll={false}>
       <AuroraBackground />
       <PageHeader action={<View style={{ flexDirection: 'row', gap: 8 }}><IconButton icon="call" label="Talk with Sparky" onPress={() => router.push('/voice')} /><IconButton icon="create-outline" label="New chat" onPress={newChat} /></View>} title="Sparky AI" subtitle={isDemoMode ? 'Preview data on screens · live assistant needs the API' : 'Energy answers with clear limits'} />
-      {started ? <View style={{ alignItems: 'center', paddingVertical: 4 }}><SparkyPresence auroraTint interactive mode={busy ? 'replying' : 'idle'} size={112} /></View> : null}
+      {started && !compactQuestions ? <View style={{ alignItems: 'center', paddingVertical: 4 }}><SparkyPresence auroraTint interactive mode={busy ? 'replying' : 'idle'} size={112} /></View> : null}
       {started ? (
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })} ref={scrollRef} showsVerticalScrollIndicator={false}>
           {messages.map((message) => (
@@ -221,7 +221,7 @@ export default function AssistantScreen() {
           ))}
           {busy && !messages.some((message) => message.streaming) ? <View style={styles.thinking}><SparkyPresence auroraTint mode="thinking" size={48} /><View style={[styles.thinkingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={{ color: colors.text }}>Sparky is thinking…</Text></View></View> : null}
         </ScrollView>
-      ) : <View style={[styles.startState, compactQuestions && styles.startStateCompact]}><SparkyPresence auroraTint interactive size={compactQuestions ? 112 : 220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text><Text style={[styles.mascotHint, { color: colors.textMuted }]}>Tap Sparky to say hello</Text></View>}
+      ) : <View style={styles.startState}>{!compactQuestions ? <><SparkyPresence auroraTint interactive size={220} /><Text style={[styles.startTitle, { color: colors.text }]}>How can I help you today?</Text><Text style={[styles.mascotHint, { color: colors.textMuted }]}>Tap Sparky to say hello</Text></> : null}</View>}
 
       {(!started || billPromptPending) && !compactQuestions ? <View style={styles.prompts}>{prompts.filter((_, index) => !started || index === 0).map((prompt, index) => <Pressable accessibilityRole="button" disabled={busy} key={prompt.text} onPress={() => void send(prompt.text)} style={({ pressed }) => [styles.prompt, { borderColor: colors.border, backgroundColor: colors.surface }, billPromptPending && index === 0 && styles.billPrompt, pressed && { opacity: 0.65 }]}><Ionicons name={prompt.icon} color={colors.textMuted} size={20} /><Text style={[styles.promptText, { color: colors.text }]}>{prompt.text}</Text><Ionicons name="arrow-up-outline" color={colors.textMuted} size={16} /></Pressable>)}</View> : null}
       <View>
@@ -239,7 +239,7 @@ export default function AssistantScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, paddingBottom: 8 }, startState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 18 }, startStateCompact: { paddingVertical: 4 }, startTitle: { marginTop: 10, fontSize: 21, lineHeight: 27, fontWeight: '900', textAlign: 'center' },
+  screen: { flex: 1, paddingBottom: 8 }, startState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 18 }, startTitle: { marginTop: 10, fontSize: 21, lineHeight: 27, fontWeight: '900', textAlign: 'center' },
   sourceLine: { marginTop: 8, fontSize: 12, lineHeight: 18 },
   mascotHint: { marginTop: 7, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   thread: { flexGrow: 1, paddingVertical: 16, gap: 13 }, messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '90%' }, userRow: { alignSelf: 'flex-end', justifyContent: 'flex-end' }, avatar: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#2C2C2E' },
