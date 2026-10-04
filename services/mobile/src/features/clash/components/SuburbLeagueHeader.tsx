@@ -10,7 +10,7 @@ export function SuburbLeagueHeader({ district, rank, total, score }: { district:
         <View style={[styles.demoBadge, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           <Text style={[styles.demoBadgeText, { color: colors.text }]}>MONTHLY DEMO</Text>
         </View>
-        <Ionicons color={colors.textMuted} name="trophy-outline" size={20} />
+        <Ionicons color={colors.icons.money} name="trophy-outline" size={20} />
       </View>
       <Text style={[styles.title, { color: colors.text }]}>Your suburb. Your progress.</Text>
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>Compare a weighted energy score with other people in the same suburb.</Text>
@@ -33,16 +33,16 @@ const styles = StyleSheet.create({
   hero: { borderRadius: 22, borderWidth: 1, padding: 20 },
   topLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   demoBadge: { borderWidth: 1, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5 },
-  demoBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  demoBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7 },
   title: { marginTop: 23, fontSize: 27, lineHeight: 32, fontWeight: '800', letterSpacing: -0.7 },
-  subtitle: { marginTop: 7, fontSize: 13, lineHeight: 19 },
+  subtitle: { marginTop: 7, fontSize: 14, lineHeight: 21 },
   divider: { height: 1, marginTop: 22, marginBottom: 17 },
   bottomLine: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
   stat: { flex: 1 },
-  meta: { fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
+  meta: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   value: { marginTop: 5, fontSize: 29, fontWeight: '800' },
   valueSuffix: { fontSize: 15, fontWeight: '600' },
   score: { minWidth: 79, borderRadius: 15, paddingVertical: 9, paddingHorizontal: 11, alignItems: 'center' },
   scoreValue: { fontSize: 18, fontWeight: '800' },
-  scoreLabel: { fontSize: 10, marginTop: 2 },
+  scoreLabel: { fontSize: 12, marginTop: 2 },
 });

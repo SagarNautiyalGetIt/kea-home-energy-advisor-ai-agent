@@ -1,14 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { router, usePathname } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { palette, useAppTheme } from '@/theme';
 import { SparkyPresence } from './sparky-presence';
+import { bottomNavMargin, NAV_DESTINATIONS } from '@/lib/bottom-navigation';
 
 type Props = {
   includeHome?: boolean;
   listMode?: boolean;
+  onNavigate?: () => void;
   billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
 };
 
@@ -24,31 +26,26 @@ function BillingNavIcon({ color, detailColor, size }: { color: string; detailCol
   );
 }
 
-export function BottomNavigation({ includeHome = true, listMode = false, billPrediction }: Props) {
+export function BottomNavigation({ includeHome = true, listMode = false, billPrediction, onNavigate }: Props) {
   const { colors, mode } = useAppTheme();
   const selectedColor = mode === 'dark' ? '#FFFFFF' : colors.text;
   const idleColor = mode === 'dark' ? 'rgba(255,255,255,0.52)' : colors.textMuted;
   const pathname = usePathname();
-  const allItems: readonly { label: string; detail: string; path: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; tint: string }[] = [
-    { label: 'Home', detail: 'Return to your energy overview', path: '/dashboard', icon: 'home', onPress: () => router.push('/dashboard'), tint: colors.text },
-    { label: 'Usage', detail: 'Track your energy usage', path: '/usage', icon: 'bar-chart-outline', onPress: () => router.push('/usage'), tint: colors.text },
-    { label: 'Sparky', detail: 'Ask Sparky AI', path: '/assistant', icon: 'sparkles', onPress: () => router.push('/assistant'), tint: colors.text },
-    { label: 'Billing', detail: 'View your billing information', path: '/billing', icon: 'receipt', onPress: () => router.push('/billing'), tint: colors.text },
-    { label: 'More', detail: 'More options', path: '/more', icon: 'grid', onPress: () => router.push('/more'), tint: colors.text },
-  ];
+  const { width } = useWindowDimensions();
+  const allItems: readonly { label: string; detail: string; path: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; tint: string }[] = NAV_DESTINATIONS.map(item => ({ ...item, onPress: () => router.push(item.path), tint: item.tint === 'text' ? colors.text : colors.icons[item.tint] }));
   const navigationItems = includeHome ? allItems : allItems.filter((item) => item.label !== 'Home');
   const items = listMode && billPrediction
     ? [{ label: 'Bill prediction', detail: billPrediction.detail, path: '', icon: 'alert-circle-outline' as const, onPress: billPrediction.onPress, tint: colors.text }, ...navigationItems]
     : navigationItems;
 
-  return <View style={[styles.container, listMode && styles.listContainer, { borderColor: colors.border, backgroundColor: listMode ? 'transparent' : colors.surface, paddingBottom: 0 }]}>
+  return <View style={[styles.container, !listMode && { marginHorizontal: bottomNavMargin(width, items.length) }, listMode && styles.listContainer, { borderColor: colors.border, backgroundColor: listMode ? 'transparent' : colors.surface, paddingBottom: 0 }]}>
     {!listMode ? <BlurView intensity={72} tint={mode} pointerEvents="none" style={styles.glassBackground} /> : null}
     {!listMode ? <View pointerEvents="none" style={styles.glassTint} /> : null}
     {items.map((item) => {
       const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
       const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
-      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
-      {item.label === 'Sparky' ? <SparkyPresence mode="static" size={28} /> : item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
+      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={() => { onNavigate?.(); item.onPress(); }} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
+      {item.label === 'Sparky AI' || item.label === 'Bill prediction' ? <SparkyPresence size={36} /> : item.label === 'Billing' ? <BillingNavIcon color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
       {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}
@@ -62,7 +59,7 @@ const styles = StyleSheet.create({
   listContainer: { flexDirection: 'column', borderRadius: 0, marginHorizontal: 16, marginBottom: 16, paddingVertical: 0, paddingHorizontal: 0, backgroundColor: 'transparent', borderWidth: 0, overflow: 'visible' },
   glassBackground: { ...StyleSheet.absoluteFill, borderRadius: 999 },
   glassTint: { ...StyleSheet.absoluteFill, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.03)' },
-  item: { flex: 1, minHeight: 44, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 999, position: 'relative' },
+  item: { flex: 1, minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 999, position: 'relative' },
   listItem: { flex: 0, minHeight: 64, minWidth: 0, width: '100%', flexDirection: 'row', justifyContent: 'flex-start', gap: 14, paddingHorizontal: 12, borderRadius: 14 },
   warningItem: { borderWidth: 1.5, borderColor: palette.red, backgroundColor: 'rgba(232,33,39,0.14)', marginBottom: 6 },
   normalItem: { borderWidth: 1, borderColor: 'rgba(48,209,88,0.48)', backgroundColor: 'rgba(48,209,88,0.07)', marginBottom: 6 },

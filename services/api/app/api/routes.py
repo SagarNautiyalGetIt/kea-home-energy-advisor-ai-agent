@@ -37,8 +37,9 @@ from app.account.mobile_plans import MobilePlansView, mobile_plans
 from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock, disaggregation
-from app.analytics import forecast as forecast_mod
 from app.analytics.annual_demand import from_context as annual_demand_from_context
+from app.analytics.billing_context import cycle_days as _cycle_days
+from app.analytics.billing_context import own_history as _own_history
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
 from app.analytics.usage_series import from_context as usage_series_from_context
@@ -60,7 +61,6 @@ from app.homelink.insights import summarise as summarise_devices
 from app.homelink.schemas import DeviceObservation, Provider
 from app.narration.prompts import SYSTEM
 from app.pipeline import (
-    DAYS_IN_JULY,
     UnknownCustomerError,
     answer,
     answer_stream,
@@ -83,6 +83,7 @@ from app.schemas import (
     EnergyCategory,
     ForecastSummary,
     HouseholdBilling,
+    HouseholdHourlyUsage,
     HouseholdSummary,
     HouseholdUsageSeries,
     LoginRequest,
@@ -141,54 +142,6 @@ async def health() -> dict[str, object]:
             else {}
         ),
     }
-
-
-def _cycle_days(ctx: UsageContext) -> int:
-    """How long this account's billing cycle actually is.
-
-    Both bill-shock call sites passed `DAYS_IN_JULY` — 31 — for every account. That is
-    right for the seeded households, whose whole world is July 2026, and wrong for any
-    real billing period that is not a calendar month. Daniel's is 1 May to 12 June: 43
-    readings into a 31-day cycle, and `forecast_cycle` raises
-    `days_in_cycle is shorter than the readings supplied`, so the endpoint 500s.
-
-    His fixture exists specifically to demonstrate "a longer billing period, not more
-    usage — the classic false alarm", which made the one account that most needed the
-    warning the one account that could not produce it.
-
-    Falls back to the reading count, then to `DAYS_IN_JULY`, so a household with no
-    billing dates behaves exactly as it did before.
-    """
-    billing = ctx.account.billing if ctx.account else None
-    if billing and billing.current_period_start and billing.current_period_end:
-        span = (billing.current_period_end - billing.current_period_start).days + 1
-        if span > 0:
-            return max(span, len(ctx.window.daily_kwh))
-    return max(DAYS_IN_JULY, len(ctx.window.daily_kwh))
-
-
-def _own_history(ctx: UsageContext) -> tuple[list[float], float | None]:
-    """This household's own completed cycles, for the bill-shock expectation.
-
-    Bill shock is a violated *personal* expectation, so the anchor should be their own
-    recent bills wherever they exist. Both call sites below used to omit these, which
-    meant `choose_expectation` always reached its comparable-homes branch and every
-    warning said "more than similar homes" — true, and no use to somebody who has always
-    run hot.
-
-    Empty for the seeded `public.*` households, which hold one month and genuinely have
-    no prior cycle. That falls back to the cohort, which is the honest answer there and
-    is labelled as such by `ExpectationBasis`.
-    """
-    account = ctx.account
-    if account is None or not account.days:
-        return [], None
-    start = account.billing.current_period_start if account.billing else None
-    return forecast_mod.own_cycle_costs(
-        [(d.date, d.import_kwh) for d in account.days],
-        unit_price_nzd=ctx.window.unit_price_nzd,
-        current_cycle_start=start,
-    )
 
 
 def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
@@ -286,6 +239,9 @@ async def demo_accounts() -> list[DemoAccountCard]:
 async def demo_session(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, str]:
+    if settings.oidc_issuer:
+        from app.security import identity
+        return identity(authorization)
     if not settings.demo_logins:
         raise HTTPException(status_code=503, detail="Demo sessions are disabled.")
     token = authorization.removeprefix("Bearer ") if authorization else ""
@@ -321,11 +277,31 @@ async def get_household_usage_series(
     _demo_household_access(customer_id, authorization)
     if end < start:
         raise HTTPException(status_code=422, detail="end must be on or after start")
+    repo = get_repository()
     try:
-        ctx = await get_repository().context(customer_id)
+        ctx = await repo.context(customer_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return usage_series_from_context(customer_id, ctx, start, end)
+    return usage_series_from_context(
+        customer_id, ctx, start, end, demo_intervals=repo.name == "fixtures"
+    )
+
+
+@router.get("/households/{customer_id}/hourly-usage", response_model=HouseholdHourlyUsage)
+async def get_household_hourly_usage(
+    customer_id: str,
+    day: dt.date,
+    authorization: Annotated[str | None, Header()] = None,
+) -> HouseholdHourlyUsage:
+    from app.analytics.hourly_usage import load_hourly
+
+    _demo_household_access(customer_id, authorization)
+    repo = get_repository()
+    try:
+        ctx = await repo.context(customer_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await load_hourly(customer_id, day, ctx, repo.name)
 
 
 @router.get("/households/{customer_id}/plans", response_model=MobilePlansView)
@@ -707,9 +683,9 @@ async def _preferences_for(customer_id: str) -> AlertPreferences:
     """
     prefs = await get_preferences_store().get(customer_id)
     patch: dict[str, str] = {}
-    if not prefs.email and settings.demo_recipient:
+    if settings.demo_logins and not prefs.email and settings.demo_recipient:
         patch["email"] = settings.demo_recipient
-    if not prefs.phone_e164 and settings.demo_phone:
+    if settings.demo_logins and not prefs.phone_e164 and settings.demo_phone:
         patch["phone_e164"] = settings.demo_phone
     return prefs.model_copy(update=patch) if patch else prefs
 
@@ -947,7 +923,11 @@ class EvOwnershipAnswer(_VapiBaseModel):
 
 
 def _demo_household_access(customer_id: str, authorization: str | None) -> None:
-    """Scope sensitive demo reads and writes; production needs real household auth."""
+    """Scope sensitive demo and production reads and writes."""
+    if settings.oidc_issuer:
+        from app.security import household_access
+        household_access(customer_id, authorization)
+        return
     if not settings.demo_logins:
         raise HTTPException(status_code=503, detail="Household access needs production auth.")
     token = authorization.removeprefix("Bearer ") if authorization else ""
@@ -1465,7 +1445,17 @@ async def voice_stream(websocket: WebSocket) -> None:
             kind = payload.get("type")
 
             if kind == "hello":
-                session.customer_id = str(payload.get("customer_id") or "")
+                if session.customer_id:
+                    await session.error("Voice account is already set.", fatal=True)
+                    break
+                account = str(payload.get("customer_id") or "")
+                from app.security import household_access
+                try:
+                    household_access(account, "Bearer " + str(payload.get("access_token") or ""))
+                except HTTPException:
+                    await session.error("Sign in to access this voice session.", fatal=True)
+                    break
+                session.customer_id = account
                 await session.send_ready()
             elif not session.customer_id:
                 await session.error("send hello first", fatal=True)

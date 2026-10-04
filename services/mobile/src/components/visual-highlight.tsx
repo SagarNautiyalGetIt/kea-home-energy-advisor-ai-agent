@@ -15,13 +15,13 @@ export const HIGHLIGHT_COLOR: Record<HighlightTarget, string> = {
 
 // These coordinates use the same 2048 × 1117.091 image viewBox as the live
 // power paths. The halo identifies an object; it never represents a reading.
-const OUTLINE: Record<HighlightTarget, string> = {
+export const HOME_OUTLINE: Record<HighlightTarget, string> = {
   solar: 'M968 250 L1362 92 L1558 266 L1146 425 Z',
   // The house is one silhouette: rear roof ridge, walls, then the left wing.
   // The old path drew a bright diagonal through the solar roof and front door.
-  home: 'M300 367 L1366 50 L1716 351 L1716 665 L1161 868 L655 756 L300 660 Z',
+  home: 'M302 368 L1366 50 L1716 356 L1706 666 L1180 869 L1180 828 L775 706 L654 758 L312 672 Z',
   // Trace the visible car body, including its low nose and rear shoulder.
-  car: 'M689 919 C684 866 709 822 779 791 C831 769 906 755 958 759 C1023 758 1065 791 1086 837 C1093 862 1079 907 1055 925 C1025 949 991 962 956 966 L822 981 C755 980 701 955 689 919 Z',
+  car: 'M689 916 C685 877 717 831 780 797 C838 766 900 755 946 757 C1000 756 1054 774 1076 799 C1093 823 1084 859 1068 885 C1059 914 1038 925 1018 930 L872 976 C815 987 742 972 702 942 Q688 932 689 916 Z',
   battery: 'M1243 680 L1314 654 L1315 785 L1244 812 Z',
   grid: 'M1762 592 L1851 556 L1900 577 L1900 677 L1804 715 L1762 697 Z',
 };
@@ -46,9 +46,9 @@ export function VisualHighlight({ selected, active, reduceMotion }: { selected: 
   const color = HIGHLIGHT_COLOR[selected];
   return <G>
     {active && !reduceMotion && Platform.OS !== 'web'
-      ? <AnimatedPath animatedProps={animatedProps} d={OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" />
-      : <Path d={OUTLINE[selected]} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={20} />}
-    <Path d={OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.24} strokeWidth={15} />
-    <Path d={OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.9} strokeWidth={4} />
+      ? <AnimatedPath animatedProps={animatedProps} d={HOME_OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" />
+      : <Path d={HOME_OUTLINE[selected]} fill="none" stroke={color} strokeOpacity={0.1} strokeWidth={12} />}
+    <Path d={HOME_OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.18} strokeWidth={9} />
+    <Path d={HOME_OUTLINE[selected]} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.9} strokeWidth={3} />
   </G>;
 }

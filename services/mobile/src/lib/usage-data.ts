@@ -1,6 +1,7 @@
 import { hourlyUsage, usage as fixtureUsage } from '@/data/mock';
 import { apiFetch } from '@/lib/backend-client';
-import { canOverlayUsage, selectedIndexes, selectedTotals, usageCoverage, usageRange, usageSource, usageTrendPercent, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
+import { hourlyComparisonUnavailable, hourlyPoints, validateHourlyUsage, type HourlyUsage } from '@/lib/hourly-usage';
+import { canOverlayUsage, selectedIndexes, selectedTotals, usageBandReading, usageChartPoints, usageCoverage, usageRange, usageSource, usageTrendPercent, usageUnitRate, validateUsageSeries, type UsageSeries } from '@/lib/usage-series';
 
 export type UsagePeriod = 'daily' | 'weekly' | 'monthly';
 export type UsageBandKey = 'peak' | 'offPeak' | 'night';
@@ -8,11 +9,12 @@ export type UsageBandKey = 'peak' | 'offPeak' | 'night';
 export type UsagePoint = {
   axisLabel: string;
   tooltipLabel: string;
-  kwh: number;
+  kwh: number | null;
   costNzd: number | null;
 };
 
 export type UsageBand = {
+  reason?: string | null;
   key: UsageBandKey;
   label: string;
   window: string | null;
@@ -21,6 +23,7 @@ export type UsageBand = {
 };
 
 export type UsageViewData = {
+  hourly?: HourlyUsage | null;
   period: UsagePeriod;
   selectedDate: string;
   sourcePeriod: string;
@@ -67,41 +70,15 @@ function shortDate(value: Date) {
   return `${value.getDate()} ${shortMonths[value.getMonth()]}`;
 }
 
-function seriesPoints(series: UsageSeries, period: UsagePeriod): UsagePoint[] {
-  const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
-  if (period === 'monthly') {
-    const buckets = new Map<string, number>();
-    series.daily_dates.forEach((day, index) => {
-      const key = day.slice(0, 7);
-      buckets.set(key, (buckets.get(key) ?? 0) + series.daily_kwh[index]!);
-    });
-    return [...buckets].map(([month, kwh]) => {
-      const date = parseIsoDate(`${month}-01`);
-      return { axisLabel: shortMonths[date.getMonth()]!, tooltipLabel: `${monthNames[date.getMonth()]} ${date.getFullYear()}`, kwh, costNzd: kwh * rate };
-    });
-  }
-  return series.daily_dates.map((day, index) => {
-    const date = parseIsoDate(day);
-    const kwh = series.daily_kwh[index]!;
-    return {
-      axisLabel: period === 'weekly' ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]! : shortDate(date),
-      tooltipLabel: `${shortDate(date)} · daily total`,
-      kwh,
-      costNzd: kwh * rate,
-    };
-  });
-}
-
 function seriesBands(series: UsageSeries, period: UsagePeriod, selected: string): UsageBand[] {
   const indexes = selectedIndexes(series, period, selected);
   const fields = { peak: series.daily_peak_kwh, offPeak: series.daily_off_peak_kwh, night: series.daily_night_kwh };
   const rate = series.total_kwh > 0 ? series.estimated_cost_nzd / series.total_kwh : 0;
   return bandDefinitions.map((band) => {
-    const values = indexes.map((index) => fields[band.key][index]);
-    const complete = series.band_data_source === 'measured' && values.length > 0 && values.every((value) => value != null);
-    const kwh = complete ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
-    // Tariff time windows are not part of this endpoint's contract.
-    return { ...band, window: null, kwh, costNzd: kwh === null ? null : kwh * rate };
+    const { kwh, reason } = usageBandReading(series, indexes, fields[band.key]);
+    // Real tariff windows are not part of the contract. Demo windows are illustrative.
+    const demo = series.band_data_source === 'demo' && series.date_source === 'demo';
+    return { ...band, window: demo ? band.window : null, kwh, reason: demo && kwh !== null ? `Demo · ${band.window}` : reason, costNzd: kwh === null ? null : kwh * rate };
   });
 }
 
@@ -119,32 +96,44 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
     return validateUsageSeries(value, query.customerId, range);
   };
   const [series, previous] = await Promise.all([load(query.date), query.compareDate ? load(query.compareDate) : Promise.resolve(null)]);
-  const points = seriesPoints(series, query.period);
-  const comparisonPoints = previous ? seriesPoints(previous, query.period) : null;
+  const loadHours = async (day: string) => {
+    if (query.period !== 'daily') return null;
+    try { return validateHourlyUsage(await fetchJson(`/api/households/${encodeURIComponent(query.customerId)}/hourly-usage?day=${day}`, query.signal), query.customerId, day); }
+    catch (error) { if (query.signal?.aborted) throw error; return null; }
+  };
+  const [hourly, previousHourly] = await Promise.all([loadHours(query.date), query.compareDate ? loadHours(query.compareDate) : Promise.resolve(null)]);
+  const rate = usageUnitRate(series);
+  const previousRate = previous ? usageUnitRate(previous) : null;
+  const points = query.period === 'daily' ? hourlyPoints(hourly, rate) : usageChartPoints(series, query.period, query.date);
+  const comparisonPoints = query.period === 'daily' ? hourlyPoints(previousHourly, previousRate) : previous ? usageChartPoints(previous, query.period, query.compareDate!) : null;
   const totals = selectedTotals(series, query.period, query.date);
   const source = usageSource(series);
   const previousSource = previous ? usageSource(previous) : null;
   const coverage = usageCoverage(series, query.period, query.date);
   const previousCoverage = previous ? usageCoverage(previous, query.period, query.compareDate!) : null;
-  const overlayAvailable = previous ? canOverlayUsage(series, previous, query.period, query.date, query.compareDate!) : false;
+  const completeComparisonDates = previous ? canOverlayUsage(series, previous, query.period, query.date, query.compareDate!) : false;
+  const hourlyComparisonReason = query.period === 'daily' && previous ? hourlyComparisonUnavailable(hourly, previousHourly) : null;
+  const comparisonReason = completeComparisonDates ? hourlyComparisonReason : 'incomplete date coverage';
+  const overlayAvailable = completeComparisonDates && comparisonReason === null;
   const comparisonLabel = previousSource && previousCoverage
-    ? ` · comparison: ${previousSource.label} · ${previousCoverage.days}/${previousCoverage.expectedDays} days${overlayAvailable ? '' : ' · comparison chart unavailable: incomplete date coverage'}`
+    ? ` · comparison: ${previousSource.label} · ${previousCoverage.days}/${previousCoverage.expectedDays} days${overlayAvailable ? '' : ` · comparison chart unavailable: ${comparisonReason}`}`
     : '';
 
   return {
+    hourly,
     period: query.period,
     selectedDate: query.date,
     sourcePeriod: query.date.slice(0, 7),
-    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${comparisonLabel}`,
+    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${query.period === 'daily' ? ` · ${hourly ? `${hourly.hours.filter(hour => hour.kwh !== null).length}/${hourly.hours.length} hours available · ${hourly.note}` : 'Hourly source unavailable'}` : ''}${comparisonLabel}`,
     points,
-    comparisonPoints: overlayAvailable && comparisonPoints?.length ? comparisonPoints : null,
+    comparisonPoints: overlayAvailable && comparisonPoints?.length && comparisonPoints.length === points.length ? comparisonPoints : null,
     totalKwh: totals.kwh,
     totalCostNzd: totals.costNzd,
     trendPercent: previous ? usageTrendPercent(series, previous, query.period, query.date, query.compareDate!) : null,
     bands: seriesBands(series, query.period, query.date),
     availableFrom: series.available_from ?? null,
     availableTo: series.available_to ?? null,
-    isDemo: source.isDemo || previousSource?.isDemo === true,
+    isDemo: source.isDemo || previousSource?.isDemo === true || hourly?.source === 'demo',
   };
 }
 
@@ -189,9 +178,10 @@ function fixtureDailyProfile(selectedDate: string) {
 function loadDemoUsage(query: UsageQuery): UsageViewData {
   const points = fixturePoints(query.period, query.date);
   const previous = fixturePoints(query.period, query.compareDate ?? query.date, true);
-  const totalKwh = points.reduce((sum, point) => sum + point.kwh, 0);
-  const previousTotal = previous.reduce((sum, point) => sum + point.kwh, 0);
-  const dailyBandValues = Object.fromEntries(Object.entries(bandHours).map(([key, hours]) => [key, hours.reduce((sum, hour) => sum + (hourlyUsage[hour] ?? 0), 0)])) as Record<UsageBandKey, number>;
+  const totalKwh = query.period === 'monthly' ? points.at(-1)?.kwh ?? 0 : points.reduce((sum, point) => sum + (point.kwh ?? 0), 0);
+  const previousTotal = query.period === 'monthly' ? previous.at(-1)?.kwh ?? 0 : previous.reduce((sum, point) => sum + (point.kwh ?? 0), 0);
+  const profile = fixtureDailyProfile(query.date);
+  const dailyBandValues = Object.fromEntries(Object.entries(bandHours).map(([key, hours]) => [key, hours.reduce((sum, hour) => sum + (profile[hour] ?? 0), 0)])) as Record<UsageBandKey, number>;
   const periodShares: Record<UsageBandKey, number> = { peak: 0.46, offPeak: 0.36, night: 0.18 };
   const bands = query.period === 'daily'
     ? bandDefinitions.map((band) => ({ ...band, kwh: dailyBandValues[band.key], costNzd: dailyBandValues[band.key] * demoTariffNzd }))

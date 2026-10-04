@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+dnf install -y docker
+systemctl enable --now docker
+aws ecr get-login-password --region '${region}' | docker login --username AWS --password-stdin '${registry}'
+docker pull '${image}'
+cat > /etc/systemd/system/kea-api.service <<'UNIT'
+[Unit]
+Description=Kea authenticated API and voice runtime
+After=docker.service
+Requires=docker.service
+[Service]
+Restart=always
+RestartSec=5
+ExecStart=/usr/bin/docker run --rm --name kea-api --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m -p 8000:8000 -e AWS_REGION=${region} -e KEA_SSM_PREFIX=${prefix} '${image}'
+ExecStop=/usr/bin/docker stop kea-api
+[Install]
+WantedBy=multi-user.target
+UNIT
+cat > /etc/systemd/system/kea-alerts.service <<'UNIT'
+[Unit]
+Description=Kea preference governed alert sweep
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m -e AWS_REGION=${region} -e KEA_SSM_PREFIX=${prefix} '${image}' python -m app.jobs.evaluate_bill_shock
+UNIT
+cat > /etc/systemd/system/kea-alerts.timer <<'UNIT'
+[Unit]
+Description=Evaluate bill warnings and release quiet hour alerts
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=60
+Persistent=true
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now kea-api kea-alerts.timer

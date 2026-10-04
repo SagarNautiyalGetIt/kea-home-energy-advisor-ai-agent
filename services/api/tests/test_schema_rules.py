@@ -160,9 +160,11 @@ def test_the_agent_writes_app_and_only_reads_kea():
         # lives in `kea.mart_account_context`, which the loader owns, and this service must
         # never write there. A request is a different fact from a plan, and it belongs to
         # the side that recorded it.
-            "plan_change_request",
-            # Daily measured device totals are account-owned app data, never loader marts.
-            "device_observation",
+        "plan_change_request",
+        # Account-owned observations and signed integration receipts belong to app.
+        "device_observation",
+        "outage_snapshot",
+        "reward_event",
     }
     assert by_schema["kea"] == {
         "mart_account_context",

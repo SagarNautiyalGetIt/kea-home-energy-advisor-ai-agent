@@ -53,6 +53,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from app.agent.account_reads import (
+    get_alert_status,
+    get_billing_records,
+    get_hourly_usage,
+    get_plan_details,
+    get_usage_history,
+)
 from app.analytics import forecast as forecast_mod
 from app.analytics.account import AccountContext
 from app.analytics.engine import DEFAULT_UNIT_PRICE_NZD, UsageWindow
@@ -535,6 +542,49 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
 ]
 
+TOOL_SCHEMAS.extend([
+    {"name": "get_usage_history", "description":
+     "Dated daily usage and peak/off-peak/night totals for a requested week, month or "
+     "date range. Same source as the Usage page. Returns completeness and demo/estimated "
+     "labels; missing bands stay unknown. Use for period totals and comparisons.",
+     "input_schema": {"type": "object", "properties": {
+         "start_date": {"type": "string", "description": "ISO date; default available start."},
+         "end_date": {"type": "string", "description": "ISO date; default available end."},
+     }}},
+    {"name": "get_hourly_usage", "description":
+     "Actual dated hourly readings, including missing/estimated hours and DST offsets, "
+     "for 'when did I use power yesterday/on Tuesday'. Not a monthly average. Demo "
+     "shapes are explicitly synthetic. Do not identify an appliance from an hour.",
+     "input_schema": {"type": "object", "properties": {
+         "day": {"type": "string", "description": "Exact ISO date; omit for latest available day."},
+     }}},
+    {"name": "get_billing_records", "description":
+     "Current and previous invoice aggregate facts: period, days, billed kWh and total. "
+     "Charge lines, credits, adjustments and invoice read-quality are not loaded. "
+     "Not a payment transaction ledger; do not infer paid status. Missing invoices "
+     "are unavailable, never replaced with usage estimates.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_plan_details", "description":
+     "The Plans page's pricing styles, exact published time windows, daily charges, "
+     "commitment terms, conditional credits and early-exit fees. Use for questions "
+     "about a named offer or term, alongside get_plan_options for measured comparisons. "
+     "Catalogue offers do not establish this customer's contracted rates or eligibility.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_alert_status", "description":
+     "Read current warning thresholds, enabled channels, quiet hours and a deterministic "
+     "bill-shock assessment against these settings. Use for 'what are my alerts', "
+     "'am I on track' and 'why no warning'. Does not send notifications and provides "
+     "no proof of delivery. Updating uses update_alert_settings.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_power_clash_progress", "description":
+     "Read this household's planning and device-verified XP, action ideas and evidenced "
+     "tariff-shift savings. Planning XP never proves savings; points have no cash value.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_scheduled_outages", "description":
+     "Read the linked distributor's scheduled outage snapshot, revisions, cancellations "
+     "and freshness. A missing or stale source cannot establish that there are no outages.",
+     "input_schema": {"type": "object", "properties": {}}},
+])
 TOOL_NAMES = frozenset(t["name"] for t in TOOL_SCHEMAS)
 
 
@@ -1928,7 +1978,38 @@ def handoff_to_human(ctx: ToolContext, reason: str) -> dict[str, Any]:
 # Dispatch
 # ---------------------------------------------------------------------------
 
+async def get_power_clash_progress(ctx: ToolContext) -> dict:
+    from app.experience import experience_store
+
+    progress = await experience_store().progress(ctx.customer_id)
+    return {"available": True, "source": "Household action receipt ledger",
+            "disclosure": "Planning is not verified performance. XP is not cash. "
+            "Tariff-shift estimates are not a causal measurement of lower total bills.",
+            **progress.model_dump(mode="json")}
+
+
+async def get_scheduled_outages(ctx: ToolContext) -> dict:
+    from app.experience import experience_store
+
+    view = await experience_store().outage(ctx.customer_id)
+    return {
+        "available": view.status == "current",
+        "reason": None if view.status == "current" else (
+            "No linked distributor schedule." if view.status == "not_linked"
+            else "The distributor snapshot is stale; check the source."
+        ),
+        "source": "Linked distributor snapshot",
+        "disclosure": (
+            "Confirm changes with the distributor; unexpected outages remain possible."
+        ),
+        **view.model_dump(mode="json"),
+    }
+
+
 _SYNC = {
+    "get_usage_history": get_usage_history,
+    "get_billing_records": get_billing_records,
+    "get_plan_details": get_plan_details,
     "get_account_summary": get_account_summary,
     "get_daily_usage": get_daily_usage,
     "get_bill_comparison": get_bill_comparison,
@@ -1941,6 +2022,10 @@ _SYNC = {
     "get_energy_breakdown": get_energy_breakdown,
 }
 _ASYNC = {
+    "get_hourly_usage": get_hourly_usage,
+    "get_alert_status": get_alert_status,
+    "get_power_clash_progress": get_power_clash_progress,
+    "get_scheduled_outages": get_scheduled_outages,
     "get_hourly_profile": get_hourly_profile,
     # The write tools. Async because they touch a store, and grouped here rather than
     # marked out further because `app/account/` is where the read/write boundary is

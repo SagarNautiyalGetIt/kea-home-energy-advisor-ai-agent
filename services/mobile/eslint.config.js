@@ -3,9 +3,10 @@ const { defineConfig } = require('eslint/config');
 const expoConfig = require("eslint-config-expo/flat");
 
 module.exports = defineConfig([
+  { ignores: ["src/vendor/bloub/**"] },
   expoConfig,
   {
-    ignores: ["dist/*"],
+    ignores: ["dist/*", "src/vendor/bloub/**"],
     rules: {
       // React Compiler rules are not compatible with React Native Animated and
       // Reanimated's mutable refs/shared values used throughout this app.

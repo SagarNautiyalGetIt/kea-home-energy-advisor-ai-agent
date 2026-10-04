@@ -39,9 +39,10 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from app.alerts.store import has_hardship
 from app.analytics import billshock
 from app.config import get_dispatcher, get_preferences_store, get_repository, settings
-from app.pipeline import DAYS_IN_JULY
+from app.pipeline import days_in_cycle
 
 log = logging.getLogger(__name__)
 
@@ -90,16 +91,16 @@ async def evaluate_one(customer_id: str, summary: RunSummary) -> None:
     # households carry no personal details by design. A real deployment leaves these
     # unset and the policy layer correctly reports "no address on file".
     patch: dict[str, str] = {}
-    if not prefs.email and settings.demo_recipient:
+    if settings.demo_logins and not prefs.email and settings.demo_recipient:
         patch["email"] = settings.demo_recipient
-    if not prefs.phone_e164 and settings.demo_phone:
+    if settings.demo_logins and not prefs.phone_e164 and settings.demo_phone:
         patch["phone_e164"] = settings.demo_phone
     if patch:
         prefs = prefs.model_copy(update=patch)
 
     assessment = billshock.assess(
         ctx.window,
-        days_in_cycle=DAYS_IN_JULY,
+        days_in_cycle=max(days_in_cycle(ctx), len(ctx.window.daily_kwh)),
         daily_hdd=ctx.hdd[: len(ctx.window.daily_kwh)],
         normal_hdd_per_day=ctx.normal_hdd,
         comparable_home_kwh_per_day=ctx.baseline,
@@ -116,6 +117,7 @@ async def evaluate_one(customer_id: str, summary: RunSummary) -> None:
         assessment=assessment,
         preferences=prefs,
         period=ctx.window.period,
+        hardship_detected=await has_hardship(customer_id),
     )
 
     if result.already_sent:
@@ -151,6 +153,15 @@ async def run(customer_ids: list[str] | None = None) -> RunSummary:
                 log.exception("bill-shock evaluation failed for %s", customer_id)
 
     await asyncio.gather(*(guarded(customer_id) for customer_id in ids))
+
+    if settings.persist and settings.alerts_enabled:
+        from app.jobs.send_scheduled import release_due
+        try:
+            await release_due()
+        except Exception:
+            summary.skipped += 1
+            summary.errors.append("Scheduled release failed; inspect the delivery ledger.")
+            log.exception("Scheduled release failed")
 
     log.info("bill-shock sweep complete %s", summary.as_dict())
     return summary

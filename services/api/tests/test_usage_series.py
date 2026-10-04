@@ -20,7 +20,7 @@ def _headers(customer_id: str = "H-JUL") -> dict[str, str]:
     return {"Authorization": f"Bearer {auth.issue_demo_token(customer_id)}"}
 
 
-def test_fixture_range_is_labelled_demo_and_has_no_invented_bands(monkeypatch) -> None:
+def test_fixture_range_labels_illustrative_bands_and_reconciles_hourly_shape(monkeypatch) -> None:
     monkeypatch.setattr(routes, "settings", replace(routes.settings, demo_logins=True))
     with TestClient(app) as client:
         result = client.get(
@@ -34,14 +34,38 @@ def test_fixture_range_is_labelled_demo_and_has_no_invented_bands(monkeypatch) -
     assert series["daily_dates"] == ["2026-07-03", "2026-07-04"]
     assert len(series["daily_kwh"]) == 2
     assert series["daily_quality"] == ["demo", "demo"]
-    assert series["daily_peak_kwh"] == [None, None]
-    assert series["band_data_source"] is None
+    assert all(value is not None for value in series["daily_peak_kwh"])
+    assert series["band_data_source"] == "demo"
     assert series["available_from"] == "2026-07-01"
     assert series["available_to"] == "2026-07-31"
 
     with TestClient(app) as client:
         summary = client.get("/api/households/H-JUL").json()
+        hours = client.get(
+            "/api/households/H-JUL/hourly-usage?day=2026-07-03", headers=_headers()
+        ).json()
     assert summary["date_source"] == "demo"
+    assert round(sum(hour["kwh"] for hour in hours["hours"]), 4) == series["daily_kwh"][0]
+    for index, total in enumerate(series["daily_kwh"]):
+        bands = [
+            series[field][index]
+            for field in ("daily_peak_kwh", "daily_off_peak_kwh", "daily_night_kwh")
+        ]
+        assert round(sum(bands), 4) == total
+
+
+def test_missing_production_context_is_not_given_a_demo_interval_profile() -> None:
+    ctx = UsageContext(
+        window=UsageWindow("C-1", "July 2026", [3.0]),
+        baseline=3,
+        label="Customer",
+        hdd=[],
+        normal_hdd=0,
+        period_start=dt.date(2026, 7, 1),
+    )
+    result = from_context("C-1", ctx, dt.date(2026, 7, 1), dt.date(2026, 7, 1))
+    assert result.daily_peak_kwh == [None]
+    assert result.band_data_source is None
 
 
 def test_empty_range_preserves_availability_without_fabricating_points(monkeypatch) -> None:

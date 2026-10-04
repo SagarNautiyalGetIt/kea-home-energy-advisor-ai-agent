@@ -1,121 +1,123 @@
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
-import Animated, { cancelAnimation, Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { useEffect, useId, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, View } from 'react-native';
+import Svg, { Circle, Defs, G, LinearGradient, Mask, Path, Stop } from 'react-native-svg';
+import { useActiveAnimation } from '@/lib/use-active-animation';
+import { useAppTheme } from '@/theme';
+import { mouthPose, mouthShape, type MouthMode } from '@/lib/sparky-mouth';
+import { sparkyFace, sparkyReactionForTap, type SparkyReaction } from '@/lib/sparky-reaction';
+import { tactile } from '@/lib/haptics';
+import { BotEngine } from '@/vendor/bloub/engine';
+import { EXPRESSION_BY_ID } from '@/vendor/bloub/expressions';
+import { DEMI_VIEWBOX, RAYON } from '@/vendor/bloub/repere';
+import { AURORA_COLORS, auroraRibbon } from '@/lib/aurora-ribbon';
+import { useAuroraTime } from './aurora-motion';
 
-type Mode = 'idle' | 'thinking' | 'replying' | 'happy' | 'static';
+type Mode = MouthMode;
 
-/** Kea's own companion: a soft energy core, attentive eyes and a measured motion cadence. */
-export function SparkyPresence({ size = 168, mode = 'idle' }: { size?: number; mode?: Mode }) {
+/** Unchanged Bloub body/eyes with a separate capsule-shaped mouth cutout. */
+export function SparkyPresence({ size = 168, mode = 'idle', auroraTint = false, interactive = false }: { size?: number; mode?: Mode; auroraTint?: boolean; interactive?: boolean }) {
+  const { mode: themeMode, colors } = useAppTheme();
+  const active = useActiveAnimation();
+  const auroraTime = useAuroraTime();
   const [reduceMotion, setReduceMotion] = useState(true);
-  const breath = useSharedValue(0);
-  const gaze = useSharedValue(0);
-  const blink = useSharedValue(1);
-  const halo = useSharedValue(0);
+  const [engine] = useState(() => {
+    const bot = new BotEngine(RAYON, 'idle');
+    bot.setLook({ yaw: 0, pitch: 0, mix: 1, spin: 0, wander: 0 }, -1);
+    return bot;
+  });
+  const time = useRef(0);
+  const [frame, setFrame] = useState(() => engine.sample(0));
+  const [reaction, setReaction] = useState<SparkyReaction>();
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const taps = useRef(0);
+  const lastTap = useRef(0);
+  const mask = 'bloub-' + useId().replace(/:/g, '');
+  const ink = themeMode === 'dark' ? '#FFFFFF' : '#0A0A0C';
+  const face = sparkyFace(mode, reaction, reduceMotion);
+  const statusLabel = mode === 'thinking' ? 'Sparky AI is thinking' : mode === 'replying' ? 'Sparky AI is responding' : 'Sparky AI';
 
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => { if (!cancelled) setReduceMotion(enabled); });
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => subscription.remove();
+    return () => { cancelled = true; subscription.remove(); };
   }, []);
 
   useEffect(() => {
-    cancelAnimation(breath);
-    cancelAnimation(gaze);
-    cancelAnimation(blink);
-    cancelAnimation(halo);
-    if (reduceMotion || mode === 'happy' || mode === 'static') {
-      breath.value = 0;
-      gaze.value = 0;
-      blink.value = 1;
-      halo.value = 0;
+    if (!active) {
+      if (reactionTimer.current) clearTimeout(reactionTimer.current);
+      reactionTimer.current = null;
+      setReaction(undefined);
+    }
+    return () => {
+      if (reactionTimer.current) clearTimeout(reactionTimer.current);
+      reactionTimer.current = null;
+    };
+  }, [active]);
+
+  const reactToTap = () => {
+    // Bound rapid taps and haptics; the original engine blends an interrupted reaction.
+    if (!active || Date.now() - lastTap.current < 250) return;
+    lastTap.current = Date.now();
+    const next = sparkyReactionForTap(taps.current++);
+    if (reactionTimer.current) clearTimeout(reactionTimer.current);
+    setReaction(next);
+    tactile();
+    reactionTimer.current = setTimeout(() => {
+      reactionTimer.current = null;
+      setReaction(undefined);
+    }, next.durationMs);
+  };
+
+  useEffect(() => {
+    const nextFace = sparkyFace(mode, reaction, reduceMotion);
+    engine.setState(nextFace.state, time.current);
+    engine.setLook({ yaw: 0, pitch: 0, mix: 1, spin: 0, wander: reduceMotion ? 0 : 0.12 }, time.current);
+    engine.setExpression(EXPRESSION_BY_ID.get(nextFace.expression) ?? null, time.current);
+    if (reduceMotion || !active || mode === 'static') {
+      setFrame(engine.sample(time.current + 0.5));
       return;
     }
-    const moving = mode === 'thinking';
-    breath.value = withRepeat(withSequence(
-      withTiming(1, { duration: moving ? 820 : 3100, easing: Easing.out(Easing.exp) }),
-      withTiming(0, { duration: moving ? 930 : 3500, easing: Easing.out(Easing.exp) }),
-    ), -1);
-    gaze.value = withRepeat(withSequence(
-      withTiming(1, { duration: 1900, easing: Easing.out(Easing.exp) }),
-      withDelay(700, withTiming(-1, { duration: 2200, easing: Easing.out(Easing.exp) })),
-      withDelay(700, withTiming(0, { duration: 1600, easing: Easing.out(Easing.exp) })),
-    ), -1);
-    blink.value = withRepeat(withSequence(
-      withDelay(moving ? 2300 : 4200, withTiming(0.08, { duration: 75 })),
-      withTiming(1, { duration: 135, easing: Easing.out(Easing.exp) }),
-      withDelay(950, withTiming(1, { duration: 1 })),
-    ), -1);
-    halo.value = withRepeat(withSequence(
-      withTiming(1, { duration: moving ? 1400 : 4700, easing: Easing.out(Easing.exp) }),
-      withTiming(0, { duration: moving ? 1400 : 4700, easing: Easing.out(Easing.exp) }),
-    ), -1);
-    return () => { cancelAnimation(breath); cancelAnimation(gaze); cancelAnimation(blink); cancelAnimation(halo); };
-  }, [blink, breath, gaze, halo, mode, reduceMotion]);
+    // Cap sampling at 30 fps and pause on hidden screens.
+    const timer = setInterval(() => {
+      time.current += 1 / 30;
+      if (!reaction && mode === 'idle' && Math.floor(time.current * 30) % 240 === 0) {
+        const expression = Math.floor(time.current / 8) % 2 ? 'heureux' : 'neutre';
+        engine.setExpression(EXPRESSION_BY_ID.get(expression) ?? null, time.current);
+      }
+      setFrame(engine.sample(time.current));
+    }, 1000 / 30);
+    return () => clearInterval(timer);
+  }, [active, engine, mode, reaction, reduceMotion]);
 
-  const bodyStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scaleX: interpolate(breath.value, [0, 1], [0.98, mode === 'thinking' ? 1.055 : 1.022]) },
-      { scaleY: interpolate(breath.value, [0, 1], [1.02, mode === 'thinking' ? 0.952 : 0.985]) },
-      { rotate: `${interpolate(breath.value, [0, 1], [-2.2, 2.2])}deg` },
-    ],
-  }));
-  const gazeStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(gaze.value, [-1, 1], [-3.6, 3.6]) },
-      { translateY: interpolate(gaze.value, [-1, 1], [1.2, -1.2]) },
-      { scaleY: blink.value },
-    ],
-  }));
-  const haloStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(halo.value, [0, 1], [0.38, mode === 'thinking' ? 0.86 : 0.58]),
-    transform: [{ scale: interpolate(halo.value, [0, 1], [0.96, 1.07]) }],
-  }));
-
-  return <View accessibilityLabel={mode === 'thinking' ? 'Sparky is thinking' : mode === 'replying' ? 'Sparky is responding' : mode === 'happy' ? 'Sparky answered' : 'Sparky is here'} accessibilityRole="image" style={{ height: size, width: size }}>
-    <Animated.View style={[styles.layer, haloStyle]}>
-      <Svg height="100%" viewBox="0 0 120 120" width="100%">
-        <Defs>
-          <RadialGradient cx="50%" cy="50%" id="halo" r="50%"><Stop offset="0" stopColor="#38BDF8" stopOpacity="0.42" /><Stop offset="0.65" stopColor="#63F09A" stopOpacity="0.13" /><Stop offset="1" stopColor="#38BDF8" stopOpacity="0" /></RadialGradient>
-        </Defs>
-        <Circle cx="60" cy="60" fill="url(#halo)" r="58" />
-        <Path d="M 17 59 A 43 43 0 0 1 51 18" fill="none" stroke="#63F09A" strokeLinecap="round" strokeOpacity="0.7" strokeWidth="2" />
-        <Path d="M 70 102 A 43 43 0 0 0 104 63" fill="none" stroke="#38BDF8" strokeLinecap="round" strokeOpacity="0.72" strokeWidth="2" />
-      </Svg>
-    </Animated.View>
-    <Animated.View style={[styles.layer, bodyStyle]}>
-      <Svg height="100%" viewBox="0 0 120 120" width="100%">
-        <Defs>
-          <LinearGradient id="body" x1="0" x2="1" y1="0" y2="1"><Stop offset="0" stopColor="#2B8C9F" /><Stop offset="0.55" stopColor="#14536C" /><Stop offset="1" stopColor="#102B43" /></LinearGradient>
-          <RadialGradient cx="36%" cy="22%" id="glow" r="70%"><Stop offset="0" stopColor="#ACF7D6" stopOpacity="0.35" /><Stop offset="1" stopColor="#ACF7D6" stopOpacity="0" /></RadialGradient>
-        </Defs>
-        <Circle cx="60" cy="60" fill="url(#body)" r="39" stroke="#63F09A" strokeOpacity="0.46" strokeWidth="1.4" />
-        <Circle cx="60" cy="60" fill="url(#glow)" r="38" />
-        <Path d="M 30 47 C 36 34 47 26 62 24" fill="none" stroke="#D5FFF0" strokeLinecap="round" strokeOpacity="0.24" strokeWidth="2" />
-      </Svg>
-    </Animated.View>
-    <Animated.View style={[styles.layer, gazeStyle]}>
-      {mode === 'happy' ? (
-        <Svg height="100%" viewBox="0 0 120 120" width="100%">
-          {/* Happy smiling eyes ^ ^ */}
-          <Path d="M 42 61 C 44 51 52 51 54 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
-          <Path d="M 66 61 C 68 51 76 51 78 61" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="3" />
-          {/* Subtle blush */}
-          <Circle cx="37" cy="65" fill="#63F09A" opacity={0.25} r="4.5" />
-          <Circle cx="83" cy="65" fill="#63F09A" opacity={0.25} r="4.5" />
-          {/* Gentle happy smile */}
-          <Path d="M 56 69 Q 60 74 64 69" fill="none" stroke="#123B50" strokeLinecap="round" strokeWidth="2.2" />
-        </Svg>
-      ) : (
-        <Svg height="100%" viewBox="0 0 120 120" width="100%">
-          <Ellipse cx="48" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
-          <Ellipse cx="72" cy="58" fill="#F4FFFC" rx="6.5" ry="9" />
-          <Circle cx="50" cy="59" fill="#123B50" r="2.2" />
-          <Circle cx="74" cy="59" fill="#123B50" r="2.2" />
-        </Svg>
-      )}
-    </Animated.View>
+  const mouth = mouthShape(face.mouth, time.current, !reduceMotion && active);
+  const mouthTransform = mouthPose(frame.eyes);
+  const artwork = <View accessible={!interactive} accessibilityElementsHidden={interactive} accessibilityLabel={statusLabel} accessibilityRole="image" importantForAccessibility={interactive ? 'no-hide-descendants' : 'auto'} style={{ height: size, width: size }}>
+    <Svg height={size} width={size} viewBox={`${-DEMI_VIEWBOX} ${-DEMI_VIEWBOX} ${DEMI_VIEWBOX * 2} ${DEMI_VIEWBOX * 2}`}>
+      <Defs><Mask id={mask} maskUnits="userSpaceOnUse" x={-DEMI_VIEWBOX} y={-DEMI_VIEWBOX} width={DEMI_VIEWBOX * 2} height={DEMI_VIEWBOX * 2}>
+        <Path d={frame.bodyPath} fill="#FFFFFF" />
+        {frame.eyes.map((eye, index) => <Path d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000000" key={index} />)}
+        <Path d={mouth.d} transform={mouthTransform} fill={mouth.fill ? '#000000' : 'none'} stroke="#000000" strokeWidth={mouth.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+        {frame.notch ? <Circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} fill="#000000" /> : null}
+      </Mask>
+      {auroraTint ? <>
+        <LinearGradient id={mask + '-hue'} gradientUnits="userSpaceOnUse" x1={-DEMI_VIEWBOX} y1={0} x2={DEMI_VIEWBOX} y2={0}>{AURORA_COLORS.map((color, i) => <Stop key={i} offset={i / 2} stopColor={color} />)}</LinearGradient>
+        <LinearGradient id={mask + '-curtain'} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={400} y2={0}>{AURORA_COLORS.map((color, i) => <Stop key={i} offset={i / 2} stopColor={color} />)}</LinearGradient>
+      </> : null}
+      </Defs>
+      {frame.arcs.map((arc) => <Path key={'back-' + arc.id} d={arc.back} stroke={ink} opacity={arc.opacity * 0.7} strokeWidth={arc.width} fill="none" strokeLinecap="round" />)}
+      <G opacity={frame.bodyAlpha}>
+        <Path d={frame.bodyPath} fill={colors.background} /><Path d={frame.bodyPath} fill={ink} mask={`url(#${mask})`} />
+        {auroraTint ? <G mask={`url(#${mask})`} opacity={themeMode === 'dark' ? 0.085 : 0.075} pointerEvents="none">
+          <Path d={frame.bodyPath} fill={`url(#${mask}-hue)`} opacity={0.45} />
+          <G transform={`translate(${-DEMI_VIEWBOX} -100) scale(${DEMI_VIEWBOX * 2 / 400})`}>
+            <Path d={auroraRibbon(auroraTime, 0)} fill={`url(#${mask}-curtain)`} opacity={0.6} />
+            <Path d={auroraRibbon(auroraTime, 1.5)} fill={`url(#${mask}-curtain)`} opacity={0.35} transform="translate(0 65)" />
+          </G>
+        </G> : null}
+      </G>
+      {frame.arcs.map((arc) => <Path key={'front-' + arc.id} d={arc.front} stroke={ink} opacity={arc.opacity} strokeWidth={arc.width} fill="none" strokeLinecap="round" />)}
+    </Svg>
   </View>;
+  return interactive ? <Pressable accessibilityRole="button" accessibilityLabel={`${statusLabel}${face.reactionLabel ? `, ${face.reactionLabel}` : ''}`} accessibilityHint="Tap to see Sparky wink, smile or look curious" onPress={reactToTap} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>{artwork}</Pressable> : artwork;
 }
-
-const styles = StyleSheet.create({ layer: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 } });

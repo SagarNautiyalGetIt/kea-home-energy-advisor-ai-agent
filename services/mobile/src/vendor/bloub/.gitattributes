@@ -1,0 +1,2 @@
+# Preserve the upstream EOFs while checking other whitespace errors.
+*.ts whitespace=blank-at-eol,space-before-tab,-blank-at-eof

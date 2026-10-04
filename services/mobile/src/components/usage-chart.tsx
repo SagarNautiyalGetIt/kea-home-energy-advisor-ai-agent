@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import Animated, { cancelAnimation, Easing, useAnimatedProps, useReducedMotion, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useAppTheme } from '@/theme';
+import { usageAreaPath, usageBarReadings, usageLinePath } from '@/lib/usage-chart-path';
 
 const HEIGHT = 210;
 const PAD_TOP = 10;
@@ -24,7 +25,7 @@ function xForIndex(index: number, count: number, plotWidth: number, horizontalPa
 }
 
 function pointsFor(
-  values: readonly number[],
+  values: readonly (number | null)[],
   max: number,
   bottomPadding: number,
   width: number,
@@ -36,25 +37,17 @@ function pointsFor(
     const x = values.length <= 1
       ? width / 2
       : leadingInset + xForIndex(index, values.length, width - leadingInset, horizontalPadding);
-    const y = HEIGHT - bottomPadding - (value / max) * plotHeight;
-    return { x, y };
+    const y = HEIGHT - bottomPadding - ((value ?? 0) / max) * plotHeight;
+    return { x, y, available: value !== null };
   });
-}
-
-function pathFor(points: readonly { x: number; y: number }[]) {
-  if (!points.length) return '';
-  return points.slice(1).reduce((path, point, index) => {
-    const previous = points[index] as { x: number; y: number };
-    const controlOffset = (point.x - previous.x) * 0.46;
-    return `${path} C${(previous.x + controlOffset).toFixed(1)} ${previous.y.toFixed(1)} ${(point.x - controlOffset).toFixed(1)} ${point.y.toFixed(1)} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-  }, `M${points[0]!.x.toFixed(1)} ${points[0]!.y.toFixed(1)}`);
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function valueText(value: number, unit: ChartUnit, max: number) {
+function valueText(value: number | null, unit: ChartUnit, max: number) {
+  if (value === null) return 'Unavailable';
   if (unit === 'cost') return `$${value.toFixed(2)}`;
   return `${value.toFixed(max <= 2 ? 1 : 0)} kWh`;
 }
@@ -116,7 +109,7 @@ export function UsageChart({
   onActivate,
   leadingDecorativeAnchor = false,
 }: {
-  values: readonly number[];
+  values: readonly (number | null)[];
   labels: readonly string[];
   axisLabels?: readonly string[];
   secondaryLabels?: readonly string[];
@@ -124,7 +117,7 @@ export function UsageChart({
   tooltipLabels?: readonly string[];
   previousTooltipLabels?: readonly string[];
   timeBands?: readonly TimeBand[];
-  previous?: readonly number[];
+  previous?: readonly (number | null)[];
   unit?: ChartUnit;
   chartType?: ChartType;
   primaryColor?: string;
@@ -160,7 +153,8 @@ export function UsageChart({
   const horizontalPadding = isBar ? (values.length >= 20 ? 8 : 32) : 0;
   const isCost = unit === 'cost';
   const minimumCeiling = isCost ? 0.1 : 1;
-  const max = Math.max(requestedMax ?? Math.max(...values, ...(previous ?? []), minimumCeiling) * 1.03, minimumCeiling);
+  const readings = [...values, ...(previous ?? [])].filter((value): value is number => value !== null);
+  const max = Math.max(requestedMax ?? Math.max(...readings, minimumCeiling) * 1.03, minimumCeiling);
 
   const timeBandRows = timeBands?.length ? Math.max(...timeBands.map((band) => band.row ?? 0)) + 1 : 0;
   const extraAxisRows = (secondaryLabels ? 1 : 0) + (tertiaryLabels ? 1 : 0);
@@ -176,19 +170,17 @@ export function UsageChart({
     [bottomPadding, horizontalPadding, leadingDataInset, max, plotWidth, previous]
   );
   const linePoints = useMemo(
-    () => hasDecorativeLeadingAnchor && points[0] ? [{ x: 0, y: points[0].y }, ...points] : points,
+    () => hasDecorativeLeadingAnchor && points[0]?.available ? [{ x: 0, y: points[0].y, available: true }, ...points] : points,
     [hasDecorativeLeadingAnchor, points]
   );
   const compareLinePoints = useMemo(
-    () => hasDecorativeLeadingAnchor && comparePoints[0] ? [{ x: 0, y: comparePoints[0].y }, ...comparePoints] : comparePoints,
+    () => hasDecorativeLeadingAnchor && comparePoints[0]?.available ? [{ x: 0, y: comparePoints[0].y, available: true }, ...comparePoints] : comparePoints,
     [comparePoints, hasDecorativeLeadingAnchor]
   );
-  const line = useMemo(() => pathFor(linePoints), [linePoints]);
-  const compareLine = useMemo(() => pathFor(compareLinePoints), [compareLinePoints]);
+  const line = useMemo(() => usageLinePath(linePoints), [linePoints]);
+  const compareLine = useMemo(() => usageLinePath(compareLinePoints), [compareLinePoints]);
   const baselineY = plotBottom;
-  const area = line && points.length > 1
-    ? `${line} L${points.at(-1)!.x.toFixed(1)} ${baselineY.toFixed(1)} L${linePoints[0]!.x.toFixed(1)} ${baselineY.toFixed(1)} Z`
-    : '';
+  const area = usageAreaPath(linePoints, baselineY);
   const hasCompare = comparePoints.length === values.length && comparePoints.length > 0;
   const slotWidth = points.length > 1 ? points[1]!.x - points[0]!.x : plotWidth;
   const singleBarWidth = Math.max(8, Math.min(30, slotWidth * 0.56));
@@ -296,49 +288,19 @@ export function UsageChart({
         {!isBar && area ? <AnimatedPath animatedProps={areaAnimatedProps} d={area} fill="url(#usageAreaShade)" /> : null}
 
         {isBar ? (
-          points.map((point, index) => {
-            const mainFill = primaryColor;
-            if (hasCompare) {
-              const comparePoint = comparePoints[index];
-              return (
-                <G key={`bar-${index}`}>
-                  {comparePoint ? (
-                    <Bar
-                      baseline={plotBottom}
-                      fill={comparisonColor}
-                      fillOpacity={0.85}
-                      fullHeight={Math.max(0, plotBottom - comparePoint.y)}
-                      progress={barProgress}
-                      radius={Math.min(5, groupBarWidth / 2)}
-                      width={groupBarWidth}
-                      x={point.x - groupBarWidth - barGap / 2}
-                    />
-                  ) : null}
-                  <Bar
-                    baseline={plotBottom}
-                    fill={mainFill}
-                    fullHeight={Math.max(0, plotBottom - point.y)}
-                    progress={barProgress}
-                    radius={Math.min(5, groupBarWidth / 2)}
-                    width={groupBarWidth}
-                    x={point.x + barGap / 2}
-                  />
-                </G>
-              );
-            }
-            return (
-              <Bar
-                key={`bar-${index}`}
-                baseline={plotBottom}
-                fill={mainFill}
-                fullHeight={Math.max(0, plotBottom - point.y)}
-                progress={barProgress}
-                radius={Math.min(6, singleBarWidth / 2)}
-                width={singleBarWidth}
-                x={point.x - singleBarWidth / 2}
-              />
-            );
-          })
+          points.map((point, index) => <G key={`bar-${index}`}>
+            {usageBarReadings(point, hasCompare ? comparePoints[index] : undefined).map((reading) => <Bar
+              key={reading.series}
+              baseline={plotBottom}
+              fill={reading.series === 'previous' ? comparisonColor : primaryColor}
+              fillOpacity={reading.series === 'previous' ? 0.85 : 1}
+              fullHeight={Math.max(0, plotBottom - reading.point.y)}
+              progress={barProgress}
+              radius={hasCompare ? Math.min(5, groupBarWidth / 2) : Math.min(6, singleBarWidth / 2)}
+              width={hasCompare ? groupBarWidth : singleBarWidth}
+              x={hasCompare ? reading.series === 'previous' ? point.x - groupBarWidth - barGap / 2 : point.x + barGap / 2 : point.x - singleBarWidth / 2}
+            />)}
+          </G>)
         ) : (
           <>
             {compareLine ? (
@@ -353,7 +315,7 @@ export function UsageChart({
               />
             ) : null}
 
-            {hasCompare && comparePoints.length === 1 ? <Circle cx={comparePoints[0]!.x} cy={comparePoints[0]!.y} fill={comparisonColor} r={4} /> : null}
+            {hasCompare && comparePoints.length === 1 && comparePoints[0]?.available ? <Circle cx={comparePoints[0].x} cy={comparePoints[0].y} fill={comparisonColor} r={4} /> : null}
             {points.length > 1 ? (
               <AnimatedPath
                 animatedProps={lineAnimatedProps}
@@ -367,6 +329,7 @@ export function UsageChart({
             ) : null}
 
             {points.map((point, index) => {
+              if (!point.available) return <Circle key={`gap-${index}`} cx={point.x} cy={plotBottom} fill="none" r={2.5} stroke={colors.textMuted} strokeDasharray="2 2" />;
               const isSelected = visibleActiveIndex === index;
               return (
                 <G key={`point-${index}`}>
@@ -400,7 +363,7 @@ export function UsageChart({
           const metric = valueText(activeValue, unit, max);
           const previousMetric = activePreviousValue !== undefined ? valueText(activePreviousValue, unit, max) : undefined;
           // Compact chip, always floating above the dot (never on it), centered on it.
-          const tooltipWidth = activePreviousValue !== undefined ? 120 : 100;
+          const tooltipWidth = Math.min(plotWidth - 8, activePreviousValue !== undefined ? 198 : 180);
           const tooltipHeight = activePreviousValue !== undefined ? 60 : 44;
           const tooltipX = clamp(
             activePoint.x - tooltipWidth / 2,
@@ -411,7 +374,7 @@ export function UsageChart({
 
           return (
             <G pointerEvents="none">
-              {!isBar ? (
+              {!isBar && activePoint.available ? (
                 <Line
                   stroke={primaryColor}
                   strokeDasharray="4 5"
@@ -423,7 +386,7 @@ export function UsageChart({
                   y2={primaryY - 18}
                 />
               ) : null}
-              {!isBar && activeComparePoint ? (
+              {!isBar && activeComparePoint?.available ? (
                 <Circle
                   cx={activeComparePoint.x}
                   cy={activeComparePoint.y}
@@ -434,10 +397,10 @@ export function UsageChart({
                 />
               ) : null}
               <Rect
-                fill="#2C2C2E"
+                fill={colors.surface}
                 height={tooltipHeight}
                 rx={12}
-                stroke="#456476"
+                stroke={colors.border}
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
                 width={tooltipWidth}
@@ -446,14 +409,14 @@ export function UsageChart({
               />
               <Path
                 d={`M${activePoint.x - 7} ${tooltipY + tooltipHeight - 1} L${activePoint.x} ${tooltipY + tooltipHeight + 9} L${activePoint.x + 7} ${tooltipY + tooltipHeight - 1} Z`}
-                fill="#2C2C2E"
-                stroke="#456476"
+                fill={colors.surface}
+                stroke={colors.border}
                 strokeOpacity={0.9}
                 strokeWidth={1.2}
               />
               <SvgText
-                fill="#C7D0D9"
-                fontSize={10}
+                fill={colors.textMuted}
+                fontSize={9}
                 fontWeight="800"
                 letterSpacing={0.7}
                 textAnchor="middle"
@@ -463,7 +426,7 @@ export function UsageChart({
                 {activeLabel.toUpperCase()}
               </SvgText>
               <SvgText
-                fill="#F2F2F7"
+                fill={colors.text}
                 fontSize={previousMetric ? 15 : 16}
                 fontWeight="900"
                 textAnchor="middle"
@@ -474,7 +437,7 @@ export function UsageChart({
               </SvgText>
               {previousMetric && activePreviousLabel ? (
                 <SvgText
-                  fill="#C7D0D9"
+                  fill={colors.textMuted}
                   fontSize={10}
                   fontWeight="700"
                   textAnchor="middle"
