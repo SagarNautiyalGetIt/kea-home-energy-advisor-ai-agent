@@ -3,6 +3,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { useState, type ReactNode } from 'react';
+import { router } from 'expo-router';
 import { GlassSegmented } from '@/components/glass-segment';
 import { palette, useAppTheme } from '@/theme';
 
@@ -69,11 +70,14 @@ export function FormField({ label, value, onChangeText, placeholder, error, secu
   );
 }
 
-export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode; hideMenuButton?: boolean }) {
+export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   const { colors } = useAppTheme();
 
   return (
     <View style={styles.header}>
+      <Pressable accessibilityLabel="Go to Home" accessibilityRole="button" hitSlop={8} onPress={() => router.replace('/dashboard')} style={styles.homeButton}>
+        <Ionicons color={colors.text} name="home-outline" size={24} />
+      </Pressable>
       <View style={styles.headerCopy}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
@@ -126,7 +130,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, alignItems: 'center' },
   title: { fontSize: 27, lineHeight: 34, fontWeight: '700', letterSpacing: -0.8, textAlign: 'center' },
   subtitle: { marginTop: 4, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  headerAction: { width: 42, alignItems: 'flex-end' },
+  headerAction: { minWidth: 42, alignItems: 'flex-end' },
   iconButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 15 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
   sectionTitle: { fontSize: 19, fontWeight: '700', letterSpacing: -0.3 },
