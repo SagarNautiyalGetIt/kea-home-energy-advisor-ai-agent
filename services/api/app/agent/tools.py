@@ -535,6 +535,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
 ]
 
+TOOL_SCHEMAS.extend([
+    {"name": "get_power_clash_progress", "description":
+     "Read this household's planning and device-verified XP, action ideas and evidenced "
+     "tariff-shift savings. Planning XP never proves savings; points have no cash value.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_scheduled_outages", "description":
+     "Read the linked distributor's scheduled outage snapshot, revisions, cancellations "
+     "and freshness. A missing or stale source cannot establish that there are no outages.",
+     "input_schema": {"type": "object", "properties": {}}},
+])
 TOOL_NAMES = frozenset(t["name"] for t in TOOL_SCHEMAS)
 
 
@@ -1928,6 +1938,34 @@ def handoff_to_human(ctx: ToolContext, reason: str) -> dict[str, Any]:
 # Dispatch
 # ---------------------------------------------------------------------------
 
+async def get_power_clash_progress(ctx: ToolContext) -> dict:
+    from app.experience import experience_store
+
+    progress = await experience_store().progress(ctx.customer_id)
+    return {"available": True, "source": "Household action receipt ledger",
+            "disclosure": "Planning is not verified performance. XP is not cash. "
+            "Tariff-shift estimates are not a causal measurement of lower total bills.",
+            **progress.model_dump(mode="json")}
+
+
+async def get_scheduled_outages(ctx: ToolContext) -> dict:
+    from app.experience import experience_store
+
+    view = await experience_store().outage(ctx.customer_id)
+    return {
+        "available": view.status == "current",
+        "reason": None if view.status == "current" else (
+            "No linked distributor schedule." if view.status == "not_linked"
+            else "The distributor snapshot is stale; check the source."
+        ),
+        "source": "Linked distributor snapshot",
+        "disclosure": (
+            "Confirm changes with the distributor; unexpected outages remain possible."
+        ),
+        **view.model_dump(mode="json"),
+    }
+
+
 _SYNC = {
     "get_account_summary": get_account_summary,
     "get_daily_usage": get_daily_usage,
@@ -1941,6 +1979,8 @@ _SYNC = {
     "get_energy_breakdown": get_energy_breakdown,
 }
 _ASYNC = {
+    "get_power_clash_progress": get_power_clash_progress,
+    "get_scheduled_outages": get_scheduled_outages,
     "get_hourly_profile": get_hourly_profile,
     # The write tools. Async because they touch a store, and grouped here rather than
     # marked out further because `app/account/` is where the read/write boundary is

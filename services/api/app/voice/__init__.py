@@ -32,6 +32,7 @@ from app.config import settings
 from app.voice.stt import SpeechToText
 from app.voice.stt_gemini import GeminiSpeechToText
 from app.voice.tts import TextToSpeech
+from app.voice.tts_gemini import GeminiTextToSpeech
 
 #: What `get_stt()` returns. A Protocol would be more formal; the two classes already
 #: agree on `available`, `describe()` and `transcribe()`, and `test_voice.py` asserts it.
@@ -61,17 +62,14 @@ def get_stt() -> Transcriber:
 
 
 @lru_cache(maxsize=1)
-def get_tts() -> TextToSpeech:
-    """Cached because it holds the synthesised-acknowledgement cache.
-
-    A fresh TextToSpeech per connection would re-synthesise every acknowledgement on
-    the first turn of every call, which is precisely the latency the cache exists to
-    remove.
-
-    Still Piper, deliberately. It is 61 MB, answers in tens of milliseconds, and is the
-    half of the loop that was never slow — moving it to a hosted service would add a
-    round trip to buy nothing.
-    """
+def get_tts() -> TextToSpeech | GeminiTextToSpeech:
+    """Explicit deployment choice. Gemini performs no paid synthesis at startup."""
+    if settings.tts_engine == "gemini":
+        return GeminiTextToSpeech(
+            api_key=settings.gemini_api_key, model=settings.tts_model, voice=settings.tts_voice
+        )
+    if settings.tts_engine != "piper":
+        raise RuntimeError("Unknown KEA_TTS_ENGINE; choose gemini or piper.")
     return TextToSpeech(binary=settings.piper_bin, voice=settings.piper_voice)
 
 

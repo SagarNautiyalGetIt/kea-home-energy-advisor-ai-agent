@@ -19,6 +19,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+aws = ["boto3>=1.43"]
+auth = ["PyJWT[crypto]>=2.10"]
 # Only needed when KEA_PROVIDER includes `bedrock`. The provider imports it lazily,
 # so a local-only checkout runs the whole test suite without it — and `/health`
 # reports model_ready=false rather than raising if it is genuinely missing in a
@@ -38,6 +40,8 @@ homelink = [
     "zeroconf>=0.132",
 ]
 dev = [
+    "boto3>=1.43",
+    "PyJWT[crypto]>=2.10",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.7",

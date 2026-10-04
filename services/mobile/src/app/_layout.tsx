@@ -4,7 +4,9 @@ import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppIntro } from '@/components/app-intro';
+import { EdgeBackBoundary } from '@/components/edge-back-boundary';
 import { useNotificationResponseRouting } from '@/lib/notifications';
+import { ExperiencePreferences } from '@/lib/experience-preferences';
 import { AuthProvider } from '@/providers/auth';
 import { ToastProvider } from '@/providers/toast';
 import { AppThemeProvider, useAppTheme } from '@/theme';
@@ -15,7 +17,7 @@ function Navigation() {
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+      <EdgeBackBoundary><Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false }} /></EdgeBackBoundary>
     </ThemeProvider>
   );
 }
@@ -25,7 +27,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppThemeProvider>
-        <AuthProvider>
+        <ExperiencePreferences><AuthProvider>
           <ToastProvider>
             <View style={styles.appRoot}>
               <View style={styles.navigationLayer}>
@@ -34,7 +36,7 @@ export default function RootLayout() {
             </View>
             {introVisible ? <AppIntro onDone={() => setIntroVisible(false)} /> : null}
           </ToastProvider>
-        </AuthProvider>
+        </AuthProvider></ExperiencePreferences>
       </AppThemeProvider>
     </GestureHandlerRootView>
   );

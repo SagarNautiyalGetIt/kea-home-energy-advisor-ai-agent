@@ -8,11 +8,19 @@ from app.analytics import plans
 from app.analytics.account import AccountContext
 
 
+class MobilePricingRate(BaseModel):
+    label: str
+    value: str
+    unit: str = "/kWh"
+    window: str | None = None
+
+
 class MobilePricingStyle(BaseModel):
     id: str
     name: str
     eyebrow: str
     rate: str
+    rates: list[MobilePricingRate]
     daily: str
     best_for: str
     highlights: list[str]
@@ -89,6 +97,34 @@ def _rate(plan: plans.PlanShape) -> str:
     return f"${plan.unit_rate_nzd:.3f}/kWh"
 
 
+def _rates(plan: plans.PlanShape) -> list[MobilePricingRate]:
+    if plan.off_peak_rate_nzd is not None and plan.night_rate_nzd is not None:
+        return [
+            MobilePricingRate(
+                label="Peak", value=f"${plan.unit_rate_nzd:.3f}", window="7–11 AM · 5–9 PM"
+            ),
+            MobilePricingRate(
+                label="Off-peak",
+                value=f"${plan.off_peak_rate_nzd:.3f}",
+                window="11 AM–5 PM · 9–11 PM",
+            ),
+            MobilePricingRate(
+                label="Night", value=f"${plan.night_rate_nzd:.3f}", window="11 PM–7 AM"
+            ),
+        ]
+    rates = [MobilePricingRate(label="Usage rate", value=f"${plan.unit_rate_nzd:.3f}")]
+    if plan.free_weekend_window is not None:
+        start, end = plan.free_weekend_window
+        rates.append(
+            MobilePricingRate(
+                label="Free weekend power",
+                value="$0.000",
+                window=f"Sat & Sun · {start:02d}:00–{end:02d}:00",
+            )
+        )
+    return rates
+
+
 def mobile_plans(account: AccountContext | None) -> MobilePlansView:
     styles = [
         MobilePricingStyle(
@@ -100,6 +136,7 @@ def mobile_plans(account: AccountContext | None) -> MobilePlansView:
                 "free_weekends": "16 free hours weekly",
             }[plan.code],
             rate=_rate(plan),
+            rates=_rates(plan),
             daily=f"${plan.daily_fixed_nzd:.2f}/day",
             best_for=plan.suits,
             highlights={

@@ -9,6 +9,7 @@ import { SparkyPresence } from './sparky-presence';
 type Props = {
   includeHome?: boolean;
   listMode?: boolean;
+  onNavigate?: () => void;
   billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
 };
 
@@ -24,21 +25,21 @@ function BillingNavIcon({ color, detailColor, size }: { color: string; detailCol
   );
 }
 
-export function BottomNavigation({ includeHome = true, listMode = false, billPrediction }: Props) {
+export function BottomNavigation({ includeHome = true, listMode = false, billPrediction, onNavigate }: Props) {
   const { colors, mode } = useAppTheme();
   const selectedColor = mode === 'dark' ? '#FFFFFF' : colors.text;
   const idleColor = mode === 'dark' ? 'rgba(255,255,255,0.52)' : colors.textMuted;
   const pathname = usePathname();
   const allItems: readonly { label: string; detail: string; path: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; tint: string }[] = [
     { label: 'Home', detail: 'Return to your energy overview', path: '/dashboard', icon: 'home', onPress: () => router.push('/dashboard'), tint: colors.text },
-    { label: 'Usage', detail: 'Track your energy usage', path: '/usage', icon: 'bar-chart-outline', onPress: () => router.push('/usage'), tint: colors.text },
-    { label: 'Sparky', detail: 'Ask Sparky AI', path: '/assistant', icon: 'sparkles', onPress: () => router.push('/assistant'), tint: colors.text },
-    { label: 'Billing', detail: 'View your billing information', path: '/billing', icon: 'receipt', onPress: () => router.push('/billing'), tint: colors.text },
-    { label: 'More', detail: 'More options', path: '/more', icon: 'grid', onPress: () => router.push('/more'), tint: colors.text },
+    { label: 'Usage', detail: 'Track your energy usage', path: '/usage', icon: 'bar-chart-outline', onPress: () => router.push('/usage'), tint: colors.icons.energy },
+    { label: 'Sparky AI', detail: 'Ask about your energy', path: '/assistant', icon: 'sparkles', onPress: () => router.push('/assistant'), tint: colors.text },
+    { label: 'Billing', detail: 'View your billing information', path: '/billing', icon: 'receipt', onPress: () => router.push('/billing'), tint: colors.icons.money },
+    { label: 'More', detail: 'More options', path: '/more', icon: 'grid', onPress: () => router.push('/more'), tint: colors.icons.utility },
   ];
   const navigationItems = includeHome ? allItems : allItems.filter((item) => item.label !== 'Home');
   const items = listMode && billPrediction
-    ? [{ label: 'Bill prediction', detail: billPrediction.detail, path: '', icon: 'alert-circle-outline' as const, onPress: billPrediction.onPress, tint: colors.text }, ...navigationItems]
+    ? [{ label: 'Bill prediction', detail: billPrediction.detail, path: '', icon: 'alert-circle-outline' as const, onPress: billPrediction.onPress, tint: colors.text }, ...navigationItems.filter(item => item.label !== 'More'), { label: 'Power Clash', detail: 'Explore the suburb league · demo', path: '/clash', icon: 'trophy-outline' as const, onPress: () => router.push('/clash'), tint: colors.icons.warm }, ...navigationItems.filter(item => item.label === 'More')]
     : navigationItems;
 
   return <View style={[styles.container, listMode && styles.listContainer, { borderColor: colors.border, backgroundColor: listMode ? 'transparent' : colors.surface, paddingBottom: 0 }]}>
@@ -47,8 +48,8 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
     {items.map((item) => {
       const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
       const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
-      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={item.onPress} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
-      {item.label === 'Sparky' ? <SparkyPresence mode="static" size={28} /> : item.label === 'Billing' ? <BillingNavIcon color={pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={warning ? palette.red : normal ? palette.green : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
+      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={() => { onNavigate?.(); item.onPress(); }} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
+      {item.label === 'Sparky AI' || item.label === 'Bill prediction' ? <SparkyPresence size={36} /> : item.label === 'Billing' ? <BillingNavIcon color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
       {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}

@@ -181,7 +181,7 @@ class AlertDispatcher:
                 results.append(ChannelResult(channel, "skipped", detail=reason))
 
         # Quiet hours. Scheduled rather than dropped: the customer asked us not to ring at
-        # 3am, not to never tell them. `scripts/dispatch_scheduled.py` picks these up.
+        # 3am, not to never tell them. `app.jobs.send_scheduled` picks these up.
         opens_at = preferences.next_open(moment)
         for channel in decision.deferred:
             await self._record_delivery(
@@ -219,10 +219,14 @@ class AlertDispatcher:
                     results.append(outcome)
 
         delivered = tuple(r.channel for r in results if r.status == "delivered")
+        queued = any(r.status == "queued" for r in results)
         await self._finish_alert(
             claimed,
-            status="delivered" if delivered else "failed",
-            detail=None if delivered else "no channel delivered",
+            status="delivered" if delivered else "queued" if queued else "failed",
+            detail=(
+                None if delivered else
+                "delivery confirmation pending" if queued else "no channel delivered"
+            ),
         )
 
         email_result = next(
@@ -280,9 +284,11 @@ class AlertDispatcher:
             )
             return ChannelResult(note.channel, "skipped", detail=detail)
 
-        outcome = await gateway.send(note)
+        from dataclasses import replace
+
+        outcome = await gateway.send(replace(note, delivery_key=f"alert-{alert_id}-{note.channel}"))
         segments = render.sms_segments(note.body) if note.channel == "sms" else None
-        status = "delivered" if outcome.delivered else "failed"
+        status = "delivered" if outcome.delivered else "queued" if outcome.accepted else "failed"
         await self._record_delivery(
             alert_id,
             channel=note.channel,
@@ -393,7 +399,7 @@ class AlertDispatcher:
             failure_reason=detail,
             segments=segments,
             scheduled_for=scheduled_for,
-            sent_at=now if status in {"delivered", "failed"} else None,
+            sent_at=now if status in {"delivered", "failed", "queued"} else None,
             delivered_at=now if status == "delivered" else None,
         )
         try:

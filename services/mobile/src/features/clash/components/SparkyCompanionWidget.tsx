@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { SparkyPresence } from '@/components/sparky-presence';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '@/theme';
 
@@ -7,7 +7,7 @@ export function SparkyCompanionWidget() {
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={[styles.avatarWrap, { backgroundColor: colors.surfaceRaised }]}>
-        <Image accessibilityLabel="Sparky the Kea" contentFit="cover" source={require('../../../../assets/kea/kea-profile.png')} style={styles.avatar} />
+        <SparkyPresence size={58} auroraTint />
       </View>
       <View style={styles.copy}>
         <Text style={[styles.eyebrow, { color: colors.textMuted }]}>SPARKY AI</Text>

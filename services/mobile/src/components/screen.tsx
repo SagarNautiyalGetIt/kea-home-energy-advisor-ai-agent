@@ -3,7 +3,7 @@ import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/theme';
 
-export function Screen({ children, contentStyle, onScroll, onTouchStart, scroll = true, scrollEventThrottle = 16, scrollRef }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle>; onScroll?: ScrollViewProps['onScroll']; onTouchStart?: (event: GestureResponderEvent) => void; scroll?: boolean; scrollEventThrottle?: number; scrollRef?: RefObject<ScrollView | null> }) {
+export function Screen({ children, contentStyle, onScroll, onTouchStart, scroll = true, scrollEnabled = true, scrollEventThrottle = 16, scrollRef }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle>; onScroll?: ScrollViewProps['onScroll']; onTouchStart?: (event: GestureResponderEvent) => void; scroll?: boolean; scrollEnabled?: boolean; scrollEventThrottle?: number; scrollRef?: RefObject<ScrollView | null> }) {
   const { colors } = useAppTheme();
   const content = <View onTouchStart={onTouchStart} style={[styles.content, contentStyle]}>{children}</View>;
 
@@ -11,7 +11,7 @@ export function Screen({ children, contentStyle, onScroll, onTouchStart, scroll 
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         {scroll ? (
-          <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={scrollEventThrottle} showsVerticalScrollIndicator={false}>
+          <Animated.ScrollView ref={scrollRef} scrollEnabled={scrollEnabled} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={scrollEventThrottle} showsVerticalScrollIndicator={false}>
             {content}
           </Animated.ScrollView>
         ) : content}

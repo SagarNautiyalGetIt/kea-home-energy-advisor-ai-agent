@@ -1,4 +1,5 @@
-import * as Haptics from 'expo-haptics';
+import { tactile } from '@/lib/haptics';
+
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
@@ -31,16 +32,16 @@ export default function RegisterScreen() {
     };
     setErrors(next);
     if (Object.values(next).some(Boolean)) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      tactile('error');
       return;
     }
     setBusy(true);
     try {
       await signUp(name, email, password);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      tactile('success');
       router.replace('/dashboard');
     } catch (error: unknown) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      tactile('error');
       showToast(error instanceof Error ? error.message : 'Account could not be created.', 'warning');
     } finally {
       setBusy(false);

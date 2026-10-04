@@ -1,9 +1,9 @@
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine, Polygon } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
 import { ModalSheet } from '@/components/modal-sheet';
@@ -11,6 +11,7 @@ import { Screen } from '@/components/screen';
 import { GlassSegmented } from '@/components/glass-segment';
 import { PageHeader, PrimaryButton } from '@/components/ui';
 import { UsageChart } from '@/components/usage-chart';
+import { usageChartValues } from '@/lib/usage-chart-path';
 import { UsageChartLoader } from '@/components/usage-chart-loader';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
 import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
@@ -123,10 +124,6 @@ function addDays(date: Date, days: number) {
   return shifted;
 }
 
-function startOfWeek(date: Date) {
-  return addDays(date, -((date.getDay() + 6) % 7));
-}
-
 function shortDate(date: Date) {
   return `${date.getDate()} ${monthLabels[date.getMonth()]}`;
 }
@@ -211,7 +208,7 @@ export default function UsageScreen() {
   const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const { showToast } = useToast();
-  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
   const [period, setPeriod] = useState<Period>('weekly');
   const [unit, setUnit] = useState<Unit>('cost');
   const [chartType, setChartType] = useState<ChartType>('line');
@@ -237,11 +234,6 @@ export default function UsageScreen() {
   const [graphOpacity] = useState(() => new Animated.Value(1));
   const [graphScale] = useState(() => new Animated.Value(1));
   const [swipeInProgress, setSwipeInProgress] = useState(false);
-  const [listInForeground, setListInForeground] = useState(false);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const chartBlurOpacity = scrollY.interpolate({ inputRange: [0, 70, 150], outputRange: [0, 0.62, 1], extrapolate: 'clamp' });
-  const breakdownListPeekHeight = 62 * 4.6;
-  const breakdownListStart = Math.max(0, screenHeight - breakdownListPeekHeight);
   const hexHeight = Math.min(30, Math.max(24, Math.floor((screenWidth - 52) / (8.5 * Math.sqrt(3) / 2))));
   const hexWidth = Math.round(hexHeight * Math.sqrt(3) / 2);
   const octagonWidth = hexWidth * 8.5;
@@ -278,7 +270,6 @@ export default function UsageScreen() {
     void (next === null ? AsyncStorage.removeItem(CHART_PALETTE_KEY) : AsyncStorage.setItem(CHART_PALETTE_KEY, next))
       .catch(() => showToast('Graph colour could not be saved.', 'warning'));
   };
-
   const comparison = comparisons[period];
   const compare = comparison !== null;
   const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
@@ -286,22 +277,20 @@ export default function UsageScreen() {
   const displayUnit: Unit = canShowCost ? unit : 'kwh';
   const chartValues = useMemo(() => {
     if (!data) return [];
-    const values = displayUnit === 'cost'
-      ? data.points.every((point) => point.costNzd !== null) ? data.points.map((point) => point.costNzd as number) : []
-      : data.points.map((point) => point.kwh);
-    return values;
+    const values = data.points.map(point => displayUnit === 'cost' ? point.costNzd : point.kwh);
+    const previous = data.comparisonPoints?.map(point => displayUnit === 'cost' ? point.costNzd : point.kwh);
+    return usageChartValues(values, previous);
   }, [data, displayUnit]);
   const chartPrevious = useMemo(() => {
     if (!data?.comparisonPoints) return undefined;
     const values = displayUnit === 'cost'
-      ? data.comparisonPoints.every((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd as number) : []
+      ? data.comparisonPoints.some((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd) : []
       : data.comparisonPoints.map((point) => point.kwh);
     return values;
   }, [data, displayUnit]);
   const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
   const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
-  // The official API publishes daily meter totals, so the X axis must follow the
-  // actual returned dates. Hour labels would imply readings the backend does not send.
+  // Day points come only from the dated hourly endpoint; week/month stay dated totals.
   const chartAxisLabels = chartLabels;
   const tooltipLabels = data?.points.map((point) => point.tooltipLabel);
   const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
@@ -326,7 +315,7 @@ export default function UsageScreen() {
   const refresh = () => {
     setReloadToken((token) => token + 1);
     setAnimationRun((run) => run + 1);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   useEffect(() => {
@@ -346,10 +335,8 @@ export default function UsageScreen() {
           const initialSelection = initialDateCustomer.current !== session?.customerId;
           initialDateCustomer.current = session?.customerId ?? null;
           if (initialSelection && !comparison && result.totalKwh === null && result.availableTo) {
-            const latest = parseDate(result.availableTo);
-            const fallbackDate = period === 'weekly'
-              ? toDateValue(addDays(startOfWeek(latest), -1))
-              : result.availableTo;
+            // Choose a populated window even with less than a week of history.
+            const fallbackDate = result.availableTo;
             if (fallbackDate !== date) setDate(fallbackDate);
           }
         }
@@ -392,7 +379,7 @@ export default function UsageScreen() {
         setDate((current) => shiftPeriodDate(period, current, amount));
       }
       setAnimationRun((run) => run + 1);
-      void Haptics.selectionAsync();
+      tactile();
       graphTranslateX.setValue(enterX);
       graphScale.setValue(0.985);
       requestAnimationFrame(() => {
@@ -458,24 +445,24 @@ export default function UsageScreen() {
     setDate(firstPeriod);
     setComparisons((current) => ({ ...current, [period]: { first: firstPeriod, second: secondPeriod } }));
     setCompareOpen(false);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   const clearComparison = () => {
     setComparisons((current) => ({ ...current, [period]: null }));
     setCompareOpen(false);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   return (
-    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)} scroll={false}>
+    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)}>
       <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
       <View
         pointerEvents="box-none"
-        style={[styles.fixedBackdrop, { backgroundColor: colors.background, zIndex: listInForeground ? 1 : 20 }]}
+        style={{ paddingTop: 12, backgroundColor: colors.background }}
       >
         <Animated.View style={styles.chartContainer}>
           <View style={styles.headerControls}>
@@ -547,7 +534,7 @@ export default function UsageScreen() {
             <UsageChartLoader color={chartPalette.primary} />
           ) : loadError ? (
             <View style={styles.usageStatus}><Text accessibilityRole="alert" style={[styles.usageStatusText, { color: colors.text }]}>{loadError}</Text><PrimaryButton label="Retry usage" onPress={refresh} /></View>
-          ) : !data || data.points.length === 0 ? (
+          ) : !data ? (
             <View style={styles.usageStatus}><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>No dated readings are available for this selection. Choose another date.</Text></View>
           ) : (
           <>
@@ -580,7 +567,7 @@ export default function UsageScreen() {
                       hitSlop={8}
                       key={item}
                       onPress={() => {
-                        void Haptics.selectionAsync();
+                        tactile();
                         setChartType(item);
                       }}
                       style={[styles.unitOption, chartType === item && { backgroundColor: colors.primary }]}
@@ -599,7 +586,7 @@ export default function UsageScreen() {
                       hitSlop={8}
                       key={item}
                       onPress={() => {
-                        void Haptics.selectionAsync();
+                        tactile();
                         setUnit(item);
                       }}
                       style={[styles.unitOption, displayUnit === item && { backgroundColor: colors.primary }]}
@@ -616,6 +603,7 @@ export default function UsageScreen() {
           </View>
 
           {/* Interactive Graph Area with Swipe PanResponder */}
+          {chartValues.length > 0 ? (
           <Animated.View
             {...chartPanResponder.panHandlers}
             style={{ opacity: graphOpacity, transform: [{ translateX: graphTranslateX }, { scale: graphScale }] }}
@@ -654,33 +642,13 @@ export default function UsageScreen() {
               ) : null}
             </View>
           </Animated.View>
+          ) : <View style={styles.usageStatus}><Ionicons name="bar-chart-outline" size={30} color={colors.textMuted} style={{ alignSelf: 'center' }} /><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>{period === 'daily' ? displayUnit === 'cost' && data.points.some(point => point.kwh !== null) ? 'Hourly costs are unavailable. Select kWh to view the energy chart.' : 'Hourly meter readings are unavailable for this day. Your available daily total is shown above.' : 'No dated readings are available for this selection.'}</Text></View>}
+          {chartValues.length > 0 ? <Text style={[styles.usageSource, { color: colors.textMuted, textAlign: 'center' }]}>{period === 'daily' ? 'Tap the chart to explore each hour · New Zealand time' : 'Tap the chart to explore each reading'}{chartValues.includes(null) ? ' · gaps mean unavailable readings' : ''}</Text> : null}
           </>
           )}
         </Animated.View>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: chartBlurOpacity }]}>
-          <BlurView intensity={46} pointerEvents="none" style={StyleSheet.absoluteFill} tint={mode} />
-          <View pointerEvents="none" style={[styles.backdropBlurShade, { backgroundColor: mode === 'dark' ? 'rgba(0,0,0,0.48)' : 'rgba(238,238,238,0.48)' }]} />
-        </Animated.View>
       </View>
-
-      <View style={[styles.listViewport, { zIndex: listInForeground ? 30 : 10 }]}>
-        <Animated.ScrollView
-          contentContainerStyle={styles.listScrollContent}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            {
-              listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-                const nextForeground = event.nativeEvent.contentOffset.y > 2;
-                setListInForeground((current) => current === nextForeground ? current : nextForeground);
-              },
-              useNativeDriver: true,
-            },
-          )}
-          scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
-          style={styles.listScrollView}
-        >
-          <View pointerEvents="none" style={{ height: breakdownListStart }} />
+      <View>
           <View style={[styles.breakdownContent, { backgroundColor: colors.background }]}>
             <View style={styles.breakdownList}>
               {energyBreakdown?.categories.length ? (
@@ -731,7 +699,7 @@ export default function UsageScreen() {
                     <View style={styles.breakdownCopy}>
                       <Text style={[styles.breakdownTitle, { color: colors.text }]}>{band.label}</Text>
                       <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>
-                        {band.window ?? 'No time window supplied'}
+                        {band.reason ?? band.window ?? 'Measured total · tariff window not supplied'}
                       </Text>
                     </View>
                     <View style={styles.breakdownValueWrap}>
@@ -746,7 +714,6 @@ export default function UsageScreen() {
             </View>
 
           </View>
-        </Animated.ScrollView>
       </View>
 
       {/* MODALS */}
@@ -921,9 +888,9 @@ const styles = StyleSheet.create({
   usageSource: { fontSize: 12, lineHeight: 17, paddingHorizontal: 8, paddingTop: 10 },
   usageStatus: { paddingVertical: 30, paddingHorizontal: 16, gap: 16 },
   usageStatusText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  screenEnter: { flex: 1 },
+  screenEnter: { width: '100%' },
   screenRoot: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
