@@ -1,12 +1,15 @@
 /* React Three Fiber supplies the scene intrinsics. */
 /* eslint-disable react/no-unknown-property */
 import { Asset } from 'expo-asset';
-import { Component, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { PixelRatio, Platform, Text, View } from 'react-native';
 import { BackSide, Box3, CatmullRomCurve3, Color, DoubleSide, Mesh, MeshBasicMaterial, ShaderMaterial, TubeGeometry, Vector3 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { HomeModelLoader } from '@/lib/home-model-loader';
+import { homeRenderDpr } from '@/lib/home-render-budget';
+import { createHomeModelResource, type HomeModelResult } from '@/lib/home-model-resource';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { Canvas, useLoader, useThree } from './gltf-canvas';
+import { Canvas, useThree } from './gltf-canvas';
 import type { HomeCamera } from '@/lib/home-camera';
 import { conduitPoints, equipmentRegions } from '@/lib/home-equipment';
 import { HOME_MODEL_ASSET } from '@/lib/home-model-asset';
@@ -20,8 +23,13 @@ import { homeAtmosphere } from '@/lib/home-presentation';
 import { HomeSceneMotion, useHomeSceneTick } from './home-scene-motion';
 import { HomeWeatherEffects } from './home-weather-effects';
 
-function House({ pose, holographicMix, nightLight, selected, onReady }: { pose: HomeCamera; holographicMix: number; nightLight: number; selected?: HighlightTarget; onReady?: () => void }) {
-  const loaded = useLoader(GLTFLoader, Asset.fromModule(HOME_MODEL_ASSET).uri, loader => { if (Platform.OS === 'web') loader.setMeshoptDecoder(MeshoptDecoder); });
+const homeModel = createHomeModelResource(async url => {
+  const loader = new HomeModelLoader();
+  if (Platform.OS === 'web') loader.setMeshoptDecoder(MeshoptDecoder);
+  return loader.loadAsync(url);
+});
+
+function House({ loaded, pose, holographicMix, nightLight, selected, onReady }: { loaded: GLTF; pose: HomeCamera; holographicMix: number; nightLight: number; selected?: HighlightTarget; onReady?: () => void }) {
   const { camera, invalidate } = useThree();
   const focus = useMemo(() => ({ focusCenter: { value: new Vector3() }, focusHalf: { value: new Vector3() }, focusX: { value: new Vector3() }, focusY: { value: new Vector3() }, focusZ: { value: new Vector3() }, focusColor: { value: new Color() }, focusStrength: { value: 0 }, homeSelected: { value: 0 }, holoMix: { value: 1 }, nightLight: { value: 0 } }), []);
   useEffect(() => { focus.holoMix.value = Math.max(0, Math.min(1, holographicMix)); focus.nightLight.value = nightLight; invalidate(); }, [holographicMix, nightLight, focus, invalidate]);
@@ -132,20 +140,29 @@ class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode
 
 export function GltfHomeScene({ camera, width, height, holographic: override, holographicMix, weather = null, sunProgress = 0.65, selected, flows = [], reduceMotion = true, onReady }: { camera: HomeCamera; width: number; height: number; holographic?: boolean; holographicMix?: number; weather?: AucklandWeather | null; sunProgress?: number; selected?: HighlightTarget; flows?: HomeFlow[]; reduceMotion?: boolean; onReady?: () => void }) {
   const preferences = useExperience(), active = useActiveAnimation();
+  const [model, setModel] = useState<HomeModelResult<GLTF> | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void Promise.resolve().then(() => homeModel(Asset.fromModule(HOME_MODEL_ASSET).uri)).then(
+      result => { if (mounted) setModel(result); },
+      () => { if (mounted) setModel({ status: 'unavailable' }); },
+    );
+    return () => { mounted = false; };
+  }, []);
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (!active) return; setNow(Date.now()); const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, [active]);
   const atmosphere = useMemo(() => homeAtmosphere(weather, now), [weather, now]);
   const { colors } = useAppTheme();
   const fallback = <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Home model unavailable on this device. Your energy readings are below.</Text></View>;
   return <View accessibilityRole="image" accessibilityLabel={`Interactive smart home model${selected ? `, illustrative ${selected} highlight` : ''}`} style={{ width, height }}>
-    <ModelBoundary fallback={fallback}><Suspense fallback={<View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Opening your home…</Text></View>}>
-      <Canvas frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 42, near: 0.01, far: 20 }} gl={{ alpha: true, antialias: true }} style={{ width, height }}>
+    {model?.status === 'unavailable' ? fallback : !model ? <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Opening your home…</Text></View> : <ModelBoundary fallback={fallback}>
+      <Canvas frameloop="demand" dpr={homeRenderDpr(width, height, PixelRatio.get())} camera={{ fov: 42, near: 0.01, far: 20 }} gl={{ alpha: true, antialias: false }} style={{ width, height }}>
         <HomeSceneMotion animated={active && !reduceMotion}>
           <WorldSky atmosphere={atmosphere} progress={sunProgress} /><HomeWeatherEffects atmosphere={atmosphere} />
-          <House pose={camera} holographicMix={holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0)} nightLight={atmosphere.nightLight} selected={selected} onReady={onReady} />
+          <House loaded={model.model} pose={camera} holographicMix={holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0)} nightLight={atmosphere.nightLight} selected={selected} onReady={onReady} />
           <EnergyPaths flows={flows} />
         </HomeSceneMotion>
       </Canvas>
-    </Suspense></ModelBoundary>
+    </ModelBoundary>}
   </View>;
 }
