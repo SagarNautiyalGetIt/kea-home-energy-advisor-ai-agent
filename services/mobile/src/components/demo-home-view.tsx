@@ -18,6 +18,7 @@ import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
 import { HIGHLIGHT_COLOR, type HighlightTarget } from './visual-highlight';
+import { weatherPalette } from '@/lib/home-weather-world';
 
 type Device = HighlightTarget;
 
@@ -47,8 +48,7 @@ function sceneColors(weather: AucklandWeather | null): [string, string, string, 
   if (!weather) return ['#141A22', '#22313D', '#1A232A', '#111111'];
   if (!weather.isDay) return ['#11151D', '#18273E', '#223242', '#111111'];
   if (weather.sunriseAt && weather.sunsetAt && Math.min(weather.observedAt - weather.sunriseAt, weather.sunsetAt - weather.observedAt) < 60 * 60 * 1000) return ['#2A2430', '#6B5B75', '#465066', '#111111'];
-  if (['rain', 'storm', 'fog'].includes(weather.condition)) return ['#1C2329', '#465561', '#323E46', '#111111'];
-  if (weather.condition === 'cloudy') return ['#202A32', '#587384', '#3E4F58', '#111111'];
+  if (['rain', 'drizzle', 'storm', 'fog', 'snow', 'cloudy'].includes(weather.condition)) { const palette = weatherPalette(true, weather.condition); return [palette.top, palette.horizon, palette.top, '#111111']; }
   return ['#1C374A', '#4EA4CF', '#95D4EE', '#111111'];
 }
 

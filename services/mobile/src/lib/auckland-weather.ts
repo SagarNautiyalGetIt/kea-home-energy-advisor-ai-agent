@@ -61,7 +61,7 @@ export function weatherCodeDetails(code: number): Pick<AucklandWeather, 'conditi
   if ([51, 53, 55, 56, 57].includes(code)) return { condition: 'drizzle', description: 'Drizzle' };
   if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { condition: 'rain', description: 'Rain' };
   if ([71, 73, 75, 77, 85, 86].includes(code)) return { condition: 'snow', description: 'Snow' };
-  if ([95, 96, 99].includes(code)) return { condition: 'storm', description: 'Thunderstorm' };
+  if ([95, 96, 97, 99].includes(code)) return { condition: 'storm', description: 'Thunderstorm' };
   return { condition: 'unknown', description: 'Conditions unavailable' };
 }
 

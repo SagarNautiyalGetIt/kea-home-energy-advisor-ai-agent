@@ -22,6 +22,7 @@ import { useAppTheme } from '@/theme';
 import { homeAtmosphere } from '@/lib/home-presentation';
 import { HomeSceneMotion, useHomeSceneTick } from './home-scene-motion';
 import { HomeWeatherEffects } from './home-weather-effects';
+import { HOME_GROUND_RADIUS, NIGHT_APERTURES, NIGHT_WINDOW_SHADER, weatherPalette } from '@/lib/home-weather-world';
 
 const homeModel = createHomeModelResource(async url => {
   const loader = new HomeModelLoader();
@@ -70,17 +71,17 @@ function House({ loaded, pose, holographicMix, nightLight, selected, onReady }: 
           vec3 hologram=vec3(0.408,0.914,0.969)*mix(0.42,1.25,scan);
           diffuseColor.rgb=mix(diffuseColor.rgb,hologram,holoMix);
           diffuseColor.a*=mix(1.0,0.72*mix(0.42,0.92,scan),holoMix);
-          // Restrained warm interior illustration on dark neutral window pixels.
-          // Thin wall planes and colour gating avoid painting timber and equipment.
-          float windows=region(keaWorld,vec3(-0.52,-0.14,0.361),vec3(0.24,0.2,0.018),vec3(1.,0.,0.),vec3(0.,1.,0.),vec3(0.,0.,1.));
-          windows=max(windows,region(keaWorld,vec3(0.652,-0.15,-0.555),vec3(0.018,0.2,0.17),vec3(1.,0.,0.),vec3(0.,1.,0.),vec3(0.,0.,1.)));
-          float neutral=1.0-smoothstep(0.08,0.2,abs(diffuseColor.r-diffuseColor.g)+abs(diffuseColor.g-diffuseColor.b));
-          float dark=1.0-smoothstep(0.35,0.6,max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b)));
-          diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.0,0.64,0.29),windows*neutral*dark*nightLight*(1.0-holoMix)*0.38);
+          // Insets target glass itself, including the almost-black upper panes.
+          // A luminance gate would reject those panes after linear texture conversion.
+          float windows=0.0;${NIGHT_WINDOW_SHADER}
+          // Frosted warm glass with subtle vertical light falloff; not a claim
+          // that a customer's actual lights are on. Black mullions stay dark.
+          vec3 warm=mix(vec3(0.60,0.28,0.075),vec3(1.0,0.68,0.32),smoothstep(-0.35,-0.06,keaWorld.y));
+          diffuseColor.rgb=mix(diffuseColor.rgb,warm,windows*nightLight*(1.0-holoMix)*0.82);
           float mask=region(keaWorld,focusCenter,focusHalf,focusX,focusY,focusZ);float equipmentMask=0.0;${exclude}
           mask*=1.0-homeSelected*equipmentMask;diffuseColor.rgb=mix(diffuseColor.rgb,focusColor,mask*focusStrength);`);
       };
-      material.customProgramCacheKey = () => 'kea-focus-reveal-windows-v4';
+      material.customProgramCacheKey = () => 'kea-focus-reveal-windows-v6';
       object.material = material;
     });
     return copy;
@@ -97,16 +98,24 @@ function House({ loaded, pose, holographicMix, nightLight, selected, onReady }: 
 }
 
 function WorldSky({ atmosphere, progress }: { atmosphere: ReturnType<typeof homeAtmosphere>; progress: number }) {
-  const material = useMemo(() => new ShaderMaterial({ side: BackSide, depthWrite: false, uniforms: {
-    top: { value: new Color(atmosphere.isDay ? '#355F7C' : '#111823') }, horizon: { value: new Color(atmosphere.isDay ? '#8AA6B2' : '#283D53') }, cloud: { value: atmosphere.cloud }, time: { value: 0 },
-  }, vertexShader: 'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-  fragmentShader: 'varying vec3 direction; uniform vec3 top; uniform vec3 horizon; uniform float cloud,time; void main(){vec3 d=normalize(direction);float h=smoothstep(-0.1,0.7,d.y);vec3 c=mix(horizon,top,h);float w=sin(d.x*18.0+d.z*9.0+time*0.025)*sin(d.z*23.0-d.y*11.0+time*0.02);float mist=smoothstep(0.05,0.65,w)*smoothstep(0.0,0.3,d.y)*(1.0-smoothstep(0.4,0.8,d.y));c=mix(c,vec3(0.75,0.81,0.85),mist*cloud*0.45);gl_FragColor=vec4(c,1.0);}' }), [atmosphere.isDay, atmosphere.cloud]);
+  const palette = weatherPalette(atmosphere.isDay, atmosphere.condition);
+  const material = useMemo(() => new ShaderMaterial({ side: BackSide, depthTest: false, depthWrite: false, uniforms: {
+    top: { value: new Color(palette.top) }, horizon: { value: new Color(palette.horizon) }, mist: { value: new Color(palette.mist) }, cloud: { value: atmosphere.cloud }, time: { value: 0 },
+  }, vertexShader: 'varying vec3 direction;varying vec4 skyClip; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);skyClip=gl_Position;}',
+  // Isometric cameras look down: an astronomical y=0 horizon is outside the
+  // viewport. Keep the stylized sky band above the scene while the cloud pattern
+  // remains world-anchored and moves with orbit, just like the sun/star shell.
+  fragmentShader: 'varying vec3 direction;varying vec4 skyClip; uniform vec3 top,horizon,mist; uniform float cloud,time; void main(){vec3 d=normalize(direction);float screenY=skyClip.y/skyClip.w;float h=smoothstep(-0.25,0.9,screenY);vec3 c=mix(horizon,top,h);float w=sin(d.x*8.0+d.z*4.0+time*0.025)*sin(d.z*11.0-d.y*6.0+time*0.02);float wisps=smoothstep(0.12,0.7,w)*smoothstep(0.05,0.4,screenY);c=mix(c,mist,wisps*cloud*0.32);gl_FragColor=vec4(c,1.0);\n#include <colorspace_fragment>\n}' }), [palette.top, palette.horizon, palette.mist, atmosphere.cloud]);
   useHomeSceneTick(useCallback((seconds: number) => { material.uniforms.time!.value = seconds; }, [material]));
   useEffect(() => () => material.dispose(), [material]);
   const angle = (progress - 0.5) * 1.4;
   return <group><mesh renderOrder={-2} material={material}><sphereGeometry args={[9, 32, 16]} /></mesh>
+    {/* A matte world floor below the supplied pavement, never a reflective sky lower hemisphere. */}
+    <mesh position={[0, -0.46, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-1}>
+      <circleGeometry args={[HOME_GROUND_RADIUS, 64]} /><meshBasicMaterial color={palette.ground} />
+    </mesh>
     <group position={[0.15 + Math.sin(angle) * 0.3, 0.85, -1.65]}>
-      <mesh><sphereGeometry args={[atmosphere.isDay ? 0.24 : 0.18, 24, 16]} /><meshBasicMaterial color={atmosphere.isDay ? '#FFE9A2' : '#DCE9F5'} /></mesh>
+      <mesh><sphereGeometry args={[atmosphere.isDay ? 0.24 : 0.18, 24, 16]} /><meshBasicMaterial color={palette.body} transparent opacity={Math.max(0.22, 1 - atmosphere.cloud * 0.65)} /></mesh>
       <mesh><sphereGeometry args={[atmosphere.isDay ? 0.34 : 0.25, 24, 16]} /><meshBasicMaterial color={atmosphere.isDay ? '#FFE9A2' : '#DCE9F5'} transparent opacity={0.09} depthWrite={false} /></mesh>
     </group>
   </group>;
@@ -134,6 +143,15 @@ function EnergyPaths({ flows }: { flows: HomeFlow[] }) {
   return <group>{paths.map(path => <mesh key={path.flow.id} geometry={path.geometry} material={path.material} renderOrder={3} />)}</group>;
 }
 
+function WindowInteriors({ nightLight, holographicMix }: { nightLight: number; holographicMix: number }) {
+  // Backings fill real empty apertures; existing opaque glazing is lit in House.
+  // Inset behind frame planes so occlusion preserves timber and black mullions.
+  const opacity = nightLight * (1 - holographicMix) * 0.78;
+  return <group>{NIGHT_APERTURES.map((pane, i) => <mesh key={i} position={[...pane.center]} rotation={[0, pane.side ? Math.PI / 2 : 0, 0]} visible={opacity > 0}>
+    <planeGeometry args={[pane.width, pane.height]} /><meshBasicMaterial color="#EFB96E" side={DoubleSide} transparent opacity={opacity} />
+  </mesh>)}</group>;
+}
+
 class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -155,13 +173,15 @@ export function GltfHomeScene({ camera, width, height, holographic: override, ho
   useEffect(() => { if (!active) return; setNow(Date.now()); const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, [active]);
   const atmosphere = useMemo(() => homeAtmosphere(weather, now), [weather, now]);
   const { colors } = useAppTheme();
+  const mix = holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0);
   const fallback = <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Home model unavailable on this device. Your energy readings are below.</Text></View>;
   return <View accessibilityRole="image" accessibilityLabel={`Interactive smart home model${selected ? `, illustrative ${selected} highlight` : ''}`} style={{ width, height }}>
     {model?.status === 'unavailable' ? fallback : !model ? <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Opening your home…</Text></View> : <ModelBoundary fallback={fallback}>
       <Canvas frameloop="demand" dpr={homeRenderDpr(width, height, PixelRatio.get())} camera={{ fov: 42, near: 0.01, far: 20 }} gl={{ alpha: true, antialias: false }} style={{ width, height }}>
         <HomeSceneMotion animated={active && !reduceMotion}>
           <WorldSky atmosphere={atmosphere} progress={sunProgress} /><HomeWeatherEffects atmosphere={atmosphere} />
-          <House loaded={model.model} pose={camera} holographicMix={holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0)} nightLight={atmosphere.nightLight} selected={selected} onReady={onReady} />
+          <House loaded={model.model} pose={camera} holographicMix={mix} nightLight={atmosphere.nightLight} selected={selected} onReady={onReady} />
+          <WindowInteriors nightLight={atmosphere.nightLight} holographicMix={mix} />
           <EnergyPaths flows={flows} />
         </HomeSceneMotion>
       </Canvas>
