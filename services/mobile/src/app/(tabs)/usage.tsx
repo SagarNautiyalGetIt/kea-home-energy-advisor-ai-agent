@@ -199,10 +199,18 @@ function bandPresentation(key: UsageBand['key']) {
 
 function energyCategoryPresentation(key: string) {
   const normalized = key.toLowerCase();
-  if (normalized.includes('heat')) return { icon: 'flame-outline' as const, color: palette.red };
-  if (normalized.includes('always') || normalized.includes('base')) return { icon: 'pulse-outline' as const, color: '#38BDF8' };
-  return { icon: 'flash-outline' as const, color: palette.amber };
+  if (normalized === 'water_heating') return { icon: 'water-outline' as const, color: '#38BDF8' };
+  if (normalized === 'space_heating') return { icon: 'flame-outline' as const, color: palette.red };
+  if (normalized === 'always_on') return { icon: 'time-outline' as const, iconLabel: '24x7', color: '#A16207' };
+  return { icon: 'apps-outline' as const, color: palette.amber };
 }
+
+const energyCategoryDefinitions = [
+  { key: 'water_heating', label: 'Water heater' },
+  { key: 'space_heating', label: 'Other heating appliances' },
+  { key: 'always_on', label: 'Always-running appliances' },
+  { key: 'everything_else', label: 'Other appliances' },
+] as const;
 
 export default function UsageScreen() {
   const { colors, mode } = useAppTheme();
@@ -299,13 +307,13 @@ export default function UsageScreen() {
   const periodTitle = period === 'daily' ? "Selected day's total" : period === 'weekly' ? "Selected week's total" : "Selected month's total";
   useEffect(() => {
     const controller = new AbortController();
-    if (process.env.EXPO_PUBLIC_USE_REAL_DATA === 'false' || !session?.customerId) {
-      void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+    if (process.env.EXPO_PUBLIC_USE_REAL_DATA !== 'true' || !session?.customerId) {
+      void Promise.resolve().then(() => { if (!controller.signal.aborted) setEnergyBreakdown({ available: false, period: '', categories: [] }); });
       return () => controller.abort();
     }
     void loadEnergyBreakdown(session.customerId, controller.signal)
-      .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result.available ? result : null); })
-      .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown(null); });
+      .then((result) => { if (!controller.signal.aborted) setEnergyBreakdown(result); })
+      .catch(() => { if (!controller.signal.aborted) setEnergyBreakdown({ available: false, period: '', categories: [] }); });
     return () => controller.abort();
   }, [session?.customerId, reloadToken]);
   const formatAmount = (kwh: number | null, costNzd: number | null) => displayUnit === 'cost' ? costNzd === null ? '—' : `$${costNzd.toFixed(2)}` : kwh === null ? '—' : `${kwh.toFixed(1)} kWh`;
@@ -455,14 +463,14 @@ export default function UsageScreen() {
   };
 
   return (
-    <Screen contentStyle={[styles.screenRoot, { backgroundColor: colors.background }]} onTouchStart={() => setChartActive(false)}>
+    <Screen hue hueHeight={170} contentStyle={styles.screenRoot} onTouchStart={() => setChartActive(false)}>
       <View style={styles.screenEnter}>
 
 
       {/* Header, controls, and chart */}
       <View
         pointerEvents="box-none"
-        style={{ paddingTop: 12, backgroundColor: colors.background }}
+        style={{ paddingTop: 12, backgroundColor: 'transparent' }}
       >
         <Animated.View style={styles.chartContainer}>
           <View style={styles.headerControls}>
@@ -649,16 +657,16 @@ export default function UsageScreen() {
         </Animated.View>
       </View>
       <View>
-          <View style={[styles.breakdownContent, { backgroundColor: colors.background }]}>
+          <View style={[styles.breakdownContent, { backgroundColor: 'transparent' }]}>
             <View style={styles.breakdownList}>
-              {energyBreakdown?.categories.length ? (
+              {energyBreakdown ? (
                 <Pressable accessibilityRole="button" onPress={() => setEnergyBreakdownOpen(true)} style={styles.breakdownRow}>
                   <View style={styles.breakdownIcon}>
                     <Ionicons color={colors.textMuted} name="pie-chart-outline" size={19} />
                   </View>
                   <View style={styles.breakdownCopy}>
                     <Text style={[styles.breakdownTitle, { color: colors.text }]}>Energy breakdown</Text>
-                    <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{energyBreakdown.period || 'Selected period'}</Text>
+                    <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>Where your energy went</Text>
                   </View>
                   <Ionicons color={colors.textMuted} name="chevron-forward" size={22} />
                 </Pressable>
@@ -720,28 +728,23 @@ export default function UsageScreen() {
       <ModalSheet
         footer={<PrimaryButton label="Done" onPress={() => setEnergyBreakdownOpen(false)} />}
         onClose={() => setEnergyBreakdownOpen(false)}
+        backgroundColor={mode === 'dark' ? '#000000' : colors.surfaceRaised}
+        subtitle={`Where your energy went · ${energyBreakdown?.period || 'Selected period'}`}
         title="Energy breakdown"
         visible={energyBreakdownOpen}
       >
-        <View style={[styles.energyBreakdownHero, { backgroundColor: colors.input, borderColor: colors.border }]}>
-          <View style={styles.energyBreakdownHeroIcon}><Ionicons color={palette.violet} name="pie-chart-outline" size={22} /></View>
-          <View style={styles.energyBreakdownHeroCopy}><Text style={[styles.energyBreakdownHeroTitle, { color: colors.text }]}>Where your energy went</Text><Text style={[styles.energyBreakdownIntro, { color: colors.textMuted }]}>{energyBreakdown?.period || 'Selected period'}</Text></View>
-        </View>
         <View style={styles.energyBreakdownSheet}>
-          {energyBreakdown?.categories.map((category) => {
-            const presentation = energyCategoryPresentation(category.key);
-            const estimated = category.confidence !== 'measured';
-            return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}><Ionicons color={presentation.color} name={presentation.icon} size={20} /></View>
+          {energyCategoryDefinitions.map((definition) => {
+            const category = energyBreakdown?.categories.find((item) => item.key === definition.key);
+            const presentation = energyCategoryPresentation(definition.key);
+            return <View key={definition.key} style={[styles.energyCategoryCard, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
+              <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}>{presentation.iconLabel ? <Text style={[styles.energyCategoryIconLabel, { color: presentation.color }]}>{presentation.iconLabel}</Text> : <Ionicons color={presentation.color} name={presentation.icon} size={20} />}</View>
               <View style={[styles.energyCategoryCopy, styles.energyCategoryCopyCompact]}>
-                <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.label}</Text>
-                <View style={[styles.confidenceBadge, { backgroundColor: estimated ? 'rgba(255, 214, 10, 0.14)' : 'rgba(48, 209, 88, 0.14)' }]}><Text style={[styles.confidenceBadgeText, { color: estimated ? palette.amber : palette.green }]}>{estimated ? 'ESTIMATED' : 'MEASURED'}</Text></View>
-                <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{category.confidence === 'measured' ? category.basis : `Estimated · ${category.basis}`}</Text>
-                {category.caveat ? <Text style={[styles.energyCategoryCaveat, { color: colors.textMuted }]}>{category.caveat}</Text> : null}
+                <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{definition.label}</Text>
               </View>
               <View style={styles.breakdownValueWrap}>
-                <Text style={[styles.breakdownValue, { color: colors.text }]}>{formatAmount(category.kwh, category.costNzd)}</Text>
-                <Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{category.kwh.toFixed(1)} kWh · {Math.round(category.sharePct)}%</Text>
+                <Text style={[styles.breakdownValue, { color: colors.text }]}>{category ? formatAmount(category.kwh, category.costNzd) : 'N/A'}</Text>
+                <Text style={[styles.breakdownShare, { color: colors.textMuted }]}>{category ? `${category.kwh.toFixed(1)} kWh · ${Math.round(category.sharePct)}%` : 'N/A'}</Text>
               </View>
             </View>;
           })}
@@ -750,6 +753,7 @@ export default function UsageScreen() {
       <ModalSheet
         dismissOnBackdropPress={false}
         onClose={() => setPaletteOpen(false)}
+        swipeToClose
         title="Graph colours"
         visible={paletteOpen}
       >
@@ -895,7 +899,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     position: 'relative',
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
   ambientGlowContainer: {
     position: 'absolute',
@@ -937,7 +941,6 @@ const styles = StyleSheet.create({
   },
   toolbarButton: {
     backgroundColor: '#111512',
-    borderWidth: 1,
     borderColor: '#202822',
     minWidth: 0,
     minHeight: 44,
@@ -1036,6 +1039,7 @@ const styles = StyleSheet.create({
   unitToggle: {
     flexDirection: 'row',
     padding: 3,
+    borderWidth: 1,
     borderRadius: 12,
   },
   headerToggles: {
@@ -1147,9 +1151,10 @@ const styles = StyleSheet.create({
   energyBreakdownSheet: { gap: 10, marginTop: 14 },
   energyCategoryCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 17, padding: 12 },
   energyCategoryIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
+  energyCategoryIconLabel: { fontSize: 10, fontWeight: '900', letterSpacing: -0.4 },
   energyCategoryCopy: { flex: 1, minWidth: 0 },
-  energyCategoryCopyCompact: { height: 34, overflow: 'hidden' },
-  energyCategoryTitle: { fontSize: 13, fontWeight: '800' },
+  energyCategoryCopyCompact: { height: 40, justifyContent: 'center', overflow: 'hidden' },
+  energyCategoryTitle: { fontSize: 16, fontWeight: '800' },
   energyCategoryCaveat: { marginTop: 4, fontSize: 10, lineHeight: 14 },
   confidenceBadge: { alignSelf: 'flex-start', marginTop: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   confidenceBadgeText: { fontSize: 8, fontWeight: '900', letterSpacing: 0.35 },

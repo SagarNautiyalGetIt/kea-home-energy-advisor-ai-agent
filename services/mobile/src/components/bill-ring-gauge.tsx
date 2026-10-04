@@ -14,10 +14,8 @@ import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop } from 'react
  * - track: full circle, #231C23, with 72 subtle tick marks (every 5deg)
  * - ring starts drawing exactly at the BOTTOM, clockwise, at a constant ~125 deg/sec
  *   (linear — no easing), then HOLDS the final state (no loop, no replay)
- * - 3 equal 120deg colour zones: green #22C55E (90->210), orange #FB923C (210->330),
- *   red #EF4444 (330->450); zone arcs are JS-computed SVG paths (no transform tricks)
- * - data mapping: overshootPct 0 -> 80deg drawn, 100 -> 312deg drawn
- *   (red stops at 60% of its zone, never completes the circle)
+ * - ratio mapping: 1.0 -> 210deg, 1.25 -> 330deg, 1.75 -> 449.9deg
+ *   across green, orange and red zones
  * - white-hot head dot (r=5) with a soft zone-coloured glow (r=45) rides the tip
  * - inner lightning bolt (video's exact points) sits centred and takes the colour of
  *   whichever zone the head currently occupies; its halo glow is steady (no pulsing)
@@ -39,15 +37,11 @@ const START_DEG = 90; // bottom (screen coords, y down, clockwise = increasing a
 const ZONE_DEG = 120;
 const ZONE_STARTS = [START_DEG, START_DEG + ZONE_DEG, START_DEG + ZONE_DEG * 2];
 const ZONE_COLORS = [GREEN, ORANGE, RED] as const;
-const MAX_DRAW_DEG = ZONE_STARTS[2] + ZONE_DEG * 0.6;
-
-// The video reveals the green zone first, then orange, then red. The comparison
-// state supplies a minimum endpoint so a small dollar overshoot still reaches its
-// correct colour zone even when the backend percentage is small.
-const drawnDegrees = (v: number, tone: BillRingTone) => {
-  const raw = 80 + (Math.min(100, Math.max(0, v)) / 100) * (MAX_DRAW_DEG - 80);
-  const minimum = tone === 'red' ? 332 : tone === 'orange' ? 212 : 80;
-  return Math.min(MAX_DRAW_DEG, Math.max(minimum, raw));
+const endAngleForRatio = (r: number) => {
+  const v = Math.min(1.75, Math.max(0, r));
+  if (v <= 1) return 90 + v * 120;
+  if (v <= 1.25) return 210 + ((v - 1) / 0.25) * 120;
+  return Math.min(449.9, 330 + ((v - 1.25) / 0.5) * 120);
 };
 
 // measured: the three demo phases draw at ~120-137 deg/sec; use a constant 125
@@ -90,17 +84,17 @@ const RING_OFFSET = (WRAP_SIZE - RING_SIZE) / 2;
 
 export type BillRingTone = 'green' | 'orange' | 'red';
 
-export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: number; tone?: BillRingTone; onToneChange?: (tone: BillRingTone) => void }) {
+export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneChange?: (tone: BillRingTone) => void }) {
   const reduceMotion = useReducedMotion();
   const [progress] = useState(() => new Animated.Value(0));
   const [headDeg, setHeadDeg] = useState(START_DEG);
   const firstMount = useRef(true);
 
-  const target = drawnDegrees(value, tone);
+  const tone: BillRingTone = ratio <= 1 ? 'green' : ratio <= 1.25 ? 'orange' : 'red';
+  const target = endAngleForRatio(ratio) - START_DEG;
 
   useEffect(() => {
-    const toneAtDegrees = (degrees: number): BillRingTone => degrees < 210 ? 'green' : degrees < 330 ? 'orange' : 'red';
-    onToneChange?.(toneAtDegrees(START_DEG));
+    const toneAtDegrees = (degrees: number): BillRingTone => degrees < ZONE_STARTS[1] ? 'green' : degrees < ZONE_STARTS[2] ? 'orange' : 'red';
     const id = progress.addListener(({ value: p }) => {
       setHeadDeg(START_DEG + p);
       onToneChange?.(toneAtDegrees(START_DEG + p));
@@ -121,6 +115,7 @@ export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: 
         toValue: target,
         useNativeDriver: false,
       }).start();
+      onToneChange?.(toneAtDegrees(START_DEG + target));
     } else {
       // value changed while open: glide to the new endpoint, never replay from blank
       Animated.timing(progress, {
@@ -129,24 +124,27 @@ export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: 
         toValue: target,
         useNativeDriver: false,
       }).start();
+      onToneChange?.(toneAtDegrees(START_DEG + target));
     }
     return () => {
       progress.removeListener(id);
     };
-  }, [onToneChange, progress, target, reduceMotion]);
+  }, [onToneChange, progress, target, reduceMotion, tone]);
 
-  const endDeg = Math.min(headDeg, MAX_DRAW_DEG);
+  const endDeg = Math.min(headDeg, 449.9);
   const head = polar(endDeg);
-  const zoneColor = (absDeg: number) => (absDeg < 210 ? GREEN : absDeg < 330 ? ORANGE : RED);
-  const headColor = zoneColor(endDeg);
+  const atTarget = Math.abs(endDeg - (START_DEG + target)) < 1;
+  const currentZoneColor = endDeg < ZONE_STARTS[1] ? GREEN : endDeg < ZONE_STARTS[2] ? ORANGE : RED;
+  const finalColor = tone === 'green' ? GREEN : tone === 'orange' ? ORANGE : RED;
+  const headColor = atTarget ? finalColor : currentZoneColor;
   const showHead = endDeg > START_DEG + 2;
 
-  const pct = Math.round(Math.min(100, Math.max(0, value)));
+  const pct = Math.round(Math.max(0, ratio) * 100);
   const state = tone === 'green' ? 'within expectation' : tone === 'orange' ? 'slightly above expected' : 'above expected';
 
   return (
     <View
-      accessibilityLabel={`Projected bill ${state}, ${pct} percent above expected`}
+      accessibilityLabel={`Projected bill ${pct} percent of expected, ${state}`}
       accessibilityRole="image"
       style={styles.wrap}
     >
@@ -165,12 +163,13 @@ export function BillRingGauge({ value, tone = 'green', onToneChange }: { value: 
         {/* faint full track */}
         <Circle cx={VCX} cy={VCY} fill="none" r={VR} stroke={TRACK} strokeWidth={VSW} />
 
-        {/* the three continuous colour zones, drawn as JS-computed arc paths */}
-        {[0, 1, 2].map((i) => {
-          const d = arcPath(ZONE_STARTS[i], Math.min(endDeg, ZONE_STARTS[i] + ZONE_DEG));
-          return d ? (
-            <Path d={d} fill="none" key={i} stroke={ZONE_COLORS[i]} strokeLinecap="round" strokeWidth={VSW} />
-          ) : null;
+        {atTarget ? (
+          <Path d={arcPath(START_DEG, endDeg)} fill="none" stroke={finalColor} strokeLinecap="round" strokeWidth={VSW} />
+        ) : [0, 1, 2].map((index) => {
+          const zoneStart = ZONE_STARTS[index]!;
+          const zoneEnd = zoneStart + ZONE_DEG;
+          const d = arcPath(zoneStart, Math.min(endDeg, zoneEnd));
+          return d ? <Path d={d} fill="none" key={index} stroke={ZONE_COLORS[index]} strokeLinecap="round" strokeWidth={VSW} /> : null;
         })}
         {/* inner lightning spark, colour synced with the head's zone (steady glow) */}
         <Circle cx={VCX} cy={VCY} fill="url(#billShockBoltGlow)" r={65} />

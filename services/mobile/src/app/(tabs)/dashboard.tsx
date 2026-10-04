@@ -32,12 +32,14 @@ export default function DashboardScreen() {
   const [ringTone, setRingTone] = useState<BillRingTone>('green');
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const projected = dashboard?.projectedCycleCostNzd;
+  const expected = dashboard?.expectedCostNzd;
+  const billRatio = projected != null && expected != null && expected > 0 ? projected / expected : 0;
   const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
-  const billShockTone: BillRingTone = dashboard?.warningTriggered ? 'red' : 'green';
   const animatedBillShockColor = ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
-  const insightTitle = dashboard?.warningTriggered ? 'Currently tracking for bill shock' : 'Below bill-shock alert threshold';
+  const insightTitle = dashboard?.warningTriggered ? 'Projecting more than expected' : 'Projecting within expectation';
   const dashboardNotifications = dashboard?.warningTriggered
     ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
     : [];
@@ -217,7 +219,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.shockModal}>
           <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
-          <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
+          <BillRingGauge onToneChange={setRingTone} ratio={billRatio} />
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />
             <View style={styles.overshootCopy}>
