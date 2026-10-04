@@ -1,23 +1,24 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ClashCoach } from '@/components/clash-coach';
+import { tactile } from '@/lib/haptics';
 import { Screen } from '@/components/screen';
 import { PageHeader } from '@/components/ui';
 import { EnergyArena } from '@/features/clash/components/EnergyArena';
+import { GameTransition } from '@/features/clash/components/GameTransition';
 import { MonthlyRewardCard } from '@/features/clash/components/MonthlyRewardCard';
 import { NextMoveCard } from '@/features/clash/components/NextMoveCard';
 import { ScoreBreakdown } from '@/features/clash/components/ScoreBreakdown';
-import { SparkyCompanionWidget } from '@/features/clash/components/SparkyCompanionWidget';
 import { SuburbLeaderboard } from '@/features/clash/components/SuburbLeaderboard';
 import { SuburbLeagueHeader } from '@/features/clash/components/SuburbLeagueHeader';
 import { demoDistricts, demoLeaderboard, locationOutcomeCopy, nearbyDemoDistrict, type DemoDistrictId, type LocationOutcome, type MetricKey } from '@/lib/clash-preview';
 import { useAppTheme } from '@/theme';
 
 function selectionFeedback() {
-  if (Platform.OS === 'web') return;
-  void Haptics.selectionAsync().catch(() => undefined);
+  tactile();
 }
 
 export default function ClashScreen() {
@@ -26,6 +27,23 @@ export default function ClashScreen() {
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('conservation');
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationOutcome, setLocationOutcome] = useState<LocationOutcome | null>(null);
+  const [view, setView] = useState<'quests' | 'arena' | 'league'>('quests');
+  const [motionPreference, setMotionPreference] = useState<boolean | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(true);
+  const [arenaInteracting, setArenaInteracting] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (mounted) setReduceMotion(value); });
+    void AsyncStorage.getItem('kea.clash.motion.v1').then((value) => { if (mounted) setMotionPreference(value !== 'off'); }).catch(() => { if (mounted) setMotionPreference(true); });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
+  const motion = Boolean(motionPreference) && !reduceMotion;
+  const changeMotion = (value: boolean) => {
+    setMotionPreference(value);
+    tactile();
+    void AsyncStorage.setItem('kea.clash.motion.v1', value ? 'on' : 'off').catch(() => undefined);
+  };
   const district = demoDistricts.find((item) => item.id === selectedId) ?? demoDistricts[0];
   const standings = demoLeaderboard(selectedId);
   const you = standings.find((item) => item.id === 'you') ?? standings[0];
@@ -66,8 +84,17 @@ export default function ClashScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.content}>
-      <PageHeader title="Power Clash" subtitle="Monthly suburb league · demo" />
+    <Screen contentStyle={styles.content} scrollEnabled={!arenaInteracting}>
+      <PageHeader title="Power Clash" subtitle="Sparky quests · sample suburb league" />
+      <View style={[styles.views, { backgroundColor: colors.surface }]}>
+        {([{ key: 'quests', label: 'Quests', icon: 'compass-outline', tint: colors.icons.energy }, { key: 'arena', label: 'Arena', icon: 'cube-outline', tint: colors.icons.info }, { key: 'league', label: 'League', icon: 'trophy-outline', tint: colors.icons.money }] as const).map((item) => <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: item.key === view }} onPress={() => { setView(item.key); tactile(); }} style={[styles.viewButton, { backgroundColor: item.key === view ? colors.surfaceRaised : colors.surface, borderColor: item.key === view ? item.tint : 'transparent' }]}><Ionicons name={item.icon} size={19} color={item.tint} /><Text style={[styles.viewLabel, { color: item.key === view ? colors.text : colors.textMuted }]}>{item.label}</Text></Pressable>)}
+      </View>
+      <View style={styles.motionRow}><View style={styles.motionCopy}><Text style={[styles.motionTitle, { color: colors.text }]}>Game motion</Text><Text style={[styles.motionHint, { color: colors.textMuted }]}>{reduceMotion ? 'Off to match your device preference' : 'Small transitions and quest celebrations'}</Text></View><Switch accessibilityLabel="Game motion" disabled={reduceMotion || motionPreference === null} value={motion} onValueChange={changeMotion} trackColor={{ false: colors.border, true: colors.icons.energy }} /></View>
+
+      <GameTransition key={view} motion={motion}>
+      {view === 'quests' ? <><ClashCoach motion={motion} /><NextMoveCard /></> : null}
+      {view === 'arena' ? <><EnergyArena metrics={you.metrics} motion={motion} onSelect={selectMetric} selected={selectedMetric} onInteractionChange={setArenaInteracting} /><ScoreBreakdown metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} /></> : null}
+      {view === 'league' ? <>
       <SuburbLeagueHeader district={district.name} rank={you.rank} score={you.score} total={standings.length} />
 
       <View style={[styles.selectCard, { backgroundColor: colors.surface }]}>
@@ -82,7 +109,7 @@ export default function ClashScreen() {
                 accessibilityState={{ selected }}
                 key={item.id}
                 onPress={() => selectDistrict(item.id)}
-                style={({ pressed }) => [styles.chip, { backgroundColor: selected ? '#383838' : colors.surfaceRaised, borderColor: selected ? '#686868' : colors.border }, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.chip, { backgroundColor: selected ? colors.input : colors.surfaceRaised, borderColor: selected ? colors.icons.energy : colors.border }, pressed && styles.pressed]}
               >
                 <Text style={[styles.chipText, { color: selected ? colors.text : colors.textMuted }]}>{item.name}</Text>
               </Pressable>
@@ -97,18 +124,14 @@ export default function ClashScreen() {
           </View>
         </View>
         <Pressable accessibilityLabel="Use location for a nearby demo suburb" accessibilityRole="button" disabled={locationBusy} onPress={() => void suggestNearby()} style={({ pressed }) => [styles.locationButton, { borderColor: colors.border }, pressed && styles.pressed, locationBusy && styles.disabled]}>
-          {locationBusy ? <ActivityIndicator color={colors.text} size="small" /> : <Ionicons color={colors.text} name="navigate-outline" size={17} />}
+          <Ionicons color={colors.icons.info} name={locationBusy ? 'locate-outline' : 'navigate-outline'} size={17} />
           <Text style={[styles.locationButtonText, { color: colors.text }]}>{locationBusy ? 'Checking nearby suburbs…' : 'Use location once'}</Text>
         </Pressable>
         {locationOutcome ? <Text accessibilityLiveRegion="polite" style={[styles.locationResult, { color: colors.textMuted }]}>{locationOutcomeCopy(locationOutcome)} {locationOutcome === 'nearby' ? `Showing ${district.name} as an example.` : ''}</Text> : null}
       </View>
 
-      <EnergyArena metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} />
-      <ScoreBreakdown metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} />
       <SuburbLeaderboard districtId={selectedId} districtName={district.name} />
-      <NextMoveCard />
       <MonthlyRewardCard />
-      <SparkyCompanionWidget />
       <View style={[styles.boundaryCard, { backgroundColor: colors.surface }]}>
         <Ionicons color={colors.textMuted} name="shield-checkmark-outline" size={21} />
         <View style={styles.boundaryCopy}>
@@ -116,29 +139,36 @@ export default function ClashScreen() {
           <Text style={[styles.boundaryBody, { color: colors.textMuted }]}>Verified meters, EV charger and solar evidence, actual tariffs, fair scoring, consent, and an approved bill-credit programme. No real score, carbon claim, rank, or credit is calculated here.</Text>
         </View>
       </View>
+      </> : null}
+      </GameTransition>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: { gap: 15, paddingBottom: 50 },
+  views: { borderRadius: 19, padding: 5, flexDirection: 'row', gap: 5 },
+  viewButton: { flex: 1, minHeight: 52, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  viewLabel: { fontSize: 13, fontWeight: '800' },
+  motionRow: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingHorizontal: 5, marginBottom: 2 },
+  motionCopy: { flex: 1 }, motionTitle: { fontSize: 13, fontWeight: '700' }, motionHint: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   selectCard: { borderRadius: 22, padding: 18 },
   sectionTitle: { fontSize: 17, fontWeight: '800' },
-  sectionBody: { fontSize: 11, lineHeight: 16, marginTop: 5 },
+  sectionBody: { fontSize: 14, lineHeight: 21, marginTop: 5 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
-  chip: { minHeight: 38, borderWidth: 1, borderRadius: 11, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontSize: 11, fontWeight: '800' },
+  chip: { minHeight: 44, borderWidth: 1, borderRadius: 11, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  chipText: { fontSize: 13, fontWeight: '800' },
   locationRow: { borderTopWidth: 1, flexDirection: 'row', gap: 11, marginTop: 18, paddingTop: 17 },
   locationCopy: { flex: 1 },
-  locationTitle: { fontSize: 12, fontWeight: '800' },
-  locationBody: { fontSize: 10, lineHeight: 15, marginTop: 4 },
-  locationButton: { marginTop: 13, minHeight: 42, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  locationButtonText: { fontSize: 11, fontWeight: '800' },
-  locationResult: { marginTop: 10, fontSize: 10, lineHeight: 15 },
+  locationTitle: { fontSize: 15, fontWeight: '800' },
+  locationBody: { fontSize: 14, lineHeight: 21, marginTop: 4 },
+  locationButton: { marginTop: 13, minHeight: 44, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  locationButtonText: { fontSize: 14, fontWeight: '800' },
+  locationResult: { marginTop: 10, fontSize: 12, lineHeight: 18 },
   boundaryCard: { borderRadius: 22, padding: 17, flexDirection: 'row', gap: 12 },
   boundaryCopy: { flex: 1 },
-  boundaryTitle: { fontSize: 13, fontWeight: '800' },
-  boundaryBody: { fontSize: 11, lineHeight: 16, marginTop: 5 },
+  boundaryTitle: { fontSize: 15, fontWeight: '800' },
+  boundaryBody: { fontSize: 14, lineHeight: 21, marginTop: 5 },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.6 },
 });

@@ -22,6 +22,7 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.analytics.demo_intervals import intervals as _intervals
 from app.analytics.fixtures import HOUSEHOLDS, REGION
 from app.config import settings
 from app.db.models import (
@@ -42,7 +43,6 @@ from app.db.models import (
     WeatherDay,
 )
 
-NZ = dt.timezone(dt.timedelta(hours=12))  # NZST for July; see the note in _intervals()
 JULY = dt.date(2026, 7, 1)
 DAYS = 31
 
@@ -50,48 +50,6 @@ DAYS = 31
 #: figure has to say so, which is why the flag lives on the row.
 UNIT_PRICE = Decimal("0.30")
 DAILY_FIXED = Decimal("1.50")
-
-
-# ───────────────────────────── daily shapes ─────────────────────────────
-#
-# A household's day has a morning peak and a bigger evening peak. Spreading a daily total
-# across 48 intervals with a realistic curve matters: the analytics work on daily totals
-# today, but the voice demo and any future half-hourly analysis need the shape to be
-# plausible. A flat 1/48th would look obviously synthetic on a chart.
-
-_SHAPE = [
-    # 00:00-06:00 — overnight floor (hot water cylinder, fridge, standby)
-    *[0.55] * 12,
-    # 06:00-09:00 — morning peak
-    1.35, 1.70, 1.85, 1.60, 1.30, 1.05,
-    # 09:00-16:00 — daytime trough
-    *[0.70] * 14,
-    # 16:00-21:00 — evening peak, the big one
-    1.25, 1.65, 2.05, 2.30, 2.20, 1.95, 1.60, 1.35, 1.15, 1.00,
-    # 21:00-24:00 — wind down
-    0.85, 0.75, 0.65, 0.60, 0.58, 0.56,
-]
-assert len(_SHAPE) == 48, f"day shape must have 48 intervals, got {len(_SHAPE)}"
-_SHAPE_SUM = sum(_SHAPE)
-
-
-def _intervals(day: dt.date, daily_kwh: float) -> list[tuple[dt.datetime, Decimal]]:
-    """Spread one day's total across 48 half-hourly readings.
-
-    Timestamps are timezone-aware (ADR-0006). New Zealand is on NZST (UTC+12) through
-    July, so a fixed offset is correct for this dataset — but any seeder covering a DST
-    boundary must use a real zone (`zoneinfo.ZoneInfo("Pacific/Auckland")`), or readings
-    land in the wrong day twice a year.
-    """
-    out = []
-    for i, weight in enumerate(_SHAPE):
-        start = dt.datetime.combine(day, dt.time(0, 0), tzinfo=NZ) + dt.timedelta(minutes=30 * i)
-        kwh = Decimal(str(round(daily_kwh * weight / _SHAPE_SUM, 3)))
-        out.append((start, kwh))
-    return out
-
-
-
 
 
 async def seed(session: AsyncSession) -> None:

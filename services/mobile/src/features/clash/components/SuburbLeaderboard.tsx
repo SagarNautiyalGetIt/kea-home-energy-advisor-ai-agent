@@ -18,7 +18,7 @@ export function SuburbLeaderboard({ districtId, districtName }: { districtId: De
         const topThree = player.rank <= 3;
         return (
           <View accessibilityLabel={`Rank ${player.rank}, ${player.label}, ${player.score.toFixed(1)} sample points`} key={player.id} style={[styles.row, { backgroundColor: isYou ? colors.surfaceRaised : colors.surface, borderColor: isYou ? '#575757' : colors.border }]}>
-            <View style={[styles.rankBadge, { backgroundColor: topThree ? '#303030' : colors.surfaceRaised }]}>
+            <View style={[styles.rankBadge, { backgroundColor: colors.surfaceRaised }]}>
               {topThree ? <Ionicons color={colors.text} name="trophy-outline" size={14} /> : null}
               <Text style={[styles.rank, { color: topThree ? colors.text : colors.textMuted }]}>{player.rank}</Text>
             </View>

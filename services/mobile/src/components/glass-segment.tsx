@@ -1,5 +1,6 @@
+import { tactile } from '@/lib/haptics';
 import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
+
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -129,7 +130,7 @@ export function GlassSegmented<T extends string>({
               onLayout={handleLayout(index)}
               onPress={() => {
                 if (option.value === value) return;
-                void Haptics.selectionAsync();
+                tactile();
                 onChange(option.value);
               }}
               style={[styles.option, appearance === 'usage' && styles.usageOption, appearance === 'usage' && active && styles.usageActiveOption, appearance === 'usage' && active && { backgroundColor: dark ? '#FFFFFF' : colors.surface }, { height }]}

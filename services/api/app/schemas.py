@@ -752,6 +752,24 @@ class HouseholdUsageSeries(BaseModel):
     available_to: dt.date | None = None
 
 
+class HourlyUsageSlot(BaseModel):
+    start: dt.datetime
+    label: str
+    kwh: float | None
+    quality: Literal["measured", "estimated", "demo", "missing"]
+    intervals_received: int
+    expected_intervals: int
+
+
+class HouseholdHourlyUsage(BaseModel):
+    customer_id: str
+    day: dt.date
+    timezone: str = "Pacific/Auckland"
+    source: Literal["intervals", "demo", "unavailable"]
+    note: str
+    hours: list[HourlyUsageSlot]
+
+
 class AnnualDemandSummary(BaseModel):
     """Exact annual demand or a labelled estimate from available account usage."""
 

@@ -75,6 +75,19 @@ def _env(key: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Settings:
+    production: bool = field(default_factory=lambda: _env("KEA_PRODUCTION", "0") == "1")
+    oidc_issuer: str = field(default_factory=lambda: _env("KEA_OIDC_ISSUER", ""))
+    oidc_client_id: str = field(default_factory=lambda: _env("KEA_OIDC_CLIENT_ID", ""))
+    outage_ingestion_secret: str = field(
+        default_factory=lambda: _env("KEA_OUTAGE_INGESTION_SECRET", "")
+    )
+    reward_receipt_secret: str = field(
+        default_factory=lambda: _env("KEA_REWARD_RECEIPT_SECRET", "")
+    )
+    delivery_receipt_secret: str = field(
+        default_factory=lambda: _env("KEA_DELIVERY_RECEIPT_SECRET", "")
+    )
+    outage_source_hosts: str = field(default_factory=lambda: _env("KEA_OUTAGE_SOURCE_HOSTS", ""))
     #: One name, or a `+`-separated fallback chain. See `app.providers.resolver`.
     #:
     #:   gcp              the default — Gemini 3.6 Flash on GCP
@@ -185,6 +198,9 @@ class Settings:
     #: binary; `auto` prefers it when it is actually installed, which is right on a
     #: machine with a Metal build and wrong on everything else.
     stt_engine: str = field(default_factory=lambda: _env("KEA_STT_ENGINE", "gemini"))
+    tts_engine: str = field(default_factory=lambda: _env("KEA_TTS_ENGINE", "piper"))
+    tts_model: str = field(default_factory=lambda: _env("KEA_TTS_MODEL", "gemini-3.8-flash-tts"))
+    tts_voice: str = field(default_factory=lambda: _env("KEA_TTS_VOICE", "Kore"))
 
     # Paths, not auto-discovery. `ml/voice/setup.sh` writes these into .env, so a
     # broken voice stack fails with "no such file" naming the exact path we looked
@@ -219,12 +235,23 @@ class Settings:
     #:   sms     file | textbelt | twilio
     #:   voice   file | twilio
     #:
-    #: The university AWS account cannot use SES, SNS or Connect, which is why these are
-    #: third parties rather than the obvious AWS services. An `SesGateway` slots into the
-    #: same protocol when that changes.
+    #: The team account now supports SES, SNS and Connect. Select them explicitly;
+    #: provider credentials come from IAM and deployment configuration.
     email_backend: str = field(default_factory=lambda: _env("KEA_EMAIL_BACKEND", "file"))
     sms_backend: str = field(default_factory=lambda: _env("KEA_SMS_BACKEND", "file"))
     voice_backend: str = field(default_factory=lambda: _env("KEA_VOICE_BACKEND", "file"))
+    ses_configuration_set: str = field(
+        default_factory=lambda: _env("KEA_SES_CONFIGURATION_SET", "")
+    )
+    sns_sender_id: str = field(default_factory=lambda: _env("KEA_SNS_SENDER_ID", ""))
+    connect_instance_id: str = field(default_factory=lambda: _env("KEA_CONNECT_INSTANCE_ID", ""))
+    connect_flow_id: str = field(default_factory=lambda: _env("KEA_CONNECT_FLOW_ID", ""))
+    connect_source_number: str = field(
+        default_factory=lambda: _env("KEA_CONNECT_SOURCE_NUMBER", "")
+    )
+    connect_prompt_bucket: str = field(
+        default_factory=lambda: _env("KEA_CONNECT_PROMPT_BUCKET", "")
+    )
 
     #: Shared by all three file backends; each writes into a per-channel subdirectory.
     email_outbox: str = field(default_factory=lambda: _env("KEA_EMAIL_OUTBOX", "var/outbox"))
@@ -245,13 +272,9 @@ class Settings:
     #: `textbelt` is the documented free key — one message per day per IP, no signup.
     textbelt_key: str = field(default_factory=lambda: _env("KEA_TEXTBELT_KEY", "textbelt"))
 
-    twilio_account_sid: str = field(
-        default_factory=lambda: _env("KEA_TWILIO_ACCOUNT_SID", "")
-    )
+    twilio_account_sid: str = field(default_factory=lambda: _env("KEA_TWILIO_ACCOUNT_SID", ""))
     twilio_auth_token: str = field(default_factory=lambda: _env("KEA_TWILIO_AUTH_TOKEN", ""))
-    twilio_from_number: str = field(
-        default_factory=lambda: _env("KEA_TWILIO_FROM_NUMBER", "")
-    )
+    twilio_from_number: str = field(default_factory=lambda: _env("KEA_TWILIO_FROM_NUMBER", ""))
 
     #: Fallback contact points for households with no preference row — the seeded demo
     #: accounts carry no personal details by design (see models.Customer), so there is no
@@ -367,8 +390,26 @@ def get_dispatcher():
         twilio_account_sid=settings.twilio_account_sid,
         twilio_auth_token=settings.twilio_auth_token,
         twilio_from_number=settings.twilio_from_number,
+        aws_region=settings.aws_region,
+        ses_configuration_set=settings.ses_configuration_set,
+        sns_sender_id=settings.sns_sender_id,
+        connect_instance_id=settings.connect_instance_id,
+        connect_flow_id=settings.connect_flow_id,
+        connect_source_number=settings.connect_source_number,
+        connect_prompt_builder=_connect_prompt_builder(),
     )
     return AlertDispatcher(registry=registry, sessionmaker=get_sessionmaker())
+
+
+def _connect_prompt_builder():
+    if settings.voice_backend != "connect":
+        return None
+    from app.voice import get_tts
+    from app.voice.connect import ConnectPromptBuilder
+
+    return ConnectPromptBuilder(
+        tts=get_tts(), bucket=settings.connect_prompt_bucket, region=settings.aws_region
+    )
 
 
 @lru_cache(maxsize=1)

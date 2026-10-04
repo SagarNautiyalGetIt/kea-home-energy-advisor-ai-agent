@@ -64,7 +64,7 @@ function normalizePlans(value: unknown): PlansViewData {
       const firstRate = rates[0];
       return {
         id: text(row.id, 'pricing ID'), name: text(row.name, 'pricing name'), eyebrow: text(row.eyebrow, 'pricing description'), summary: typeof row.summary === 'string' ? row.summary : undefined,
-        rate: text(row.rate, 'pricing rate'), rateLabel: typeof row.rateLabel === 'string' ? row.rateLabel : firstRate?.label ?? 'Usage rate', daily: text(row.daily, 'daily charge'), rates: rates.length ? rates : [{ label: typeof row.rateLabel === 'string' ? row.rateLabel : 'Usage rate', value: text(row.rate, 'pricing rate'), unit: '/kWh' }], bestFor: text(row.bestFor ?? row.best_for, 'best-for text'),
+        rate: text(row.rate, 'pricing rate'), rateLabel: typeof row.rateLabel === 'string' ? row.rateLabel : firstRate?.label ?? 'Usage rate', daily: text(row.daily, 'daily charge').replace(/\s*\/day$/, ''), rates: rates.length ? rates : [{ label: typeof row.rateLabel === 'string' ? row.rateLabel : 'Usage rate', value: text(row.rate, 'pricing rate'), unit: String(row.rate).includes('/kWh') ? '' : '/kWh' }], bestFor: text(row.bestFor ?? row.best_for, 'best-for text'),
         highlights: Array.isArray(highlights) ? highlights.map((entry) => text(entry, 'highlight')) : [],
         badge: typeof (row.badge ?? row.flag) === 'string' ? String(row.badge ?? row.flag) : undefined,
       };

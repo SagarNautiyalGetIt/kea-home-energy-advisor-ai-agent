@@ -348,7 +348,8 @@ async def test_conversation_history_reaches_the_model(ctx) -> None:
 
     messages = provider.calls[0]["messages"]
     assert len(messages) == 3
-    assert messages[-1]["content"] == "what about last month?"
+    assert messages[-1]["content"].endswith("what about last month?")
+    assert messages[-1]["content"].startswith("Current date in Pacific/Auckland:")
 
 
 async def test_escalation_is_the_models_call_and_reaches_the_result(ctx) -> None:

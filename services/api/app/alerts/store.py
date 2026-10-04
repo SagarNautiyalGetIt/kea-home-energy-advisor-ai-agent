@@ -36,6 +36,36 @@ from app.db.models import AlertPreferenceRow
 log = logging.getLogger(__name__)
 
 
+class PreferencesUnavailable(RuntimeError):
+    """Storage failure is distinct from a household that has never saved preferences."""
+
+
+async def has_hardship(account: str) -> bool:
+    """Persisted disclosure suppresses automated warnings until care clears it."""
+    from app.config import settings
+    from app.db.models import Conversation, Customer
+    from app.db.session import get_sessionmaker
+
+    if not settings.persist:
+        return False
+    try:
+        async with get_sessionmaker()() as session:
+            return bool(
+                await session.scalar(
+                    select(Conversation.id)
+                    .join(Customer)
+                    .where(
+                        Customer.external_ref == account, Conversation.hardship_detected.is_(True)
+                    )
+                    .limit(1)
+                )
+            )
+    except Exception:
+        raise PreferencesUnavailable(
+            "Care preferences are unavailable; no alert was sent."
+        ) from None
+
+
 class PreferencesStore(Protocol):
     name: str
 
@@ -101,16 +131,11 @@ class DatabasePreferencesStore:
         try:
             async with self._sessionmaker() as session:
                 row = await session.scalar(
-                    select(AlertPreferenceRow).where(
-                        AlertPreferenceRow.account_ref == account_ref
-                    )
+                    select(AlertPreferenceRow).where(AlertPreferenceRow.account_ref == account_ref)
                 )
         except Exception:
-            # Same rule as the recorder: a settings lookup that fails must not cost the
-            # customer their warning. Defaults are a safe answer — they are what the
-            # ladder did before this table existed.
-            log.exception("could not read alert preferences for %s — using defaults", account_ref)
-            return defaults_for(account_ref)
+            log.exception("alert preferences unavailable; no notification may be sent")
+            raise PreferencesUnavailable("Alert settings are unavailable. Please retry.") from None
 
         return _to_model(row) if row else defaults_for(account_ref)
 

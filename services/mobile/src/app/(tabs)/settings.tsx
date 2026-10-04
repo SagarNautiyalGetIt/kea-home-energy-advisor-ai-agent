@@ -1,5 +1,7 @@
+import { useExperience } from '@/lib/experience-preferences';
+import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
+
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, type LayoutChangeEvent, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -67,6 +69,7 @@ export default function SettingsScreen() {
   const [modelCheckedAt, setModelCheckedAt] = useState<string | null>(null);
   const [phoneModel, setPhoneModel] = useState<PhoneModelStatus>({ phase: 'checking', detail: 'Checking this phone…' });
   const [phoneModelEnabled, setPhoneModelEnabledState] = useState(false);
+  const experience = useExperience();
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveVersion = useRef(0);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -116,14 +119,14 @@ export default function SettingsScreen() {
     const enabled = !phoneModelEnabled;
     await setPhoneModelEnabled(enabled);
     setPhoneModelEnabledState(enabled);
-    void Haptics.selectionAsync();
+    tactile();
   };
 
   const installModel = async () => {
     try {
       const status = await installPhoneModel(setPhoneModel);
       setPhoneModel(status);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      tactile('success');
       showToast('On-phone Sparky model verified', 'success');
     } catch (error) {
       setPhoneModel(await phoneModelStatus());
@@ -134,7 +137,7 @@ export default function SettingsScreen() {
   const removeModel = async () => {
     try {
       setPhoneModel(await removePhoneModel());
-      void Haptics.selectionAsync();
+      tactile();
       showToast('On-phone model removed', 'info');
     } catch {
       showToast('Could not remove the on-phone model.', 'warning');
@@ -307,6 +310,11 @@ export default function SettingsScreen() {
         <NotificationChannel checked={preferences.billReminders} colors={colors} detail="Receive reminders before a bill is due." icon="calendar-outline" label="Bill reminders" onPress={() => update({ billReminders: !preferences.billReminders })} />
       </Card>
 
+      <SectionTitle>Feel and appearance</SectionTitle>
+      <Card>
+        <NotificationChannel checked={experience.holographic} colors={colors} detail="Home reveals into its original realistic colours. Turn this on to keep the holographic view." icon="cube-outline" label="Keep Home holographic" onPress={() => { tactile(); experience.update({ holographic: !experience.holographic }); }} />
+        <NotificationChannel checked={experience.haptics} colors={colors} detail="Gentle feedback for controls and Sparky responses." icon="hand-left-outline" label="Haptic feedback" onPress={() => { tactile(); experience.update({ haptics: !experience.haptics }); }} />
+      </Card>
       <SectionTitle>Sparky AI</SectionTitle>
       <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Check both the Kea service and this phone before choosing how Sparky answers.</Text>
       <Card style={styles.connectedCard}>
@@ -416,7 +424,7 @@ export default function SettingsScreen() {
 }
 
 function NotificationChannel({ colors, icon, label, detail, checked, onPress, control = 'checkbox', tint = 'utility' }: { colors: ReturnType<typeof useAppTheme>['colors']; icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; checked: boolean; onPress: () => void; control?: 'checkbox' | 'switch'; tint?: IconTint }) {
-  return <Pressable accessibilityRole={control === 'switch' ? 'switch' : 'checkbox'} accessibilityState={{ checked }} onPress={onPress} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, pressed && styles.pressed]}><Ionicons color={colors.icons[tint]} name={icon} size={23} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{detail}</Text></View>{control === 'switch' ? <AppleSwitch checked={checked} label={label} onChange={onPress} /> : <View style={[styles.checkbox, { borderColor: checked ? palette.white : colors.border, backgroundColor: checked ? palette.white : 'transparent' }]}>{checked ? <Ionicons color="#000000" name="checkmark" size={17} /> : null}</View>}</Pressable>;
+  return <Pressable accessibilityRole={control === 'switch' ? 'switch' : 'checkbox'} accessibilityState={{ checked }} onPress={() => { tactile(); onPress(); }} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, pressed && styles.pressed]}><Ionicons color={colors.icons[tint]} name={icon} size={23} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{detail}</Text></View>{control === 'switch' ? <AppleSwitch checked={checked} label={label} onChange={onPress} /> : <View style={[styles.checkbox, { borderColor: checked ? palette.white : colors.border, backgroundColor: checked ? palette.white : 'transparent' }]}>{checked ? <Ionicons color="#000000" name="checkmark" size={17} /> : null}</View>}</Pressable>;
 }
 
 const SLIDER_ZONE = { green: '#57D98A', orange: '#F2C94C', red: '#EE6B60' };
@@ -470,6 +478,7 @@ function SplitSlider({ colors, label, value, options, disabled, onValue }: { col
       Animated.timing(trackHeight, { toValue: 8, duration: 220, useNativeDriver: false }),
       Animated.timing(tickOpacity, { toValue: 0, duration: 200, useNativeDriver: false }),
     ]).start();
+    tactile();
     onValueRef.current(snapped);
   };
 
@@ -576,7 +585,7 @@ function ThresholdChannel({ colors, label, note, checked, value, options, onTogg
   // Master off => channel switches render off and can't be flipped. The real
   // preference values stay untouched so they restore when the master returns.
   const switchOn = checked && !dimmed;
-  return <View style={[styles.thresholdBlock, { borderBottomColor: colors.border }, inactive && styles.disabledChannel]}><View style={styles.thresholdHeader}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Pressable accessibilityRole="switch" accessibilityState={{ checked: switchOn }} disabled={dimmed} onPress={onToggle} style={[styles.switchTrack, { backgroundColor: switchOn ? '#0A84FF' : colors.border }]}><View style={[styles.switchThumb, switchOn && styles.switchThumbOn]} /></Pressable></View><SplitSlider colors={colors} disabled={inactive} label={label} onValue={onValue} options={options} value={value} /><Text style={[styles.thresholdValue, { color: colors.text }]}>{value}% above normal</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{note}</Text></View>;
+  return <View style={[styles.thresholdBlock, { borderBottomColor: colors.border }, inactive && styles.disabledChannel]}><View style={styles.thresholdHeader}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Pressable accessibilityRole="switch" accessibilityState={{ checked: switchOn }} disabled={dimmed} onPress={() => { tactile(); onToggle(); }} style={[styles.switchTrack, { backgroundColor: switchOn ? '#0A84FF' : colors.border }]}><View style={[styles.switchThumb, switchOn && styles.switchThumbOn]} /></Pressable></View><SplitSlider colors={colors} disabled={inactive} label={label} onValue={onValue} options={options} value={value} /><Text style={[styles.thresholdValue, { color: colors.text }]}>{value}% above normal</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{note}</Text></View>;
 }
 
 function NumberSetting({ colors, label, detail, prefix, value, max, onValue, dimmed = false }: { colors: ReturnType<typeof useAppTheme>['colors']; label: string; detail: string; prefix?: string; value: number; max: number; onValue: (value: number) => void; dimmed?: boolean }) {
@@ -588,7 +597,7 @@ function HourInput({ colors, value, onValue, dimmed = false }: { colors: ReturnT
 }
 
 function SettingLink({ colors, icon, label, detail, onPress }: { colors: ReturnType<typeof useAppTheme>['colors']; icon: keyof typeof Ionicons.glyphMap; label: string; detail: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, pressed && styles.pressed]}><Ionicons color={colors.icons.utility} name={icon} size={23} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>;
+  return <Pressable onPress={() => { tactile(); onPress(); }} style={({ pressed }) => [styles.settingRow, { borderBottomColor: colors.border }, pressed && styles.pressed]}><Ionicons color={colors.icons.utility} name={icon} size={23} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>{label}</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>{detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>;
 }
 
 const styles = StyleSheet.create({

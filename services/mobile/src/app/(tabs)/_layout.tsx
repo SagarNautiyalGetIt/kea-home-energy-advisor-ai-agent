@@ -12,7 +12,7 @@ export default function TabsLayout() {
   if (!session) return <Redirect href="/login" />;
 
   return (
-    <Tabs tabBar={() => pathname === '/dashboard' ? null : <BottomNavigation />} screenOptions={{
+    <Tabs backBehavior="history" tabBar={() => pathname === '/dashboard' ? null : <BottomNavigation />} screenOptions={{
       headerShown: false,
     }}>
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
