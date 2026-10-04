@@ -736,6 +736,8 @@ ARTICLES: tuple[Article, ...] = (
         topic="alerts",
         title="Bill-shock warnings and how they are tuned",
         asks=(
+            "how often will kea send warnings",
+            "why didn't I get a text",
             "what is a bill shock warning",
             "how do I change my alert threshold",
             "stop texting me",
@@ -772,6 +774,14 @@ ARTICLES: tuple[Article, ...] = (
             Fact(
                 "Quiet hours apply to texts and calls but not to email, which makes no "
                 "noise at 3am and forms the written record.",
+                Basis.PRODUCT,
+            ),
+            Fact(
+                "The delivery service deduplicates cycle/tier warnings and may send a "
+                "later warning when risk qualifies for another tier. An increase "
+                "within the same cycle/tier does not resend that warning. "
+                "Delivery still needs enabled gateways, destinations and confidence "
+                "thresholds. A setting or forecast alone is not evidence of a sent message.",
                 Basis.PRODUCT,
             ),
         ),
@@ -826,6 +836,9 @@ ARTICLES: tuple[Article, ...] = (
         topic="privacy",
         title="What data is held and what it is used for",
         asks=(
+            "what information does sparky use",
+            "how does kea protect my information",
+            "are my conversations with sparky stored",
             "what data do you have on me",
             "is my data safe",
             "do you train on my conversations",
@@ -842,24 +855,29 @@ ARTICLES: tuple[Article, ...] = (
             ),
             Fact(
                 "This system reads the signed-in household's meter data, plan, bills and "
-                "connection details. The customer identifier is bound from the "
-                "authenticated request and is never something the model can supply.",
+                "connection details. Tools use the server's request context; the model "
+                "cannot choose a different household. Configured production authentication "
+                "checks request ownership. The local prototype is a synthetic demo, "
+                "not evidence that a production identity service has been deployed.",
                 Basis.PRODUCT,
             ),
             Fact(
-                "Conversations and the lookups behind each answer are recorded so an "
-                "answer can be audited against the data that produced it.",
+                "When database persistence is enabled, conversations and the lookups "
+                "behind each answer are recorded for audit. Runtime configuration may "
+                "disable persistence. No fixed retention/deletion period is established "
+                "by this help corpus; do not promise one or that data is never stored.",
                 Basis.PRODUCT,
             ),
             Fact(
-                "The customer records hold no name or personal detail beyond what the "
-                "account needs — a deliberate schema decision, because 47.6% of surveyed "
-                "customers said they would not trust an AI with their data.",
+                "Account records may hold name, connection address, email and phone. "
+                "The assistant's tools deliberately exclude contact email/phone; use "
+                "Profile to view them. Do not promise that no personal data is stored.",
                 Basis.PRODUCT,
             ),
             Fact(
-                "Where the household has connected smart-home devices, only daily totals "
-                "are stored. The minute-by-minute device stream never leaves the phone.",
+                "Connected-device energy tools read stored daily observations. Network "
+                "discovery is separate and exposes names, not measured consumption. "
+                "Do not promise that all device traffic remains on the phone.",
                 Basis.PRODUCT,
             ),
         ),
@@ -955,6 +973,11 @@ ARTICLES: tuple[Article, ...] = (
         topic="assistant",
         title="How the assistant produces an answer, and when it is wrong",
         asks=(
+            "what is sparky ai",
+            "what can sparky help me with",
+            "how does sparky work",
+            "where do sparky's numbers come from",
+            "can sparky make mistakes",
             "how do you know that",
             "are you making this up",
             "how accurate are you",
@@ -1001,12 +1024,14 @@ ARTICLES: tuple[Article, ...] = (
         ),
         facts=(
             Fact(
-                "A customer can ask for a person at any time and the conversation is handed "
-                "over with its context, so they do not have to explain it twice.",
+                "A customer can ask for a person at any time. Sparky flags or records "
+                "the concern, but this prototype does not deliver the chat to live staff. "
+                "Use verified provider contacts on the customer's bill; do not invent "
+                "a support address, claim staff received it or promise a callback.",
                 Basis.PRODUCT,
             ),
             Fact(
-                "Some conversations are handed over whether or not they ask: difficulty "
+                "Some conversations require human support whether or not they ask: difficulty "
                 "paying, a dispute about the bill or the meter, and anything touching "
                 "payment or supply on a medically dependent account.",
                 Basis.PRODUCT,
@@ -1092,8 +1117,10 @@ ARTICLES: tuple[Article, ...] = (
                 source="Electricity Authority",
             ),
             Fact(
-                "This assistant has no live outage feed. It reads meter data, which lags, "
-                "so it cannot tell a customer whether their power is on right now.",
+                "get_scheduled_outages reads a linked distributor's source-dated scheduled "
+                "notices, with revisions, cancellations and expiry. Missing/stale notices "
+                "do not prove there are no outages. The assistant has no live fault feed "
+                "and cannot tell whether power is on right now.",
                 Basis.PRODUCT,
             ),
         ),
@@ -1103,6 +1130,75 @@ ARTICLES: tuple[Article, ...] = (
             "outage page."
         ),
         see_also=("medically-dependent", "talk-to-a-person"),
+    ),
+    Article(
+        id="bill-uploads", topic="assistant", title="Bill Explainer uploads and estimates",
+        asks=(
+            "how does the bill explainer work", "what can I upload to the bill explainer",
+            "can you read my bill photo", "upload pdf jpg png",
+            "is my projected bill the same as my final bill",
+        ),
+        facts=(
+            Fact("The Bill Explainer accepts a readable electricity bill as PDF, JPG or PNG. "
+                 "A text chat does not automatically receive an attachment or read a file "
+                 "from the user's device; use the app's Bill Explainer upload flow.",
+                 Basis.PRODUCT),
+            Fact("Uploaded bill extraction can be incomplete. Verify the extracted period, "
+                 "charges and total against the original document before relying on them. "
+                 "Do not invent an unreadable charge or attribute it to an appliance.",
+                 Basis.PRODUCT),
+            Fact("Forecasts estimate the remaining period from available usage and pricing. "
+                 "The issued invoice remains the record of what is owed; forecasts and "
+                 "plan comparisons do not replace it.", Basis.PRODUCT),
+        ),
+        not_covered="No tool reads plain-chat attachments or retrieves a downloadable invoice.",
+        see_also=("reading-your-bill", "how-sparky-answers"),
+    ),
+    Article(
+        id="power-clash", topic="assistant", title="Power Clash missions and reward evidence",
+        asks=(
+            "how do I earn xp", "what are my points", "power clash", "complete my quest",
+            "why didn't I get points", "are rewards money",
+            "which flexible energy task could I move off peak",
+        ),
+        facts=(
+            Fact("get_power_clash_progress reads the household's mission list and action ledger. "
+                 "Planning a mission in the app earns planning XP; verified XP requires an "
+                 "accepted device-provider receipt. Asking Sparky is not a verified action.",
+                 Basis.PRODUCT),
+            Fact("XP has no cash value. Estimated shift savings use measured shifted kWh and "
+                 "the receipt's peak/off-peak rate difference; they are not causal evidence "
+                 "that the total bill fell. Sparky cannot mint points or redeem them.",
+                 Basis.PRODUCT),
+            Fact("Choose a flexible task the customer can safely delay, such as a dishwasher "
+                 "cycle or EV charge. Ask about their routine and actual tariff. Do not "
+                 "delay essential medical equipment, compromise comfort or claim an "
+                 "unmetered task has a measured saving.", Basis.PRODUCT),
+        ),
+        see_also=("time-of-use", "saving-power", "smart-home"),
+    ),
+    Article(
+        id="ev-solar-battery", topic="assistant", title="EV charging, solar and battery evidence",
+        asks=(
+            "help me plan ev charging", "is my car charging", "charge before I leave",
+            "my battery target", "how much solar did I generate", "is the battery full",
+            "why is the energy flow moving", "what is grid import export",
+        ),
+        facts=(
+            Fact("The API's home-energy view contains dated import/export and connected-device "
+                 "observations, not live household power. Daily kWh is not current kW. "
+                 "No Sparky tool starts/stops a charger or changes a battery controller.",
+                 Basis.PRODUCT),
+            Fact("An export meter measures energy sent to the grid, not all solar generation. "
+                 "A mapped generation sensor is needed for generation, a battery sensor "
+                 "for charge level and fresh charger telemetry for charging status.",
+                 Basis.PRODUCT),
+            Fact("A personal charging schedule needs the actual contracted time windows/rates, "
+                 "departure time, current/target charge and usable capacity/charger power. "
+                 "Catalogue rates are offers, not proof of those contracted values. "
+                 "A planning suggestion must label unknown constraints.", Basis.PRODUCT),
+        ),
+        see_also=("solar-export", "time-of-use", "smart-home", "power-clash"),
     ),
 )
 

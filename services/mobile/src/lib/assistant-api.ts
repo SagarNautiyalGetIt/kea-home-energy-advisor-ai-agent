@@ -1,4 +1,5 @@
-import { apiBase, apiJson, apiPath, jsonRequest } from '@/lib/backend-client';
+import { apiBase, apiJson, apiPath, jsonRequest, loadAccessToken } from '@/lib/backend-client';
+import { sendAuthenticatedStream } from '@/lib/assistant-auth-stream';
 import { parseChartEvent, parseSseFrames, type ChartEvent } from '@/lib/assistant-stream';
 
 /**
@@ -71,6 +72,15 @@ export type AssistantHandlers = {
 
 /** Human-readable labels for the tool names. Kept in step with the web client's copy. */
 const TOOL_LABELS: Record<string, string> = {
+  get_usage_history: 'Reading your dated usage and tariff bands',
+  get_hourly_usage: 'Checking readings for the selected day',
+  get_billing_records: 'Reading your invoice totals',
+  get_plan_details: 'Checking plan rates and commitment terms',
+  get_alert_status: 'Checking your warning settings and assessment',
+  get_power_clash_progress: 'Reading your Power Clash progress',
+  get_scheduled_outages: 'Checking the distributor schedule',
+  update_alert_settings: 'Updating your warning settings',
+  request_plan_change: 'Checking your plan change request',
   get_account_summary: 'Looking up your account',
   get_daily_usage: 'Reading your daily meter data',
   get_bill_comparison: 'Comparing this bill with your last one',
@@ -90,6 +100,13 @@ export const toolLabel = (name: string): string =>
   TOOL_LABELS[name] ?? name.replace(/_/g, ' ');
 
 const SOURCE_LABELS: Record<string, string> = {
+  get_usage_history: 'dated usage',
+  get_hourly_usage: 'dated hourly readings',
+  get_billing_records: 'invoice records',
+  get_plan_details: 'plan terms',
+  get_alert_status: 'warning preferences and assessment',
+  get_power_clash_progress: 'Power Clash receipts',
+  get_scheduled_outages: 'distributor schedule',
   get_account_summary: 'account',
   get_daily_usage: 'daily meter readings',
   get_bill_comparison: 'bills',
@@ -186,7 +203,9 @@ export function streamAssistantReply(
     }
     if (xhr.status >= 400) {
       finished = true;
-      handlers.onError?.('Sparky is unavailable right now. Please try again shortly.');
+      handlers.onError?.(xhr.status === 401 || xhr.status === 403
+        ? 'Your session cannot access this account. Please sign in again.'
+        : 'Sparky is unavailable right now. Please try again shortly.');
       return;
     }
     drain(`${xhr.responseText}\n\n`);
@@ -201,12 +220,15 @@ export function streamAssistantReply(
   xhr.ontimeout = () => {
     if (!cancelled && !finished) { finished = true; handlers.onError?.('Sparky took too long to respond. Please try again.'); }
   };
-  xhr.send(
+  void sendAuthenticatedStream(xhr,
     JSON.stringify({
       customer_id: customerId,
       message,
       conversation_id: conversationId ?? null,
-    }),
+    }), loadAccessToken, () => cancelled || finished, () => {
+      finished = true;
+      handlers.onError?.('Sparky could not read your session. Please sign in again.');
+    },
   );
 
   return {
