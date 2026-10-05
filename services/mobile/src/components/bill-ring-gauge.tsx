@@ -42,9 +42,6 @@ const RED = '#EF4444';
 const TRACK = '#231C23';
 
 const START_DEG = BILL_RING_START_DEG; // bottom (screen coords, y down, clockwise = increasing angle)
-const ZONE_DEG = 120;
-const ZONE_STARTS = [START_DEG, START_DEG + ZONE_DEG, START_DEG + ZONE_DEG * 2];
-const ZONE_COLORS = [GREEN, ORANGE, RED] as const;
 // measured: the three demo phases draw at ~120-137 deg/sec; use a constant 125
 const DRAW_SPEED_DEG_PER_SEC = 125;
 
@@ -133,6 +130,7 @@ export function BillRingGauge({ ratio, active, onToneChange }: { ratio: number; 
   const currentColor = currentTone === 'green' ? GREEN : currentTone === 'orange' ? ORANGE : RED;
   const headColor = currentColor;
   const showHead = endDeg > START_DEG + 2;
+  const drawnArc = arcPath(START_DEG, endDeg);
 
   const pct = Math.round(Math.max(0, ratio) * 100);
   const state = tone === 'green' ? 'within expectation' : tone === 'orange' ? 'slightly above expected' : 'above expected';
@@ -158,12 +156,9 @@ export function BillRingGauge({ ratio, active, onToneChange }: { ratio: number; 
         {/* faint full track */}
         <Circle cx={VCX} cy={VCY} fill="none" r={VR} stroke={TRACK} strokeWidth={VSW} />
 
-        {[0, 1, 2].map((i) => {
-          const d = arcPath(ZONE_STARTS[i], Math.min(endDeg, ZONE_STARTS[i] + ZONE_DEG));
-          return d ? (
-            <Path d={d} fill="none" key={i} stroke={ZONE_COLORS[i]} strokeLinecap="round" strokeWidth={VSW} />
-          ) : null;
-        })}
+        {drawnArc ? (
+          <Path d={drawnArc} fill="none" stroke={currentColor} strokeLinecap="round" strokeWidth={VSW} />
+        ) : null}
         {/* inner lightning spark, colour synced with the head's zone (steady glow) */}
         <Circle cx={VCX} cy={VCY} fill="url(#billShockBoltGlow)" r={65} />
         <Polygon fill={headColor} points={boltPoints} />
