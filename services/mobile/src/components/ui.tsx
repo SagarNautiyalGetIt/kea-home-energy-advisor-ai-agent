@@ -4,14 +4,16 @@ import { BlurView } from 'expo-blur';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { useState, type ReactNode } from 'react';
 import { GlassSegmented } from '@/components/glass-segment';
+import { useHueScreen } from '@/components/hue-screen-context';
 import { palette, useAppTheme } from '@/theme';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { mode } = useAppTheme();
+  const hueScreen = useHueScreen();
   return (
-    <View style={[styles.card, style, { backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.56)', borderColor: mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.82)' }]}>
-      <BlurView intensity={mode === 'dark' ? 32 : 58} tint={mode === 'dark' ? 'dark' : 'light'} pointerEvents="none" style={StyleSheet.absoluteFill} />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.16)' }]} />
+    <View style={[styles.card, style, { backgroundColor: hueScreen ? mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.30)' : mode === 'dark' ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.56)', borderColor: hueScreen ? 'transparent' : mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.82)' }]}>
+      <BlurView intensity={hueScreen ? mode === 'dark' ? 18 : 34 : mode === 'dark' ? 32 : 58} tint={mode === 'dark' ? 'dark' : 'light'} pointerEvents="none" style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hueScreen ? mode === 'dark' ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.07)' : mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.16)' }]} />
       <View style={styles.cardContent}>{children}</View>
     </View>
   );
@@ -121,12 +123,12 @@ const styles = StyleSheet.create({
   multilineFrame: { minHeight: 110, alignItems: 'flex-start', paddingVertical: 10 },
   multilineInput: { minHeight: 88, textAlignVertical: 'top' },
   error: { color: palette.red, fontSize: 12, fontWeight: '600' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  header: { position: 'relative', alignItems: 'center', marginBottom: 20 },
   homeButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  headerCopy: { flex: 1, alignItems: 'center' },
+  headerCopy: { width: '100%', alignItems: 'center' },
   title: { fontSize: 27, lineHeight: 34, fontWeight: '700', letterSpacing: -0.8, textAlign: 'center' },
   subtitle: { marginTop: 4, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  headerAction: { width: 42, alignItems: 'flex-end' },
+  headerAction: { position: 'absolute', right: 0, top: 0, width: 42, alignItems: 'flex-end' },
   iconButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 15 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
   sectionTitle: { fontSize: 19, fontWeight: '700', letterSpacing: -0.3 },

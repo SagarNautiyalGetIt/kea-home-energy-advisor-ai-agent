@@ -111,6 +111,10 @@ export function PaymentCard({ brand, last4, cardholder, expiry }: Props) {
     .onEnd((event) => {
       if (Math.abs(event.translationY) > 35) runOnJS(flip)();
     });
+  const tapGesture = Gesture.Tap().onEnd((_event, success) => {
+    if (success) runOnJS(flip)();
+  });
+  const cardGesture = Gesture.Simultaneous(swipeGesture, tapGesture);
 
   const frontStyle = useAnimatedStyle(() => ({
     opacity: interpolate(rot.value, [0, 89, 91, 180], [1, 1, 0, 0]),
@@ -129,8 +133,8 @@ export function PaymentCard({ brand, last4, cardholder, expiry }: Props) {
 
   return (
     <View>
-      <GestureDetector gesture={swipeGesture}>
-      <View accessible accessibilityLabel={`${brand} card ending in ${last4}. Swipe up or down to flip.`} accessibilityRole="button" style={styles.cardWrap}>
+      <GestureDetector gesture={cardGesture}>
+      <View accessible accessibilityLabel={`${brand} card ending in ${last4}. Tap or swipe up or down to flip.`} accessibilityRole="button" style={styles.cardWrap}>
           {/* FRONT */}
           <Animated.View style={[styles.face, frontStyle]}>
             <LinearGradient

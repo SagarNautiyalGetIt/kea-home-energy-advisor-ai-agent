@@ -84,7 +84,7 @@ export default function BillingScreen() {
     finally { setDocumentBusy(false); }
   };
 
-  return <Screen>
+  return <Screen hue hueStretch>
     <PageHeader title="Billing" subtitle="Your billing information from Kea Energy." />
     {!loading && billing.invoices.length ? <Animated.View entering={FadeInUp.duration(400)}>
       <View style={styles.billHero}>
