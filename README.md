@@ -173,6 +173,7 @@ meter reading. The recorder keeps tool arguments and results for review. Read
 | [`data/`](data/) | Data pipeline, sample data, and dictionary. |
 | [`infra/`](infra/) | Local services and AWS deployment material. |
 | [`contracts/`](contracts/) | Committed OpenAPI contract shared by clients and API. |
+| [`qa/`](qa/) | End-to-end functional tests (Playwright), mobile acceptance testing and device runbooks. |
 
 New contributors: start with [your team's page](docs/teams/README.md), then
 read [CONTRIBUTING.md](CONTRIBUTING.md). For deeper context, see the

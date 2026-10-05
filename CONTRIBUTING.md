@@ -91,6 +91,7 @@ Refs: KEA-64
 | AI | `narration` · `providers` · `evals` · `voice` |
 | Data | `analytics` · `db` · `data` |
 | AWS | `infra` · `deploy` |
+| QA | `qa` |
 | Anyone | `ci` · `docs` · `contracts` · `repo` |
 
 ### Good
@@ -215,10 +216,12 @@ question, write an ADR — it takes ten minutes and saves an argument.
 | Architecture decisions | `docs/adr/` |
 | Smaller dated calls | `docs/decision-log.md` |
 | Sprint boards | `docs/sprints/` |
+| Test approach, coverage and how to run the end-to-end suite | `qa/README.md` |
 
 Each top-level directory also has a README explaining what belongs in it —
 [`services/`](services/), [`ml/`](ml/), [`data/`](data/), [`infra/`](infra/),
-[`contracts/`](contracts/). If you are unsure where a file goes, that is where to look.
+[`contracts/`](contracts/), [`qa/`](qa/). If you are unsure where a file goes, that is
+where to look.
 
 ---
 

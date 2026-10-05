@@ -31,6 +31,10 @@ when you want live responses.
 - **The live pitch demo runs on an iPhone.** Test thoroughly on iOS: check notch / Dynamic
   Island clearance, iOS navigation transitions, and Apple Human Interface Guidelines (HIG)
   tap target standards (minimum 44x44pt).
+- **Device runbooks and release acceptance checklists live in [`qa/`](../../qa/).** QA runs
+  manual acceptance testing of the mobile app on a physical phone; the test cases, report
+  and open defects are linked from #349. Tag QA on a PR that changes a flow those cases
+  cover, so the affected cases are re-run.
 
 ---
 
@@ -132,3 +136,4 @@ newline. On a phone especially, a five-sentence explanation in one block is unre
 - [`../../contracts/README.md`](../../contracts/README.md) — The frozen API contract
 - [`../api-standards.md`](../api-standards.md) — API standards and conventions
 - [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) — Branch naming, commit scopes, and PR rules
+- [`qa.md`](qa.md) — How the app is acceptance-tested, and the device runbooks in `qa/`

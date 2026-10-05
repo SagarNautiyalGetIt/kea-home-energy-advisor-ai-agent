@@ -42,6 +42,11 @@ stream. Debugging a UI and an SSE parser at the same time is two problems.
   cannot identify appliances — the refusal is a demo line, not a gap.
 - **Regenerate types after every backend endpoint change.** A stale `api.d.ts` compiles
   perfectly and lies to you.
+- **Treat accessible names as part of the interface.** The end-to-end suite in `qa/e2e/`
+  finds elements by role and label — `getByRole('button', { name: 'Send message' })` —
+  so renaming a visible label or an `aria-label` breaks tests that pass on your machine.
+  Tag QA on the PR when you change one. Charts expose nothing to query, so they are the one
+  place a `data-testid` is wanted.
 
 ## The trap
 
@@ -63,3 +68,4 @@ exactly the failure the product claims to prevent.
 - [`../../services/web/README.md`](../../services/web/README.md)
 - [`../../contracts/README.md`](../../contracts/README.md)
 - [`../api-standards.md`](../api-standards.md)
+- [`qa.md`](qa.md) — the end-to-end suite that drives these pages
