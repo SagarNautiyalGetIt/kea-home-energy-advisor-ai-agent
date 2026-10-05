@@ -17,8 +17,6 @@ export type NotificationPreferences = {
   phoneE164: string | null;
   quietHoursStart: number | null;
   quietHoursEnd: number | null;
-  quietHoursStartMinute: number;
-  quietHoursEndMinute: number;
   timezone: string;
   theme: 'light' | 'dark';
 };
@@ -46,8 +44,6 @@ export async function loadNotificationPreferences(customerId: string): Promise<N
     phoneE164: typeof value.phone_e164 === 'string' ? value.phone_e164 : null,
     quietHoursStart: typeof value.quiet_hours_start === 'number' ? value.quiet_hours_start : null,
     quietHoursEnd: typeof value.quiet_hours_end === 'number' ? value.quiet_hours_end : null,
-    quietHoursStartMinute: typeof value.quiet_hours_start_minute === 'number' ? value.quiet_hours_start_minute : 0,
-    quietHoursEndMinute: typeof value.quiet_hours_end_minute === 'number' ? value.quiet_hours_end_minute : 0,
     timezone: typeof value.timezone === 'string' ? value.timezone : 'Pacific/Auckland',
     theme: value.theme === 'light' ? 'light' : 'dark',
   };
@@ -70,8 +66,6 @@ export function saveNotificationPreferences(customerId: string, preferences: Not
     phone_e164: preferences.phoneE164,
     quiet_hours_start: preferences.quietHoursStart,
     quiet_hours_end: preferences.quietHoursEnd,
-    quiet_hours_start_minute: preferences.quietHoursStartMinute,
-    quiet_hours_end_minute: preferences.quietHoursEndMinute,
     timezone: preferences.timezone,
     theme: preferences.theme,
   }));

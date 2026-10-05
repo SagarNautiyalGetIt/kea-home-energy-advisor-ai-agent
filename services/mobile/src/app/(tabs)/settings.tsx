@@ -23,7 +23,7 @@ type Preferences = NotificationPreferences;
 type SettingsModal = 'privacy' | 'security' | 'change-password' | 'reset-email' | null;
 type PasswordErrors = { current?: string; next?: string; confirm?: string };
 
-const defaults: Preferences = { accountRef: '', enabled: true, emailNotifications: true, smsNotifications: false, phoneNotifications: false, billReminders: true, tier1Pct: 15, tier2Pct: 40, tier3Pct: 75, minOvershootNzd: 20, offlineModelOptIn: false, email: null, phoneE164: null, quietHoursStart: 21, quietHoursEnd: 8, quietHoursStartMinute: 0, quietHoursEndMinute: 0, timezone: 'Pacific/Auckland', theme: 'dark' };
+const defaults: Preferences = { accountRef: '', enabled: true, emailNotifications: true, smsNotifications: false, phoneNotifications: false, billReminders: true, tier1Pct: 15, tier2Pct: 40, tier3Pct: 75, minOvershootNzd: 20, offlineModelOptIn: false, email: null, phoneE164: null, quietHoursStart: 21, quietHoursEnd: 8, timezone: 'Pacific/Auckland', theme: 'dark' };
 const tierOptions = { email: [10, 15, 20, 30, 40], sms: [40, 50, 60, 70], phone: [70, 75, 80, 90, 100] } as const;
 type ScanResult = { devices_found?: number; devices?: { name?: string; kind?: string; note?: string; address?: string | null; service?: string; could_connect_via?: string | null }[]; error?: string | null };
 type ModelHealth = { provider: string; model: string; model_ready: boolean };
@@ -306,7 +306,7 @@ export default function SettingsScreen() {
         <ThresholdChannel checked={preferences.smsNotifications} colors={colors} dimmed={alertsOff} label="Text message" note="Interrupts your day — set this higher than the email." options={tierOptions.sms} onToggle={() => update({ smsNotifications: !preferences.smsNotifications })} onValue={(tier2Pct) => update({ tier2Pct })} value={preferences.tier2Pct} />
         <ThresholdChannel checked={preferences.phoneNotifications} colors={colors} dimmed={alertsOff} label="A call from Sparky" note="Sparky calls you. Off unless you turn it on." options={tierOptions.phone} onToggle={() => update({ phoneNotifications: !preferences.phoneNotifications })} onValue={(tier3Pct) => update({ tier3Pct })} value={preferences.tier3Pct} />
         <NumberSetting colors={colors} dimmed={alertsOff} detail="This is the dollar floor underneath every alert level above." label="Never alert me under" max={500} onValue={(minOvershootNzd) => update({ minOvershootNzd })} prefix="$" value={preferences.minOvershootNzd} />
-        <View style={[styles.quietSetting, { borderBottomColor: colors.border }, alertsOff && styles.disabledChannel]}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>Quiet hours</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>Texts and calls wait until morning. Emails still arrive.</Text></View><View style={styles.quietInputs}><TimeInput colors={colors} dimmed={alertsOff} hour={preferences.quietHoursStart ?? 21} minute={preferences.quietHoursStartMinute} onHour={(quietHoursStart) => update({ quietHoursStart })} onMinute={(quietHoursStartMinute) => update({ quietHoursStartMinute })} label="Start" /><Text style={{ color: colors.textMuted }}>to</Text><TimeInput colors={colors} dimmed={alertsOff} hour={preferences.quietHoursEnd ?? 8} minute={preferences.quietHoursEndMinute} onHour={(quietHoursEnd) => update({ quietHoursEnd })} onMinute={(quietHoursEndMinute) => update({ quietHoursEndMinute })} label="End" /></View></View>
+        <View style={[styles.quietSetting, { borderBottomColor: colors.border }, alertsOff && styles.disabledChannel]}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.text }]}>Quiet hours</Text><Text style={[styles.settingDetail, { color: colors.textMuted }]}>Choose whole hours (24-hour clock). Texts and calls wait; emails still arrive.</Text></View><View style={styles.quietInputs}><TimeInput colors={colors} dimmed={alertsOff} hour={preferences.quietHoursStart ?? 21} onHour={(quietHoursStart) => update({ quietHoursStart })} label="Start" /><Text style={{ color: colors.textMuted }}>to</Text><TimeInput colors={colors} dimmed={alertsOff} hour={preferences.quietHoursEnd ?? 8} onHour={(quietHoursEnd) => update({ quietHoursEnd })} label="End" /></View></View>
         <NotificationChannel checked={preferences.billReminders} colors={colors} detail="Receive reminders before a bill is due." icon="calendar-outline" label="Bill reminders" onPress={() => update({ billReminders: !preferences.billReminders })} />
       </Card>
 
@@ -594,13 +594,10 @@ function NumberSetting({ colors, label, detail, prefix, value, max, onValue, dim
 
 function padTime(value: number) { return String(value).padStart(2, '0'); }
 
-function TimeInput({ colors, hour, minute, onHour, onMinute, label, dimmed = false }: { colors: ReturnType<typeof useAppTheme>['colors']; hour: number; minute: number; onHour: (value: number) => void; onMinute: (value: number) => void; label: string; dimmed?: boolean }) {
+function TimeInput({ colors, hour, onHour, label, dimmed = false }: { colors: ReturnType<typeof useAppTheme>['colors']; hour: number; onHour: (value: number) => void; label: string; dimmed?: boolean }) {
   const [hourText, setHourText] = useState(() => padTime(hour));
-  const [minuteText, setMinuteText] = useState(() => padTime(minute));
   const hourFocused = useRef(false);
-  const minuteFocused = useRef(false);
   useEffect(() => { if (!hourFocused.current) setHourText(padTime(hour)); }, [hour]);
-  useEffect(() => { if (!minuteFocused.current) setMinuteText(padTime(minute)); }, [minute]);
   const change = (text: string, max: number, setText: (value: string) => void, onValue: (value: number) => void) => {
     if (!/^\d{0,2}$/.test(text) || (text && Number(text) > max)) return;
     setText(text);
@@ -608,8 +605,7 @@ function TimeInput({ colors, hour, minute, onHour, onMinute, label, dimmed = fal
   };
   return <View style={[styles.timeBox, { backgroundColor: colors.input, borderColor: colors.border }]}>
     <TextInput accessibilityLabel={`${label} quiet hours hour`} editable={!dimmed} keyboardType="number-pad" maxLength={2} onBlur={() => { hourFocused.current = false; setHourText(padTime(hour)); }} onChangeText={(text) => change(text, 23, setHourText, onHour)} onFocus={() => { hourFocused.current = true; }} selectTextOnFocus style={[styles.timeInput, { color: colors.text }]} value={hourText} />
-    <Text style={{ color: colors.textMuted }}>:</Text>
-    <TextInput accessibilityLabel={`${label} quiet hours minute`} editable={!dimmed} keyboardType="number-pad" maxLength={2} onBlur={() => { minuteFocused.current = false; setMinuteText(padTime(minute)); }} onChangeText={(text) => change(text, 59, setMinuteText, onMinute)} onFocus={() => { minuteFocused.current = true; }} selectTextOnFocus style={[styles.timeInput, { color: colors.text }]} value={minuteText} />
+    <Text style={[styles.timeInput, { color: colors.textMuted }]}>:00</Text>
   </View>;
 }
 
