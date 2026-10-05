@@ -104,6 +104,7 @@ export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneCh
     if (reduceMotion) {
       // reduced motion: final customer-data state immediately, no animation
       progress.setValue(target);
+      setHeadDeg(START_DEG + target);
       onToneChange?.(tone);
     } else if (firstMount.current) {
       firstMount.current = false;
@@ -132,11 +133,9 @@ export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneCh
 
   const endDeg = Math.min(headDeg, BILL_RING_MAX_DEG);
   const head = polar(endDeg);
-  const atTarget = Math.abs(endDeg - (START_DEG + target)) < 1;
   const currentTone = billRingToneForAngle(endDeg);
   const currentColor = currentTone === 'green' ? GREEN : currentTone === 'orange' ? ORANGE : RED;
-  const finalColor = tone === 'green' ? GREEN : tone === 'orange' ? ORANGE : RED;
-  const headColor = atTarget ? finalColor : currentColor;
+  const headColor = currentColor;
   const showHead = endDeg > START_DEG + 2;
 
   const pct = Math.round(Math.max(0, ratio) * 100);
@@ -163,9 +162,7 @@ export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneCh
         {/* faint full track */}
         <Circle cx={VCX} cy={VCY} fill="none" r={VR} stroke={TRACK} strokeWidth={VSW} />
 
-        {atTarget ? (
-          <Path d={arcPath(START_DEG, endDeg)} fill="none" stroke={finalColor} strokeLinecap="round" strokeWidth={VSW} />
-        ) : [0, 1, 2].map((i) => {
+        {[0, 1, 2].map((i) => {
           const d = arcPath(ZONE_STARTS[i], Math.min(endDeg, ZONE_STARTS[i] + ZONE_DEG));
           return d ? (
             <Path d={d} fill="none" key={i} stroke={ZONE_COLORS[i]} strokeLinecap="round" strokeWidth={VSW} />
