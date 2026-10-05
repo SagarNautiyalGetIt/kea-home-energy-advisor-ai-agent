@@ -23,6 +23,7 @@ built by the backend owner.
 | Botman backtest | Stages 1–3 on the export of the day, own branch | **done, 17–18 Sep** on `forecast-backtest`: Stages 1–2 against the 12 Sep export (gate PASS), and Stage 3 after this rebuild, which re-ran the headline on the 17 Sep export (PASS again) and failed the seasonal variant |
 | 4. Rebuild and evaluate | `make rebuild-demo`, evaluation against the thresholds below, backend brief 2 with measured figures | **done, 18 Sep** — rebuild green (dbt 308 PASS, `assert-source` and `assert-serving` pass, 6 dashboards verified, 10 Soda serving checks pass); the evaluation reports 44 figures, of which 2 missed a target — both in brief 2 |
 | 5. The household with both panels and an EV | Load-linked array sizes, three solar+EV plants, `detect-v2`, the `solar_soak` scenario, migration `V006`, design §15.11, the evaluation's §1a and §9a, dashboard section 7, backend brief 3 | **code done, 20 Sep** — `make lint`, `make test` (244 + 99) and `make ci-dbt-parse` green, the five new dashboard queries replayed on a throwaway Postgres with V001–V006 applied. **Not yet re-measured**: it needs `make init-data` and a rebuild, so every figure in §15.10 and in `analysis/sprint4_evaluation/results/` still describes the pre-V006 cohort |
+| 6. The home battery | Migration `V007` (`battery_kwh`) and `V008` (`battery_dispatch`, grid charging), sourced battery figures, dashboard 11 section 5, backend brief 4 | **done, 1 Oct** — `V007` merged (#259); the sources (#265) and grid charging (#267) in review. Published as `demo-20261001T130219`: `make ci` green, `assert_serving` 61 pass / 5 known / 0 fail, the evaluation's hand check on a grid-charged row reads Match |
 
 Registrations that name a producer — `serving.TABLES`, the export SQL files,
 the new jobs in `publish()`, the `validate()` requirements and `DECISIONS` in
@@ -221,6 +222,21 @@ Figures are aggregates.
   side of it: see `solar_soak` below.) Generation is counted on metered
   half-hours only, so one row's generation, saving and payback describe the
   same half-hours. Install cost is 2,000–3,000 NZD per kW, marked `[ASSUMED]`.
+- **Home battery** (added 30 Sep, `V007`): every size is also priced with a
+  13.5 kWh battery, `battery_kwh`. It is walked through the real half-hours in
+  time order: surplus charges it before anything is exported (5 kW, 90% round
+  trip, the loss taken on the way in), import is met from it, and a gap in the
+  readings empties it. Its cost is added to the panels'. Capacity, power and
+  round trip are `[PUBLISHED]`, from one product's datasheet; the cost,
+  12,000–18,000 NZD, is `[ASSUMED]` and brackets a survey of 63 NZ
+  installations (`estimate_assumptions.py` cites both).
+- **Charging it from the grid** (added 1 Oct, `V008`): on a plan with more than
+  one import rate (Time of Use, Weekend) each size also gets a `grid_charge`
+  battery, `battery_dispatch`. It tops up from the grid in the plan's cheapest
+  half-hours, leaving room for as much surplus as the panels made the day
+  before, does not discharge in them, and gives the energy back where the rate,
+  after the loss, still beats them. Grid energy never counts as solar
+  self-use. Flat plans get no such row.
 - **`solar_soak`** (added 20 Sep): for accounts that *do* export, charging is
   placed in the NZ day's half-hours ranked by **measured** export, capped at
   each half-hour's own export, in both scenarios. Offered only when the basis
@@ -338,7 +354,9 @@ assessed day; no row = not assessed.
 | `built_at` | timestamptz not null |
 
 `kea.solar_estimate` — append-only; read the rows with the newest
-`computed_at` per account (index `(account_id, computed_at DESC, system_kw)`).
+`computed_at` per account (index `(account_id, computed_at DESC, system_kw,
+battery_kwh, battery_dispatch)`). ⚠️ Since `V007` and `V008` a size has up to
+three rows; see backend brief 4.
 
 | Column | Type |
 |---|---|
@@ -346,6 +364,8 @@ assessed day; no row = not assessed.
 | `account_id` | bigint not null |
 | `plan_id` | integer not null (the plan both costs were priced on) |
 | `system_kw` | numeric(4,1) not null (3, 5, 7) |
+| `battery_kwh` | numeric(4,1) not null (`V007`): 0 = panels alone, 13.5 = with a battery |
+| `battery_dispatch` | text (`V008`): NULL without a battery, `self_consumption` or `grid_charge` |
 | `weather_region` | text not null |
 | `basis_from`, `basis_to` | date not null |
 | `annual_generation_kwh_low` / `_high` | numeric(10,1) not null |
@@ -701,3 +721,69 @@ rather than 65.2% only because the new shape joined the pool.
 
 The dashboard's new **section 7 · When the panels are in the way** has been
 rebuilt against this release (dashboard 11, 38 cards, `--check` clean).
+
+---
+
+## Backend brief 4 — the home battery (`V007`, `V008`)
+
+Written 1 Oct 2026, after the release it describes. The shape, the wording and
+the figures below are all measured on `demo-20261001T130219`.
+
+### What changed in `kea.solar_estimate`
+
+Each system size used to have one row. It now has up to three:
+
+| `battery_kwh` | `battery_dispatch` | the row assumes | written for |
+|---|---|---|---|
+| 0 | NULL | panels alone — exactly the rows there were before | every estimated account |
+| 13.5 | `self_consumption` | a battery that stores only what the panels would export | every estimated account |
+| 13.5 | `grid_charge` | the same battery, also filled from the grid in the plan's cheapest half-hours | accounts on a plan with more than one import rate |
+
+- ⚠️ **A reader keyed on `(account_id, system_kw)` now finds two or three rows.**
+  `battery_kwh = 0` gives the old panels-only answer; add `battery_kwh` and
+  `battery_dispatch` to the key to read the rest.
+- **On a battery row `install_cost_nzd_*` includes the battery** (12,000–18,000
+  NZD on top of the panels), so payback is still cost ÷ saving.
+- **`self_used_pct_*` counts only solar energy**, including the solar share of
+  what the battery gives back. Grid energy that passed through the battery is
+  never counted.
+- Both columns are in `design/serving_read_contract.json`, so
+  `ServingReadContract` fails if either is renamed, dropped or retyped.
+
+### Wording rule
+
+- Name the battery the row assumes: "with a 13.5 kWh home battery", and for a
+  `grid_charge` row, "also charged from the grid overnight on your Time of Use
+  plan" (or "at weekends" on the Weekend plan).
+- A `self_consumption` row must not imply grid charging: "it stores only what
+  your panels would otherwise export".
+- ⚠️ **A battery row is not always the better row.** It saves more each year
+  and usually pays back later, and on a large array a `grid_charge` row can
+  save slightly less than the `self_consumption` one in a sunny year. Show
+  the rows side by side; never pick one for the customer.
+- As for panels: always the range, "simple payback", and the
+  `assumptions_version` (`sprint4-assumptions-v3`).
+
+### Figures you can quote
+
+Medians over the estimated households, low – high:
+
+| system | households | saving a year | used at home | payback, years |
+|---|---|---|---|---|
+| 5 kW, panels alone | 36 | $904 – $1,116 | 32.4 – 40.5% | 9.0 – 16.6 |
+| 5 kW + battery | 36 | $1,373 – $1,785 | 75.5 – 85.5% | 12.4 – 24.1 |
+| 5 kW + battery, grid-charged | 20 | $1,585 – $1,859 | 69.9 – 77.5% | 11.9 – 20.9 |
+
+For the same 20 households, the grid-charged battery shortens the payback
+against the surplus-only one most on small arrays and on the Weekend plan: at
+3 kW, from 14.8 – 31.0 to 11.9 – 21.6 years on Weekend and from 14.2 – 29.0 to
+12.6 – 21.9 on Time of Use. At 7 kW on Time of Use the two are within a few
+months of each other.
+
+### What we are NOT giving you
+
+- **A battery without panels.** The table requires `system_kw > 0`; a
+  battery-only what-if is a separate piece of work.
+- **Selling stored energy back to the grid.** Kea's buy-back is flat, so it
+  would never pay; no row assumes it.
+- **Grid charging on a flat plan.** There it only loses the round trip.
