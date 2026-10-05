@@ -214,8 +214,61 @@ html[data-theme='dark'] .energy-home-scene-shell {
   cursor: pointer;
 }
 
-.energy-home-summary-trigger { text-align: left; }
-.energy-home-alert-trigger { text-align: right; }
+.energy-home-summary-trigger {
+  text-align: left;
+}
+
+.energy-home-summary-trigger:focus-visible {
+  outline: 2px solid #4318ff;
+  outline-offset: 3px;
+}
+.energy-home-alert-trigger {
+  --bill-status-color: #64748b;
+  --bill-status-fill: rgb(248 250 252 / 88%);
+  padding: 12px 14px;
+  border: 1px solid var(--bill-status-color);
+  border-radius: 14px;
+  color: var(--bill-status-color);
+  background: var(--bill-status-fill);
+  text-align: right;
+  text-shadow: none;
+  transform-origin: right center;
+  transition: transform .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.energy-home-alert-trigger--alert {
+  border-color: #e99a9a;
+  --bill-status-color: #b91c1c;
+  --bill-status-fill: rgb(254 226 226 / 94%);
+  box-shadow: 0 4px 16px rgb(185 28 28 / 12%);
+}
+
+.energy-home-alert-trigger--normal {
+  --bill-status-color: #166534;
+  --bill-status-fill: rgb(240 253 244 / 88%);
+}
+
+.energy-home-alert-trigger strong,
+.energy-home-alert-trigger small {
+  color: #243b5e;
+}
+
+.energy-home-alert-trigger:hover {
+  background: var(--bill-status-fill);
+  transform: scale(1.05);
+}
+
+.energy-home-alert-trigger:focus-visible {
+  outline: 2px solid #4318ff;
+  outline-offset: 3px;
+}
+
+.energy-home-action-hint {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.energy-home-summary-trigger .energy-home-action-hint { color: #4318ff; }
 
 .energy-home-summary-trigger svg {
   color: #4318ff;
@@ -240,12 +293,12 @@ html[data-theme='dark'] .energy-home-scene-shell {
 }
 
 .energy-home-alert-trigger svg {
-  color: #ef4444;
+  color: var(--bill-status-color);
 }
 
 .energy-home-alert-trigger:hover .energy-home-weather-icon,
 .energy-home-alert-trigger:focus-visible .energy-home-weather-icon {
-  border-color: rgb(239 68 68 / 45%);
+  border-color: var(--bill-status-color);
   background: #fff;
 }
 
@@ -466,6 +519,8 @@ html[data-theme='dark'] .energy-home-scene-shell {
   .energy-home-weather-icon { width: 30px; height: 30px; }
   .energy-home-weather strong { font-size: 11px; }
   .energy-home-weather small { font-size: 9px; }
+  .energy-home-action-hint { font-size: 10px; }
+  .energy-home-alert-trigger { padding: 8px 9px; }
   .energy-home-actions { flex-direction: column; align-items: flex-end; gap: 6px; }
   .energy-home-direction { min-height: 30px; padding: 6px 8px; font-size: 9px; }
   /* The scene is barely taller than the assessment on a phone, and it clips anything that
@@ -480,6 +535,7 @@ html[data-theme='dark'] .energy-home-scene-shell {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .energy-home-alert-trigger:hover { transform: none; }
   .energy-home-panel *,
   .energy-home-panel *::before,
   .energy-home-panel *::after {

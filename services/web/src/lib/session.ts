@@ -5,9 +5,9 @@
  * boolean. Every page then picked `households[0]`, so all fourteen logins showed the
  * same customer and the app had no concept of "you". This holds the identity instead.
  *
- * Still `localStorage`, still no token, still not authentication: see
- * `services/api/app/auth.py` for why that is acceptable against synthetic accounts and
- * what has to replace it before a real one. The single rule worth keeping is that
+ * This prototype stores the identity and optional short-lived demo API token in
+ * `localStorage`. See `services/api/app/auth.py` for the synthetic-account boundary
+ * and what must replace it before a real deployment. The single rule worth keeping is that
  * `customerId` is read from here rather than guessed, so when the session becomes real
  * there is one place to change.
  */
@@ -16,6 +16,8 @@ const KEY = 'kea-demo-session'
 
 export interface Session {
   customerId: string
+  /** Short-lived token supplied by the sign-in API for authenticated feature routes. */
+  accessToken?: string
   displayName: string
   /** What this account is for — shown on the profile chip so a tester knows which
    *  scenario they are looking at without cross-referencing the credentials list. */
@@ -32,6 +34,7 @@ export function loadSession(): Session | null {
     if (!parsed.customerId) return null
     return {
       customerId: parsed.customerId,
+      accessToken: typeof parsed.accessToken === 'string' ? parsed.accessToken : undefined,
       displayName: parsed.displayName ?? parsed.customerId,
       scenario: parsed.scenario ?? '',
     }

@@ -380,6 +380,7 @@ export interface LoginResponse {
   customer_id: string;
   display_name: string;
   scenario: string;
+  access_token?: string;
 }
 
 export interface DemoAccountCard extends LoginResponse {

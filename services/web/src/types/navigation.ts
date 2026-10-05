@@ -1,1 +1,1 @@
-export type PageId = 'dashboard' | 'usage' | 'billing' | 'assistant' | 'plans' | 'profile' | 'help' | 'settings'
+export type PageId = 'dashboard' | 'usage' | 'billing' | 'assistant' | 'plans' | 'clash' | 'profile' | 'help' | 'settings'

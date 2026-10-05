@@ -1,7 +1,7 @@
 import type { ComponentType, FocusEvent, MouseEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, X, type LucideProps } from 'lucide-react'
+import { Bell, ChartNoAxesColumnIncreasing, CheckCheck, CircleDollarSign, CircleHelp, House, ListChecks, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, SquareUserRound, Sun, Trophy, X, type LucideProps } from 'lucide-react'
 import BrandMark from './BrandMark'
 import SparkyIcon from './SparkyIcon'
 import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
@@ -29,6 +29,7 @@ const allNavItems: NavItem[] = [
   { id: 'billing', label: 'Billing', icon: CircleDollarSign, description: 'Invoices, payment status and saved card', keywords: 'bill pay invoice history balance due receipt' },
   { id: 'plans', label: 'Plans', icon: ListChecks, description: 'Pricing styles, terms and plan comparison', keywords: 'pricing compare tariff rate anytime time of use free weekends commitment credit' },
   { id: 'assistant', label: 'Sparky AI', icon: SparkyIcon, description: 'Ask about your bill, usage and plans', keywords: 'ai assistant chat question explain bill explainer' },
+  { id: 'clash', label: 'Power Clash', icon: Trophy, description: 'Energy quests, score arena and suburb league', keywords: 'game challenge mission xp rewards leaderboard conservation solar ev off peak' },
   { id: 'profile', label: 'Profile', icon: SquareUserRound, description: 'Your customer and contact details', keywords: 'account name address phone email password' },
 ]
 

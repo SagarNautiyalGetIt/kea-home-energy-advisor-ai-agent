@@ -93,10 +93,10 @@ function usePopover() {
  * The two top corners open the page's own data, which the page supplies because it is
  * the page's, not the scene's; without it that corner's chip is not drawn. `summary` is
  * what the chip in the top-left corner opens, and `billShock` what the warning chip in
- * the top-right corner opens. `billShockTriggered` makes that chip's alarm clock ring,
+ * the top-right corner opens. `billShockStatus` colours the chip and makes its alarm clock ring,
  * so it only rings when there is actually something to warn about.
  */
-export default function EnergyHomePanel({ summary, billShock, billShockTriggered = false }: { summary?: ReactNode; billShock?: ReactNode; billShockTriggered?: boolean }) {
+export default function EnergyHomePanel({ summary, billShock, billShockStatus = 'unavailable' }: { summary?: ReactNode; billShock?: ReactNode; billShockStatus?: 'alert' | 'normal' | 'unavailable' }) {
   const sceneRef = useRef<HTMLDivElement>(null)
   const sceneInView = useRef(true)
   const [preferences, setPreferences] = useState<Preferences>(loadPreferences)
@@ -226,6 +226,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockTriggered
                   <div>
                     <strong>Usage &amp; Costs</strong>
                     <small>This cycle so far</small>
+                    <span className="energy-home-action-hint">Explore usage →</span>
                   </div>
                 </button>
                 {summaryPopover.open && (
@@ -249,7 +250,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockTriggered
                 <div className="energy-home-alert" ref={alertPopover.ref}>
                   <button
                     type="button"
-                    className={`energy-home-weather energy-home-alert-trigger${billShockTriggered ? ' is-ringing' : ''}`}
+                    className={`energy-home-weather energy-home-alert-trigger energy-home-alert-trigger--${billShockStatus}${billShockStatus === 'alert' ? ' is-ringing' : ''}`}
                     aria-expanded={alertPopover.open}
                     aria-controls="energy-home-alert-detail"
                     onClick={() => alertPopover.setOpen((open) => !open)}
@@ -257,6 +258,8 @@ export default function EnergyHomePanel({ summary, billShock, billShockTriggered
                     <div>
                       <strong>Power Bill Shock Warning</strong>
                       <small>Projection for this cycle</small>
+                      <span className="energy-home-action-hint">See why →</span>
+                      <span className="sr-only">{billShockStatus === 'alert' ? 'Bill shock warning active' : billShockStatus === 'normal' ? 'No bill shock expected' : 'Bill shock assessment unavailable'}</span>
                     </div>
                     <span className="energy-home-weather-icon"><AlarmClock size={19} /></span>
                   </button>
