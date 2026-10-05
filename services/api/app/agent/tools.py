@@ -871,6 +871,8 @@ def get_daily_usage(
 
     totals = [d.import_kwh for d in selected]
     base_loads = [d.base_load_kwh for d in selected if d.base_load_kwh is not None]
+    peak_kwh = max(totals)
+    peak_days = [d.date.isoformat() for d in selected if d.import_kwh == peak_kwh]
 
     return {
         "available": True,
@@ -889,6 +891,8 @@ def get_daily_usage(
                 "total_cost_nzd": _round(sum(totals) * ctx.usage.window.unit_price_nzd),
                 "unit_price_nzd": _round(ctx.usage.window.unit_price_nzd, 4),
                 "mean_daily_kwh": _round(sum(totals) / len(totals)),
+                "highest_import_kwh": _round(peak_kwh),
+                "highest_import_dates": peak_days,
                 "mean_base_load_kwh_per_day": _round(
                     sum(base_loads) / len(base_loads)
                 )

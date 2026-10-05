@@ -210,11 +210,23 @@ async def login(req: LoginRequest) -> LoginResponse:
             detail="demo logins are disabled on this deployment (set KEA_DEMO_LOGINS=1)",
         )
 
-    account = auth.authenticate(req.email, req.password)
+    account = auth.authenticate(
+        req.email,
+        req.password,
+        include_generated=settings.generated_demo_login and settings.persist,
+    )
     if account is None:
         # One message for both halves. Saying "no such email" enumerates accounts, and
         # the habit is worth keeping even where the accounts are synthetic.
         raise HTTPException(status_code=401, detail="Email or password is incorrect.")
+
+    try:
+        await get_repository().context(account.customer_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="This demo household has no loaded data. Ask the demo operator to load it.",
+        ) from exc
 
     log.info("demo login customer=%s", account.customer_id)
     return LoginResponse(
@@ -238,7 +250,17 @@ async def demo_accounts() -> list[DemoAccountCard]:
             status_code=503,
             detail="demo logins are disabled on this deployment (set KEA_DEMO_LOGINS=1)",
         )
-    return [DemoAccountCard(**vars(a)) for a in auth.DEMO_ACCOUNTS]
+    repository = get_repository()
+    available = []
+    for account in auth.demo_accounts(
+        include_generated=settings.generated_demo_login and settings.persist
+    ):
+        try:
+            await repository.context(account.customer_id)
+        except KeyError:
+            continue
+        available.append(DemoAccountCard(**vars(account)))
+    return available
 
 
 @router.get("/auth/session")

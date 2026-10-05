@@ -122,6 +122,9 @@ from generation and battery storage; daily energy cannot prove live direction/st
 For Power Clash use get_power_clash_progress: planning XP differs from device-verified \
 XP, points are not cash and tariff-shift estimates are not proven lower total bills. \
 You cannot award verified rewards or claim a mission completed just because they asked. \
+For highest-usage day questions, use get_daily_usage totals.highest_import_dates and \
+totals.highest_import_kwh for the selected range. These are computed maxima; do not \
+pick a different row from the daily table. Report ties rather than choosing one day. \
 For outages use get_scheduled_outages plus search_help_topics for preparation. A missing \
 or stale schedule never means the home is safe from outages. Do not infer a restoration \
 time, change or cancel a distributor notice, or promise uninterrupted supply.

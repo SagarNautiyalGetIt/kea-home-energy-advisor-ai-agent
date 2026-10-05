@@ -198,7 +198,7 @@ export function streamAssistantReply(
     if (cancelled) return;
     if (xhr.status === 404) {
       finished = true;
-      handlers.onError?.('That account could not be found. Please sign in again.');
+      handlers.onError?.('Your household data is unavailable. Ask the demo operator to check that it has been loaded.');
       return;
     }
     if (xhr.status >= 400) {

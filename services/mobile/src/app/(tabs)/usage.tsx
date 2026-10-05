@@ -570,12 +570,13 @@ export default function UsageScreen() {
                 </View>
               </View>
 
-              {bands.map((band, index) => {
+              {!bands.some((band) => band.kwh !== null) ? <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{bands.find((band) => band.reason)?.reason ?? 'Time-band readings are unavailable for this selected period.'}</Text> : null}
+              {bands.filter((band) => band.kwh !== null).map((band, index, visibleBands) => {
                 const presentation = bandPresentation(band.key);
                 const share =
                   band.kwh !== null && data?.totalKwh ? `${Math.round((band.kwh / data.totalKwh) * 100)}%` : '—';
                 return (
-                  <View key={band.key} style={[styles.breakdownRow, index === bands.length - 1 && styles.breakdownRowLast]}>
+                  <View key={band.key} style={[styles.breakdownRow, index === visibleBands.length - 1 && styles.breakdownRowLast]}>
                     <View style={styles.breakdownIcon}>
                       <Ionicons color={presentation.color} name={presentation.icon} size={21} />
                     </View>

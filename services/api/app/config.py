@@ -228,6 +228,9 @@ class Settings:
     demo_logins: bool = field(
         default_factory=lambda: _env("KEA_DEMO_LOGINS", "0").lower() in {"1", "true", "yes"}
     )
+    generated_demo_login: bool = field(
+        default_factory=lambda: _env("KEA_GENERATED_DEMO_LOGIN", "0") == "1"
+    )
 
     # --- Tiered alerts ------------------------------------------------------
     #: Off by default like the recorder, and for the same reason: sending needs a

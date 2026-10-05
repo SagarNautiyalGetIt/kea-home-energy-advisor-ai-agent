@@ -68,7 +68,8 @@ DEMO_ACCOUNTS: tuple[DemoAccount, ...] = (
         "coldsnap24",
         "H-COLD",
         "Cold Snap Household",
-        "Cold-snap driven, not behaviour. Trips the bill-shock warning at day 6.",
+        "Cold-snap driven, not behaviour. Completed July cycle; "
+        "the alert also requires a $20 increase.",
     ),
     DemoAccount(
         "spike@kea.example",
@@ -177,7 +178,20 @@ DEMO_ACCOUNTS: tuple[DemoAccount, ...] = (
 )
 
 _BY_EMAIL = {a.email.lower(): a for a in DEMO_ACCOUNTS}
+# PR #265's planted MAC000265. The account number is the generator's stable
+# hash of the LCL ID, not the cohort's renumbered ICP/surrogate key.
+GENERATED_DEMO_ACCOUNT = DemoAccount(
+    "walkthrough@kea.example",
+    "walkthrough24",
+    "A41636552",
+    "Generated Demo Household",
+    "Synthetic pipeline walkthrough: planted EV-shaped load and payment difficulty.",
+)
 _SESSIONS: dict[str, tuple[str, dt.datetime]] = {}
+
+
+def demo_accounts(*, include_generated: bool = False) -> tuple[DemoAccount, ...]:
+    return DEMO_ACCOUNTS + ((GENERATED_DEMO_ACCOUNT,) if include_generated else ())
 
 
 def issue_demo_token(customer_id: str) -> str:
@@ -198,13 +212,17 @@ def demo_token_customer(token: str) -> str | None:
     return customer_id
 
 
-def authenticate(email: str, password: str) -> DemoAccount | None:
+def authenticate(
+    email: str, password: str, *, include_generated: bool = False
+) -> DemoAccount | None:
     """The account, or None. Never says which half was wrong.
 
     `compare_digest` rather than `==` — the threat model here is empty, but a
     string-compare on a credential is a habit worth not writing down.
     """
     account = _BY_EMAIL.get(email.strip().lower())
+    if include_generated and email.strip().lower() == GENERATED_DEMO_ACCOUNT.email:
+        account = GENERATED_DEMO_ACCOUNT
     if account is None:
         # Compare anyway so a missing address and a wrong password cost the same time.
         secrets.compare_digest(password, "no-such-account")

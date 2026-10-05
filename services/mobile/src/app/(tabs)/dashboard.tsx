@@ -34,16 +34,19 @@ export default function DashboardScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const gaugePercentage = Math.min(Math.max(dashboard?.overshootPct ?? 0, 0), 100);
   const billShockTone: BillRingTone = dashboard?.warningTriggered ? 'red' : 'green';
-  const animatedBillShockColor = ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
+  const predictionAvailable = dashboard?.warningTriggered != null && !dashboardError;
+  const animatedBillShockColor = !predictionAvailable ? colors.textMuted : ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
-  const insightTitle = dashboard?.warningTriggered ? 'Currently tracking for bill shock' : 'Below bill-shock alert threshold';
+  const insightTitle = !predictionAvailable ? 'Bill prediction unavailable' : dashboard.warningTriggered ? 'Currently tracking for bill shock' : 'Below bill-shock alert threshold';
   const dashboardNotifications = dashboard?.warningTriggered
     ? [{ id: 'bill-shock', title: 'Bill prediction warning', detail: dashboard.warningReasons[0] ?? 'Your projected bill is above the expected amount.', unread: true }]
     : [];
 
   useEffect(() => {
     const controller = new AbortController();
+    setDashboard(null);
+    setDashboardError(null);
     getDashboardView(session?.customerId ?? '', controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) {
@@ -217,7 +220,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.shockModal}>
           <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
-          <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} />
+          {predictionAvailable ? <BillRingGauge onToneChange={setRingTone} tone={billShockTone} value={gaugePercentage} /> : <Text accessibilityRole="alert" style={[styles.shockBody, { color: colors.textMuted }]}>{dashboardError ?? 'No bill forecast is available for this account yet.'}</Text>}
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />
             <View style={styles.overshootCopy}>
@@ -231,9 +234,10 @@ export default function DashboardScreen() {
             </View>
             <View style={styles.insightCopy}>
               <Text style={[styles.insightTitle, { color: colors.text }]}>{insightTitle}</Text>
-              <Text style={[styles.insightBody, { color: colors.textMuted }]}>Ask Sparky AI for possible reasons</Text>
+              <Text style={[styles.insightBody, { color: colors.textMuted }]}>{predictionAvailable ? 'Ask Sparky AI for possible reasons' : 'A missing forecast does not mean your bill is below the warning threshold.'}</Text>
             </View>
           </View>
+          {!predictionAvailable ? <PrimaryButton label="Retry bill prediction" onPress={() => setReloadKey((key) => key + 1)} /> : null}
           <View style={styles.compareRow}>
             <View style={[styles.compareChip, { backgroundColor: colors.input, borderColor: colors.border }]}>
               <Text style={[styles.compareLabel, { color: colors.textMuted }]}>EXPECTED</Text>
