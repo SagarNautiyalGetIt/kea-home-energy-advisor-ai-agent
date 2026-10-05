@@ -12,6 +12,7 @@ import HelpPage from './pages/HelpPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PlansPage from './pages/PlansPage'
+import PowerClashPage from './pages/PowerClashPage'
 import RegisterPage from './pages/RegisterPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
@@ -23,7 +24,7 @@ import { clearThread } from './lib/thread'
 
 const routeFor: Record<PageId, string> = {
   dashboard: '/dashboard', usage: '/usage', billing: '/billing', assistant: '/assistant',
-  plans: '/plans', profile: '/profile', help: '/help', settings: '/settings',
+  plans: '/plans', clash: '/clash', profile: '/profile', help: '/help', settings: '/settings',
 }
 
 function App() {
@@ -78,6 +79,7 @@ function App() {
       <Route path="/assistant" element={<AssistantPage onEscalate={() => navigate('/help')} onToast={addToast}/>}/>
       <Route path="/solar" element={<SolarPage/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
+      <Route path="/clash" element={<PowerClashPage onSignIn={() => { clearSession(); setSession(null); navigate('/login') }} />}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>

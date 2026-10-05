@@ -150,7 +150,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const threadSolar = [...messages].reverse().find((item) => item.solar)?.solar
   const solarContext = threadSolar?.customerId === loadSession()?.customerId ? threadSolar : arrivingSolar
   const [started, setStarted] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() => new URLSearchParams(routeLocation.search).get('question') ?? '')
   const [busy, setBusy] = useState(false)
   const [escalating, setEscalating] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
