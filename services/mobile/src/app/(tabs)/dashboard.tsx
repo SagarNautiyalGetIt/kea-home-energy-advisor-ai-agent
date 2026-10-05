@@ -11,6 +11,7 @@ import { BillRingGauge, type BillRingTone } from '@/components/bill-ring-gauge';
 import { SparkyPresence } from '@/components/sparky-presence';
 import { PrimaryButton } from '@/components/ui';
 import { getDashboardView, type DashboardViewData } from '@/lib/dashboard-data';
+import { billRingToneForRatio } from '@/lib/bill-ring';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
@@ -36,7 +37,9 @@ export default function DashboardScreen() {
   const expected = dashboard?.expectedCostNzd;
   const billRatio = projected != null && expected != null && expected > 0 ? projected / expected : 0;
   const predictionAvailable = dashboard?.warningTriggered != null && projected != null && expected != null && expected > 0 && !dashboardError;
+  const finalBillShockTone = billRingToneForRatio(billRatio);
   const animatedBillShockColor = !predictionAvailable ? colors.textMuted : ringTone === 'red' ? '#EF4444' : ringTone === 'orange' ? '#FB923C' : '#22C55E';
+  const animatedBillShockTint = ringTone === 'red' ? 'rgba(239,68,68,0.13)' : ringTone === 'orange' ? 'rgba(251,146,60,0.13)' : 'rgba(34,197,94,0.13)';
 
   const money = (value: number | null | undefined) => (value == null ? '—' : `$${value.toFixed(2)}`);
   const insightTitle = !predictionAvailable ? 'Bill prediction unavailable' : dashboard.warningTriggered ? 'Currently tracking for bill shock' : 'Below bill-shock alert threshold';
@@ -80,6 +83,7 @@ export default function DashboardScreen() {
         onInteractionChange={setDockInteracting}
         blurTarget={homeBlurTarget}
         billPrediction={{
+          tone: predictionAvailable ? finalBillShockTone : undefined,
           detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
           onPress: () => setBillShockOpen(true),
           status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
@@ -222,8 +226,8 @@ export default function DashboardScreen() {
         <View style={styles.shockModal}>
           <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
           {predictionAvailable ? <BillRingGauge active={billShockOpen} onToneChange={setRingTone} ratio={billRatio} /> : <Text accessibilityRole="alert" style={[styles.shockBody, { color: colors.textMuted }]}>{dashboardError ?? 'No bill forecast is available for this account yet.'}</Text>}
-          {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
-            <Ionicons color={palette.red} name="alert-circle" size={24} />
+          {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={[styles.overshootCallout, { backgroundColor: animatedBillShockTint, borderColor: animatedBillShockColor }]}>
+            <Ionicons color={animatedBillShockColor} name="alert-circle" size={24} />
             <View style={styles.overshootCopy}>
               <Text style={[styles.overshootValue, { color: colors.text }]}>{dashboard.overshootPct.toFixed(1)}% over expected</Text>
               <Text style={[styles.overshootDetail, { color: colors.textMuted }]}>Projected {money(dashboard.overshootNzd)} above {dashboard.expectationBasis === 'comparable_homes' ? 'comparable homes' : 'your usual amount'}.</Text>
@@ -286,7 +290,7 @@ const styles = StyleSheet.create({
   dashboardRowTitle: { fontSize: 16, fontWeight: '800' },
   dashboardRowDetail: { marginTop: 3, fontSize: 12, lineHeight: 16 },
   billShockCard: { borderWidth: 1, borderRadius: 22, padding: 14, paddingBottom: 6 },
-  overshootCallout: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderWidth: 1.5, borderColor: palette.red, borderRadius: 16, backgroundColor: 'rgba(232,33,39,0.13)' },
+  overshootCallout: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderWidth: 1.5, borderRadius: 16 },
   overshootCopy: { flex: 1 },
   overshootValue: { fontSize: 19, lineHeight: 25, fontWeight: '800' },
   overshootDetail: { fontSize: 12, lineHeight: 17, marginTop: 3 },

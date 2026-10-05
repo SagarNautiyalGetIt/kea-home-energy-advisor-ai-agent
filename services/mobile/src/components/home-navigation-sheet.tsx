@@ -7,8 +7,9 @@ import { BottomNavigation } from './bottom-navigation';
 import { tactile } from '@/lib/haptics';
 import { useAppTheme } from '@/theme';
 import { opensHomeDock, tapsHomeDock } from '@/lib/home-presentation';
+import type { BillRingTone } from '@/lib/bill-ring';
 
-export function HomeNavigationSheet({ billPrediction, blurTarget, onInteractionChange }: { onInteractionChange?: (locked: boolean) => void; blurTarget: RefObject<View | null>; billPrediction: { detail: string; onPress: () => void; status?: 'warning' | 'normal' } }) {
+export function HomeNavigationSheet({ billPrediction, blurTarget, onInteractionChange }: { onInteractionChange?: (locked: boolean) => void; blurTarget: RefObject<View | null>; billPrediction: { detail: string; onPress: () => void; status?: 'warning' | 'normal'; tone?: BillRingTone } }) {
   const { colors, mode } = useAppTheme();
   const { height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();

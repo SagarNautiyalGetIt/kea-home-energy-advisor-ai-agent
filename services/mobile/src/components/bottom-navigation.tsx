@@ -6,13 +6,20 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { palette, useAppTheme } from '@/theme';
 import { SparkyPresence } from './sparky-presence';
 import { bottomNavMargin, NAV_DESTINATIONS } from '@/lib/bottom-navigation';
+import type { BillRingTone } from '@/lib/bill-ring';
 
 type Props = {
   includeHome?: boolean;
   listMode?: boolean;
   onNavigate?: () => void;
-  billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
+  billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal'; tone?: BillRingTone };
 };
+
+const billPredictionColors = {
+  green: { backgroundColor: 'rgba(34,197,94,0.07)', borderColor: '#22C55E' },
+  orange: { backgroundColor: 'rgba(251,146,60,0.10)', borderColor: '#FB923C' },
+  red: { backgroundColor: 'rgba(239,68,68,0.14)', borderColor: '#EF4444' },
+} as const;
 
 function BillingNavIcon({ color, detailColor, size }: { color: string; detailColor: string; size: number }) {
   return (
@@ -44,10 +51,11 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
     {items.map((item) => {
       const warning = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'warning';
       const normal = listMode && item.label === 'Bill prediction' && billPrediction?.status === 'normal';
-      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={() => { onNavigate?.(); item.onPress(); }} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
+      const predictionColors = listMode && item.label === 'Bill prediction' && billPrediction?.tone ? billPredictionColors[billPrediction.tone] : null;
+      return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={() => { onNavigate?.(); item.onPress(); }} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, predictionColors, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
       {item.label === 'Sparky AI' || item.label === 'Bill prediction' ? <SparkyPresence size={36} /> : item.label === 'Billing' ? <BillingNavIcon color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
-      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
+      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: predictionColors?.borderColor ?? (warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted) }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}
     </Pressable>;
     })}
