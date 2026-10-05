@@ -37,8 +37,9 @@ from app.account.mobile_plans import MobilePlansView, mobile_plans
 from app.agent.loop import AgentUnavailable
 from app.alerts.preferences import AlertPreferences
 from app.analytics import billshock, disaggregation
-from app.analytics import forecast as forecast_mod
 from app.analytics.annual_demand import from_context as annual_demand_from_context
+from app.analytics.billing_context import cycle_days as _cycle_days
+from app.analytics.billing_context import own_history as _own_history
 from app.analytics.engine import UsageWindow
 from app.analytics.repository import UsageContext
 from app.analytics.usage_series import from_context as usage_series_from_context
@@ -60,7 +61,6 @@ from app.homelink.insights import summarise as summarise_devices
 from app.homelink.schemas import DeviceObservation, Provider
 from app.narration.prompts import SYSTEM
 from app.pipeline import (
-    DAYS_IN_JULY,
     UnknownCustomerError,
     answer,
     answer_stream,
@@ -95,6 +95,12 @@ from app.voice.vad import TurnDetector
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.get("/live", include_in_schema=False)
+async def live() -> dict[str, str]:
+    """Container liveness without a paid model invocation or database query."""
+    return {"status": "ok"}
 
 
 @router.get("/health")
@@ -142,54 +148,6 @@ async def health() -> dict[str, object]:
             else {}
         ),
     }
-
-
-def _cycle_days(ctx: UsageContext) -> int:
-    """How long this account's billing cycle actually is.
-
-    Both bill-shock call sites passed `DAYS_IN_JULY` — 31 — for every account. That is
-    right for the seeded households, whose whole world is July 2026, and wrong for any
-    real billing period that is not a calendar month. Daniel's is 1 May to 12 June: 43
-    readings into a 31-day cycle, and `forecast_cycle` raises
-    `days_in_cycle is shorter than the readings supplied`, so the endpoint 500s.
-
-    His fixture exists specifically to demonstrate "a longer billing period, not more
-    usage — the classic false alarm", which made the one account that most needed the
-    warning the one account that could not produce it.
-
-    Falls back to the reading count, then to `DAYS_IN_JULY`, so a household with no
-    billing dates behaves exactly as it did before.
-    """
-    billing = ctx.account.billing if ctx.account else None
-    if billing and billing.current_period_start and billing.current_period_end:
-        span = (billing.current_period_end - billing.current_period_start).days + 1
-        if span > 0:
-            return max(span, len(ctx.window.daily_kwh))
-    return max(DAYS_IN_JULY, len(ctx.window.daily_kwh))
-
-
-def _own_history(ctx: UsageContext) -> tuple[list[float], float | None]:
-    """This household's own completed cycles, for the bill-shock expectation.
-
-    Bill shock is a violated *personal* expectation, so the anchor should be their own
-    recent bills wherever they exist. Both call sites below used to omit these, which
-    meant `choose_expectation` always reached its comparable-homes branch and every
-    warning said "more than similar homes" — true, and no use to somebody who has always
-    run hot.
-
-    Empty for the seeded `public.*` households, which hold one month and genuinely have
-    no prior cycle. That falls back to the cohort, which is the honest answer there and
-    is labelled as such by `ExpectationBasis`.
-    """
-    account = ctx.account
-    if account is None or not account.days:
-        return [], None
-    start = account.billing.current_period_start if account.billing else None
-    return forecast_mod.own_cycle_costs(
-        [(d.date, d.import_kwh) for d in account.days],
-        unit_price_nzd=ctx.window.unit_price_nzd,
-        current_cycle_start=start,
-    )
 
 
 def _summary(customer_id: str, ctx: UsageContext) -> HouseholdSummary:
@@ -956,6 +914,8 @@ async def homelink_discover() -> dict[str, object]:
     caller and is dropped. See `app/homelink/discovery.py` on why that matters more here
     than anywhere else in this service.
     """
+    if not settings.homelink_discovery_enabled:
+        raise HTTPException(status_code=503, detail="Local network discovery is unavailable here")
     from app.homelink import discovery
 
     return discovery.summarise(await discovery.discover())
@@ -1472,7 +1432,9 @@ async def voice_stream(websocket: WebSocket) -> None:
         transport=_WebSocketTransport(websocket),
         stt=voice.get_stt(),
         tts=voice.get_tts(),
-        detector=TurnDetector(silero_model_path=settings.silero_vad_model),
+        detector=None if settings.stt_engine == "client" else TurnDetector(
+            silero_model_path=settings.silero_vad_model
+        ),
     )
 
     try:
@@ -1485,6 +1447,9 @@ async def voice_stream(websocket: WebSocket) -> None:
             if (data := message.get("bytes")) is not None:
                 if not session.customer_id:
                     await session.error("send hello before audio", fatal=True)
+                    break
+                if settings.stt_engine == "client":
+                    await session.error("microphone audio must stay on the device", fatal=True)
                     break
                 await session.on_audio(data)
                 continue
@@ -1509,7 +1474,10 @@ async def voice_stream(websocket: WebSocket) -> None:
                 await session.error("send hello first", fatal=True)
                 break
             elif kind == "end":
-                await session.on_end()
+                if settings.stt_engine == "client":
+                    await session.error("send the local transcript as text", fatal=False)
+                else:
+                    await session.on_end()
             elif kind == "text":
                 await session.answer_text(str(payload.get("message") or ""))
             else:

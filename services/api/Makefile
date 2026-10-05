@@ -48,6 +48,3 @@ spec:  ## write the OpenAPI contract the frontend generates types from
 
 clean:
 	rm -rf $(VENV) .pytest_cache **/__pycache__ *.egg-info
-
-bedrock-check:  ## verify the Bedrock connection end to end — see docs/teams/aws-bedrock-setup.md
-	$(PY) -m scripts.bedrock_check

@@ -1,0 +1,61 @@
+name: kea-energy-ec2
+
+x-api: &api
+  image: kea-energy-api:ec2
+  platform: linux/amd64
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=67108864,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  env_file: /opt/kea/runtime.env
+  volumes:
+    - /opt/kea/certs/rds:/certs/rds:ro
+  environment:
+    AWS_REGION: ap-southeast-2
+    AWS_DEFAULT_REGION: ap-southeast-2
+    AWS_EC2_METADATA_DISABLED: 'true'
+    KEA_PROVIDER: bedrock
+    KEA_BEDROCK_MODEL: amazon.nova-lite-v1:0
+    KEA_PERSIST: '1'
+    KEA_DEMO_LOGINS: '1'
+    KEA_VOICE_ENABLED: '1'
+    KEA_STT_ENGINE: client
+    KEA_HOMELINK_DISCOVERY_ENABLED: '0'
+    KEA_ALERTS_ENABLED: '0'
+  logging:
+    driver: local
+    options: {max-size: 5m, max-file: '2'}
+
+services:
+  api:
+    <<: *api
+    restart: unless-stopped
+
+  web:
+    image: kea-energy-web:ec2
+    platform: linux/amd64
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16777216,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports: ['443:8080']
+    volumes:
+      - /opt/kea/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/kea/certs/active:/certs:ro
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck: {disable: true}
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: '2'}
+
+  evaluator:
+    <<: *api
+    profiles: [jobs]
+    command: [python, -m, app.jobs.evaluate_bill_shock]
+    restart: 'no'
+    healthcheck: {disable: true}

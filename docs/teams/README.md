@@ -1,6 +1,6 @@
 # Teams
 
-Six teams, one repository. Each page below is the first thing a new member of that team
+Seven teams, one repository. Each page below is the first thing a new member of that team
 should read — what you own, where it lives, how to run it, and the rules specific to your
 work.
 
@@ -12,6 +12,7 @@ work.
 | AI | `ml/`, plus `app/narration/` and `app/providers/` | [ai.md](ai.md) |
 | Data | `data/`, plus `app/analytics/` and `app/db/` | [data.md](data.md) |
 | AWS | `infra/` — local Postgres today, Bedrock and deployment in Sprint 3 | [aws.md](aws.md) |
+| QA | `qa/` — end-to-end functional tests (Playwright) and acceptance testing | [qa.md](qa.md) |
 
 ## Ownership is a convention, not a directory
 

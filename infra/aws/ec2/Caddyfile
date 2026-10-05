@@ -1,0 +1,23 @@
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	tls /certs/fullchain.pem /certs/privkey.pem
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Strict-Transport-Security "max-age=86400"
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

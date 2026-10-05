@@ -1,6 +1,9 @@
 # ADR-0010 — Cost-optimised AWS deployment
 
-**Status:** accepted · **Date:** 4 September 2026 · **Sprint:** 3
+**Status:** Superseded by [ADR-0012](0012-ec2-rds-deployment.md) · **Date:** 4 September 2026 · **Sprint:** 3
+
+> The Lambda / API Gateway / CloudFront design below is not what runs. The deployment is
+> one EC2 application host and a private RDS database; ADR-0012 records why.
 
 ## Context
 

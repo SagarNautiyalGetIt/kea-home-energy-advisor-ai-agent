@@ -118,6 +118,13 @@ export interface SourceRef {
 
 /** Human-readable labels for the tool names, for the activity line and the panel. */
 export const TOOL_LABELS: Record<string, string> = {
+  get_usage_history: 'Reading your dated usage and tariff bands',
+  get_hourly_usage: 'Checking readings for the selected day',
+  get_billing_records: 'Reading your invoice totals',
+  get_plan_details: 'Checking plan rates and commitment terms',
+  get_alert_status: 'Checking your warning settings and assessment',
+  get_power_clash_progress: 'Reading your Power Clash progress',
+  get_scheduled_outages: 'Checking the distributor schedule',
   get_account_summary: 'Looking up your account',
   get_daily_usage: 'Reading your daily meter data',
   get_bill_comparison: 'Comparing this bill with your last one',
@@ -373,6 +380,7 @@ export interface LoginResponse {
   customer_id: string;
   display_name: string;
   scenario: string;
+  access_token?: string;
 }
 
 export interface DemoAccountCard extends LoginResponse {
@@ -529,7 +537,10 @@ export interface SmartDeviceScan {
  */
 export async function discoverSmartDevices(): Promise<SmartDeviceScan> {
   const res = await fetch("/api/homelink/discover", { method: "POST" });
-  if (!res.ok) throw new Error(`discover → ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    if (res.status === 503) throw new Error('local network discovery is unavailable here');
+    throw new Error('the scan could not be started');
+  }
   return (await res.json()) as SmartDeviceScan;
 }
 

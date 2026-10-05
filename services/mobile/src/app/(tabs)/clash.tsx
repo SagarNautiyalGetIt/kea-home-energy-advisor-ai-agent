@@ -30,6 +30,7 @@ export default function ClashScreen() {
   const [view, setView] = useState<'quests' | 'arena' | 'league'>('quests');
   const [motionPreference, setMotionPreference] = useState<boolean | null>(null);
   const [reduceMotion, setReduceMotion] = useState(true);
+  const [arenaInteracting, setArenaInteracting] = useState(false);
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (mounted) setReduceMotion(value); });
@@ -83,7 +84,7 @@ export default function ClashScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.content}>
+    <Screen contentStyle={styles.content} scrollEnabled={!arenaInteracting}>
       <PageHeader title="Power Clash" subtitle="Sparky quests · sample suburb league" />
       <View style={[styles.views, { backgroundColor: colors.surface }]}>
         {([{ key: 'quests', label: 'Quests', icon: 'compass-outline', tint: colors.icons.energy }, { key: 'arena', label: 'Arena', icon: 'cube-outline', tint: colors.icons.info }, { key: 'league', label: 'League', icon: 'trophy-outline', tint: colors.icons.money }] as const).map((item) => <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: item.key === view }} onPress={() => { setView(item.key); tactile(); }} style={[styles.viewButton, { backgroundColor: item.key === view ? colors.surfaceRaised : colors.surface, borderColor: item.key === view ? item.tint : 'transparent' }]}><Ionicons name={item.icon} size={19} color={item.tint} /><Text style={[styles.viewLabel, { color: item.key === view ? colors.text : colors.textMuted }]}>{item.label}</Text></Pressable>)}
@@ -92,7 +93,7 @@ export default function ClashScreen() {
 
       <GameTransition key={view} motion={motion}>
       {view === 'quests' ? <><ClashCoach motion={motion} /><NextMoveCard /></> : null}
-      {view === 'arena' ? <><EnergyArena metrics={you.metrics} motion={motion} onSelect={selectMetric} selected={selectedMetric} /><ScoreBreakdown metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} /></> : null}
+      {view === 'arena' ? <><EnergyArena metrics={you.metrics} motion={motion} onSelect={selectMetric} selected={selectedMetric} onInteractionChange={setArenaInteracting} /><ScoreBreakdown metrics={you.metrics} onSelect={selectMetric} selected={selectedMetric} /></> : null}
       {view === 'league' ? <>
       <SuburbLeagueHeader district={district.name} rank={you.rank} score={you.score} total={standings.length} />
 

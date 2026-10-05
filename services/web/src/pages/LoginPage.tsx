@@ -43,6 +43,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
       const account = await apiLogin(withEmail, withPassword)
       onLogin({
         customerId: account.customer_id,
+        accessToken: account.access_token,
         displayName: account.display_name,
         scenario: account.scenario,
       })

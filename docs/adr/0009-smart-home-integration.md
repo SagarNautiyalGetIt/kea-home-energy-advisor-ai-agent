@@ -92,7 +92,7 @@ Not alphabetical, and not by market share.
 ## What this unlocks, concretely
 
 The bill-shock warning currently decomposes an overshoot into weather, behaviour and
-everyday load (ADR-0010's forecast work). With a connected cylinder that becomes:
+everyday load (the existing bill-shock forecast). With a connected cylinder that becomes:
 
 > Your cylinder ran unattended on 19 of 21 days and cost about $46 — that is most of the
 > $68 you are tracking above normal, and it is on a schedule you can change.

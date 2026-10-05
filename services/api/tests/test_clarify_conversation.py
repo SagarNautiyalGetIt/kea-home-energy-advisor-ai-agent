@@ -90,8 +90,10 @@ async def test_the_question_is_appended_verbatim(monkeypatch, ctx_with_question)
 async def test_the_model_is_told_not_to_ask_its_own(monkeypatch, ctx_with_question) -> None:
     from app.agent.prompts import SYSTEM
 
-    assert "Do not end your answer with a question of your own" in SYSTEM
-    assert "Python chooses it and appends it after you" in SYSTEM
+    assert "Do not invent a second household-cause question" in SYSTEM
+    assert "You may ask one necessary clarification" in SYSTEM
+    assert "Python chooses those from unexplained" in SYSTEM
+    assert "appends one after you" in SYSTEM
 
 
 async def test_no_question_is_appended_when_there_is_none(monkeypatch) -> None:

@@ -204,7 +204,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
 
   return <>
     <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
-    <div className="dashboard-hero" ref={heroRef}><EnergyHomePanel summary={summaryTiles} billShock={<BillShockDetail shock={shock} offline={offline} onNavigate={onNavigate}/>} billShockTriggered={!offline && shock?.triggered === true} /></div>
+    <div className="dashboard-hero" ref={heroRef}><EnergyHomePanel summary={summaryTiles} billShock={<BillShockDetail shock={shock} offline={offline} onNavigate={onNavigate}/>} billShockStatus={!offline && shock ? (shock.triggered ? 'alert' : 'normal') : 'unavailable'} /></div>
     {SHOW_DASHBOARD_CHARTS && (<>
     <div className="dashboard-grid">
       <article className="card usage-summary">

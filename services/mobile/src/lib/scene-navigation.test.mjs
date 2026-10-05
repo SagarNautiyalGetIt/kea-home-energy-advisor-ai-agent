@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { homeFlows } from './home-flows.ts';
+import { homeFlows, freshHomePower } from './home-flows.ts';
 import { canClaimEdgeBack, shouldCompleteEdgeBack, backFallback } from './edge-back.ts';
 import { validateHourlyUsage, hourlyPoints, hourlyComparisonUnavailable } from './hourly-usage.ts';
 
 test('flows preserve zero, missing and measured directions without inventing power', () => {
   assert.ok(homeFlows({}, false).every(flow => flow.watts === null && !flow.active));
-  assert.ok(homeFlows({}, true).every(flow => flow.watts === null && flow.active));
+  assert.ok(homeFlows({}, true).every(flow => flow.watts === null && flow.active === (flow.id !== 'car')));
   const flows = homeFlows({ solar_generation: 0, grid_import: 2400, grid_export: 0, battery_charge: 900, battery_discharge: 0 }, true);
   assert.equal(flows[0].active, false);
   assert.equal(flows[1].watts, 900); assert.equal(flows[1].reverse, false);
@@ -14,6 +14,27 @@ test('flows preserve zero, missing and measured directions without inventing pow
   assert.equal(homeFlows({ battery_discharge: 1800 }, false)[1].reverse, true);
   assert.equal(homeFlows({ grid_export: 900 }, false)[2].reverse, false);
   assert.equal(homeFlows({ solar_generation: NaN }, false)[0].watts, null);
+  const partial = homeFlows({ grid_import: 1200 }, true);
+  assert.deepEqual(partial.filter(flow => flow.active).map(flow => flow.id), ['grid']);
+});
+test('EV never charges from preview, daily attribution, missing/zero/invalid/stale telemetry', () => {
+  for (const watts of [undefined, 0, 10, -20, NaN, Infinity]) {
+    assert.equal(homeFlows({ ev_charger: watts }, true)[3].active, false);
+  }
+  assert.equal(homeFlows({ ev_charger: 7200 }, false)[3].active, true);
+  assert.equal(homeFlows(freshHomePower({ ev_charger: 7200 }, 0, 60_001), true)[3].active, false);
+  assert.equal(homeFlows(freshHomePower({ ev_charger: 7200 }, 0, 60_000), false)[3].active, true);
+  assert.deepEqual(freshHomePower({ ev_charger: 7200 }, 500, 499), {});
+  // A poll completes between 15s expiry ticks: receipt time gates it immediately.
+  const expiryTick = 45_000, receipt = 45_321;
+  assert.equal(homeFlows(freshHomePower({ ev_charger: 7200 }, receipt, Math.max(expiryTick, receipt)), false)[3].active, true);
+});
+test('opposing measured flows render net direction; equal readings stop', () => {
+  const flows = homeFlows({ battery_charge: 900, battery_discharge: 600, grid_import: 1200, grid_export: 1500 }, true);
+  assert.equal(flows[1].watts, 300); assert.equal(flows[1].reverse, false);
+  assert.equal(flows[2].watts, 300); assert.equal(flows[2].reverse, false);
+  const stopped = homeFlows({ battery_charge: 900, battery_discharge: 900, grid_import: 1200, grid_export: 1200 }, true);
+  assert.equal(stopped[1].active, false); assert.equal(stopped[2].active, false);
 });
 test('hourly comparisons explain DST day-length differences without shifting readings', () => {
   const normal = row();

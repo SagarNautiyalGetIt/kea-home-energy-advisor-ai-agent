@@ -34,6 +34,7 @@ served something invented.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
 import re
@@ -41,6 +42,7 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.agent.prompts import SYSTEM, build_user_turn
 from app.agent.tools import TOOL_SCHEMAS, ToolContext, dispatch
@@ -297,7 +299,9 @@ async def run_agent(
             "The customer asks:\n"
         )
 
-    messages.append({"role": "user", "content": preamble + build_user_turn(question)})
+    today = dt.datetime.now(ZoneInfo("Pacific/Auckland")).date()
+    calendar = f"Current date in Pacific/Auckland: {today.isoformat()}.\n\n"
+    messages.append({"role": "user", "content": calendar + preamble + build_user_turn(question)})
 
     for round_number in range(1, MAX_ROUNDS + 1):
         # The last round is answered without tools. A model that has spent five rounds

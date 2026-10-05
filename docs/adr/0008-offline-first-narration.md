@@ -100,5 +100,5 @@ checklist says to look at it.
 but not consumed. The pack format is versioned (`schema_version`) so a device on an older
 build refuses a pack it does not understand rather than reading fields positionally.
 
-Related: [ADR-0004](0004-llm-provider-interface.md), [ADR-0010](0010-aws-deployment.md),
+Related: [ADR-0004](0004-llm-provider-interface.md), [AWS deployment plan](../../infra/aws/deployment-plan.md),
 [ADR-0009](0009-smart-home-integration.md) (shares the phone-computes pattern).

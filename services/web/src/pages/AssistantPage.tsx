@@ -150,7 +150,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   const threadSolar = [...messages].reverse().find((item) => item.solar)?.solar
   const solarContext = threadSolar?.customerId === loadSession()?.customerId ? threadSolar : arrivingSolar
   const [started, setStarted] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() => new URLSearchParams(routeLocation.search).get('question') ?? '')
   const [busy, setBusy] = useState(false)
   const [escalating, setEscalating] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
@@ -164,6 +164,8 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
   // offering one.
   const [voiceReady, setVoiceReady] = useState(false)
   const [listening, setListening] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState('')
+  const [voiceStarting, setVoiceStarting] = useState(false)
   // True while Piper is playing the answer back. Drives the `speaking` spark state —
   // without it the orb would sit on `idle` through the whole spoken reply, which is
   // the one moment Sparky is most obviously doing something.
@@ -550,6 +552,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
    * figure.
    */
   const toggleVoice = useCallback(async () => {
+    if (voiceStarting) return
     if (!customerId) {
       onToast('Still connecting to your account — try again in a moment', 'warning')
       return
@@ -569,9 +572,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       return
     }
 
+    setVoiceStarting(true)
     try {
       if (!voiceRef.current) {
         voiceRef.current = new VoiceClient(customerId, {
+          onStatus: setVoiceStatus,
+          onListeningStopped: () => setListening(false),
           onTranscript: (text) => {
             setStarted(true)
             setMessages((current) => [...current, { id: nextId.current++, role: 'user', text }])
@@ -621,14 +627,16 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       }
 
       await voiceRef.current.startListening()
-      setListening(true)
+      if (voiceRef.current) setListening(true)
     } catch (error) {
       voiceRef.current?.close()
       voiceRef.current = null
       setListening(false)
       onToast(error instanceof Error ? error.message : 'Could not start voice', 'warning')
+    } finally {
+      setVoiceStarting(false)
     }
-  }, [customerId, listening, onToast])
+  }, [customerId, listening, onToast, voiceStarting])
 
   const submit = () => {
     const value = message.trim()
@@ -966,6 +974,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
       </div>
       {/* Announced, not hovered — see the mic button above. */}
       <p className="sr-only" role="status">{voiceReasonShown ? voiceHint : ''}</p>
+      {voiceStatus && <p role="status">{voiceStatus} <button type="button" onClick={() => {
+        voiceRef.current?.close()
+        voiceRef.current = null
+        setListening(false)
+        setVoiceStatus('')
+      }}>Cancel voice</button></p>}
       <div className="chat-footer">
         {/* Each link is named after where it goes: the "Sparky AI terms" dialog and the
             "Help & Support" page. They read "Check Terms & Conditions" and "See support

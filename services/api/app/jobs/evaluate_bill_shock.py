@@ -12,8 +12,9 @@ dashboard polling it. Two things wrong with that, and the second is the serious 
   only fires when they visit the dashboard is a warning for people who were already
   looking, which is the group that needed it least.
 
-So evaluation runs on a schedule (EventBridge, hourly — see `infra/aws/main.tf`) and the
-GET became a read again. Both call the same `billshock.assess` and the same dispatcher, and
+So evaluation runs hourly via the EC2 host's systemd timer (see
+`infra/aws/ec2/install-evaluator-timer.sh`) and the GET became a read again.
+Both call the same `billshock.assess` and the same dispatcher, and
 the dispatcher's unique constraint on `(account_ref, kind, period, tier)` means the two
 paths cannot double-send.
 
@@ -21,8 +22,7 @@ paths cannot double-send.
 
 Because it is also what releases alerts held back by a customer's quiet hours. A daily job
 would hold a 9pm text until the following morning's run, which is not "quiet hours", it is
-"tomorrow". Hourly costs nothing — the free tier is 14 million invocations and this is 24
-a day.
+"tomorrow". The timer runs this job in the existing API image once per hour.
 
 ## Failure policy
 
@@ -48,8 +48,8 @@ log = logging.getLogger(__name__)
 
 #: How many households are assessed at once. The work is I/O-bound (a repository read, a
 #: preferences read, up to three gateway calls), so this is about not opening 140,000
-#: connections at once rather than about CPU. Sized to the RDS t4g.micro's connection
-#: limit with room for the request path to keep serving.
+#: connections at once rather than about CPU. Keep this bounded so the EC2-hosted
+#: PostgreSQL container has room for the request path to keep serving.
 CONCURRENCY = 8
 
 
@@ -168,15 +168,14 @@ async def run(customer_ids: list[str] | None = None) -> RunSummary:
 
 
 def handler(event: dict | None = None, context: object | None = None) -> dict[str, object]:
-    """Lambda entry point. Referenced by `infra/aws/main.tf`.
-
-    Returns the summary rather than logging it and returning None: EventBridge records the
-    payload, so a run's outcome is retrievable without going to CloudWatch Logs, and a
-    metric filter can alarm on `sent` being zero for a day.
-    """
+    """Callable entry point for integrations; returns the sweep summary."""
     return asyncio.run(run()).as_dict()
 
 
-if __name__ == "__main__":  # pragma: no cover — local sweep, same code path as Lambda
+if __name__ == "__main__":  # pragma: no cover — EC2 timer runs this module directly
+    import sys
+
     logging.basicConfig(level=logging.INFO)
-    print(asyncio.run(run()).as_dict())
+    summary = asyncio.run(run())
+    print(summary.as_dict())
+    sys.exit(1 if summary.skipped else 0)

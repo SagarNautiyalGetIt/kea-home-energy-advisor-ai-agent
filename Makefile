@@ -103,6 +103,15 @@ clean:
 	$(API) clean
 	$(WEB) clean
 
+## AWS team — EC2 application + private RDS demo (see infra/aws/deployment-plan.md)
+.PHONY: aws-deploy aws-db-tunnel aws-teardown
+aws-deploy:  ## deploy the Sydney EC2 + RDS demo using a retained Elastic IP; build the APK
+	$(MAKE) -C infra/aws deploy SOURCE_PAUSED="$(SOURCE_PAUSED)" SESSION_ID="$(if $(filter command line,$(origin SESSION_ID)),$(SESSION_ID),)"
+aws-db-tunnel:  ## open the private RDS database at localhost:15432 through EC2
+	$(MAKE) -C infra/aws db-tunnel SESSION_ID="$(if $(filter command line,$(origin SESSION_ID)),$(SESSION_ID),)" DB_LOCAL_PORT="$(or $(DB_LOCAL_PORT),15432)" SSH_HOST="$(SSH_HOST)" SSH_KEY="$(SSH_KEY)" DB_HOST="$(DB_HOST)"
+aws-teardown:  ## destroy a Sydney demo session but retain its Elastic IP
+	$(MAKE) -C infra/aws teardown SESSION_ID="$(if $(filter command line,$(origin SESSION_ID)),$(SESSION_ID),)"
+
 ## AI team — voice (ADR-0003)
 voice-setup:  ## download the whisper/piper/silero stack into ml/voice/dist
 	./ml/voice/setup.sh

@@ -124,7 +124,8 @@ class FallbackProvider:
                 self._unhealthy_until[provider.name] = time.monotonic() + PROBE_TTL_SECONDS
                 log.warning(
                     "provider %s failed (%s) — trying the next in the chain",
-                    provider.name, exc,
+                    provider.name,
+                    exc,
                 )
                 continue
 
@@ -135,7 +136,9 @@ class FallbackProvider:
                 log.warning(
                     "SERVING FROM FALLBACK PROVIDER %s:%s — the primary (%s) is unreachable. "
                     "Answer quality will differ.",
-                    provider.name, provider.model, self._providers[0].name,
+                    provider.name,
+                    provider.model,
+                    self._providers[0].name,
                 )
             self._active = provider
             self.degraded = was_degraded
@@ -171,11 +174,7 @@ class FallbackProvider:
         unavailable.
         """
         last_error: Exception | None = None
-        eligible = [
-            p
-            for p in self._providers
-            if not tools or getattr(p, "supports_tools", True)
-        ]
+        eligible = [p for p in self._providers if not tools or getattr(p, "supports_tools", True)]
         if not eligible:
             raise RuntimeError(
                 f"no provider in the chain can use tools ({', '.join(self.chain)}). "
@@ -205,7 +204,8 @@ class FallbackProvider:
                 self._unhealthy_until[provider.name] = time.monotonic() + PROBE_TTL_SECONDS
                 log.warning(
                     "provider %s failed (%s) — trying the next in the chain",
-                    provider.name, exc,
+                    provider.name,
+                    exc,
                 )
                 continue
 
@@ -214,7 +214,9 @@ class FallbackProvider:
                 log.warning(
                     "SERVING FROM FALLBACK PROVIDER %s:%s — the primary (%s) is unreachable. "
                     "Answer quality will differ.",
-                    provider.name, provider.model, self._providers[0].name,
+                    provider.name,
+                    provider.model,
+                    self._providers[0].name,
                 )
             self._active = provider
             self.degraded = was_degraded
@@ -266,9 +268,14 @@ def build_provider(
     providers: list[LLMProvider] = []
     for name in names:
         if name == "bedrock":
-            from app.providers.bedrock import BedrockProvider
+            if bedrock_model.startswith("amazon.nova-"):
+                from app.providers.bedrock_nova import BedrockNovaProvider
 
-            providers.append(BedrockProvider(model=bedrock_model, aws_region=aws_region))
+                providers.append(BedrockNovaProvider(model=bedrock_model, aws_region=aws_region))
+            else:
+                from app.providers.bedrock import BedrockProvider
+
+                providers.append(BedrockProvider(model=bedrock_model, aws_region=aws_region))
         elif name == "ollama":
             from app.providers.ollama import OllamaProvider
 

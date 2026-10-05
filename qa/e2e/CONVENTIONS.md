@@ -146,11 +146,15 @@ finding, with the count and the file:line beside it — never in the suite.
 ## 9. Naming and layout
 
 ```
-tests/
-  auth.setup.ts          storageState, runs before everything
-  dashboard.spec.ts      one file per page or per user journey
-  fixtures/              shared test data and custom fixtures
+qa/e2e/
+  playwright.config.ts
+  tests/
+    auth.setup.ts        storageState, runs before everything
+    dashboard.spec.ts    one file per page or per user journey
   pages/                 page objects, added when duplication justifies one
+  fixtures/              shared test data and custom fixtures
+  api/                   the API client tests use to fetch expected values
+  cassettes/             recorded model turns the API replays (KEA_CASSETTE=replay)
 ```
 
 One file per page, with no exceptions — a spec that tests the suite rather than the
