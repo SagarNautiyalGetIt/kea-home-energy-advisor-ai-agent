@@ -10,8 +10,8 @@ floors. A cycle — and an invisible one:
 * the whole test suite passed, because pytest's collection order happened to import
   `app.analytics.billshock` after something had already finished initialising `app.alerts`;
 * `uvicorn app.main:app` was fine, for the same reason;
-* the first caller to import `app.analytics` *first* was the scheduled job, and on Lambda
-  that is a cold-start crash at 3am, not a red build.
+* the first caller to import `app.analytics` *first* was the scheduled job, so
+  that would crash the hourly evaluator container rather than fail a build.
 
 The fix was to stop re-exporting. This test is what stops it coming back, and it has to
 run each module in a **fresh interpreter** — inside one process, `sys.modules` carries the

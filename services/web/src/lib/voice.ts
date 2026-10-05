@@ -11,6 +11,7 @@
  */
 
 import type { SourceRef } from "./client";
+import { LocalWhisper } from "./local-whisper";
 
 /** 16 kHz mono is what whisper.cpp wants; resampling server-side costs latency. */
 const CAPTURE_SAMPLE_RATE = 16_000;
@@ -20,6 +21,7 @@ export interface VoiceReadiness {
   tts: { engine: string; voice: string | null; sample_rate: number; available: boolean };
   vad: string;
   can_listen: boolean;
+  client_transcription?: boolean;
   can_speak: boolean;
   sample_rate_in: number;
 }
@@ -33,6 +35,8 @@ export interface VoiceTimings {
 }
 
 export interface VoiceHandlers {
+  onStatus?: (message: string) => void;
+  onListeningStopped?: () => void;
   onReady?: (r: VoiceReadiness) => void;
   onSpeechStart?: () => void;
   onTranscript?: (text: string) => void;
@@ -149,6 +153,13 @@ export class VoiceClient {
   private audioContext: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
+  private readiness: VoiceReadiness | null = null;
+  private whisper: LocalWhisper | null = null;
+  private captured: Int16Array[] = [];
+  private sampleCount = 0;
+  private limitTimer: ReturnType<typeof setTimeout> | null = null;
+  private generation = 0;
+  private transcribing = false;
 
   /** Playback scheduling. Clips must not overlap, so each is queued after the last. */
   private playbackContext: AudioContext | null = null;
@@ -173,15 +184,26 @@ export class VoiceClient {
       ws.binaryType = "arraybuffer";
       this.ws = ws;
 
+      const timer = setTimeout(() => {
+        reject(new Error("Voice service did not become ready."));
+        ws.close();
+      }, 15_000);
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "hello", customer_id: this.customerId }));
-        resolve();
       };
       // A close before open means the handshake was refused — most often the feature
       // flag is off. The server accepts and then closes precisely so `reason` survives.
-      ws.onerror = () => reject(new Error("voice websocket failed to open"));
-      ws.onclose = (e) => this.handlers.onClose?.(describeClose(e), isTransportDrop(e.code));
-      ws.onmessage = (e) => this.onMessage(e);
+      ws.onerror = () => { clearTimeout(timer); reject(new Error("voice websocket failed to open")); };
+      ws.onclose = (e) => {
+        clearTimeout(timer);
+        this.cancelCapture();
+        reject(new Error(describeClose(e)));
+        this.handlers.onClose?.(describeClose(e), isTransportDrop(e.code));
+      };
+      ws.onmessage = (e) => {
+        this.onMessage(e);
+        if (this.readiness) { clearTimeout(timer); resolve(); }
+      };
     });
   }
 
@@ -196,6 +218,7 @@ export class VoiceClient {
     const msg = JSON.parse(event.data as string);
     switch (msg.type) {
       case "ready":
+        this.readiness = msg as VoiceReadiness;
         this.handlers.onReady?.(msg as VoiceReadiness);
         break;
       case "speech_start":
@@ -227,7 +250,18 @@ export class VoiceClient {
   async startListening(): Promise<void> {
     const support = checkVoiceSupport();
     if (!support.ok) throw new Error(support.reason);
-    if (!this.connected) throw new Error("connect() first");
+    if (!this.connected || !this.readiness) throw new Error("connect() first");
+    if (this.stream || this.transcribing) throw new Error("Voice is still working. Please wait.");
+    const generation = this.generation;
+    if (this.readiness.client_transcription) {
+      this.whisper ??= new LocalWhisper((message) => this.handlers.onStatus?.(message));
+      await this.whisper.prepare();
+      if (generation !== this.generation) return;
+    }
+    this.captured = [];
+    this.sampleCount = 0;
+    this.playbackContext ??= new AudioContext();
+    await this.playbackContext.resume();
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -239,6 +273,10 @@ export class VoiceClient {
       },
     });
 
+    if (generation !== this.generation) {
+      this.releaseMicrophone();
+      return;
+    }
     // Asking for 16 kHz here means the browser resamples, in C++, before we see a
     // sample. Doing it in JS afterwards is both slower and worse.
     this.audioContext = new AudioContext({ sampleRate: CAPTURE_SAMPLE_RATE });
@@ -253,14 +291,27 @@ export class VoiceClient {
     const source = this.audioContext.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.audioContext, "kea-capture");
     this.node.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-      if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(e.data);
+      if (this.readiness?.client_transcription) {
+        const chunk = new Int16Array(e.data);
+        const remaining = 30 * CAPTURE_SAMPLE_RATE - this.sampleCount;
+        const accepted = chunk.subarray(0, Math.max(0, remaining));
+        this.captured.push(accepted);
+        this.sampleCount += accepted.length;
+        if (this.sampleCount >= 30 * CAPTURE_SAMPLE_RATE) this.stopListening();
+      } else if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(e.data);
     };
     source.connect(this.node);
+    if (this.readiness.client_transcription) {
+      this.limitTimer = setTimeout(() => this.stopListening(), 30_000);
+      this.handlers.onStatus?.('Listening — tap the microphone to finish (30 seconds maximum).');
+    }
     // Not connected to the destination: routing the mic to the speakers is feedback.
   }
 
   /** Release the mic and tell the server to transcribe whatever it is holding. */
-  stopListening(): void {
+  private releaseMicrophone(): void {
+    if (this.limitTimer) clearTimeout(this.limitTimer);
+    this.limitTimer = null;
     this.node?.port.close();
     this.node?.disconnect();
     this.node = null;
@@ -271,9 +322,50 @@ export class VoiceClient {
     void this.audioContext?.close();
     this.audioContext = null;
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
+  }
+
+  stopListening(): void {
+    const wasListening = this.stream !== null;
+    this.releaseMicrophone();
+    if (!wasListening) return;
+    this.handlers.onListeningStopped?.();
+    if (this.readiness?.client_transcription) {
+      const samples = new Float32Array(this.sampleCount);
+      let offset = 0;
+      for (const chunk of this.captured) {
+        for (const sample of chunk) samples[offset++] = sample / 32768;
+      }
+      this.captured = [];
+      this.sampleCount = 0;
+      if (!samples.length) return;
+      const generation = this.generation;
+      this.transcribing = true;
+      void this.whisper!.transcribe(samples).then((text) => {
+        if (generation !== this.generation || !this.connected) return;
+        this.handlers.onStatus?.('');
+        if (text.trim()) {
+          this.handlers.onTranscript?.(text.trim());
+          this.ask(text.trim());
+        } else this.handlers.onStatus?.('No speech detected. Try again or type your question.');
+      }).catch((error: unknown) => {
+        if (generation === this.generation) {
+          this.handlers.onStatus?.('');
+          this.handlers.onError?.(error instanceof Error ? error.message : 'Please type your question.', false);
+        }
+      }).finally(() => { this.transcribing = false; });
+    } else if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "end" }));
     }
+  }
+
+  private cancelCapture(): void {
+    this.generation++;
+    this.releaseMicrophone();
+    this.captured = [];
+    this.sampleCount = 0;
+    this.whisper?.cancel();
+    this.whisper = null;
+    this.readiness = null;
   }
 
   /** Same pipeline, no microphone. Useful on a machine with no mic, and in tests. */
@@ -307,7 +399,7 @@ export class VoiceClient {
   }
 
   close(): void {
-    this.stopListening();
+    this.cancelCapture();
     void this.playbackContext?.close();
     this.playbackContext = null;
     this.playheadAt = 0;

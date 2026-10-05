@@ -25,7 +25,12 @@ def _load_dotenv() -> None:
     file. `.claude/launch.json` and CI both set variables explicitly, and a `.env` that
     silently overrode them would be a worse trap than the one this replaces.
     """
-    root = pathlib.Path(__file__).resolve().parents[3]
+    if os.environ.get("KEA_LOAD_DOTENV", "1") == "0":
+        return
+    parents = pathlib.Path(__file__).resolve().parents
+    if len(parents) < 4:
+        return  # Installed/container layouts need no repository-local .env file.
+    root = parents[3]
     env_file = root / ".env"
     if not env_file.is_file():
         return
@@ -163,11 +168,17 @@ class Settings:
         default_factory=lambda: _env("KEA_CORS_ORIGINS", "http://localhost:5173")
     )
 
-    # ADR-0006. asyncpg driver; the same URL shape points at RDS in Sprint 3.
+    # ADR-0006. asyncpg driver; the same URL shape works for local and EC2-hosted PostgreSQL.
     database_url: str = field(
         default_factory=lambda: _env(
             "KEA_DATABASE_URL", "postgresql+asyncpg://kea:kea@localhost:5432/kea"
         )
+    )
+
+    #: Optional database CA bundle; when set, verify the certificate and hostname.
+    database_ssl_ca: str = field(default_factory=lambda: _env("KEA_DATABASE_SSL_CA", ""))
+    homelink_discovery_enabled: bool = field(
+        default_factory=lambda: _env("KEA_HOMELINK_DISCOVERY_ENABLED", "1") == "1"
     )
 
     #: Write conversations, verification verdicts and token counts to PostgreSQL.
@@ -191,7 +202,7 @@ class Settings:
         default_factory=lambda: _env("KEA_VOICE_ENABLED", "0").lower() in {"1", "true", "yes"}
     )
 
-    #: Which transcriber runs: `gemini` (default) | `whisper` | `auto`.
+    #: Which transcriber runs: `gemini` (default) | `whisper` | `auto` | `client`.
     #:
     #: Defaults to Gemini because the local path is what made voice slow and
     #: intermittently silent — see `app/voice/__init__.py`. `whisper` forces the local

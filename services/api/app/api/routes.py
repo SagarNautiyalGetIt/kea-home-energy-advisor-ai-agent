@@ -97,6 +97,12 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/live", include_in_schema=False)
+async def live() -> dict[str, str]:
+    """Container liveness without a paid model invocation or database query."""
+    return {"status": "ok"}
+
+
 @router.get("/health")
 async def health() -> dict[str, object]:
     provider = get_provider()
@@ -908,6 +914,8 @@ async def homelink_discover() -> dict[str, object]:
     caller and is dropped. See `app/homelink/discovery.py` on why that matters more here
     than anywhere else in this service.
     """
+    if not settings.homelink_discovery_enabled:
+        raise HTTPException(status_code=503, detail="Local network discovery is unavailable here")
     from app.homelink import discovery
 
     return discovery.summarise(await discovery.discover())
@@ -1424,7 +1432,9 @@ async def voice_stream(websocket: WebSocket) -> None:
         transport=_WebSocketTransport(websocket),
         stt=voice.get_stt(),
         tts=voice.get_tts(),
-        detector=TurnDetector(silero_model_path=settings.silero_vad_model),
+        detector=None if settings.stt_engine == "client" else TurnDetector(
+            silero_model_path=settings.silero_vad_model
+        ),
     )
 
     try:
@@ -1437,6 +1447,9 @@ async def voice_stream(websocket: WebSocket) -> None:
             if (data := message.get("bytes")) is not None:
                 if not session.customer_id:
                     await session.error("send hello before audio", fatal=True)
+                    break
+                if settings.stt_engine == "client":
+                    await session.error("microphone audio must stay on the device", fatal=True)
                     break
                 await session.on_audio(data)
                 continue
@@ -1461,7 +1474,10 @@ async def voice_stream(websocket: WebSocket) -> None:
                 await session.error("send hello first", fatal=True)
                 break
             elif kind == "end":
-                await session.on_end()
+                if settings.stt_engine == "client":
+                    await session.error("send the local transcript as text", fatal=False)
+                else:
+                    await session.on_end()
             elif kind == "text":
                 await session.answer_text(str(payload.get("message") or ""))
             else:

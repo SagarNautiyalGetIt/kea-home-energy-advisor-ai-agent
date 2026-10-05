@@ -1,11 +1,11 @@
-# infra/ — AWS team
+# Infrastructure
 
 Everything that runs the system somewhere other than a laptop.
 
 | Path | What goes in it |
 |---|---|
 | `docker-compose.yml` | Local Postgres. Every team uses this daily |
-| `aws/` | Infrastructure as code for the Sprint 3 deployment |
+| [`aws/`](aws/) | Sydney EC2 application + private RDS PostgreSQL deployment |
 
 ## Local
 
@@ -19,31 +19,42 @@ Ollama is deliberately **not** in the compose file. Docker Desktop on macOS is a
 with no access to the Apple GPU, so a containerised model server silently drops to CPU
 speed. Install it natively: `brew install --cask ollama`.
 
-## Sprint 3 — Bedrock
+## AWS demo
 
-The provider seam already exists ([ADR-0004](../docs/adr/0004-llm-provider-interface.md)):
-`app/providers/base.py` defines the interface, `bedrock.py` is the stub. Switching is a
-config change, `KEA_PROVIDER=bedrock`, not a rewrite. What this team needs to land is
-everything around it — credentials, region, networking, the database.
+The [deployment plan](aws/deployment-plan.md) describes the stack in
+`ap-southeast-2` (Sydney). Docker Compose runs the website, API/Piper and
+hourly evaluator on EC2; a private RDS PostgreSQL 16 instance holds the
+application and serving database. The data pipeline remains local. The Cloud
+Owner controls deployment and teardown manually using the
+[AWS Makefile](aws/Makefile) and [operator README](aws/README.md).
+Future sessions reuse a retained Elastic IP; releasing it is a separate manual
+command after session teardown.
 
-Region is `ap-southeast-2` (Sydney). It is the closest region to NZ and the one that
-matters for latency in a live demo.
+Bill-shock alerts are planned to use SES for email, SNS for SMS and Amazon
+Connect for phone calls; see [Alert delivery](aws/deployment-plan.md#alert-delivery).
+SES and SNS are account-level and still in the sandbox. A session creates the
+Connect instance and its NZ number only with `ENABLE_VOICE_ALERTS=1`. Delivery
+stays off until the backend gateways exist.
 
 ## Secrets — the hard rule
 
-**No credential ever enters this repository.** Not in a `.tfvars`, not in a compose file,
-not in a comment, not "temporarily".
+**No credential may be committed or placed in a tracked file.** Not in a
+`.tfvars`, a compose file, or a comment, not even temporarily. Deployment-only
+secrets go in owner-only files under the ignored `aws/.work/` directory.
 
 - Local AWS access: `aws configure` or SSO. Never a file in the repo.
 - CI: GitHub Actions secrets.
-- Deployed: an instance role or task role. Not environment variables holding long-lived keys.
+- Deployed: the current EC2 workflow exports temporary team SSO credentials
+  into a protected runtime file for Sydney Bedrock. Refresh them before expiry.
 
 `.gitignore` blocks `*.tfstate`, `*.tfvars`, `.aws/`, `*.pem` and `*.key` — but the
 ignore file is a safety net, not the control. If you are about to type a real secret into
 a file, stop.
 
-Terraform state is not committed. Before the first deploy this team needs to decide where
-it lives (S3 + DynamoDB lock is the usual answer) and write that up as an ADR.
+Terraform state and the SSH key for an active deployment belong in an ignored
+`aws/.work/` session directory. The retained Elastic IP has separate state in
+`aws/.work/elastic-ip/` that must stay until the IP is explicitly released.
+Local database exports are kept separately.
 
 ## Related
 

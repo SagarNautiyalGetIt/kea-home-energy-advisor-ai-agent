@@ -537,7 +537,10 @@ export interface SmartDeviceScan {
  */
 export async function discoverSmartDevices(): Promise<SmartDeviceScan> {
   const res = await fetch("/api/homelink/discover", { method: "POST" });
-  if (!res.ok) throw new Error(`discover → ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    if (res.status === 503) throw new Error('local network discovery is unavailable here');
+    throw new Error('the scan could not be started');
+  }
   return (await res.json()) as SmartDeviceScan;
 }
 

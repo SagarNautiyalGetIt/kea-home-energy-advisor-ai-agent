@@ -30,13 +30,14 @@ from functools import lru_cache
 
 from app.config import settings
 from app.voice.stt import SpeechToText
+from app.voice.stt_client import ClientSpeechToText
 from app.voice.stt_gemini import GeminiSpeechToText
 from app.voice.tts import TextToSpeech
 from app.voice.tts_gemini import GeminiTextToSpeech
 
 #: What `get_stt()` returns. A Protocol would be more formal; the two classes already
 #: agree on `available`, `describe()` and `transcribe()`, and `test_voice.py` asserts it.
-Transcriber = SpeechToText | GeminiSpeechToText
+Transcriber = SpeechToText | GeminiSpeechToText | ClientSpeechToText
 
 
 @lru_cache(maxsize=1)
@@ -47,6 +48,8 @@ def get_stt() -> Transcriber:
     once, and a fresh one per connection would open a new TLS connection on every call.
     """
     engine = (settings.stt_engine or "gemini").strip().lower()
+    if engine == "client":
+        return ClientSpeechToText()
     whisper = SpeechToText(binary=settings.whisper_bin, model=settings.whisper_model)
 
     if engine == "whisper":

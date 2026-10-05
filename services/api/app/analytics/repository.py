@@ -303,20 +303,27 @@ class DatabaseRepository:
     ZONE = "Pacific/Auckland"
 
     async def all_ids(self) -> list[str]:
-        from app.db.models import Customer
+        from app.db.models import Customer, Meter, Reading
         from app.db.recorder import DatabaseRecorder
         from app.db.session import get_sessionmaker
 
         async with get_sessionmaker()() as session:
-            # Exclude conversation anchors. The recorder provisions a bare `customer` row
+            # Exclude conversation anchors and households without readings. The recorder
+            # provisions a bare `customer` row
             # the first time a mart account is recorded, because `conversation.customer_id`
             # is a foreign key and the spine needs something to hang off. Those rows are
             # identity only — they have no meters and no readings — so listing them here
             # would put every mart account in the picker twice: once from `public.*` with
             # no data, once from `kea.*` with its real usage.
+            has_readings = (
+                select(Reading.id)
+                .join(Meter, Meter.id == Reading.meter_id)
+                .where(Meter.customer_id == Customer.id)
+                .exists()
+            )
             rows = await session.execute(
                 select(Customer.external_ref)
-                .where(Customer.region != DatabaseRecorder.ANCHOR_REGION)
+                .where(Customer.region != DatabaseRecorder.ANCHOR_REGION, has_readings)
                 .order_by(Customer.id)
             )
             return [r for (r,) in rows.all()]
@@ -422,12 +429,21 @@ class MartRepository:
     name = "marts"
 
     async def all_ids(self) -> list[str]:
-        from app.db.marts import MartAccountContext
+        from app.db.marts import MartAccountContext, MartDailyUsage
         from app.db.session import get_sessionmaker
 
         async with get_sessionmaker()() as session:
+            # A loaded account without daily usage cannot produce a UsageContext and
+            # must not make the scheduled evaluator fail for the entire sweep.
+            has_usage = (
+                select(MartDailyUsage.icp_id)
+                .where(MartDailyUsage.icp_id == MartAccountContext.icp_id)
+                .exists()
+            )
             rows = await session.execute(
-                select(MartAccountContext.account_number).order_by(MartAccountContext.account_id)
+                select(MartAccountContext.account_number)
+                .where(has_usage)
+                .order_by(MartAccountContext.account_id)
             )
             return [r for (r,) in rows.all()]
 

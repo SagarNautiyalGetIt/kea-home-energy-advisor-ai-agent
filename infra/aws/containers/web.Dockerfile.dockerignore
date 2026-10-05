@@ -1,0 +1,12 @@
+**
+!services/
+!services/web/
+!services/web/**
+!infra/
+!infra/aws/
+!infra/aws/ec2/
+!infra/aws/ec2/Caddyfile
+**/node_modules
+**/dist
+**/.env*
+**/*.tsbuildinfo

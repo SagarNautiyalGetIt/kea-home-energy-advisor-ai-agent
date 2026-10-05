@@ -190,9 +190,8 @@ class WeatherResponse:
 def fit_weather_response(daily_kwh: list[float], daily_hdd: list[float]) -> WeatherResponse:
     """Ordinary least squares of daily kWh on daily heating degree days.
 
-    Written out rather than pulled from numpy or scipy on purpose. The API image is
-    deployed to Lambda (see infra/aws), where numpy is a 20 MB layer for six lines of
-    arithmetic; and a reviewer who wants to check this can check it against the formula
+    Written out rather than pulled from numpy or scipy on purpose. This calculation
+    needs only a few lines of arithmetic, and a reviewer can check it against the formula
     in any statistics text rather than against a library's conventions.
 
     Three guards, and each one falls back rather than raising, because a household whose

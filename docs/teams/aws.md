@@ -2,7 +2,7 @@
 
 ## You own
 
-`infra/` — local Postgres today, the Sprint 3 deployment and Bedrock cutover next.
+`infra/` — local PostgreSQL and the Sydney AWS demo.
 
 ## First hour
 
@@ -16,18 +16,21 @@ Get the whole stack running locally before changing anything about how it deploy
 read [ADR-0004](../adr/0004-llm-provider-interface.md) and
 [ADR-0006](../adr/0006-postgres-in-sprint-2.md).
 
-## The thing to internalise
+## Current deployment
 
-The provider seam already exists. `app/providers/base.py` is the interface,
-`ollama.py` is the working implementation, `bedrock.py` is the stub. Switching providers
-is a config change — `KEA_PROVIDER=bedrock` — not a rewrite.
+Read the [AWS deployment plan](../../infra/aws/deployment-plan.md) and
+[operator README](../../infra/aws/README.md); [ADR-0012](../adr/0012-ec2-rds-deployment.md)
+records why it is built this way. One EC2 host runs Caddy, the web app, API/Piper and an
+hourly evaluator. A private RDS PostgreSQL 16 database holds the application and serving
+data. Every session attaches the retained Sydney Elastic IP from a separate Terraform
+state; session teardown leaves that address allocated until the Cloud Owner runs the
+explicit `ip-release` command.
 
-That means your Sprint 3 work is **everything around the model**, not the model call:
-credentials, region, networking, the database, and how the thing gets deployed at all.
-The application side is already done and waiting.
-
-Region is `ap-southeast-2` (Sydney) — closest to NZ, and latency is visible in a live
-demo.
+Only data exported from the local PostgreSQL serving database is restored into RDS; the
+data pipeline is not deployed. RDS is never public: `make aws-db-tunnel` exposes it at
+`127.0.0.1:15432` through EC2 while the command runs. Region is `ap-southeast-2`
+(Sydney). The Cloud Owner explicitly controls each deployment and teardown, and tears
+the stack down after each demo.
 
 ## Rules specific to you
 
@@ -36,9 +39,8 @@ not in a comment, not "just while I test it".
 
 | Context | How credentials get there |
 |---|---|
-| Local | `aws configure` or SSO |
-| CI | GitHub Actions secrets |
-| Deployed | An instance role or task role — never long-lived keys in env vars |
+| Local | University SSO profile `kea-energy` |
+| Deployed | Protected runtime file with temporary team SSO credentials for Bedrock |
 
 `.gitignore` blocks `*.tfstate`, `*.tfvars`, `.aws/`, `*.pem`, `*.key`. That is a safety
 net, not the control. The control is you not typing it.
@@ -47,15 +49,11 @@ net, not the control. The control is you not typing it.
 no Apple GPU access, so a containerised model server silently drops to CPU speed. Don't
 "fix" its absence from the compose file.
 
-**Terraform state is not committed.** Before the first deploy, decide where it lives —
-S3 with a DynamoDB lock is the usual answer — and write it up as an ADR. Two people
-running `apply` against local state on the same day is a bad afternoon.
-
-## Open decisions for you to make
-
-- Where Terraform state lives (ADR needed)
-- RDS vs a container-hosted Postgres for the deployed environment
-- How the frontend is served — S3 + CloudFront, or alongside the API
+**Terraform state is not committed.** The Cloud Owner keeps active session
+state, SSH keys and database passwords in the ignored `infra/aws/.work/` directory,
+then removes them after a verified teardown. The separate `infra/aws/.work/elastic-ip/`
+state must remain until the retained IP is explicitly released. Local database
+exports are kept separately.
 
 ## Related
 

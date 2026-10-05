@@ -12,6 +12,7 @@ least want it.
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import AsyncIterator
 from functools import lru_cache
 
@@ -25,10 +26,19 @@ from sqlalchemy.ext.asyncio import (
 from app.config import settings
 
 
+def connection_args() -> dict:
+    if not settings.database_ssl_ca:
+        return {}
+    context = ssl.create_default_context(cafile=settings.database_ssl_ca)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return {"ssl": context}
+
+
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
     return create_async_engine(
         settings.database_url,
+        connect_args=connection_args(),
         pool_pre_ping=True,
         # Small on purpose: five demo households and one presenter. A large pool hides
         # connection leaks during the sprint instead of surfacing them.

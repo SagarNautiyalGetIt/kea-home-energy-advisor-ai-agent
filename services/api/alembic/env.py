@@ -1,7 +1,7 @@
 """Alembic environment — async engine, URL from the app's settings.
 
 The database URL is never written into alembic.ini. It comes from KEA_DATABASE_URL so
-that the same migrations run against local Docker Postgres today and RDS in Sprint 3
+that the same migrations run against local Docker and EC2-hosted PostgreSQL
 without editing a file (ADR-0006).
 """
 
@@ -15,10 +15,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import sqlalchemy as sa
 from alembic import context
 from app.config import settings
 from app.db.models import Base
+from app.db.session import connection_args
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -75,6 +75,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connection_args(),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

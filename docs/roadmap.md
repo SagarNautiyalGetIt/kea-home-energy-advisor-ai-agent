@@ -3,6 +3,10 @@
 **Kea Energy · Scenario 9 · Team HAKAS · MIT Internship 2026**
 Status: living document · Written 20 Aug 2026 (Day 4 of Sprint 2) · Owner: maintainer
 
+> Historical sprint planning: the AWS workstream below is superseded by the
+> [deployed EC2 + RDS plan](../infra/aws/deployment-plan.md) and
+> [ADR-0012](adr/0012-ec2-rds-deployment.md).
+
 > **The shape of the plan in one paragraph.** Sprint 2 ships a local-first MVP that
 > proves the guarantee: every number computed and verified, running on one laptop with
 > no internet. Sprints 3 and 4 keep that pipeline byte-for-byte and move the *transport*

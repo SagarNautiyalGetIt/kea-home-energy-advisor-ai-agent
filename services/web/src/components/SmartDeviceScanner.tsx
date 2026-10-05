@@ -50,10 +50,10 @@ export default function SmartDeviceScanner({ onToast }: { onToast?: (message: st
           ? `Found ${result.devices_found} device${result.devices_found === 1 ? '' : 's'}`
           : 'No devices answered on this network',
       )
-    } catch {
+    } catch (error) {
       setScan({
         scanned: false,
-        error: 'the scan could not be started',
+        error: error instanceof Error ? error.message : 'the scan could not be started',
         method: 'failed',
         scan_was_shallow: true,
         devices_found: 0,

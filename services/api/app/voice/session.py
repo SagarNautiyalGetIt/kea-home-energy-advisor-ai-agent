@@ -38,7 +38,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.agent.loop import AgentUnavailable
 from app.pipeline import Answer, UnknownCustomerError, answer
@@ -89,24 +89,32 @@ class VoiceSession:
     stt: SpeechToText
     tts: TextToSpeech
     customer_id: str = ""
-    detector: TurnDetector = field(default_factory=TurnDetector)
+    detector: TurnDetector | None = None
+
+    def __post_init__(self) -> None:
+        if self.detector is None and self.stt.describe()["engine"] != "client":
+            self.detector = TurnDetector()
 
     async def send_ready(self) -> None:
+        client_transcription = self.stt.describe()["engine"] == "client"
         await self.transport.send_json(
             {
                 "type": "ready",
                 "sample_rate_in": SAMPLE_RATE,
                 "stt": self.stt.describe(),
                 "tts": self.tts.describe(),
-                "vad": self.detector.detector,
+                "vad": self.detector.detector if self.detector is not None else "client",
+                "client_transcription": client_transcription,
                 # A client that knows the mic is useless can say so up front instead of
                 # letting someone talk into a dead microphone for ten seconds.
-                "can_listen": self.stt.available,
+                "can_listen": self.stt.available and not client_transcription,
                 "can_speak": self.tts.available,
             }
         )
 
     async def on_audio(self, chunk: bytes) -> None:
+        if self.detector is None:
+            raise RuntimeError("Client transcription does not accept microphone audio")
         for event, clip in self.detector.push(chunk):
             if event is Event.SPEECH_START:
                 await self.transport.send_json({"type": "speech_start"})
@@ -115,6 +123,8 @@ class VoiceSession:
 
     async def on_end(self) -> None:
         """Push-to-talk released. Transcribe whatever is buffered, even mid-pause."""
+        if self.detector is None:
+            raise RuntimeError("Client transcription requires a text message")
         clip = self.detector.flush()
         if clip:
             await self.handle_utterance(clip)
@@ -173,9 +183,7 @@ class VoiceSession:
 
         model_started = time.perf_counter()
         try:
-            result = await answer(
-                self.customer_id, message, channel="voice", language=language
-            )
+            result = await answer(self.customer_id, message, channel="voice", language=language)
         except UnknownCustomerError as exc:
             await self.error(f"unknown customer: {exc}", fatal=True)
             return None
@@ -185,15 +193,11 @@ class VoiceSession:
             log.error("voice: agent unavailable customer=%s: %s", self.customer_id, exc)
             await self._speak_line(_UNAVAILABLE)
             await self.error("the assistant is unavailable", fatal=False)
-            await self.transport.send_json(
-                {"type": "done", "latency": timings.as_dict()}
-            )
+            await self.transport.send_json({"type": "done", "latency": timings.as_dict()})
             return None
         timings.model_ms = (time.perf_counter() - model_started) * 1000.0
 
-        await self.transport.send_json(
-            {"type": "meta", "escalate": result.escalate}
-        )
+        await self.transport.send_json({"type": "meta", "escalate": result.escalate})
         await self.transport.send_json(
             {
                 "type": "answer",

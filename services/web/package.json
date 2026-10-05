@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:solar": "node --test tests/solar.test.mjs",
+    "test:voice": "node tests/run-voice.mjs",
     "test:clash": "node --test src/lib/clash-preview.test.mjs src/lib/clash-quest.test.mjs",
     "lint": "eslint . && tsc --noEmit",
     "types": "openapi-typescript ../../contracts/openapi.json -o src/api.d.ts"
