@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop } from 'react-native-svg';
 import {
@@ -85,51 +85,47 @@ const RING_OFFSET = (WRAP_SIZE - RING_SIZE) / 2;
 
 export type { BillRingTone } from '@/lib/bill-ring';
 
-export function BillRingGauge({ ratio, onToneChange }: { ratio: number; onToneChange?: (tone: BillRingTone) => void }) {
+export function BillRingGauge({ ratio, active, onToneChange }: { ratio: number; active: boolean; onToneChange?: (tone: BillRingTone) => void }) {
   const reduceMotion = useReducedMotion();
-  const [progress] = useState(() => new Animated.Value(0));
   const [headDeg, setHeadDeg] = useState(START_DEG);
-  const firstMount = useRef(true);
+  const angleRef = useRef(START_DEG);
 
   const tone = billRingToneForRatio(ratio);
   const target = billRingEndAngle(ratio) - START_DEG;
 
   useEffect(() => {
-    onToneChange?.(billRingToneForAngle(START_DEG));
-    const id = progress.addListener(({ value: p }) => {
-      setHeadDeg(START_DEG + p);
-      onToneChange?.(billRingToneForAngle(START_DEG + p));
-    });
-    progress.stopAnimation();
+    if (!active) {
+      angleRef.current = START_DEG;
+      setHeadDeg(START_DEG);
+      return;
+    }
+
+    const endAngle = START_DEG + target;
     if (reduceMotion) {
       // reduced motion: final customer-data state immediately, no animation
-      progress.setValue(target);
-      setHeadDeg(START_DEG + target);
+      angleRef.current = endAngle;
+      setHeadDeg(endAngle);
       onToneChange?.(tone);
-    } else if (firstMount.current) {
-      firstMount.current = false;
-      // one-shot: blank track -> customer-data endpoint, linear, then HOLD
-      progress.setValue(0);
-      setHeadDeg(START_DEG);
-      Animated.timing(progress, {
-        duration: Math.max(400, (target / DRAW_SPEED_DEG_PER_SEC) * 1000),
-        easing: Easing.linear,
-        toValue: target,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      // value changed while open: glide to the new endpoint, never replay from blank
-      Animated.timing(progress, {
-        duration: 500,
-        easing: Easing.linear,
-        toValue: target,
-        useNativeDriver: false,
-      }).start();
+      return;
     }
-    return () => {
-      progress.removeListener(id);
+
+    const startAngle = angleRef.current;
+    const duration = Math.max(400, (Math.abs(endAngle - startAngle) / DRAW_SPEED_DEG_PER_SEC) * 1000);
+    let frame = 0;
+    let startedAt: number | undefined;
+    onToneChange?.(billRingToneForAngle(startAngle));
+    const draw = (time: number) => {
+      startedAt ??= time;
+      const fraction = Math.min(1, (time - startedAt) / duration);
+      const angle = startAngle + (endAngle - startAngle) * fraction;
+      angleRef.current = angle;
+      setHeadDeg(angle);
+      onToneChange?.(fraction === 1 ? tone : billRingToneForAngle(angle));
+      if (fraction < 1) frame = requestAnimationFrame(draw);
     };
-  }, [onToneChange, progress, target, reduceMotion, tone]);
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [active, onToneChange, target, reduceMotion, tone]);
 
   const endDeg = Math.min(headDeg, BILL_RING_MAX_DEG);
   const head = polar(endDeg);

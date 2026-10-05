@@ -221,7 +221,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.shockModal}>
           <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10 }}><SparkyPresence size={56} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Sparky AI · bill prediction</Text></View>
-          {predictionAvailable ? <BillRingGauge onToneChange={setRingTone} ratio={billRatio} /> : <Text accessibilityRole="alert" style={[styles.shockBody, { color: colors.textMuted }]}>{dashboardError ?? 'No bill forecast is available for this account yet.'}</Text>}
+          {predictionAvailable ? <BillRingGauge active={billShockOpen} onToneChange={setRingTone} ratio={billRatio} /> : <Text accessibilityRole="alert" style={[styles.shockBody, { color: colors.textMuted }]}>{dashboardError ?? 'No bill forecast is available for this account yet.'}</Text>}
           {dashboard?.warningTriggered && dashboard.overshootPct != null ? <View style={styles.overshootCallout}>
             <Ionicons color={palette.red} name="alert-circle" size={24} />
             <View style={styles.overshootCopy}>
