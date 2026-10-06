@@ -1,10 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { BlurTargetView } from 'expo-blur';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
-import { HomeNavigationSheet } from '@/components/home-navigation-sheet';
+import { BottomNavigation } from '@/components/bottom-navigation';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { BillRingGauge, type BillRingTone } from '@/components/bill-ring-gauge';
@@ -19,9 +18,7 @@ export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
-  const homeBlurTarget = useRef<View>(null);
   const [sceneInteracting, setSceneInteracting] = useState(false);
-  const [dockInteracting, setDockInteracting] = useState(false);
 
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -63,8 +60,8 @@ export default function DashboardScreen() {
   // The absolute Home artwork must not paint beyond an inactive tab's scene bounds.
   if (pathname !== '/dashboard') return null;
   return (
-    <Screen key={pathname} scrollEnabled={!sceneInteracting && !dockInteracting} contentStyle={styles.screenContent}>
-      <BlurTargetView ref={homeBlurTarget}><DemoHomeView customerId={session?.customerId ?? null}
+    <Screen key={pathname} scrollEnabled={!sceneInteracting} contentStyle={styles.screenContent}>
+      <DemoHomeView customerId={session?.customerId ?? null}
         onSceneInteractionChange={setSceneInteracting}
         onOpenInfo={() => setWelcomeOpen(true)}
         onOpenNotifications={() => setNotificationsOpen(true)}
@@ -74,16 +71,17 @@ export default function DashboardScreen() {
         {dashboard ? <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
         {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
       </View>
-      </BlurTargetView>
-      <HomeNavigationSheet
-        onInteractionChange={setDockInteracting}
-        blurTarget={homeBlurTarget}
+      <View style={[styles.navigationSection, { borderTopColor: colors.border }]}>
+        <Text style={[styles.navigationTitle, { color: colors.text }]}>Explore Kea</Text>
+        <Text style={[styles.navigationSubtitle, { color: colors.textMuted }]}>Scroll for predictions, usage, Sparky and more.</Text>
+      <BottomNavigation listMode includeHome={false}
         billPrediction={{
           detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
           onPress: () => setBillShockOpen(true),
           status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
         }}
       />
+      </View>
 
       <ModalSheet
         footer={<PrimaryButton label="Done" onPress={() => setNotificationsOpen(false)} />}
@@ -265,6 +263,9 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     position: 'relative',
   },
+  navigationSection: { borderTopWidth: 1, paddingTop: 18, paddingBottom: 12 },
+  navigationTitle: { fontSize: 20, fontWeight: '800', marginHorizontal: 22 },
+  navigationSubtitle: { fontSize: 12, marginHorizontal: 22, marginTop: 4, marginBottom: 12 },
   menuScroll: {
     flex: 1,
   },

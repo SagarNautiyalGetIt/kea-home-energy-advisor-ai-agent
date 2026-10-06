@@ -618,7 +618,7 @@ export default function UsageScreen() {
             return <View key={category.key} style={[styles.energyCategoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={[styles.energyCategoryIcon, { backgroundColor: `${presentation.color}20` }]}><Ionicons color={presentation.color} name={presentation.icon} size={20} /></View>
               <View style={[styles.energyCategoryCopy, styles.energyCategoryCopyCompact]}>
-                <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.label}</Text>
+                <Text style={[styles.energyCategoryTitle, { color: colors.text }]}>{category.key === 'space_heating' ? 'Heating' : category.key === 'everything_else' ? 'Everything else' : category.label}</Text>
                 <View style={[styles.confidenceBadge, { backgroundColor: estimated ? 'rgba(255, 214, 10, 0.14)' : 'rgba(48, 209, 88, 0.14)' }]}><Text style={[styles.confidenceBadgeText, { color: estimated ? palette.amber : palette.green }]}>{estimated ? 'ESTIMATED' : 'MEASURED'}</Text></View>
                 <Text style={[styles.breakdownDetail, { color: colors.textMuted }]}>{category.confidence === 'measured' ? category.basis : `Estimated · ${category.basis}`}</Text>
                 {category.caveat ? <Text style={[styles.energyCategoryCaveat, { color: colors.textMuted }]}>{category.caveat}</Text> : null}

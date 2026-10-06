@@ -15,6 +15,7 @@ const menu = [
   { label: 'Scheduled outages', detail: 'Distributor notices and preparation', icon: 'calendar' as const, route: '/outages' as const, tint: 'alert' as const },
   { label: 'Profile', detail: 'Contact and account details', icon: 'person' as const, route: '/profile' as const, tint: 'info' as const },
   { label: 'Plans', detail: 'Compare pricing and terms', icon: 'swap-horizontal' as const, route: '/plans' as const, tint: 'money' as const },
+  { label: 'Power Clash', detail: 'Explore the suburb league', icon: 'trophy-outline' as const, route: '/clash' as const, tint: 'money' as const },
   { label: 'Help & support', detail: 'Answers and Customer Care', icon: 'help-circle' as const, route: '/help' as const, tint: 'ai' as const },
   { label: 'Settings', detail: 'Alerts, privacy and security', icon: 'settings' as const, route: '/settings' as const, tint: 'utility' as const },
 ];

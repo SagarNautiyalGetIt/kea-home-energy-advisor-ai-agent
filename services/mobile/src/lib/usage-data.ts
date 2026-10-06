@@ -124,7 +124,7 @@ async function loadApiUsage(query: UsageQuery): Promise<UsageViewData> {
     period: query.period,
     selectedDate: query.date,
     sourcePeriod: query.date.slice(0, 7),
-    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${query.period === 'daily' ? ` · ${hourly ? `${hourly.hours.filter(hour => hour.kwh !== null).length}/${hourly.hours.length} hours available · ${hourly.note}` : 'Hourly source unavailable'}` : ''}${comparisonLabel}`,
+    sourceLabel: `${source.label} · ${coverage.days}/${coverage.expectedDays} days available${query.period === 'daily' ? ` · ${hourly ? `${hourly.hours.filter(hour => hour.kwh !== null).length}/${hourly.hours.length} hours available` : 'Hourly source unavailable'}` : ''}${comparisonLabel}`,
     points,
     comparisonPoints: overlayAvailable && comparisonPoints?.length && comparisonPoints.length === points.length ? comparisonPoints : null,
     totalKwh: totals.kwh,
