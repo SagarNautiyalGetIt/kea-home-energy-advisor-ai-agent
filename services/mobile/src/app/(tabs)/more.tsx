@@ -55,7 +55,7 @@ export default function MoreScreen() {
   };
 
   return (
-    <Screen>
+    <Screen hue hueStart={2} hueStretch>
       <PageHeader title="More" subtitle="Your Kea Energy account" />
       <SectionTitle>Account</SectionTitle>
       <View style={styles.menuCard}>{menu.map((item, index) => <Pressable key={item.route} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.row, index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }, pressed && styles.pressed]}><Ionicons color={colors.text} name={item.icon} size={24} /><View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.rowDetail, { color: colors.textMuted }]}>{item.detail}</Text></View><Ionicons color={colors.textMuted} name="chevron-forward" size={20} /></Pressable>)}</View>

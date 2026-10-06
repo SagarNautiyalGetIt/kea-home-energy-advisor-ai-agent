@@ -113,7 +113,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <Screen>
+    <Screen hue hueStart={2} hueStretch>
       <PageHeader action={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />} title="Profile" subtitle="Account details · edits stay on this phone" />
       <View style={styles.profileContent}>
         <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image accessibilityLabel="Illustrative customer portrait" contentFit="cover" source={customerPortrait} style={styles.portrait} /></View>
