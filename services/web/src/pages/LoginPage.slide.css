@@ -18,6 +18,14 @@
 .login-page.slide-shot .auth-switch button:hover,
 .login-page.slide-shot .auth-switch button:focus-visible{color:#0b55e6}
 
+/* Demo accounts: toggle and expanded list in the same blue */
+.login-page.slide-shot .demo-accounts-toggle{color:#1f6bff}
+.login-page.slide-shot .demo-accounts-toggle:hover,
+.login-page.slide-shot .demo-accounts-toggle:focus-visible{color:#0b55e6}
+.login-page.slide-shot .demo-accounts-list button:hover:not(:disabled){border-color:#1f6bff;background:#f3f7ff}
+.login-page.slide-shot .demo-accounts-list strong{color:var(--ink)}
+.login-page.slide-shot .demo-accounts-list code{color:#1f6bff}
+
 /* Right: near-black base, cyan glow top-left like the slide, blue glow bottom-right */
 .login-page.slide-shot .brand-panel{position:relative;overflow:hidden;isolation:isolate;color:#fff;background:
   radial-gradient(55% 45% at 6% 2%,rgb(34 211 238 / 55%),transparent 70%),
