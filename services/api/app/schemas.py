@@ -11,7 +11,7 @@ import datetime as dt
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # clarify.schemas imports nothing from the app — see app/clarify/schemas.py and
 # tests/test_import_graph.py. That is what lets the question be typed here rather than
@@ -304,6 +304,15 @@ class FactBundle(BaseModel):
 # ---------- API surface ----------
 
 
+class ChatHistoryMessage(BaseModel):
+    """A prior displayed turn, supplied by the client rather than an account fact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class ChatRequest(BaseModel):
     customer_id: str
     message: str
@@ -313,6 +322,15 @@ class ChatRequest(BaseModel):
             "Continue an existing conversation. Omit on the first message; send back "
             "whatever the previous response returned. Ignored when persistence is off, "
             "and ignored if it belongs to a different customer."
+        ),
+    )
+    history: list[ChatHistoryMessage] = Field(
+        default_factory=list,
+        max_length=12,
+        description=(
+            "Up to twelve prior user/assistant messages from this account's displayed "
+            "thread, oldest first. Used to resolve follow-up questions, not as "
+            "authoritative account data or permission to take an action."
         ),
     )
 

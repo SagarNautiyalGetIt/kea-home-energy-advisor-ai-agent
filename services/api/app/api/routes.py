@@ -1169,6 +1169,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             req.customer_id,
             req.message,
             conversation_id=req.conversation_id,
+            history=[turn.model_dump() for turn in req.history],
         )
     except UnknownCustomerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1239,6 +1240,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
             req.customer_id,
             req.message,
             conversation_id=req.conversation_id,
+            history=[turn.model_dump() for turn in req.history],
         ):
             yield f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 

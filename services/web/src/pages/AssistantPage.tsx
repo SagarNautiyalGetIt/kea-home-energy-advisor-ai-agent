@@ -19,6 +19,7 @@ import {
 import { fromDoneEvent } from '../lib/answerLog'
 import { loadSession } from '../lib/session'
 import { clearThread, loadThread, saveThread } from '../lib/thread'
+import { completedChatHistory } from '../lib/chat-history'
 import { VoiceClient, checkVoiceSupport } from '../lib/voice'
 import SparkyPresence, { type SparkyPresenceMode } from '../components/SparkyPresence'
 import type { ToastMessage } from '../components/ToastStack'
@@ -77,6 +78,10 @@ type Message = {
   attachment?: { name: string; kind: 'image' | 'pdf'; status: 'reading' | 'ready' | 'failed' }
   /** The service could not answer — never a fabricated stand-in. See `onError`. */
   error?: string
+  /** The actual question sent, when an upload bubble has a shorter display label. */
+  requestText?: string
+  /** Tier 3 responses are human-support handovers, not model-written advice. */
+  handover?: boolean
   /**
    * A solar calculation brought over from Explore solar savings, shown as Sparky's message
    * about it. Kept in the thread (and so saved with it) rather than only in the page's
@@ -453,6 +458,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
           id: nextId.current++,
           role: 'user',
           text: shown?.text ?? question,
+          requestText: shown ? question : undefined,
           attachment: shown?.attachment,
         },
         { id: answerId, role: 'assistant', text: '', streaming: true },
@@ -463,7 +469,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
 
       try {
         await streamChat(
-          { customer_id: customerId, message: solarContext ? solarPrompt(solarContext) + '\nCustomer question: ' + question : question, conversation_id: solarContext ? null : conversationId.current },
+          { customer_id: customerId, message: solarContext ? solarPrompt(solarContext) + '\nCustomer question: ' + question : question, conversation_id: solarContext ? null : conversationId.current, history: completedChatHistory(history) },
           {
             onToken: (token) => patch((m) => ({ ...m, text: m.text + token.text })),
             // The round that produced this text turned out to be a lookup, so the text
@@ -488,7 +494,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
             onDone: (done) => {
               conversationId.current = done.conversation_id
               setEscalating(done.escalate_to_human)
-              patch((m) => ({ ...m, sources: done.sources, activity: undefined, streaming: false }))
+              patch((m) => ({ ...m, sources: done.sources, handover: done.tier === 3, activity: undefined, streaming: false }))
               // Demo line 6. Recorded for every answer, including unsourced ones — a log
               // that only records successes is not evidence.
               fromDoneEvent(done, { customerId, question })
@@ -510,12 +516,13 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
         )
       } catch (error) {
         if (controller.signal.aborted) return
-        setBackendDown(true)
+        setBackendDown(error instanceof TypeError)
         patch((m) => ({
           ...m,
           text: '',
           activity: undefined,
-          error: 'Sparky can’t reach your usage data right now.',
+          error: error instanceof Error ? error.message : 'Sparky can’t reach your usage data right now.',
+          streaming: false,
         }))
         onToast(error instanceof Error ? error.message : 'Could not reach Sparky', 'warning')
       } finally {
@@ -813,6 +820,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                         literal asterisks. See components/AnswerText for why this is
                         hand-written: the string is model output, and no HTML is built
                         from it. */}
+                    {item.handover && <p className="answer-withheld"><strong>Customer Care support</strong> · This response does not confirm that a support request was delivered.</p>}
                     <AnswerText text={item.text}/>
 
                     {/* The figures the answer is about, drawn from the same lookup that
@@ -848,7 +856,7 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
                       <details className="verified-badge answer-sources">
                         <summary>
                           <ShieldCheck aria-hidden="true"/>
-                          Answered from your own meter data
+                          Based on checked account sources
                         </summary>
                         <ul>
                           {item.sources.filter((s) => s.ok).map((s, i) => (

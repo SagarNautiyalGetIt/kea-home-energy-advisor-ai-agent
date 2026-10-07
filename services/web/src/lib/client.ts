@@ -12,12 +12,15 @@
  */
 
 import { loadSession } from './session';
+import { sendChatStream } from './chat-stream';
 
 export interface ChatRequest {
   customer_id: string;
   message: string;
   /** Send back whatever the previous `done` returned, to keep the thread together. */
   conversation_id?: number | null;
+  /** Bounded completed turns keep follow-ups coherent when persistence is disabled. */
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 /**
@@ -95,6 +98,11 @@ export interface DoneEvent {
   conversation_id: number | null;
   latency_ms: number;
   tokens: number;
+  /** Shared API handling tier: 3 is a human handover, never model advice. */
+  tier: 1 | 2 | 3;
+  tier_reason: string | null;
+  emotion: string | null;
+  emotion_intensity: string | null;
 }
 
 /** `event: error` — no answer, and no invented one either. */
@@ -571,62 +579,5 @@ export async function streamChat(
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch("/api/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(loadSession()?.accessToken ? { Authorization: `Bearer ${loadSession()!.accessToken}` } : {}) },
-    body: JSON.stringify(req),
-    signal,
-  });
-
-  if (!res.ok) throw new Error(`chat/stream → ${res.status} ${res.statusText}`);
-  if (!res.body) throw new Error("chat/stream returned no body");
-
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += value;
-
-    // SSE frames are separated by a blank line. A chunk can split a frame in the
-    // middle, so anything after the last "\n\n" stays in the buffer for next time.
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
-
-    for (const frame of frames) {
-      let event = "message";
-      let data = "";
-      for (const line of frame.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
-      }
-      if (!data) continue;
-
-      const payload: unknown = JSON.parse(data);
-      switch (event) {
-        case "token":
-          handlers.onToken?.(payload as TokenEvent);
-          break;
-        case "reset":
-          handlers.onReset?.();
-          break;
-        case "tool":
-          handlers.onTool?.(payload as ToolEvent);
-          break;
-        case "result":
-          handlers.onToolResult?.(payload as ToolResultEvent);
-          break;
-        case "chart":
-          handlers.onChart?.(payload as ChartEvent);
-          break;
-        case "done":
-          handlers.onDone?.(payload as DoneEvent);
-          break;
-        case "error":
-          handlers.onError?.(payload as ErrorEvent);
-          break;
-      }
-    }
-  }
+  await sendChatStream(req, handlers, loadSession()?.accessToken, signal);
 }

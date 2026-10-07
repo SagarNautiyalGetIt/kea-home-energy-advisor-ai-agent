@@ -14,6 +14,7 @@ import { IconButton, PageHeader } from '@/components/ui';
 import { streamAssistantReply, toolLabel, sendAssistantFeedback } from '@/lib/assistant-api';
 import { answerOnPhone, isPhoneModelEnabled, phoneModelStatus, stopPhoneAnswer } from '@/lib/local-sparky';
 import { canAnswerWithLocalModel, LOCAL_EVIDENCE_LIMIT } from '@/lib/local-sparky-policy';
+import { completedChatHistory } from '@/lib/assistant-history';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
 import { palette, useAppTheme } from '@/theme';
@@ -155,7 +156,7 @@ export default function AssistantScreen() {
             patch((m) => ({ ...m, text: phoneReady ? `${failure}\n\n${LOCAL_EVIDENCE_LIMIT}` : failure, streaming: false, failed: true, activity: undefined }));
             resolve();
           },
-        }, conversationId.current);
+        }, conversationId.current, completedChatHistory(messages));
         requestRef.current = { abort: () => { stream.cancel(); resolve(); } };
       });
       if (!completed) throw new Error('Sparky did not complete the response. Please try again.');

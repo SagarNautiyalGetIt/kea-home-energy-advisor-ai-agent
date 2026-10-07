@@ -60,7 +60,14 @@ export function loadThread<M>(customerId: string): StoredThread<M> | null {
 export function saveThread<M>(thread: Omit<StoredThread<M>, 'version'>): void {
   if (!thread.customerId) return
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...thread, version: VERSION }))
+    // Upload extraction belongs to the active request, not a new persistent bill copy.
+    const messages = thread.messages.map((message) => {
+      if (!message || typeof message !== 'object') return message
+      const displayed = { ...message } as Record<string, unknown>
+      delete displayed.requestText
+      return displayed
+    })
+    localStorage.setItem(KEY, JSON.stringify({ ...thread, messages, version: VERSION }))
   } catch {
     // A full quota must not take out the page. Losing the saved thread is the same
     // outcome as before this file existed, and the live one is untouched.

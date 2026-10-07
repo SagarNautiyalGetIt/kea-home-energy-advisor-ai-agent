@@ -3012,6 +3012,32 @@
         "title": "CauseBreakdown",
         "description": "Where the overshoot came from, in dollars that sum to it exactly.\n\n`explained` false means the weather regression was not usable and the whole overshoot\nsits in `everyday_load_nzd` unattributed. The UI must not draw a cause chart in that\nstate \u2014 an unexplained overshoot shown with a confident breakdown is worse than one\nshown with none."
       },
+      "ChatHistoryMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatHistoryMessage",
+        "description": "A prior displayed turn, supplied by the client rather than an account fact."
+      },
       "ChatRequest": {
         "properties": {
           "customer_id": {
@@ -3033,6 +3059,15 @@
             ],
             "title": "Conversation Id",
             "description": "Continue an existing conversation. Omit on the first message; send back whatever the previous response returned. Ignored when persistence is off, and ignored if it belongs to a different customer."
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatHistoryMessage"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "History",
+            "description": "Up to twelve prior user/assistant messages from this account's displayed thread, oldest first. Used to resolve follow-up questions, not as authoritative account data or permission to take an action."
           }
         },
         "type": "object",

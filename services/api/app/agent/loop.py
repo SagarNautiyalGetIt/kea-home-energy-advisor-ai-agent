@@ -282,23 +282,23 @@ async def run_agent(
     # Still recorded as a real invocation, so the provenance panel and
     # `app.agent_tool_call` cannot tell the difference — the customer sees "looked up
     # your account", because that is exactly what happened.
-    preamble = ""
-    if not history:
-        started = time.perf_counter()
-        summary = await dispatch(ctx, "get_account_summary", {})
-        invocations.append(
-            ToolInvocation(
-                name="get_account_summary",
-                arguments={},
-                result=summary,
-                duration_ms=int((time.perf_counter() - started) * 1000),
-            )
+    # Client history helps resolve follow-ups, but cannot replace fresh scoped facts.
+    # A prior answer may be stale or forged, and the selected account may have changed.
+    started = time.perf_counter()
+    summary = await dispatch(ctx, "get_account_summary", {})
+    invocations.append(
+        ToolInvocation(
+            name="get_account_summary",
+            arguments={},
+            result=summary,
+            duration_ms=int((time.perf_counter() - started) * 1000),
         )
-        preamble = (
-            "Here is this customer's account summary, already looked up for you:\n"
-            f"{tool_result_to_text(summary)}\n\n"
-            "The customer asks:\n"
-        )
+    )
+    preamble = (
+        "Here is this customer's account summary, already looked up for you:\n"
+        f"{tool_result_to_text(summary)}\n\n"
+        "The customer asks:\n"
+    )
 
     today = dt.datetime.now(ZoneInfo("Pacific/Auckland")).date()
     if os.getenv("KEA_AS_OF", "").strip():

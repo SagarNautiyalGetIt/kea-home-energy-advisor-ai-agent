@@ -1,5 +1,6 @@
 import { apiBase, apiJson, apiPath, jsonRequest, loadAccessToken } from '@/lib/backend-client';
 import { sendAuthenticatedStream } from '@/lib/assistant-auth-stream';
+import type { HistoryTurn } from '@/lib/assistant-history';
 import { parseChartEvent, parseSseFrames, type ChartEvent } from '@/lib/assistant-stream';
 
 /**
@@ -131,6 +132,7 @@ export function streamAssistantReply(
   message: string,
   handlers: AssistantHandlers,
   conversationId?: number | null,
+  history: HistoryTurn[] = [],
 ): AssistantStream {
   if (!customerId) {
     handlers.onError?.('Your account could not be identified. Please sign in again.');
@@ -225,6 +227,7 @@ export function streamAssistantReply(
       customer_id: customerId,
       message,
       conversation_id: conversationId ?? null,
+      history,
     }), loadAccessToken, () => cancelled || finished, () => {
       finished = true;
       handlers.onError?.('Sparky could not read your session. Please sign in again.');
