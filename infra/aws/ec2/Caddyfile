@@ -15,6 +15,12 @@
 	handle /api/* {
 		reverse_proxy api:8000
 	}
+	handle_path /download/* {
+		root * /downloads
+		@apk path *.apk
+		header @apk Content-Type application/vnd.android.package-archive
+		file_server
+	}
 	handle {
 		root * /srv
 		try_files {path} /index.html

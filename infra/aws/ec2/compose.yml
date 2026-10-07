@@ -47,6 +47,8 @@ services:
     volumes:
       - /opt/kea/Caddyfile:/etc/caddy/Caddyfile:ro
       - /opt/kea/certs/active:/certs:ro
+      # The Android app, published by `make publish-apk`, served at /download/.
+      - /opt/kea/downloads:/downloads:ro
     depends_on:
       api: {condition: service_healthy}
     healthcheck: {disable: true}

@@ -284,17 +284,52 @@ step_mobile() {
   # npm ci replaces native modules; stale CMake files can reference codegen
   # directories from the previous installation and break Gradle's clean task.
   rm -rf -- android/app/.cxx
+  # arm64-v8a by default: practically every Android phone in use, and 162 MB
+  # to download instead of 253 MB for every architecture (6 Oct 2026; the
+  # JavaScript bundle and assets are most of the rest). ANDROID_ABIS=all builds
+  # every architecture (older 32-bit phones, x86 emulators).
+  local abis="${ANDROID_ABIS:-arm64-v8a}"
   # macOS Bash 3.2 treats an empty array expansion as unset under `set -u`.
   # Invoke Gradle directly in each branch so the default ABI path also works.
-  if [[ -n "${ANDROID_ABIS:-}" ]]; then
+  if [[ "$abis" != all ]]; then
     EXPO_PUBLIC_API_URL="https://$PUBLIC_IP" EXPO_PUBLIC_USE_REAL_DATA=true \
-      ./android/gradlew -p android --no-daemon "-PreactNativeArchitectures=$ANDROID_ABIS" clean :app:assembleRelease
+      ./android/gradlew -p android --no-daemon "-PreactNativeArchitectures=$abis" clean :app:assembleRelease
   else
     EXPO_PUBLIC_API_URL="https://$PUBLIC_IP" EXPO_PUBLIC_USE_REAL_DATA=true \
       ./android/gradlew -p android --no-daemon clean :app:assembleRelease
   fi
   printf 'APK built: %s\nTo install it when ready: make -C infra/aws install-apk SESSION_ID=%s\n' \
     "$KEA_ROOT/services/mobile/android/app/build/outputs/apk/release/app-release.apk" "$SESSION_ID"
+}
+
+step_publish_apk() {
+  kea_load_session "$SESSION_ID"
+  local apk="$KEA_ROOT/services/mobile/android/app/build/outputs/apk/release/app-release.apk"
+  [[ -s "$apk" ]] || { echo 'Release APK missing; run make mobile to build it.' >&2; exit 1; }
+  # The compose file and Caddyfile carry the /download/ route; sync them so an
+  # older session gains it, then recreate web (a few seconds) to mount the folder.
+  kea_scp "$apk" "$KEA_STACK/compose.yml" "$KEA_STACK/Caddyfile"
+  kea_ssh 'set -e; sudo install -d -m 755 /opt/kea/downloads; sudo install -m 644 app-release.apk /opt/kea/downloads/kea-energy.apk; sudo install -m 644 compose.yml Caddyfile /opt/kea/; rm app-release.apk compose.yml Caddyfile'
+  kea_ssh 'sudo docker compose --env-file /opt/kea/runtime.env -f /opt/kea/compose.yml up -d web && sudo docker compose --env-file /opt/kea/runtime.env -f /opt/kea/compose.yml restart web'
+  local url="https://$PUBLIC_IP/download/kea-energy.apk" got
+  for _ in 1 2 3 4 5 6; do
+    got="$(curl -sI -o /dev/null -w '%{http_code} %{content_type}' "$url" || true)"
+    [[ "$got" == "200 application/vnd.android.package-archive" ]] && break
+    sleep 3
+  done
+  [[ "$got" == "200 application/vnd.android.package-archive" ]] || { printf 'Download check failed: %s\n' "$got" >&2; exit 1; }
+  printf 'Android app published: %s\n' "$url"
+  # The committed QR code encodes one URL. The Elastic IP is retained, so it
+  # stays right across sessions; publish it only while the IP still matches.
+  local qr="$KEA_ROOT/infra/aws/downloads/kea-energy-apk-qr.png" qr_ip=13.54.25.80
+  if [[ "$PUBLIC_IP" == "$qr_ip" ]]; then
+    kea_scp "$qr"
+    kea_ssh 'sudo install -m 644 kea-energy-apk-qr.png /opt/kea/downloads/ && rm kea-energy-apk-qr.png'
+    printf 'QR code: https://%s/download/kea-energy-apk-qr.png\n' "$PUBLIC_IP"
+  else
+    printf 'QR code not published: it encodes %s, this session is %s. Regenerate it (see infra/aws/README.md).\n' \
+      "$qr_ip" "$PUBLIC_IP" >&2
+  fi
 }
 
 step_install_apk() {
@@ -441,7 +476,7 @@ step_deploy() {
   id="${SESSION_ID:-$(date -u +%Y%m%d%H%M%S)}"
   kea_require_id "$id"
   printf 'Deploying session %s. Keep this ID for teardown.\n' "$id"
-  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify mobile; do
+  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify mobile publish-apk; do
     printf '\n==> %s\n' "$step"
     make -C "$KEA_ROOT/infra/aws" "$step" SESSION_ID="$id" SOURCE_PAUSED=1 || {
       printf 'Stopped at %s. Session %s files and any state were retained; inspect them before continuing.\n' "$step" "$id" >&2

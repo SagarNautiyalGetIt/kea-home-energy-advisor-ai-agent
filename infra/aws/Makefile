@@ -14,7 +14,7 @@ ENABLE_VOICE_ALERTS ?= 0
 export SESSION_ID SOURCE_PAUSED RELEASE_IP DB_LOCAL_PORT SSH_HOST SSH_KEY DB_HOST ENABLE_VOICE_ALERTS
 
 .PHONY: help validate export-local login ip-allocate ip-status ip-release session-id session export-db plan-create apply-create host cert images runtime \
-	restore verify mobile install-apk db-tunnel renew-cert refresh-credentials destroy-plan destroy-apply audit \
+	restore verify mobile publish-apk install-apk db-tunnel renew-cert refresh-credentials destroy-plan destroy-apply audit \
 	clean-session deploy teardown
 
 help:
@@ -51,6 +51,7 @@ help:
 	  '  make -C infra/aws restore SESSION_ID=<id>            # Restore private RDS, verify inventory, start services' \
 	  '  make -C infra/aws verify SESSION_ID=<id>             # Check HTTPS and restored row count' \
 	  '  make -C infra/aws mobile SESSION_ID=<id>             # Build APK; installation is separate' \
+	  '  make -C infra/aws publish-apk SESSION_ID=<id>        # Serve the APK at https://<ip>/download/kea-energy.apk' \
 	  '' \
 	  'Maintenance:' \
 	  '  make -C infra/aws db-tunnel SESSION_ID=<id>          # Open private RDS at localhost:15432' \
@@ -124,6 +125,9 @@ verify:
 
 mobile:
 	@bash scripts/operations.sh mobile
+
+publish-apk:
+	@bash scripts/operations.sh publish-apk
 
 install-apk:
 	@bash scripts/operations.sh install-apk

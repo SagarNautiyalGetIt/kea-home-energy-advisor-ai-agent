@@ -83,8 +83,29 @@ If deployment stops after creating its session, keep that session ID and state.
 Do not rerun `aws-deploy` with the same ID; continue from the failed step with
 `make -C infra/aws <step> SESSION_ID=<session-id>`, or run the teardown below
 if you want to discard the partial deployment. Use `make -C infra/aws help`
-for the step names. When you want to install the built APK, connect and unlock
-the phone, authorize USB debugging, then run:
+for the step names.
+
+The deploy ends by publishing the built APK on the host (`publish-apk`): any
+Android phone can install it from `https://<ip>/download/kea-energy.apk`
+(the browser asks once to allow installs from it), or by scanning
+`https://<ip>/download/kea-energy-apk-qr.png`, also in
+[`downloads/`](downloads/kea-energy-apk-qr.png) for slides. Rerun
+`make -C infra/aws publish-apk SESSION_ID=<session-id>` after rebuilding it.
+
+`publish-apk` installs this checkout's Compose and Caddy configurations on the
+host. Before using it on a manually modified session, reconcile any extra
+services and routes with those files; otherwise they can be removed. In
+particular, the experimental Metabase configuration is maintained separately
+until its deployment PR reaches `main`.
+
+The QR code encodes `https://13.54.25.80/download/kea-energy.apk`, the retained
+Elastic IP, so it survives redeploys. If that address is ever released,
+`publish-apk` skips the QR code; regenerate it with
+`python3 -m pip install segno` and
+`python3 -c "import segno; segno.make('https://<ip>/download/kea-energy.apk', error='m').save('infra/aws/downloads/kea-energy-apk-qr.png', scale=12, border=4)"`,
+and change `qr_ip` in `scripts/operations.sh`.
+To install over USB instead, connect and unlock the phone, authorize USB
+debugging, then run:
 
 ```bash
 make -C infra/aws install-apk SESSION_ID="$(make -s -C infra/aws session-id)"
@@ -96,8 +117,10 @@ Xiaomi phones also need **Install via USB** enabled in Developer options.
 
 For a local export without deployment, use
 `make -C infra/aws export-local SOURCE_PAUSED=1`.
-For a specific connected Android architecture, set `ANDROID_ABIS=arm64-v8a`
-when invoking the `mobile` step; the default APK includes all architectures.
+The `mobile` step builds for `arm64-v8a` by default, which covers practically
+every Android phone in use and keeps the download small. Set `ANDROID_ABIS=all`
+for every architecture (older 32-bit phones, x86 emulators), or a comma list
+such as `ANDROID_ABIS=arm64-v8a,armeabi-v7a`.
 
 ## Backend database access
 
