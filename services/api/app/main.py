@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app import voice
 from app.alerts.store import PreferencesUnavailable
+from app.api.account_actions import router as account_actions_router
 from app.api.experience import router as experience_router
 from app.api.routes import router
 from app.config import get_provider, settings
@@ -104,6 +105,7 @@ async def add_security_headers(request: Request, call_next):
 
 app.include_router(router, prefix="/api")
 app.include_router(experience_router, prefix="/api")
+app.include_router(account_actions_router, prefix="/api")
 
 
 @app.middleware("http")

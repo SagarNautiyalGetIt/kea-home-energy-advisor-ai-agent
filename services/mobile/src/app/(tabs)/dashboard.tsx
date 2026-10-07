@@ -1,9 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurTargetView } from 'expo-blur';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { DemoHomeView } from '@/components/demo-home-view';
 import { BottomNavigation } from '@/components/bottom-navigation';
+import { FrostedPanel, glassDetailColor } from '@/components/frosted-panel';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { BillRingGauge, type BillRingTone } from '@/components/bill-ring-gauge';
@@ -15,10 +17,28 @@ import { palette, useAppTheme } from '@/theme';
 
 export default function DashboardScreen() {
   const pathname = usePathname();
-  const { colors } = useAppTheme();
+  const { colors, mode } = useAppTheme();
   const { session } = useAuth();
   const router = useRouter();
   const [sceneInteracting, setSceneInteracting] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const blurTarget = useRef<View>(null);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [homeHeight, setHomeHeight] = useState(0);
+  // Let every Home reading enter a short viewport before pinning the scene.
+  const pinStart = Math.max(0, homeHeight - viewportHeight);
+  const backdropOffset = useMemo(() => pinStart === 0 ? scrollY : scrollY.interpolate({
+    inputRange: [0, pinStart, pinStart + 1],
+    outputRange: [0, 0, 1],
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'extend',
+  }), [pinStart, scrollY]);
+
+  useLayoutEffect(() => {
+    // This tab unmounts its ScrollView while another route is active. Reset
+    // the matching backdrop transform before its next scroll starts at zero.
+    if (pathname !== '/dashboard') scrollY.setValue(0);
+  }, [pathname, scrollY]);
 
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -60,28 +80,49 @@ export default function DashboardScreen() {
   // The absolute Home artwork must not paint beyond an inactive tab's scene bounds.
   if (pathname !== '/dashboard') return null;
   return (
-    <Screen key={pathname} scrollEnabled={!sceneInteracting} contentStyle={styles.screenContent}>
-      <DemoHomeView customerId={session?.customerId ?? null}
-        onSceneInteractionChange={setSceneInteracting}
-        onOpenInfo={() => setWelcomeOpen(true)}
-        onOpenNotifications={() => setNotificationsOpen(true)}
-        onOpenProfile={() => router.push('/profile')}
-      />
-      <View style={styles.cardArea}>
-        {dashboard ? <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
-        {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
-      </View>
-      <View style={[styles.navigationSection, { borderTopColor: colors.border }]}>
-        <Text style={[styles.navigationTitle, { color: colors.text }]}>Explore Kea</Text>
-        <Text style={[styles.navigationSubtitle, { color: colors.textMuted }]}>Scroll for predictions, usage, Sparky and more.</Text>
-      <BottomNavigation listMode includeHome={false}
-        billPrediction={{
-          detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
-          onPress: () => setBillShockOpen(true),
-          status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
-        }}
-      />
-      </View>
+    <Screen key={pathname} scroll={false} contentStyle={styles.screenContent}>
+      <Animated.ScrollView
+        testID="home-explore-scroll"
+        style={styles.menuScroll}
+        onLayout={({ nativeEvent: { layout } }) => setViewportHeight(layout.height)}
+        contentContainerStyle={styles.homeScrollContent}
+        scrollEnabled={!sceneInteracting}
+        removeClippedSubviews={false}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: Platform.OS !== 'web' })}
+      >
+        {/* Counter the scroll on the existing scene; only the glass panel rises.
+            Keeping one mounted model preserves orbit, nature audio and readings. */}
+        <Animated.View onLayout={({ nativeEvent: { layout } }) => setHomeHeight(layout.height)} style={[styles.homeBackdrop, { transform: [{ translateY: backdropOffset }] }]}>
+          <BlurTargetView ref={blurTarget}>
+            <DemoHomeView customerId={session?.customerId ?? null}
+              onSceneInteractionChange={setSceneInteracting}
+              onOpenInfo={() => setWelcomeOpen(true)}
+              onOpenNotifications={() => setNotificationsOpen(true)}
+              onOpenProfile={() => router.push('/profile')}
+            />
+          </BlurTargetView>
+        </Animated.View>
+        <FrostedPanel blurTarget={blurTarget}>
+          <View style={styles.navigationSection}>
+            <Text accessibilityRole="header" style={[styles.navigationTitle, { color: colors.text }]}>Explore Kea</Text>
+            <Text style={[styles.navigationSubtitle, { color: glassDetailColor[mode] }]}>Your energy, ideas and account — all in one place.</Text>
+          </View>
+          <View style={styles.cardArea}>
+            {dashboard ? <Text style={{ color: glassDetailColor[mode], fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
+            {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
+          </View>
+          <BottomNavigation listMode includeHome={false} detailColor={glassDetailColor[mode]}
+            billPrediction={{
+              detail: dashboard?.warningTriggered ? 'Currently tracking for bill shock' : dashboard?.warningTriggered === false ? 'Below bill-shock alert threshold' : 'View your bill prediction',
+              onPress: () => setBillShockOpen(true),
+              status: dashboard?.warningTriggered === true ? 'warning' : dashboard?.warningTriggered === false ? 'normal' : undefined,
+            }}
+          />
+        </FrostedPanel>
+      </Animated.ScrollView>
 
       <ModalSheet
         footer={<PrimaryButton label="Done" onPress={() => setNotificationsOpen(false)} />}
@@ -258,14 +299,18 @@ const styles = StyleSheet.create({
   dataError: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 14, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10 },
   dataErrorText: { flex: 1, fontSize: 11, lineHeight: 16 },
   screenContent: {
-    flexGrow: 1,
+    flex: 1,
+    alignSelf: 'center',
     paddingHorizontal: 0,
     paddingTop: 0,
+    paddingBottom: 0,
     position: 'relative',
   },
-  navigationSection: { borderTopWidth: 1, paddingTop: 18, paddingBottom: 12 },
+  homeBackdrop: { zIndex: 0 },
+  homeScrollContent: { flexGrow: 1, overflow: 'hidden' },
+  navigationSection: { paddingBottom: 4 },
   navigationTitle: { fontSize: 20, fontWeight: '800', marginHorizontal: 22 },
-  navigationSubtitle: { fontSize: 12, marginHorizontal: 22, marginTop: 4, marginBottom: 12 },
+  navigationSubtitle: { fontSize: 13, lineHeight: 19, marginHorizontal: 22, marginTop: 5 },
   menuScroll: {
     flex: 1,
   },
@@ -278,7 +323,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     overflow: 'hidden',
   },
-  cardArea: { marginTop: 8, marginHorizontal: 16, gap: 12 },
+  cardArea: { marginTop: 8, marginHorizontal: 22, marginBottom: 14, gap: 12 },
   dashboardList: { gap: 2 },
   dashboardRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4, paddingVertical: 9 },
   dashboardRowIcon: { alignItems: 'center', borderRadius: 14, height: 28, justifyContent: 'center', width: 28 },

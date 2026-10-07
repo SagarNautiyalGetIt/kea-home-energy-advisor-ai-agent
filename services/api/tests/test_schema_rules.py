@@ -165,6 +165,7 @@ def test_the_agent_writes_app_and_only_reads_kea():
         "device_observation",
         "outage_snapshot",
         "reward_event",
+        "client_state",
     }
     assert by_schema["kea"] == {
         "mart_account_context",

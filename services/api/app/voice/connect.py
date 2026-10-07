@@ -13,8 +13,8 @@ NOTICE = (
     "Hello, this is Sparky, Kea Energy's AI assistant. You asked Kea to call about bill "
     "warnings. There is a new energy notice in your Kea app. Open the app securely to "
     "see the details or talk with me. I will never ask for your password or payment "
-    "details on this call. Press one for customer care, nine to stop automated calls, "
-    "or hang up."
+    "details on this call. You can contact customer care or turn off phone warnings "
+    "in Settings in the Kea app. Goodbye."
 )
 
 

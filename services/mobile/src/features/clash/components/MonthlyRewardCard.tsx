@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAppTheme } from '@/theme';
+import { ClashHue, useClashColors } from './ClashHue';
 
 export function MonthlyRewardCard() {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <ClashHue color={colors.icons.money} />
       <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={colors.icons.money} name="receipt-outline" size={23} /></View>
       <View style={styles.copy}>
         <Text style={[styles.eyebrow, { color: colors.textMuted }]}>PLANNED MONTHLY REWARD</Text>
@@ -21,7 +22,7 @@ export function MonthlyRewardCard() {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 22, padding: 17, flexDirection: 'row', gap: 13 },
+  card: { borderRadius: 22, overflow: 'hidden', padding: 17, flexDirection: 'row', gap: 13 },
   iconWrap: { width: 45, height: 45, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1 },
   eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7 },

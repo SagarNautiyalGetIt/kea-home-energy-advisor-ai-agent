@@ -9,8 +9,14 @@ from app.config import settings
 from app.security import validate_production
 
 
-def configuration() -> list[str]:
+def configuration(*, sandbox: bool = False) -> list[str]:
     failures = []
+    if sandbox:
+        if settings.production or not settings.demo_logins:
+            failures.append("Sandbox requires non-production demo logins.")
+        if not settings.persist:
+            failures.append("AWS sandbox requires persistent serving data.")
+        return failures
     try:
         validate_production()
     except RuntimeError as error:
@@ -41,7 +47,7 @@ def configuration() -> list[str]:
     return failures
 
 
-def aws_checks() -> list[str]:
+def aws_checks(*, sandbox: bool = False) -> list[str]:
     import boto3
     from botocore.config import Config
 
@@ -66,7 +72,8 @@ def aws_checks() -> list[str]:
         try:
             result = probe()
             if name == "ses" and (
-                not result.get("ProductionAccessEnabled") or not result.get("SendingEnabled")
+                (not sandbox and not result.get("ProductionAccessEnabled"))
+                or not result.get("SendingEnabled")
             ):
                 failures.append("SES production access and sending must be enabled")
             if name == "connect" and result["ContactFlow"].get("State") != "ACTIVE":
@@ -79,10 +86,15 @@ def aws_checks() -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aws", action="store_true", help="Read team service configuration")
+    parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="Check a demo deployment without requiring production SES or speech",
+    )
     arguments = parser.parse_args()
-    failures = configuration()
+    failures = configuration(sandbox=arguments.sandbox)
     if arguments.aws and not failures:
-        failures.extend(aws_checks())
+        failures.extend(aws_checks(sandbox=arguments.sandbox))
     print(
         json.dumps(
             {

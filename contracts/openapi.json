@@ -498,6 +498,67 @@
             }
           }
         }
+      },
+      "put": {
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_households__customer_id__profile_put",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/bills/analyse": {
@@ -1608,6 +1669,549 @@
           }
         }
       }
+    },
+    "/api/assistant/feedback": {
+      "post": {
+        "summary": "Feedback",
+        "operationId": "feedback_api_assistant_feedback_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Feedback"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/assistant/attachments": {
+      "post": {
+        "summary": "Attachment",
+        "operationId": "attachment_api_households__customer_id__assistant_attachments_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_attachment_api_households__customer_id__assistant_attachments_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/assistant/attachments/{attachment_id}": {
+      "delete": {
+        "summary": "Delete Attachment",
+        "operationId": "delete_attachment_api_households__customer_id__assistant_attachments__attachment_id__delete",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Attachment Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/plan-change-requests": {
+      "post": {
+        "summary": "Switch Plan",
+        "operationId": "switch_plan_api_households__customer_id__plan_change_requests_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchPlan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanChangeRequest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/push-tokens": {
+      "post": {
+        "summary": "Push Token",
+        "operationId": "push_token_api_households__customer_id__push_tokens_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/payments": {
+      "post": {
+        "summary": "Pay Invoice",
+        "operationId": "pay_invoice_api_households__customer_id__payments_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoicePayment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/payment-methods": {
+      "post": {
+        "summary": "Save Method",
+        "operationId": "save_method_api_households__customer_id__payment_methods_post",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentMethod"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/payment-methods/{method_id}": {
+      "delete": {
+        "summary": "Delete Method",
+        "operationId": "delete_method_api_households__customer_id__payment_methods__method_id__delete",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "method_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Method Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/households/{customer_id}/capabilities": {
+      "get": {
+        "summary": "Capabilities",
+        "operationId": "capabilities_api_households__customer_id__capabilities_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2338,6 +2942,20 @@
           "file"
         ],
         "title": "Body_analyse_bill_api_bills_analyse_post"
+      },
+      "Body_attachment_api_households__customer_id__assistant_attachments_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_attachment_api_households__customer_id__assistant_attachments_post"
       },
       "Body_voice_turn_api_households__account__voice_turn_post": {
         "properties": {
@@ -3168,6 +3786,36 @@
         "title": "FactBundle",
         "description": "Everything layer 2 is allowed to know, and nothing else.\n\nDeliberately does NOT carry raw meter readings, name, address or account number.\nLayer 1 computes; the model narrates. Keeping PII out of here is both the privacy\ncontrol and \u2014 once we move to a hosted model \u2014 the prompt-cache boundary."
       },
+      "Feedback": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "message_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Message Id"
+          },
+          "feedback": {
+            "type": "string",
+            "enum": [
+              "like",
+              "dislike"
+            ],
+            "title": "Feedback"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "message_id",
+          "feedback"
+        ],
+        "title": "Feedback"
+      },
       "ForecastSummary": {
         "properties": {
           "method": {
@@ -3826,6 +4474,34 @@
         "title": "Intent",
         "description": "A closed set of pre-computable questions. **Offline and bill-shock only now.**\n\nThis was the spine of the request path: a keyword router mapped free text onto one\nof these, and the intent chose the analytics, the prompt and the caveats. It no\nlonger does \u2014 the agent reads the question and the data, and nothing classifies a\ncustomer's message into a bucket before it is understood. See `app/pipeline.py`.\n\nTwo things still use it, both legitimately:\n\n* `app/offline.py` pre-computes a pack of answers for a device with no connection.\n  It has to guess what will be asked, so a fixed list is the only option available.\n* `app/analytics/billshock.py` labels a proactive warning, which nobody asked a\n  question to receive.\n\nNeither is a classifier over customer text.\n\n## Two families, and why the second one exists\n\nThe **usage** intents below the divider are the original ten: they all answer a\nquestion about consumption, and every one of them needs analytics to run first.\n\nThe **account** intents are facts about the customer's own account \u2014 balance, plan,\nrates, connection, payment method. They were unroutable before, which meant \"what\nplan am I on?\" and \"when is my bill due?\" returned `OUT_OF_SCOPE`. That is a bad\nanswer to a question the service can answer perfectly from one mart row, and it is\na large share of what a real energy assistant is asked.\n\nThey are a separate family rather than more of the same because the layer-3\ncontract differs: an account fact is a *lookup*, so its bundle is a copy of stored\nvalues rather than the output of a computation. Nothing is derived, so nothing can\nbe derived wrongly."
       },
+      "InvoicePayment": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "invoice_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Invoice Id"
+          },
+          "payment_method_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Payment Method Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "invoice_id",
+          "payment_method_id"
+        ],
+        "title": "InvoicePayment"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -3999,12 +4675,12 @@
           "change_requests_available": {
             "type": "boolean",
             "title": "Change Requests Available",
-            "default": false
+            "default": true
           },
           "limitation": {
             "type": "string",
             "title": "Limitation",
-            "default": "Plan switches are not available in the mobile API. Contact Customer Care to change plans."
+            "default": "A switch records a request for Customer Care review; your current plan stays active until the retailer confirms an effective date."
           }
         },
         "type": "object",
@@ -4357,6 +5033,32 @@
         ],
         "title": "OutageView"
       },
+      "PaymentMethod": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "payment_method_token": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Payment Method Token"
+          },
+          "make_default": {
+            "type": "boolean",
+            "title": "Make Default",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "payment_method_token"
+        ],
+        "title": "PaymentMethod"
+      },
       "PlanAction": {
         "properties": {
           "mission_id": {
@@ -4375,6 +5077,118 @@
         ],
         "title": "PlanAction"
       },
+      "PlanChangeRequest": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "from_plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Plan",
+            "description": "What they were on, as far as this service could tell. Null when the account has no plan on file \u2014 recorded as null rather than guessed, because the request is a document somebody will act on."
+          },
+          "to_plan_code": {
+            "type": "string",
+            "title": "To Plan Code"
+          },
+          "to_plan_name": {
+            "type": "string",
+            "title": "To Plan Name"
+          },
+          "quoted_saving_nzd_per_year": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Saving Nzd Per Year"
+          },
+          "quoted_from_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted From Period"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "pending_review | actioned | cancelled. Set by the team, not here.",
+            "default": "pending_review"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel",
+            "default": "chat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref",
+          "to_plan_code",
+          "to_plan_name"
+        ],
+        "title": "PlanChangeRequest",
+        "description": "A confirmed request, on its way to a person. Crosses the API boundary."
+      },
+      "ProfileUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 3,
+            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+            "title": "Email"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(\\+[1-9]\\d{7,14})?$",
+            "title": "Phone",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "ProfileUpdate"
+      },
       "Provider": {
         "type": "string",
         "enum": [
@@ -4387,6 +5201,27 @@
         ],
         "title": "Provider",
         "description": "Where the data came from. Carried on every observation because the trust level and\nthe legal basis differ per provider, and a mixed-provider household is normal."
+      },
+      "PushRegistration": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^(ExponentPushToken|ExpoPushToken)\\[[A-Za-z0-9_-]+\\]$",
+            "title": "Token"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "PushRegistration"
       },
       "QuestionResponse": {
         "properties": {
@@ -4577,6 +5412,30 @@
         ],
         "title": "SourceRef",
         "description": "One lookup the assistant made, for the transparency panel.\n\nThis replaced `facts` on the chat response. The two answer different questions and\nthe new one is the question customers were actually asking: `facts` listed the\nfigures Python computed *before* the model saw the message, which was the same list\nfor everyone who tripped the same keyword. This says what was consulted for *this*\nanswer and where each result came from \u2014 which is checkable, and is what makes\n\"every number traces to a source\" a claim rather than a slogan."
+      },
+      "SwitchPlan": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "pricing_style": {
+            "type": "string",
+            "title": "Pricing Style"
+          },
+          "commitment_term": {
+            "type": "string",
+            "title": "Commitment Term"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "pricing_style",
+          "commitment_term"
+        ],
+        "title": "SwitchPlan"
       },
       "ValidationError": {
         "properties": {

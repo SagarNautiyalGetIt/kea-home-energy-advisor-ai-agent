@@ -17,7 +17,8 @@ x-api: &api
     AWS_DEFAULT_REGION: ap-southeast-2
     AWS_EC2_METADATA_DISABLED: 'true'
     KEA_PROVIDER: bedrock
-    KEA_BEDROCK_MODEL: amazon.nova-lite-v1:0
+    # Select the approved Bedrock model through runtime.env or SSM.
+    # A Compose override here would prevent the cloud engineer's setting from taking effect.
     KEA_PERSIST: '1'
     KEA_DEMO_LOGINS: '1'
     KEA_VOICE_ENABLED: '1'

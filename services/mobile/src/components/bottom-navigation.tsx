@@ -10,6 +10,7 @@ import { bottomNavMargin, NAV_DESTINATIONS } from '@/lib/bottom-navigation';
 type Props = {
   includeHome?: boolean;
   listMode?: boolean;
+  detailColor?: string;
   onNavigate?: () => void;
   billPrediction?: { detail: string; onPress: () => void; status?: 'warning' | 'normal' };
 };
@@ -26,7 +27,7 @@ function BillingNavIcon({ color, detailColor, size }: { color: string; detailCol
   );
 }
 
-export function BottomNavigation({ includeHome = true, listMode = false, billPrediction, onNavigate }: Props) {
+export function BottomNavigation({ includeHome = true, listMode = false, billPrediction, onNavigate, detailColor }: Props) {
   const { colors, mode } = useAppTheme();
   const selectedColor = mode === 'dark' ? '#FFFFFF' : colors.text;
   const idleColor = mode === 'dark' ? 'rgba(255,255,255,0.52)' : colors.textMuted;
@@ -47,7 +48,7 @@ export function BottomNavigation({ includeHome = true, listMode = false, billPre
       return <Pressable accessibilityLabel={`Open ${item.label}`} accessibilityRole={listMode ? 'button' : 'tab'} accessibilityState={{ selected: pathname === item.path }} key={item.label} onPress={() => { onNavigate?.(); item.onPress(); }} style={({ pressed }) => [styles.item, listMode && styles.listItem, warning && styles.warningItem, normal && styles.normalItem, pathname === item.path && styles.selectedItem, pressed && styles.pressed]}>
       {item.label === 'Sparky AI' || item.label === 'Bill prediction' ? <SparkyPresence size={36} /> : item.label === 'Billing' ? <BillingNavIcon color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} detailColor={colors.surface} size={27} /> : <Ionicons color={listMode ? item.tint : pathname === item.path ? selectedColor : idleColor} name={item.icon} size={24} />}
       {!listMode && pathname === item.path ? <View style={[styles.selectedDot, { backgroundColor: selectedColor }]} /> : null}
-      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning ? colors.icons.alert : normal ? colors.icons.success : colors.textMuted }, (warning || normal) && { fontWeight: '700', fontSize: 12 }]}>{item.detail}</Text></View> : null}
+      {listMode ? <View style={styles.listCopy}><Text style={[styles.listLabel, { color: colors.text }]}>{item.label}</Text><Text style={[styles.listDetail, { color: warning || normal ? colors.text : detailColor ?? colors.textMuted }, (warning || normal) && { fontWeight: '700' }]}>{item.detail}</Text></View> : null}
       {listMode ? <Ionicons color={colors.textMuted} name="chevron-forward" size={21} /> : null}
     </Pressable>;
     })}
@@ -60,12 +61,12 @@ const styles = StyleSheet.create({
   glassBackground: { ...StyleSheet.absoluteFill, borderRadius: 999 },
   glassTint: { ...StyleSheet.absoluteFill, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.03)' },
   item: { flex: 1, minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 999, position: 'relative' },
-  listItem: { flex: 0, minHeight: 64, minWidth: 0, width: '100%', flexDirection: 'row', justifyContent: 'flex-start', gap: 14, paddingHorizontal: 12, borderRadius: 14 },
+  listItem: { flex: 0, minHeight: 64, minWidth: 0, width: '100%', flexDirection: 'row', justifyContent: 'flex-start', gap: 14, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14 },
   warningItem: { borderWidth: 1.5, borderColor: palette.red, backgroundColor: 'rgba(232,33,39,0.14)', marginBottom: 6 },
   normalItem: { borderWidth: 1, borderColor: 'rgba(48,209,88,0.48)', backgroundColor: 'rgba(48,209,88,0.07)', marginBottom: 6 },
   listCopy: { flex: 1 },
   listLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  listDetail: { color: 'rgba(255,255,255,0.62)', fontSize: 11, marginTop: 2 },
+  listDetail: { color: 'rgba(255,255,255,0.62)', fontSize: 12, lineHeight: 17, marginTop: 2 },
   warningLabel: { color: '#FFFFFF' },
   warningDetail: { color: '#FFB8BA', fontSize: 12, fontWeight: '700' },
   normalDetail: { color: '#A2EFB8', fontSize: 12, fontWeight: '600' },

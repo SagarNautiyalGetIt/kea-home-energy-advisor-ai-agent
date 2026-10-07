@@ -80,7 +80,8 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
   const sceneWidth = Math.min(width, 760);
-  const sceneHeight = sceneWidth * 0.7;
+  const skyExtension = 48;
+  const sceneHeight = sceneWidth * 0.7 + skyExtension;
   const bottomFadeHeight = 18;
   const chipWidth = Math.min(220, Math.round(111 * fontScale));
   const reportProtectedHeader = () => onProtectedHeaderHeightChange?.(sceneTop.current + weatherBottom.current + 8);
@@ -175,7 +176,7 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
       <View style={styles.headingCopy}><Text style={[styles.eyebrow, { color: colors.textMuted }]}>YOUR KEA HOME</Text><Text style={[styles.headingTitle, { color: colors.text }]}>Energy in its element.</Text></View>
       <Pressable accessibilityLabel="About home readings" accessibilityRole="button" onPress={onOpenInfo} style={styles.infoButton}><Ionicons color={colors.textMuted} name="information-circle-outline" size={22} /></Pressable>
     </View>
-    <View onLayout={({ nativeEvent: { layout } }) => { sceneTop.current = layout.y; reportProtectedHeader(); }} style={styles.sceneWrapper}>
+    <View onLayout={({ nativeEvent: { layout } }) => { sceneTop.current = layout.y; reportProtectedHeader(); }} style={[styles.sceneWrapper, { marginTop: -skyExtension }]}>
       <Animated.View style={{ opacity: sceneOpacity ?? 1 }}>
         <View style={styles.sceneCard}>
           <LinearGradient colors={sceneColors(currentWeather)} locations={[0, 0.38, 0.7, 1]} style={StyleSheet.absoluteFill} />
@@ -191,23 +192,23 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
             ]}
             locations={[0, 0.12, 0.25, 0.40, 0.55, 0.70, 0.82, 0.93, 1]}
             pointerEvents="none"
-            style={styles.topFade}
+            style={[styles.topFade, { height: skyExtension + 8 }]}
           />
           <InteractiveHomeScene reduceMotion={reduceMotion} pinnedHolographic={preferences.holographic} onInteractionChange={onSceneInteractionChange}>
             {(camera, onReady, holographicMix) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} weather={currentWeather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
+              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} skyExtension={skyExtension} weather={currentWeather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
             </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
       </Animated.View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Regional weather. ${weatherError ?? 'Refresh weather'}. Tap to retry.`} onPress={() => setWeatherReload(value => value + 1)} onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={[styles.weatherInScene, { minHeight: 36 }]}><Ionicons name={weatherIcon(currentWeather)} color={mode === 'dark' ? '#E9F5FB' : colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: mode === 'dark' ? '#E9F5FB' : colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}${!currentWeather || weatherError ? ' · Last known · tap to retry' : ''}` : weatherError ? 'Weather unavailable · tap to retry' : 'Finding weather'}` : 'Location unavailable'}</Text>{weatherError ? <Ionicons name="refresh-outline" size={13} color={colors.textMuted} /> : null}</Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Regional weather. ${weatherError ?? 'Refresh weather'}. Tap to retry.`} onPress={() => setWeatherReload(value => value + 1)} onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={[styles.weatherInScene, { top: skyExtension + 12 }]}><View style={[styles.weatherLabel, { backgroundColor: mode === 'dark' ? 'rgba(17,17,17,0.88)' : 'rgba(255,255,255,0.94)', maxWidth: sceneWidth * 0.62 }]}><Ionicons name={weatherIcon(currentWeather)} color={colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}${!currentWeather || weatherError ? ' · Last known · tap to retry' : ''}` : weatherError ? 'Weather unavailable · tap to retry' : 'Finding weather'}` : 'Location unavailable'}</Text>{weatherError ? <Ionicons name="refresh-outline" size={13} color={colors.text} /> : null}</View></Pressable>
       <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
       <EnergyReadingRail cardWidth={chipWidth} selected={selected} onSelect={(device) => setSelected(current => toggleHomeSelection(current, device as Device))} readings={(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
         const metric = homeCardReading(scene, live, device);
         return { id: device, label: device === 'car' ? 'EV' : device.toUpperCase(), value: metric.value, color: HIGHLIGHT_COLOR[device], detail: sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail };
       })} />
-      <Pressable accessibilityRole="button" accessibilityLabel={isPreviewingFlows ? 'Stop illustrative flow preview' : 'Preview illustrative energy flows'} onPress={() => setPreviewFlows(!isPreviewingFlows)} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, paddingHorizontal: 18 }}><Ionicons name="git-network-outline" color={POWER_COLOR} size={15} /><Text style={{ color: colors.textMuted, fontSize: 11 }}>{flows.some(flow => flow.watts !== null) ? 'Live sensor flow · illustrative paths' : isPreviewingFlows ? 'Illustrative flows · no live power readings' : 'Preview energy flows · connect live sensors'}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={isPreviewingFlows ? 'Stop illustrative flow preview' : 'Preview illustrative energy flows'} onPress={() => setPreviewFlows(!isPreviewingFlows)} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, paddingHorizontal: 18 }}><Ionicons name="git-network-outline" color={POWER_COLOR} size={15} /><Text style={{ color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 17 }}>{flows.some(flow => flow.watts !== null) ? 'Live sensor flow · illustrative paths' : isPreviewingFlows ? 'Illustrative flows · no live power readings' : 'Preview energy flows · connect live sensors'}</Text></Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push(!selected || selected === 'home' || selected === 'grid' ? '/usage' : '/settings')} style={[styles.readingAction, { borderColor: colors.border }]}>
         <Ionicons name={!selected || selected === 'home' || selected === 'grid' ? 'bar-chart-outline' : 'link-outline'} color={colors.text} size={18} />
         <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>{!selected || selected === 'home' || selected === 'grid' ? 'View dated household imports' : `Connect or sync ${selected === 'car' ? 'EV charger' : selected} sensors`}</Text>
@@ -229,17 +230,18 @@ const styles = StyleSheet.create({
   iconBtn: { alignItems: 'center', justifyContent: 'center', height: 36, width: 36 },
   heading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 15, paddingBottom: 13, position: 'relative', zIndex: 30, elevation: 30 },
   headingCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
-  eyebrow: { color: '#E2E8EE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  eyebrow: { color: '#E2E8EE', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
   headingTitle: { color: '#F4F5F7', fontSize: 19, fontWeight: '700', marginTop: 4 },
   infoButton: { alignItems: 'center', flexShrink: 0, justifyContent: 'center', height: 44, width: 44 },
   sceneWrapper: { position: 'relative', width: '100%' },
   sceneCard: { overflow: 'hidden', width: '100%' },
   sceneArt: { position: 'relative', zIndex: 2, elevation: 2 },
-  weatherInScene: { alignItems: 'center', flexDirection: 'row', gap: 6, left: 20, position: 'absolute', right: 20, top: 12, zIndex: 20, elevation: 20 },
-  weatherInSceneText: { color: '#E9F5FB', flexShrink: 1, fontSize: 11, fontWeight: '700' },
+  weatherInScene: { alignItems: 'center', flexDirection: 'row', left: 20, minHeight: 36, position: 'absolute', right: 20, zIndex: 20, elevation: 20 },
+  weatherLabel: { alignItems: 'center', borderRadius: 12, flexDirection: 'row', flexShrink: 1, gap: 6, paddingHorizontal: 9, paddingVertical: 6 },
+  weatherInSceneText: { flexShrink: 1, fontSize: 12, fontWeight: '700' },
   topFade: { top: 0, height: 40, left: 0, position: 'absolute', right: 0, zIndex: 3, elevation: 3 },
   bottomFade: { bottom: 0, left: 0, position: 'absolute', right: 0, zIndex: 3, elevation: 3 },
-  readingDate: { color: '#8E8E8E', fontSize: 11, paddingHorizontal: 18, paddingTop: 3 },
+  readingDate: { color: '#8E8E8E', fontSize: 12, lineHeight: 17, paddingHorizontal: 18, paddingTop: 3 },
   deviceRail: { gap: 9, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 2 },
   deviceChip: { backgroundColor: '#1A1A1A', borderColor: '#303030', borderRadius: 14, borderWidth: 1, minHeight: 116, paddingHorizontal: 11, paddingVertical: 9, width: 111 },
   deviceHeading: { alignItems: 'center', flexDirection: 'row', gap: 6 },
@@ -247,8 +249,8 @@ const styles = StyleSheet.create({
   deviceName: { color: '#A8A8A8', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   deviceValue: { color: '#F7F8F9', fontSize: 17, fontWeight: '800', marginTop: 6 },
   deviceDetail: { color: '#8E8E8E', fontSize: 10, marginTop: 3 },
-  demoNote: { color: '#8E8E8E', fontSize: 11, paddingHorizontal: 18, paddingTop: 8 },
+  demoNote: { color: '#8E8E8E', fontSize: 12, lineHeight: 17, paddingHorizontal: 18, paddingTop: 8 },
   readingAction: { alignItems: 'center', flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, minHeight: 44 },
   retry: { alignItems: 'center', flexDirection: 'row', gap: 7, marginHorizontal: 18, marginTop: 10 },
-  retryText: { color: '#D8D8D8', fontSize: 11 },
+  retryText: { color: '#D8D8D8', flex: 1, fontSize: 12, lineHeight: 17 },
 });

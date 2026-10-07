@@ -41,15 +41,21 @@ it('dock distinguishes upward swipes, taps, sideways scrolling and downward canc
 });
 const at = value => Date.parse(value);
 const weather = (now, patch = {}) => ({ observedAt: now, fetchedAt: now, temperatureC: 23, isDay: true, weatherCode: 0, cloudCoverPercent: 0, solarRadiationWm2: 600, sunriseAt: null, sunsetAt: null, condition: 'clear', description: 'Clear sky', ...patch });
-it('NZ morning birds and summer butterflies require suitable fresh regional conditions', () => {
+it('decorative daytime visitors work without a forecast and stay absent in precipitation', () => {
   const morning = at('2026-12-10T19:00:00Z'); // 08:00 NZDT, next day.
   assert.ok(homeAtmosphere(weather(morning), morning).birds);
   assert.ok(homeAtmosphere(weather(morning), morning).butterflies);
   assert.equal(homeAtmosphere(weather(morning, { condition: 'rain' }), morning).birds, false);
   assert.equal(homeAtmosphere(weather(morning, { condition: 'rain' }), morning).butterflies, false);
-  assert.equal(homeAtmosphere(weather(morning, { temperatureC: 12 }), morning).butterflies, false);
+  assert.ok(homeAtmosphere(null, morning).birds);
+  assert.ok(homeAtmosphere(null, morning).butterflies);
+  assert.ok(homeAtmosphere(weather(morning, { temperatureC: 12 }), morning).butterflies);
   const winter = at('2026-07-10T20:00:00Z');
-  assert.equal(homeAtmosphere(weather(winter), winter).butterflies, false);
+  assert.ok(homeAtmosphere(weather(winter), winter).butterflies);
+  for (const condition of ['rain', 'drizzle', 'storm', 'snow', 'fog']) {
+    const sky = homeAtmosphere(weather(morning, { condition }), morning);
+    assert.equal(sky.birds, false); assert.equal(sky.butterflies, false);
+  }
 });
 it('stars/lights use regional night; snow and rain remain distinct; stale weather cannot invent conditions', () => {
   const night = at('2026-12-11T10:00:00Z');

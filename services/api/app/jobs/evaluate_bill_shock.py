@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 
 from app.alerts.store import has_hardship
@@ -112,6 +113,18 @@ async def evaluate_one(customer_id: str, summary: RunSummary) -> None:
         return
 
     summary.triggered += 1
+    import datetime as dt
+
+    from app.alerts.push import notify
+
+    await notify(
+        customer_id,
+        ctx.window.period,
+        prefs.enabled
+        and settings.persist
+        and settings.alerts_enabled
+        and not prefs.in_quiet_hours(dt.datetime.now(dt.UTC)),
+    )
     result = await dispatcher.dispatch(
         account_ref=customer_id,
         assessment=assessment,
@@ -140,7 +153,22 @@ async def evaluate_one(customer_id: str, summary: RunSummary) -> None:
 async def run(customer_ids: list[str] | None = None) -> RunSummary:
     """Sweep every household. Never raises for one household's sake."""
     summary = RunSummary()
-    ids = customer_ids if customer_ids is not None else await get_repository().all_ids()
+    configured = [
+        value.strip()
+        for value in os.getenv("KEA_ALERT_ACCOUNTS", os.getenv("KEA_ALERT_CUSTOMER_IDS", "")).split(
+            ","
+        )
+        if value.strip()
+    ]
+    ids = (
+        customer_ids if customer_ids is not None else configured or await get_repository().all_ids()
+    )
+    ids = list(dict.fromkeys(ids))
+    limit = int(os.getenv("KEA_ALERT_LIMIT", "0"))
+    if limit < 0:
+        raise ValueError("KEA_ALERT_LIMIT must be zero (unlimited) or positive")
+    if limit:
+        ids = ids[:limit]
     semaphore = asyncio.Semaphore(CONCURRENCY)
 
     async def guarded(customer_id: str) -> None:
@@ -154,8 +182,15 @@ async def run(customer_ids: list[str] | None = None) -> RunSummary:
 
     await asyncio.gather(*(guarded(customer_id) for customer_id in ids))
 
-    if settings.persist and settings.alerts_enabled:
+    if (
+        settings.persist
+        and settings.alerts_enabled
+        and customer_ids is None
+        and not configured
+        and not limit
+    ):
         from app.jobs.send_scheduled import release_due
+
         try:
             await release_due()
         except Exception:
@@ -169,13 +204,24 @@ async def run(customer_ids: list[str] | None = None) -> RunSummary:
 
 def handler(event: dict | None = None, context: object | None = None) -> dict[str, object]:
     """Callable entry point for integrations; returns the sweep summary."""
-    return asyncio.run(run()).as_dict()
+    ids = (event or {}).get("customer_ids")
+    if ids is not None and (
+        not isinstance(ids, list) or not all(isinstance(value, str) and value for value in ids)
+    ):
+        raise ValueError("customer_ids must be a list of account IDs")
+    return asyncio.run(run(ids)).as_dict()
 
 
 if __name__ == "__main__":  # pragma: no cover — EC2 timer runs this module directly
+    import argparse
     import sys
 
     logging.basicConfig(level=logging.INFO)
-    summary = asyncio.run(run())
+    parser = argparse.ArgumentParser(
+        description="Evaluate selected account IDs, or the configured allowlist."
+    )
+    parser.add_argument("customer_ids", nargs="*")
+    arguments = parser.parse_args()
+    summary = asyncio.run(run(arguments.customer_ids or None))
     print(summary.as_dict())
     sys.exit(1 if summary.skipped else 0)

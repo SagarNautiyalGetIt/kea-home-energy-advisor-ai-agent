@@ -11,6 +11,8 @@
  * this file must change in the same PR.
  */
 
+import { loadSession } from './session';
+
 export interface ChatRequest {
   customer_id: string;
   message: string;
@@ -168,6 +170,7 @@ export interface HouseholdSummary {
   label: string;
   period: string;
   daily_kwh: number[];
+  daily_dates?: string[];
   total_kwh: number;
   estimated_cost_nzd: number;
 }
@@ -194,7 +197,8 @@ export interface CustomerProfile {
 }
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const token = loadSession()?.accessToken;
+  const res = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!res.ok) throw new Error(`${path} → ${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
@@ -569,7 +573,7 @@ export async function streamChat(
 ): Promise<void> {
   const res = await fetch("/api/chat/stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(loadSession()?.accessToken ? { Authorization: `Bearer ${loadSession()!.accessToken}` } : {}) },
     body: JSON.stringify(req),
     signal,
   });

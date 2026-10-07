@@ -3,7 +3,7 @@
 import { Asset } from 'expo-asset';
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PixelRatio, Platform, Text, View } from 'react-native';
-import { BackSide, Box3, CatmullRomCurve3, Color, DoubleSide, Mesh, MeshBasicMaterial, ShaderMaterial, TubeGeometry, Vector3 } from 'three';
+import { BackSide, Box3, CatmullRomCurve3, Color, DoubleSide, Mesh, MeshBasicMaterial, PerspectiveCamera, ShaderMaterial, TubeGeometry, Vector3 } from 'three';
 import { HomeModelLoader } from '@/lib/home-model-loader';
 import { homeRenderDpr } from '@/lib/home-render-budget';
 import { createHomeModelResource, type HomeModelResult } from '@/lib/home-model-resource';
@@ -22,6 +22,8 @@ import { useAppTheme } from '@/theme';
 import { homeAtmosphere } from '@/lib/home-presentation';
 import { HomeSceneMotion, useHomeSceneTick } from './home-scene-motion';
 import { HomeWeatherEffects } from './home-weather-effects';
+import { HomeClouds, HomeGrass } from './home-garden';
+import { HomeNatureSound } from './home-nature-sound';
 import { HOME_GROUND_RADIUS, NIGHT_APERTURES, NIGHT_WINDOW_SHADER, weatherPalette } from '@/lib/home-weather-world';
 
 const homeModel = createHomeModelResource(async url => {
@@ -97,6 +99,18 @@ function House({ loaded, pose, holographicMix, nightLight, selected, onReady }: 
   return <primitive object={scene} />;
 }
 
+function SceneViewport({ width, height, skyExtension }: { width: number; height: number; skyExtension: number }) {
+  const { camera, invalidate } = useThree();
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return;
+    // Extend the visible sky upward while keeping the house's scale and position.
+    camera.setViewOffset(width, height - skyExtension, 0, -skyExtension, width, height);
+    invalidate();
+    return () => { camera.clearViewOffset(); invalidate(); };
+  }, [camera, height, invalidate, skyExtension, width]);
+  return null;
+}
+
 function WorldSky({ atmosphere, progress }: { atmosphere: ReturnType<typeof homeAtmosphere>; progress: number }) {
   const palette = weatherPalette(atmosphere.isDay, atmosphere.condition);
   const material = useMemo(() => new ShaderMaterial({ side: BackSide, depthTest: false, depthWrite: false, uniforms: {
@@ -114,7 +128,7 @@ function WorldSky({ atmosphere, progress }: { atmosphere: ReturnType<typeof home
     <mesh position={[0, -0.46, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-1}>
       <circleGeometry args={[HOME_GROUND_RADIUS, 64]} /><meshBasicMaterial color={palette.ground} />
     </mesh>
-    <group position={[0.15 + Math.sin(angle) * 0.3, 0.85, -1.65]}>
+    <group position={[0.15 + Math.sin(angle) * 0.3, 0.5, -1.65]}>
       <mesh><sphereGeometry args={[atmosphere.isDay ? 0.24 : 0.18, 24, 16]} /><meshBasicMaterial color={palette.body} transparent opacity={Math.max(0.22, 1 - atmosphere.cloud * 0.65)} /></mesh>
       <mesh><sphereGeometry args={[atmosphere.isDay ? 0.34 : 0.25, 24, 16]} /><meshBasicMaterial color={atmosphere.isDay ? '#FFE9A2' : '#DCE9F5'} transparent opacity={0.09} depthWrite={false} /></mesh>
     </group>
@@ -158,7 +172,7 @@ class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-export function GltfHomeScene({ camera, width, height, holographic: override, holographicMix, weather = null, sunProgress = 0.65, selected, flows = [], reduceMotion = true, onReady }: { camera: HomeCamera; width: number; height: number; holographic?: boolean; holographicMix?: number; weather?: AucklandWeather | null; sunProgress?: number; selected?: HighlightTarget; flows?: HomeFlow[]; reduceMotion?: boolean; onReady?: () => void }) {
+export function GltfHomeScene({ camera, width, height, skyExtension = 0, holographic: override, holographicMix, weather = null, sunProgress = 0.65, selected, flows = [], reduceMotion = true, onReady }: { camera: HomeCamera; width: number; height: number; skyExtension?: number; holographic?: boolean; holographicMix?: number; weather?: AucklandWeather | null; sunProgress?: number; selected?: HighlightTarget; flows?: HomeFlow[]; reduceMotion?: boolean; onReady?: () => void }) {
   const preferences = useExperience(), active = useActiveAnimation();
   const [model, setModel] = useState<HomeModelResult<GLTF> | null>(null);
   useEffect(() => {
@@ -176,10 +190,12 @@ export function GltfHomeScene({ camera, width, height, holographic: override, ho
   const mix = holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0);
   const fallback = <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Home model unavailable on this device. Your energy readings are below.</Text></View>;
   return <View accessibilityRole="image" accessibilityLabel={`Interactive smart home model${selected ? `, illustrative ${selected} highlight` : ''}`} style={{ width, height }}>
+    {model?.status === 'ready' && preferences.natureSounds ? <HomeNatureSound birds={atmosphere.birds} /> : null}
     {model?.status === 'unavailable' ? fallback : !model ? <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Opening your home…</Text></View> : <ModelBoundary fallback={fallback}>
       <Canvas frameloop="demand" dpr={homeRenderDpr(width, height, PixelRatio.get())} camera={{ fov: 42, near: 0.01, far: 20 }} gl={{ alpha: true, antialias: false }} style={{ width, height }}>
         <HomeSceneMotion animated={active && !reduceMotion}>
-          <WorldSky atmosphere={atmosphere} progress={sunProgress} /><HomeWeatherEffects atmosphere={atmosphere} />
+          <SceneViewport width={width} height={height} skyExtension={skyExtension} />
+          <WorldSky atmosphere={atmosphere} progress={sunProgress} /><HomeGrass atmosphere={atmosphere} /><HomeClouds atmosphere={atmosphere} /><HomeWeatherEffects atmosphere={atmosphere} />
           <House loaded={model.model} pose={camera} holographicMix={mix} nightLight={atmosphere.nightLight} selected={selected} onReady={onReady} />
           <WindowInteriors nightLight={atmosphere.nightLight} holographicMix={mix} />
           <EnergyPaths flows={flows} />

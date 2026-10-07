@@ -17,6 +17,7 @@ import { loadNotificationPreferences, saveNotificationPreferences, type Notifica
 import { validateEmail, validateNewPassword, validateRequired } from '@/lib/validation';
 import { useToast } from '@/providers/toast';
 import { useAuth } from '@/providers/auth';
+import { devicePushEnabled, setDevicePush } from '@/lib/notifications';
 import { palette, useAppTheme, type IconTint } from '@/theme';
 
 type Preferences = NotificationPreferences;
@@ -69,6 +70,20 @@ export default function SettingsScreen() {
   const [modelCheckedAt, setModelCheckedAt] = useState<string | null>(null);
   const [phoneModel, setPhoneModel] = useState<PhoneModelStatus>({ phase: 'checking', detail: 'Checking this phone…' });
   const [phoneModelEnabled, setPhoneModelEnabledState] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (session) void devicePushEnabled(session.customerId).then(value => { if (active) setPushEnabled(value); });
+    return () => { active = false; };
+  }, [session]);
+  const togglePush = async () => {
+    if (!session || pushBusy) return;
+    setPushBusy(true);
+    try { await setDevicePush(session.customerId, !pushEnabled); setPushEnabled(!pushEnabled); }
+    catch (error) { showToast(error instanceof Error ? error.message : 'Device notifications could not be changed.', 'warning'); }
+    finally { setPushBusy(false); }
+  };
   const experience = useExperience();
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveVersion = useRef(0);
@@ -301,6 +316,7 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>You choose how far over your bill has to be tracking before we get in touch, and how.</Text>
       <Card style={styles.settingsCard}>
         <NotificationChannel control="switch" checked={preferences.enabled} colors={colors} detail="Tell me when this cycle is heading somewhere I would not expect. The warning still shows in the app when this is off." icon="notifications-outline" label="Bill-shock alerts" onPress={() => update({ enabled: !preferences.enabled })} />
+        <NotificationChannel control="switch" checked={pushEnabled} colors={colors} detail="Private notices on this device. Requires a Kea native build and notification permission." icon="phone-portrait-outline" label={pushBusy ? 'Updating device notifications…' : 'Device notifications'} onPress={() => void togglePush()} />
         <Text style={[styles.groupLabel, { color: colors.textMuted }, alertsOff && styles.disabledChannel]}>HOW WE TELL YOU, AND HOW FAR OVER IS FAR ENOUGH</Text>
         <ThresholdChannel checked={preferences.emailNotifications} colors={colors} dimmed={alertsOff} label="Email" note="Always in writing, so you have a record." options={tierOptions.email} onToggle={() => update({ emailNotifications: !preferences.emailNotifications })} onValue={(tier1Pct) => update({ tier1Pct })} value={preferences.tier1Pct} />
         <ThresholdChannel checked={preferences.smsNotifications} colors={colors} dimmed={alertsOff} label="Text message" note="Interrupts your day — set this higher than the email." options={tierOptions.sms} onToggle={() => update({ smsNotifications: !preferences.smsNotifications })} onValue={(tier2Pct) => update({ tier2Pct })} value={preferences.tier2Pct} />
@@ -314,6 +330,10 @@ export default function SettingsScreen() {
       <Card>
         <NotificationChannel checked={experience.holographic} colors={colors} detail="Home reveals into its original realistic colours. Turn this on to keep the holographic view." icon="cube-outline" label="Keep Home holographic" onPress={() => { tactile(); experience.update({ holographic: !experience.holographic }); }} />
         <NotificationChannel checked={experience.haptics} colors={colors} detail="Gentle feedback for controls and Sparky responses." icon="hand-left-outline" label="Haptic feedback" onPress={() => { tactile(); experience.update({ haptics: !experience.haptics }); }} />
+      </Card>
+      <SectionTitle>Sound effects</SectionTitle>
+      <Card>
+        <NotificationChannel control="switch" checked={experience.natureSounds} colors={colors} detail="Soft wind and birds while viewing Home. Respects silent mode and stops when you leave." icon={experience.natureSounds ? 'volume-low-outline' : 'volume-mute-outline'} label="Home nature sounds" onPress={() => experience.update({ natureSounds: !experience.natureSounds })} />
       </Card>
       <SectionTitle>Sparky AI</SectionTitle>
       <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Check both the Kea service and this phone before choosing how Sparky answers.</Text>

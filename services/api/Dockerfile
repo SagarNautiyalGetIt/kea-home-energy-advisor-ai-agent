@@ -6,7 +6,7 @@ COPY services/api/pyproject.toml ./
 COPY services/api/app ./app
 COPY services/api/alembic ./alembic
 COPY services/api/alembic.ini ./
-RUN pip install --no-cache-dir '.[aws,auth,gcp]' && useradd --uid 10001 --create-home kea
+RUN pip install --no-cache-dir '.[aws,auth,gcp,bedrock]' && useradd --uid 10001 --create-home kea
 USER kea
 EXPOSE 8000
 ENTRYPOINT ["python", "-m", "app.aws_bootstrap"]

@@ -2,7 +2,6 @@ import { CircleAlert, DollarSign, ShieldCheck, Triangle, Zap } from 'lucide-reac
 import { useEffect, useState } from 'react'
 import AreaChart from '../components/AreaChart'
 import Modal from '../components/Modal'
-import { profile } from '../data/mockData'
 import EnergyHomePanel from '../features/energy-home/EnergyHomePanel'
 import {
   basisNote,
@@ -203,7 +202,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   </div>
 
   return <>
-    <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? profile.name}</p></div>
+    <div className="page-heading"><h1>Dashboard</h1><p className="welcome-customer">Welcome, {loadSession()?.displayName ?? 'Kea customer'}</p></div>
     <div className="dashboard-hero" ref={heroRef}><EnergyHomePanel summary={summaryTiles} billShock={<BillShockDetail shock={shock} offline={offline} onNavigate={onNavigate}/>} billShockStatus={!offline && shock ? (shock.triggered ? 'alert' : 'normal') : 'unavailable'} /></div>
     {SHOW_DASHBOARD_CHARTS && (<>
     <div className="dashboard-grid">

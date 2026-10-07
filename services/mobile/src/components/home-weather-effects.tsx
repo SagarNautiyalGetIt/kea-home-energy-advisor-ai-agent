@@ -74,18 +74,20 @@ function ShootingStar() {
 
 function Wildlife({ butterflies }: { butterflies: boolean }) {
   const group = useRef<Group>(null);
+  const { camera } = useThree();
   useHomeSceneTick(useCallback((seconds: number) => {
     group.current?.children.forEach((object, i) => {
       const frame = wildlifeFrame(seconds, i, butterflies);
-      object.position.set(frame.x, frame.y, frame.z); object.rotation.z = Math.sin(seconds * 0.7 + i) * 0.15;
+      object.position.set(frame.x, frame.y, frame.z); object.quaternion.copy(camera.quaternion); object.rotateZ(Math.sin(seconds * 0.7 + i) * 0.15);
       object.visible = frame.opacity > 0.01;
-      object.children.forEach((wing, side) => { wing.rotation.y = Math.sin(seconds * (butterflies ? 9 : 5) + i) * 0.7 * (side === 0 ? 1 : -1); ((wing as Mesh).material as MeshBasicMaterial).opacity = frame.opacity; });
+      object.children.forEach((wing, side) => { if (side < 2) wing.rotation.y = Math.sin(seconds * (butterflies ? 9 : 5) + i) * 0.7 * (side === 0 ? 1 : -1); ((wing as Mesh).material as MeshBasicMaterial).opacity = frame.opacity; });
     });
-  }, [butterflies]));
-  return <group ref={group}>{[0, 1, 2].map(i => <group key={i} position={[(i - 1) * 0.45, butterflies ? 0.1 : 0.7, butterflies ? 0.8 : -2]}>
-    {[-1, 1].map(side => <mesh key={side} scale={butterflies ? [0.012, 0.022, 0.003] : [0.035, 0.006, 0.008]} position={[side * (butterflies ? 0.01 : 0.028), 0, 0]} rotation={[0, 0, side * (butterflies ? 0.25 : 0.55)]}>
-      <sphereGeometry args={[1, 6, 4]} /><meshBasicMaterial transparent depthWrite={false} color={butterflies ? ['#FFD48A', '#C7B9FF', '#FFAEC2'][i] : '#68869C'} />
+  }, [butterflies, camera]));
+  return <group ref={group}>{[0, 1, 2].map(i => <group key={i} visible={false}>
+    {[-1, 1].map(side => <mesh key={side} scale={butterflies ? [0.02, 0.03, 0.003] : [0.035, 0.006, 0.008]} position={[side * (butterflies ? 0.015 : 0.028), 0, 0]} rotation={[0, 0, side * (butterflies ? 0.25 : 0.55)]}>
+      <sphereGeometry args={[1, 6, 4]} /><meshBasicMaterial transparent depthWrite={false} color={butterflies ? ['#FFD48A', '#C7B9FF', '#FFAEC2'][i] : '#344859'} />
     </mesh>)}
+    <mesh scale={butterflies ? [0.003, 0.017, 0.004] : [0.005, 0.012, 0.005]}><sphereGeometry args={[1, 6, 4]} /><meshBasicMaterial color="#344859" transparent depthWrite={false} /></mesh>
   </group>)}</group>;
 }
 

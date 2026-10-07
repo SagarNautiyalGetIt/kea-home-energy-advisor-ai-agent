@@ -110,7 +110,21 @@ async def get_hourly_usage(ctx: ToolContext, day: str | None = None) -> dict[str
     }
 
 
-def get_billing_records(ctx: ToolContext) -> dict[str, Any]:
+async def get_billing_records(ctx: ToolContext) -> dict[str, Any]:
+    from app.account.invoices import history
+
+    records = await history(ctx.customer_id)
+    if records == []:
+        return _missing("No issued invoices exist through the served as-of date.")
+    if records:
+        return {
+            "available": True,
+            "bills": [row.model_dump(mode="json") for row in records],
+            "source": "Serving invoice history and successful payment records",
+            "guidance": "These are issued invoice records through the served as-of date. "
+            "Quote their exact period, due date and outstanding amount. "
+            "Do not infer individual appliances from invoice totals.",
+        }
     bills = [
         {
             "position": position,

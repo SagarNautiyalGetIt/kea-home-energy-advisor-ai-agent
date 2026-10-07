@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -7,7 +6,7 @@ import { Keyboard, StyleSheet, Text, View } from 'react-native';
 import { ModalSheet } from '@/components/modal-sheet';
 import { Screen } from '@/components/screen';
 import { FormField, IconButton, PageHeader, PrimaryButton } from '@/components/ui';
-import { emptyCustomerProfile, loadCustomerProfile, type CustomerProfile } from '@/lib/profile-data';
+import { emptyCustomerProfile, loadCustomerProfile, updateCustomerProfile, type CustomerProfile } from '@/lib/profile-data';
 import { validateEmail, validatePhone, validateRequired } from '@/lib/validation';
 import { useAuth } from '@/providers/auth';
 import { useToast } from '@/providers/toast';
@@ -18,22 +17,6 @@ type Errors = Partial<Record<'name' | 'address' | 'phone' | 'email', string>>;
 // The backend has no avatar field. Match the illustrative photo used by the
 // website's profile menu and page; it is not asserted to be the account holder.
 const customerPortrait = require('../../../assets/kea/customer-profile-man.png');
-
-function localProfileKey(customerId: string) {
-  return `kea-local-profile:${customerId}`;
-}
-
-function applyLocalContactDetails(profile: CustomerProfile, saved: unknown): CustomerProfile {
-  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return profile;
-  const details = saved as Record<string, unknown>;
-  return {
-    ...profile,
-    name: typeof details.name === 'string' ? details.name : profile.name,
-    address: typeof details.address === 'string' ? details.address : profile.address,
-    phone: typeof details.phone === 'string' ? details.phone : profile.phone,
-    email: typeof details.email === 'string' ? details.email : profile.email,
-  };
-}
 
 export default function ProfileScreen() {
   const { colors } = useAppTheme();
@@ -64,20 +47,12 @@ export default function ProfileScreen() {
     const controller = new AbortController();
     void loadCustomerProfile(session?.customerId ?? '', session?.displayName ?? '', session?.email ?? '', controller.signal)
       .then(async (result) => {
-        let loaded = result.data;
-        if (loaded.customerId) {
-          try {
-            const saved = await AsyncStorage.getItem(localProfileKey(loaded.customerId));
-            loaded = applyLocalContactDetails(loaded, saved ? JSON.parse(saved) as unknown : null);
-          } catch {
-            // The live profile still works if local device storage is unavailable.
-          }
-        }
+        const loaded = result.data;
         if (controller.signal.aborted) return;
         setProfile(loaded);
         setDraft(loaded);
         setStatus(result.state);
-        setMessage(result.state === 'unavailable' ? 'Account details could not be loaded. You can still edit a local copy.' : '');
+        setMessage(result.state === 'unavailable' ? 'Account details could not be loaded. Retry before editing.' : '');
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -93,20 +68,19 @@ export default function ProfileScreen() {
   };
 
   const save = async () => {
-    const next: Errors = { name: validateRequired(draft.name, 'Full name'), address: validateRequired(draft.address, 'Address'), phone: validatePhone(draft.phone), email: validateEmail(draft.email) };
+    const next: Errors = { name: validateRequired(draft.name, 'Full name'), phone: draft.phone ? validatePhone(draft.phone) : undefined, email: validateEmail(draft.email) };
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
     Keyboard.dismiss();
     setSaving(true);
     try {
-      await AsyncStorage.setItem(localProfileKey(draft.customerId), JSON.stringify({ name: draft.name.trim(), address: draft.address.trim(), phone: draft.phone.trim(), email: draft.email.trim() }));
-      const updated = { ...draft, name: draft.name.trim(), address: draft.address.trim(), phone: draft.phone.trim(), email: draft.email.trim() };
+      const updated = await updateCustomerProfile(draft, new AbortController().signal);
       setProfile(updated);
       setDraft(updated);
       setEditing(false);
-      showToast('Saved on this phone only. Your Kea account is unchanged.', 'info');
+      showToast('Your contact details were saved.', 'success');
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Local profile could not be saved.', 'warning');
+      showToast(error instanceof Error ? error.message : 'Profile could not be saved.', 'warning');
     } finally {
       setSaving(false);
     }
@@ -114,7 +88,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen hue hueStart={2} hueStretch>
-      <PageHeader action={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />} title="Profile" subtitle="Account details · edits stay on this phone" />
+      <PageHeader action={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />} title="Profile" subtitle="Your account and contact details" />
       <View style={styles.profileContent}>
         <View style={[styles.hero, { borderBottomColor: colors.border }]}><View><Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>KEA CUSTOMER</Text><Text style={[styles.heroName, { color: colors.text }]}>{profile.name}</Text></View><Image accessibilityLabel="Illustrative customer portrait" contentFit="cover" source={customerPortrait} style={styles.portrait} /></View>
         <View style={styles.details}>{details.map(([icon, label, value, tint]) => <View key={label} style={[styles.detail, { borderBottomColor: colors.border }]}><Ionicons color={colors.icons[tint]} name={icon} size={22} /><View style={styles.detailCopy}><Text style={[styles.detailLabel, { color: colors.textMuted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.text }]}>{value || 'Not available'}</Text></View></View>)}</View>
@@ -124,7 +98,7 @@ export default function ProfileScreen() {
       </View>
       <View style={[styles.security, { borderTopColor: colors.border }]}><Ionicons color={colors.icons.success} name="shield-checkmark" size={26} /><View style={styles.securityCopy}><Text style={[styles.securityTitle, { color: colors.text }]}>Local profile copy</Text><Text style={[styles.securityBody, { color: colors.textMuted }]}>Edits stay on this phone. Your Kea account, sign-in and billing details are unchanged. Contact Customer Care to update your account.</Text></View></View>
       <ModalSheet dismissOnBackdropPress={false} footer={<View style={styles.footerButtons}><View style={styles.footerButton}><PrimaryButton disabled={saving} label="Cancel" onPress={closeEditor} variant="secondary" /></View><View style={styles.footerButton}><PrimaryButton loading={saving} label="Save on phone" onPress={() => void save()} /></View></View>} keyboardAware onClose={closeEditor} title="Edit local profile" visible={editing}>
-        <View style={styles.form}><FormField autoCapitalize="words" error={errors.name} label="Full name" onChangeText={(name) => { setDraft({ ...draft, name }); setErrors((current) => ({ ...current, name: undefined })); }} placeholder="Full name" value={draft.name} /><FormField autoCapitalize="words" error={errors.address} label="Address" onChangeText={(address) => { setDraft({ ...draft, address }); setErrors((current) => ({ ...current, address: undefined })); }} placeholder="Address" value={draft.address} /><FormField error={errors.phone} keyboardType="phone-pad" label="Contact number" onChangeText={(phone) => { setDraft({ ...draft, phone }); setErrors((current) => ({ ...current, phone: undefined })); }} placeholder="Contact number" value={draft.phone} /><FormField error={errors.email} keyboardType="email-address" label="Email" onChangeText={(email) => { setDraft({ ...draft, email }); setErrors((current) => ({ ...current, email: undefined })); }} placeholder="name@example.com" value={draft.email} /></View>
+        <View style={styles.form}><FormField autoCapitalize="words" error={errors.name} label="Full name" onChangeText={(name) => { setDraft({ ...draft, name }); setErrors((current) => ({ ...current, name: undefined })); }} placeholder="Full name" value={draft.name} /><FormField error={errors.phone} keyboardType="phone-pad" label="Contact number" onChangeText={(phone) => { setDraft({ ...draft, phone }); setErrors((current) => ({ ...current, phone: undefined })); }} placeholder="Contact number" value={draft.phone} /><FormField error={errors.email} keyboardType="email-address" label="Email" onChangeText={(email) => { setDraft({ ...draft, email }); setErrors((current) => ({ ...current, email: undefined })); }} placeholder="name@example.com" value={draft.email} /></View>
       </ModalSheet>
       <ModalSheet footer={<View style={styles.footerButtons}><View style={styles.footerButton}><PrimaryButton label="Cancel" onPress={() => setLogoutOpen(false)} variant="secondary" /></View><View style={styles.footerButton}><PrimaryButton label="Sign out" onPress={() => { void signOut().then(() => { setLogoutOpen(false); router.replace('/login'); }); }} variant="danger" /></View></View>} onClose={() => setLogoutOpen(false)} title="Sign out?" visible={logoutOpen}><Text style={[styles.logoutMessage, { color: colors.textMuted }]}>Are you sure you want to sign out of your Kea Energy account?</Text></ModalSheet>
     </Screen>

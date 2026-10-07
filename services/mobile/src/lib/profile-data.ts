@@ -79,7 +79,7 @@ export async function loadCustomerProfile(customerId: string, displayName: strin
   }
   if (!customerId) return { state: 'unavailable', data: emptyCustomerProfile(), message: 'A signed-in customer is required to load profile details.', canEdit: false };
   try {
-    return { state: 'ready', data: await profileRequest(customerId, displayName, email, signal), canEdit: false };
+    return { state: 'ready', data: await profileRequest(customerId, displayName, email, signal), canEdit: true };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
     return { state: 'unavailable', data: emptyCustomerProfile(customerId, displayName, email), message: error instanceof Error ? error.message : 'Profile details are unavailable right now.', canEdit: false };
@@ -91,5 +91,11 @@ export async function updateCustomerProfile(profile: CustomerProfile, signal: Ab
   if (!useRealData) {
     return profile;
   }
-  throw new Error('Profile updates are not supported by the current backend.');
+  const response = await apiFetch(apiPath(profilePath, { customer_id: profile.customerId }), {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal,
+    body: JSON.stringify({ name: profile.name, email: profile.email,
+      phone: profile.phone.replace(/[\s()-]/g, '').replace(/^0/, '+64') }),
+  });
+  if (!response.ok) throw new Error(`Profile could not be saved (${response.status}). Use an international phone number such as +64…`);
+  return profileFromResponse(await response.json(), profile.customerId);
 }

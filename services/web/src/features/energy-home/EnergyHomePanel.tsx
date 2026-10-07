@@ -11,6 +11,7 @@ import { loadPreferences, savePreferences, type Preferences } from './lib/prefer
 import { previewWeather } from './lib/scenarios'
 import { fetchWeather, WEATHER_REFRESH_MS, type WeatherSnapshot } from './lib/weather'
 import './EnergyHomePanel.css'
+import { accountRequest } from '../../lib/account-client'
 
 const HOME_DEMAND_KW = 1.2
 const BATTERY_PERCENT = 68
@@ -104,6 +105,12 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
   const [selectedDevice, setSelectedDevice] = useState<EnergyDevice>('solar')
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null)
   const [clock, setClock] = useState(() => new Date())
+  const [capabilities, setCapabilities] = useState<{has_solar:boolean; has_battery:boolean; has_ev:boolean; instant_power_available:boolean} | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    void accountRequest<typeof capabilities>('capabilities', controller.signal).then(setCapabilities).catch(() => setCapabilities(null))
+    return () => controller.abort()
+  }, [])
 
   const syncSceneAnimation = useCallback(() => {
     const scene = sceneRef.current
@@ -164,15 +171,16 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
   )
   const sceneWeather = weather ?? fallbackWeather
   const energy = useMemo(() => calculateEnergy({
-    solarPotential: DEMO_SOLAR_KW / DEMO_SOLAR_CAPACITY_KW,
-    batteryPercent: BATTERY_PERCENT,
+    solarPotential: capabilities?.has_solar ? DEMO_SOLAR_KW / DEMO_SOLAR_CAPACITY_KW : 0,
+    batteryPercent: capabilities?.has_battery ? BATTERY_PERCENT : 0,
+    batteryMaxChargeKw: capabilities?.has_battery ? 5 : 0,
     reservePercent: preferences.reservePercent,
-    evEnabled: true,
+    evEnabled: capabilities?.has_ev ?? false,
     gridConnected: true,
     homeDemandKw: HOME_DEMAND_KW,
     evDemandKw: DEMO_EV_KW,
-    batteryMaxDischargeKw: DEMO_BATTERY_MAX_DISCHARGE_KW,
-  }), [preferences.reservePercent])
+    batteryMaxDischargeKw: capabilities?.has_battery ? DEMO_BATTERY_MAX_DISCHARGE_KW : 0,
+  }), [preferences.reservePercent, capabilities])
 
   // Weather and flow changes can create fresh GSAP tweens while the scene is hidden.
   useEffect(syncSceneAnimation, [energy, sceneWeather, selectedDevice, syncSceneAnimation])
@@ -279,11 +287,11 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
             </div>
           </div>
 
-          <EnergyHouse
+          {capabilities?.instant_power_available ? <EnergyHouse
             snapshot={energy}
             onDeviceSelect={setSelectedDevice}
             activeDevice={selectedDevice}
-          />
+          /> : <div className="account-energy-home" style={{minHeight:280,display:'grid',placeContent:'center',textAlign:'center',gap:12}}><strong>Your home · grid connected</strong><p>{capabilities?.has_solar ? 'Solar installed' : 'Grid electricity'}</p><small>Instant power readings are unavailable. Explore your dated usage below.</small></div>}
 
           <div className="energy-home-bottomline">
             <div className="energy-home-weather">
@@ -293,7 +301,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
                 <small>{Math.round(sceneWeather.temperatureC)}°C · {Math.round(sceneWeather.cloudCoverPercent)}% clouds</small>
               </div>
             </div>
-            <div className={`energy-home-weather energy-home-now energy-home-now--${statusSource}`}>
+            {capabilities?.instant_power_available && <div className={`energy-home-weather energy-home-now energy-home-now--${statusSource}`}>
               <div>
                 {/* Always shown, never behind a flag. The flow and this status are worked out
                     from fixed demo figures (DEMO_*), not this household's meters, and the
@@ -308,7 +316,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
                 </small>
               </div>
               <span className="energy-home-weather-icon"><StatusIcon size={19} /></span>
-            </div>
+            </div>}
           </div>
         </div>
       </section>

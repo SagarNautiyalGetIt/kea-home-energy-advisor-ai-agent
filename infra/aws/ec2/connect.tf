@@ -22,7 +22,7 @@ resource "aws_connect_phone_number" "alerts" {
   type         = "DID"
 }
 
-# Speaks the rendered alert passed as the contact attribute `message`, then hangs up.
+# Plays the private notice prepared by ConnectGateway, then hangs up.
 resource "aws_connect_contact_flow" "alerts" {
   count       = var.enable_voice_alerts ? 1 : 0
   instance_id = aws_connect_instance.alerts[0].id
@@ -36,7 +36,7 @@ resource "aws_connect_contact_flow" "alerts" {
       {
         Identifier = "play"
         Type       = "MessageParticipant"
-        Parameters = { Text = "$.Attributes.message" }
+        Parameters = { Media = { Uri = "$.Attributes.kea_notice_audio", SourceType = "S3", MediaType = "Audio" } }
         Transitions = {
           NextAction = "end"
           Errors     = [{ NextAction = "end", ErrorType = "NoMatchingError" }]

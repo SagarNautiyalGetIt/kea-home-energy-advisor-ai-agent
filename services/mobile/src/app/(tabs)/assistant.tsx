@@ -11,7 +11,7 @@ import { AuroraBackground } from '@/components/aurora-background';
 import { AuroraMotion } from '@/components/aurora-motion';
 import { SparkyPresence } from '@/components/sparky-presence';
 import { IconButton, PageHeader } from '@/components/ui';
-import { streamAssistantReply, toolLabel } from '@/lib/assistant-api';
+import { streamAssistantReply, toolLabel, sendAssistantFeedback } from '@/lib/assistant-api';
 import { answerOnPhone, isPhoneModelEnabled, phoneModelStatus, stopPhoneAnswer } from '@/lib/local-sparky';
 import { canAnswerWithLocalModel, LOCAL_EVIDENCE_LIMIT } from '@/lib/local-sparky-policy';
 import { useAuth } from '@/providers/auth';
@@ -215,6 +215,7 @@ export default function AssistantScreen() {
                 {message.escalate ? <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={styles.escalationAction}><Ionicons color="#000000" name="people-outline" size={17} /><Text style={styles.escalationText}>See support guidance</Text></Pressable> : null}
                 {message.role === 'assistant' && !message.streaming ? <View style={styles.replyActions}>
                   <Pressable accessibilityLabel="Copy reply" hitSlop={8} onPress={() => void copyReply(message)} style={styles.replyAction}><Ionicons color={colors.text} name="copy-outline" size={15} /></Pressable>
+                  {message.id !== 1 && !message.failed ? (['like', 'dislike'] as const).map(feedback => <Pressable key={feedback} accessibilityLabel={feedback === 'like' ? 'Helpful reply' : 'Unhelpful reply'} hitSlop={8} style={styles.replyAction} onPress={() => { void sendAssistantFeedback(session?.customerId ?? '', message.id, feedback).then(() => showToast('Feedback recorded.', 'success')).catch((error: Error) => showToast(error.message, 'warning')); }}><Ionicons color={colors.text} name={feedback === 'like' ? 'thumbs-up-outline' : 'thumbs-down-outline'} size={15} /></Pressable>) : null}
                 </View> : null}
               </View>
             </View>

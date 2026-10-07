@@ -1,31 +1,42 @@
 import { setHapticsEnabled } from './haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { EXPERIENCE_DEFAULTS, restoreExperienceSettings, type ExperienceSettings } from './experience-settings';
 
-type Preferences = { holographic: boolean; haptics: boolean };
-const defaults: Preferences = { holographic: false, haptics: true };
 const key = 'kea-experience-v2';
-const Context = createContext({ ...defaults, update: (_: Partial<Preferences>) => {} });
+const Context = createContext({ ...EXPERIENCE_DEFAULTS, update: (_: Partial<ExperienceSettings>) => {} });
 
 export function ExperiencePreferences({ children }: { children: ReactNode }) {
-  const [preferences, set] = useState(defaults);
+  const [preferences, set] = useState(EXPERIENCE_DEFAULTS);
+  const edits = useRef<Partial<ExperienceSettings>>({});
+  const hydrated = useRef(false);
+  const writes = useRef<Promise<void>>(Promise.resolve());
+  const persist = useCallback((next: ExperienceSettings) => {
+    writes.current = writes.current.catch(() => {}).then(() => AsyncStorage.setItem(key, JSON.stringify(next)));
+    void writes.current.catch(() => { /* Session preference still works without storage. */ });
+  }, []);
   useEffect(() => {
     let alive = true;
     void Promise.all([AsyncStorage.getItem(key), AsyncStorage.getItem('kea-experience-v1')]).then(([value, legacy]) => {
       if (!alive) return;
-      try {
-        const saved = JSON.parse(value ?? legacy ?? '{}');
-        // Everyone receives the new realistic reveal default. Keep legacy haptics;
-        // an explicit holographic choice made in v2 still remains available.
-        set({ holographic: value !== null && saved.holographic === true, haptics: saved.haptics !== false });
-      } catch { /* retain safe defaults */ }
+      const next = { ...restoreExperienceSettings(value, legacy), ...edits.current };
+      hydrated.current = true;
+      set(next);
+      // A choice made during loading must retain the other saved preferences.
+      if (Object.keys(edits.current).length) persist(next);
     }).catch(() => { /* retain safe defaults when storage is unavailable */ });
     return () => { alive = false; };
-  }, []);
+  }, [persist]);
   useEffect(() => setHapticsEnabled(preferences.haptics), [preferences.haptics]);
-  const update = (patch: Partial<Preferences>) => set(current => {
-    const next = { ...current, ...patch }; void AsyncStorage.setItem(key, JSON.stringify(next)); return next;
-  });
+  const update = (patch: Partial<ExperienceSettings>) => {
+    edits.current = { ...edits.current, ...patch };
+    set(current => {
+      const next = { ...current, ...patch };
+      // Serial writes prevent a quick on/off gesture from saving the older value.
+      if (hydrated.current) persist(next);
+      return next;
+    });
+  };
   return <Context.Provider value={{ ...preferences, update }}>{children}</Context.Provider>;
 }
 export const useExperience = () => useContext(Context);

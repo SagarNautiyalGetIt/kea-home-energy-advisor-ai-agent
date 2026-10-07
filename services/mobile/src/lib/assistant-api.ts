@@ -241,13 +241,13 @@ export function streamAssistantReply(
 
 
 export function sendAssistantFeedback(customerId: string, messageId: number, feedback: 'like' | 'dislike') {
-  const path = process.env.EXPO_PUBLIC_AI_FEEDBACK_PATH?.trim();
+  const path = process.env.EXPO_PUBLIC_AI_FEEDBACK_PATH?.trim() || '/api/assistant/feedback';
   if (!path) return Promise.reject(new Error('Assistant feedback is not supported by the current backend.'));
   return apiJson<void>(path, jsonRequest('POST', { customer_id: customerId, message_id: String(messageId), feedback }));
 }
 
 export function uploadAssistantAttachment(customerId: string, formData: FormData, signal?: AbortSignal) {
-  const template = process.env.EXPO_PUBLIC_AI_ATTACHMENT_PATH?.trim();
+  const template = process.env.EXPO_PUBLIC_AI_ATTACHMENT_PATH?.trim() || '/api/households/{customer_id}/assistant/attachments';
   if (!template) return Promise.reject(new Error('Assistant attachments are not supported by the current backend.'));
   return apiJson<{ attachment_id: string }>(apiPath(template, { customer_id: customerId }), { method: 'POST', body: formData, signal });
 }

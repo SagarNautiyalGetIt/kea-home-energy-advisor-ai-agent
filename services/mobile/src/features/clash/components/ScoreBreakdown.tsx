@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { demoScoreParts, demoScoring, metricDetails, type DemoMetrics, type MetricKey } from '@/lib/clash-preview';
-import { useAppTheme } from '@/theme';
+import { ClashHue, useClashColors } from './ClashHue';
 
 const keys: MetricKey[] = ['conservation', 'ev', 'offPeak', 'solar'];
 const icons = { conservation: 'flash-outline', ev: 'car-sport-outline', offPeak: 'time-outline', solar: 'sunny-outline' } as const;
@@ -16,11 +16,12 @@ function amount(key: MetricKey, metrics: DemoMetrics): string {
 }
 
 export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoMetrics; selected: MetricKey; onSelect: (key: MetricKey) => void }) {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   const parts = demoScoreParts(metrics);
   const tint = { conservation: colors.icons.success, ev: colors.icons.info, offPeak: colors.icons.warm, solar: colors.icons.money };
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <ClashHue color={tint[selected]} />
       <Text style={[styles.title, { color: colors.text }]}>How the score adds up</Text>
       <Text style={[styles.caption, { color: colors.textMuted }]}>Four example categories, each with a different weight. Tap one to see what verified data it would need.</Text>
       {keys.map((key) => {
@@ -35,6 +36,7 @@ export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoM
             onPress={() => onSelect(key)}
             style={({ pressed }) => [styles.row, { borderColor: active ? tint[key] : colors.border, backgroundColor: active ? colors.surfaceRaised : colors.surface }, pressed && styles.pressed]}
           >
+            <ClashHue color={tint[key]} />
             <View style={styles.rowTop}>
               <View style={[styles.iconWrap, { backgroundColor: colors.surfaceRaised }]}><Ionicons color={tint[key]} name={icons[key]} size={19} /></View>
               <View style={styles.rowCopy}>
@@ -48,6 +50,7 @@ export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoM
         );
       })}
       <View style={[styles.method, { backgroundColor: colors.surfaceRaised }]}>
+        <ClashHue color={tint[selected]} />
         <Text style={[styles.methodLabel, { color: colors.text }]}>HOW {metricDetails[selected].label.toUpperCase()} WOULD WORK</Text>
         <Text style={[styles.methodText, { color: colors.textMuted }]}>{metricDetails[selected].method}</Text>
       </View>
@@ -57,10 +60,10 @@ export function ScoreBreakdown({ metrics, selected, onSelect }: { metrics: DemoM
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 22, padding: 18, gap: 9 },
+  card: { borderRadius: 22, overflow: 'hidden', padding: 18, gap: 9 },
   title: { fontSize: 18, fontWeight: '800' },
   caption: { fontSize: 14, lineHeight: 21, marginBottom: 4 },
-  row: { borderWidth: 1, borderRadius: 14, padding: 11, minHeight: 70 },
+  row: { borderWidth: 1, borderRadius: 14, overflow: 'hidden', padding: 11, minHeight: 70 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconWrap: { width: 35, height: 35, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1 },
@@ -70,7 +73,7 @@ const styles = StyleSheet.create({
   max: { fontSize: 12, fontWeight: '500' },
   track: { height: 3, borderRadius: 3, marginTop: 9, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
-  method: { borderRadius: 13, padding: 12, marginTop: 2 },
+  method: { borderRadius: 13, overflow: 'hidden', padding: 12, marginTop: 2 },
   methodLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
   methodText: { fontSize: 14, lineHeight: 21, marginTop: 5 },
   disclaimer: { fontSize: 12, lineHeight: 18, marginTop: 2 },

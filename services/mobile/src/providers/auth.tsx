@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiFetch, apiJson, jsonRequest, loadAccessToken, onSessionExpired, storeTokenPair } from '@/lib/backend-client';
 import { sessionMatches } from '@/lib/session-policy';
+import { devicePushEnabled, setDevicePush } from '@/lib/notifications';
 
 export type LocalSession = {
   customerId: string;
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Account registration is not available from the current Kea backend. Please use an approved demo account or contact Customer Care.');
     },
     signOut: async () => {
+      if (session && await devicePushEnabled(session.customerId)) await setDevicePush(session.customerId, false);
       await AsyncStorage.removeItem(STORAGE_KEY);
       await storeTokenPair(null, null);
       setSession(null);

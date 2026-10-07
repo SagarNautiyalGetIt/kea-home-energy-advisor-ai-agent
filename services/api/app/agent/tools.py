@@ -2012,7 +2012,6 @@ async def get_scheduled_outages(ctx: ToolContext) -> dict:
 
 _SYNC = {
     "get_usage_history": get_usage_history,
-    "get_billing_records": get_billing_records,
     "get_plan_details": get_plan_details,
     "get_account_summary": get_account_summary,
     "get_daily_usage": get_daily_usage,
@@ -2026,6 +2025,7 @@ _SYNC = {
     "get_energy_breakdown": get_energy_breakdown,
 }
 _ASYNC = {
+    "get_billing_records": get_billing_records,
     "get_hourly_usage": get_hourly_usage,
     "get_alert_status": get_alert_status,
     "get_power_clash_progress": get_power_clash_progress,

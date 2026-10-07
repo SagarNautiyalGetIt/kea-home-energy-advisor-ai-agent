@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { PerspectiveCamera, Vector3 } from 'three';
-import { starPositions, meteorFrame, wildlifeFrame, nightWindowAt, HOME_GROUND_RADIUS, NIGHT_WINDOWS, NIGHT_APERTURES, WEATHER_BUDGET, weatherPalette } from './home-weather-world.ts';
+import { starPositions, meteorFrame, wildlifeFrame, grassBlades, cloudFrame, nightWindowAt, HOME_GROUND_RADIUS, NIGHT_WINDOWS, NIGHT_APERTURES, WEATHER_BUDGET, weatherPalette } from './home-weather-world.ts';
 import { homeAtmosphere } from './home-presentation.ts';
 import { weatherCodeDetails } from './auckland-weather.ts';
 
@@ -44,15 +44,49 @@ test('one varied meteor starts every four seconds, fades out and fits visible up
   }
   assert.equal(origins.size, 40);
 });
-test('bounded wildlife fades in/out and changes spawn location between cycles', () => {
+test('wildlife has quiet gaps, gentle fades and varied visits without exceeding its slots', () => {
   for (const butterfly of [false, true]) {
-    const lifetime = butterfly ? 7 : 11;
-    assert.equal(wildlifeFrame(0, 0, butterfly).opacity, 0);
-    assert.ok(wildlifeFrame(lifetime * 0.3, 0, butterfly).opacity > 0.5);
-    assert.ok(wildlifeFrame(lifetime - 0.001, 0, butterfly).opacity < 0.001);
-    assert.notEqual(wildlifeFrame(0, 0, butterfly).x, wildlifeFrame(lifetime, 0, butterfly).x);
+    for (let slot = 0; slot < 3; slot++) {
+      const arrivals = [], locations = new Set();
+      let last = wildlifeFrame(0, slot, butterfly), quiet = 0, visible = 0;
+      for (let step = 1; step < 3000; step++) {
+        const frame = wildlifeFrame(step / 10, slot, butterfly);
+        assert.ok(Object.values(frame).every(Number.isFinite));
+        assert.ok(frame.opacity >= 0 && frame.opacity <= 1);
+        assert.ok(Math.abs(frame.opacity - last.opacity) < 0.1, 'visits fade instead of popping');
+        if (!frame.opacity) quiet++; else visible++;
+        if (!last.opacity && frame.opacity) { arrivals.push(step / 10); locations.add(`${frame.x.toFixed(3)},${frame.y.toFixed(3)}`); }
+        last = frame;
+      }
+      assert.ok(quiet > 100 && visible > 100, 'both arrivals and absences must be observable');
+      assert.ok(locations.size > 8);
+      const gaps = arrivals.slice(1).map((time, i) => (time - arrivals[i]).toFixed(1));
+      assert.ok(new Set(gaps).size > 3, 'visitors must not arrive at a metronomic interval');
+    }
   }
   assert.equal(WEATHER_BUDGET.birds, 3); assert.equal(WEATHER_BUDGET.butterflies, 3); assert.equal(WEATHER_BUDGET.fireflies, 12);
+});
+test('grass stays inside the lawn and away from the supplied house and driveway', () => {
+  const blades = grassBlades(); assert.equal(blades.length, WEATHER_BUDGET.grass);
+  for (const blade of blades) {
+    assert.ok(Math.hypot(blade.x, blade.z) < HOME_GROUND_RADIUS - 0.04);
+    assert.ok(Math.abs(blade.x) >= 0.97 || Math.abs(blade.z) >= 1.15);
+    assert.ok(blade.height >= 0.035 && blade.height <= 0.07);
+  }
+  for (const [x, z] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) assert.ok(blades.some(blade => blade.x * x > 0 && blade.z * z > 0), 'lawn surrounds the house');
+});
+test('clouds stay light, move slowly, and disappear before wrapping around', () => {
+  for (let slot = 0; slot < WEATHER_BUDGET.clouds; slot++) {
+    let last = cloudFrame(0, slot);
+    for (let step = 1; step <= 2000; step++) {
+      const frame = cloudFrame(step / 10, slot);
+      assert.ok(Object.values(frame).every(Number.isFinite));
+      assert.ok(frame.opacity >= 0 && frame.opacity <= 1);
+      if (Math.abs(frame.x - last.x) > 1) assert.ok(frame.opacity < 0.03 && last.opacity < 0.03, 'no visible cloud teleport');
+      else assert.ok(Math.abs(frame.x - last.x) < 0.02, 'a cloud drifts instead of racing');
+      last = frame;
+    }
+  }
 });
 test('conditions select coherent effects and palettes without inventing stale weather', () => {
   const now = Date.parse('2026-12-11T10:00:00Z');
@@ -63,6 +97,10 @@ test('conditions select coherent effects and palettes without inventing stale we
   const day = Date.parse('2026-12-11T00:00:00Z');
   const sunny = homeAtmosphere({ ...make('clear'), observedAt: day, isDay: true }, day);
   assert.ok(sunny.birds); assert.ok(sunny.butterflies); assert.ok(sunny.cloud >= 0.12); assert.equal(sunny.fireflies, false);
+  const clockDay = homeAtmosphere(null, day);
+  assert.ok(clockDay.birds && clockDay.butterflies && clockDay.cloud > 0, 'decorative nature does not need a weather request');
+  const wetDay = homeAtmosphere({ ...make('rain'), observedAt: day, isDay: true }, day);
+  assert.equal(wetDay.birds, false); assert.equal(wetDay.butterflies, false);
   assert.equal(weatherCodeDetails(97).condition, 'storm');
   assert.notEqual(weatherPalette(true, 'rain').top, weatherPalette(true, 'snow').top);
   assert.notEqual(weatherPalette(true, 'clear').top, weatherPalette(false, 'clear').top);

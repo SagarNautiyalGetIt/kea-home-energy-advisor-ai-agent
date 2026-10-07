@@ -14,7 +14,7 @@ def test_mobile_plans_are_live_catalogue_and_read_only() -> None:
         plan.name for plan in plans.CATALOGUE
     ]
     assert body["pricing_styles"][0]["rate"] == "$0.325/kWh"
-    assert body["change_requests_available"] is False
+    assert body["change_requests_available"] is True
     assert body["current_plan"] == {"pricing_style": None, "term": None}
 
 

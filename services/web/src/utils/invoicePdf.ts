@@ -21,6 +21,9 @@ export interface InvoicePdfData {
   address: string
   paymentMethod: string
   planName: string
+  gst?: number | null
+  chargeLines?: Array<{label:string; amount?:number|null}>
+  estimated?: boolean
 }
 
 /** OpenType (CFF) font files: the regular and the semibold weight. */
@@ -249,10 +252,6 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
     )
   }
 
-  const total = Number(data.amount.replace(/[^0-9.]/g, ''))
-  // Prices include GST at 15%, the same split the invoice card on the page shows.
-  const excludingGst = Math.round((total / 1.15) * 100) / 100
-  const gst = Math.round((total - excludingGst) * 100) / 100
   const paid = data.status === 'Paid'
   const right = PAGE_W - MARGIN
 
@@ -262,7 +261,7 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   ops.push(`q 0 ${num(y(headerH))} ${PAGE_W} ${headerH} re W n /Sh1 sh Q`)
   ops.push(`${rgb('#E9ECF7')} RG 0.8 w 0 ${num(y(headerH))} m ${PAGE_W} ${num(y(headerH))} l S`)
   logo(MARGIN, 40, 60)
-  const title = 'KEA ENERGY INVOICE'
+  const title = data.estimated ? 'KEA ENERGY USAGE ESTIMATE' : 'KEA ENERGY INVOICE'
   text(title, 124, 70, { font: 'bold', size: 20 })
   const pillX = 124 + textWidth(title, 'bold', 20) + 12
   const pillW = textWidth(data.status, 'bold', 8.5) + 18
@@ -305,8 +304,7 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   text('DESCRIPTION', MARGIN + 16, tableTop + 19, { font: 'bold', size: 7.5, color: GREY_LABEL, spacing: 1.4 })
   text('AMOUNT', right - 16, tableTop + 19, { font: 'bold', size: 7.5, color: GREY_LABEL, spacing: 1.4, align: 'right' })
   const rows: [string, string][] = [
-    ['Electricity charges (excl. GST)', money(excludingGst)],
-    ['GST (15%)', money(gst)],
+    ...(data.chargeLines ?? []).map(line => [line.label, line.amount == null ? 'Not on file' : money(line.amount)] as [string, string]),
   ]
   rows.forEach(([label, amount], i) => {
     const baseline = tableTop + 30 + 24 + i * 36
@@ -324,10 +322,10 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   fill(roundedRect(MARGIN, noteTop, CONTENT_W, 40, 8), '#FFF5EC')
   fill(`${MARGIN} ${num(y(noteTop + 40))} 3 40 re`, '#FE6601')
   text('Payment:', MARGIN + 16, noteTop + 25, { font: 'bold', color: '#FE6601' })
-  const note = paid ? `Received with ${data.paymentMethod}.` : 'Pay securely using your saved card before the due date.'
+  const note = paid ? 'Paid according to account records.' : 'Use the verified payment details on your issued bill.'
   text(note, MARGIN + 16 + textWidth('Payment: ', 'bold', 10.5), noteTop + 25, { color: '#5B6A8F' })
 
-  text('Cost basis: illustrative rate of 30c/kWh.', MARGIN, noteTop + 40 + 28, { size: 9.5, color: MUTED })
+  text(data.estimated ? 'Usage estimate; not an issued tax invoice.' : 'Based on issued account records.', MARGIN, noteTop + 40 + 28, { size: 9.5, color: MUTED })
   text('Thank you for choosing Kea Energy.', MARGIN, noteTop + 40 + 48, { font: 'bold', size: 11, color: PURPLE })
 
   // Footer.

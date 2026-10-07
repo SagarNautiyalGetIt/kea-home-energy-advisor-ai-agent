@@ -4,6 +4,8 @@ import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { ClashCoach } from '@/components/clash-coach';
+import { AuroraMotion } from '@/components/aurora-motion';
+import { ClashHue, useClashColors } from '@/features/clash/components/ClashHue';
 import { tactile } from '@/lib/haptics';
 import { Screen } from '@/components/screen';
 import { PageHeader } from '@/components/ui';
@@ -15,14 +17,13 @@ import { ScoreBreakdown } from '@/features/clash/components/ScoreBreakdown';
 import { SuburbLeaderboard } from '@/features/clash/components/SuburbLeaderboard';
 import { SuburbLeagueHeader } from '@/features/clash/components/SuburbLeagueHeader';
 import { demoDistricts, demoLeaderboard, locationOutcomeCopy, nearbyDemoDistrict, type DemoDistrictId, type LocationOutcome, type MetricKey } from '@/lib/clash-preview';
-import { useAppTheme } from '@/theme';
 
 function selectionFeedback() {
   tactile();
 }
 
 export default function ClashScreen() {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   const [selectedId, setSelectedId] = useState<DemoDistrictId>('grey-lynn');
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('conservation');
   const [locationBusy, setLocationBusy] = useState(false);
@@ -84,10 +85,11 @@ export default function ClashScreen() {
   };
 
   return (
+    <AuroraMotion animated={motion}>
     <Screen contentStyle={styles.content} scrollEnabled={!arenaInteracting}>
       <PageHeader title="Power Clash" subtitle="Sparky quests · sample suburb league" />
       <View style={[styles.views, { backgroundColor: colors.surface }]}>
-        {([{ key: 'quests', label: 'Quests', icon: 'compass-outline', tint: colors.icons.energy }, { key: 'arena', label: 'Arena', icon: 'cube-outline', tint: colors.icons.info }, { key: 'league', label: 'League', icon: 'trophy-outline', tint: colors.icons.money }] as const).map((item) => <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: item.key === view }} onPress={() => { setView(item.key); tactile(); }} style={[styles.viewButton, { backgroundColor: item.key === view ? colors.surfaceRaised : colors.surface, borderColor: item.key === view ? item.tint : 'transparent' }]}><Ionicons name={item.icon} size={19} color={item.tint} /><Text style={[styles.viewLabel, { color: item.key === view ? colors.text : colors.textMuted }]}>{item.label}</Text></Pressable>)}
+        {([{ key: 'quests', label: 'Quests', icon: 'compass-outline', tint: colors.icons.energy }, { key: 'arena', label: 'Arena', icon: 'cube-outline', tint: colors.icons.info }, { key: 'league', label: 'League', icon: 'trophy-outline', tint: colors.icons.money }] as const).map((item) => <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: item.key === view }} onPress={() => { setView(item.key); tactile(); }} style={[styles.viewButton, { backgroundColor: item.key === view ? colors.surfaceRaised : colors.surface, borderColor: item.key === view ? item.tint : 'transparent' }]}>{item.key === view ? <ClashHue color={item.tint} /> : null}<Ionicons name={item.icon} size={19} color={item.tint} /><Text style={[styles.viewLabel, { color: item.key === view ? colors.text : colors.textMuted }]}>{item.label}</Text></Pressable>)}
       </View>
       <View style={styles.motionRow}><View style={styles.motionCopy}><Text style={[styles.motionTitle, { color: colors.text }]}>Game motion</Text><Text style={[styles.motionHint, { color: colors.textMuted }]}>{reduceMotion ? 'Off to match your device preference' : 'Small transitions and quest celebrations'}</Text></View><Switch accessibilityLabel="Game motion" disabled={reduceMotion || motionPreference === null} value={motion} onValueChange={changeMotion} trackColor={{ false: colors.border, true: colors.icons.energy }} /></View>
 
@@ -98,6 +100,7 @@ export default function ClashScreen() {
       <SuburbLeagueHeader district={district.name} rank={you.rank} score={you.score} total={standings.length} />
 
       <View style={[styles.selectCard, { backgroundColor: colors.surface }]}>
+        <ClashHue color={colors.icons.energy} />
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Choose a demo suburb</Text>
         <Text style={[styles.sectionBody, { color: colors.textMuted }]}>Your rank is against other sample players in this suburb. This does not enrol your account.</Text>
         <View style={styles.chips}>
@@ -133,6 +136,7 @@ export default function ClashScreen() {
       <SuburbLeaderboard districtId={selectedId} districtName={district.name} />
       <MonthlyRewardCard />
       <View style={[styles.boundaryCard, { backgroundColor: colors.surface }]}>
+        <ClashHue color={colors.icons.utility} />
         <Ionicons color={colors.textMuted} name="shield-checkmark-outline" size={21} />
         <View style={styles.boundaryCopy}>
           <Text style={[styles.boundaryTitle, { color: colors.text }]}>What is needed for real rankings</Text>
@@ -142,17 +146,18 @@ export default function ClashScreen() {
       </> : null}
       </GameTransition>
     </Screen>
+    </AuroraMotion>
   );
 }
 
 const styles = StyleSheet.create({
   content: { gap: 15, paddingBottom: 50 },
   views: { borderRadius: 19, padding: 5, flexDirection: 'row', gap: 5 },
-  viewButton: { flex: 1, minHeight: 52, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  viewButton: { flex: 1, minHeight: 52, borderRadius: 15, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   viewLabel: { fontSize: 13, fontWeight: '800' },
   motionRow: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingHorizontal: 5, marginBottom: 2 },
   motionCopy: { flex: 1 }, motionTitle: { fontSize: 13, fontWeight: '700' }, motionHint: { fontSize: 12, lineHeight: 17, marginTop: 3 },
-  selectCard: { borderRadius: 22, padding: 18 },
+  selectCard: { borderRadius: 22, overflow: 'hidden', padding: 18 },
   sectionTitle: { fontSize: 17, fontWeight: '800' },
   sectionBody: { fontSize: 14, lineHeight: 21, marginTop: 5 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
@@ -165,7 +170,7 @@ const styles = StyleSheet.create({
   locationButton: { marginTop: 13, minHeight: 44, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   locationButtonText: { fontSize: 14, fontWeight: '800' },
   locationResult: { marginTop: 10, fontSize: 12, lineHeight: 18 },
-  boundaryCard: { borderRadius: 22, padding: 17, flexDirection: 'row', gap: 12 },
+  boundaryCard: { borderRadius: 22, overflow: 'hidden', padding: 17, flexDirection: 'row', gap: 12 },
   boundaryCopy: { flex: 1 },
   boundaryTitle: { fontSize: 15, fontWeight: '800' },
   boundaryBody: { fontSize: 14, lineHeight: 21, marginTop: 5 },

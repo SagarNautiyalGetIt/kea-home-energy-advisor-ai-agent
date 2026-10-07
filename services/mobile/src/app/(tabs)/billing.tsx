@@ -105,9 +105,9 @@ export default function BillingScreen() {
                 <Ionicons color="#FFFFFF" name="eye-outline" size={17} />
                 <Text style={[styles.billPillText, { color: '#FFFFFF' }]}>View</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => showToast('Online payment is not connected yet.', 'info')} style={({ pressed }) => [styles.billPill, styles.billPillGhost, pressed && styles.pressed]}>
+              <Pressable accessibilityRole="button" onPress={() => showToast(`Use the verified bank-transfer details on your issued invoice. Reference: ${current.id}. Contact Customer Care if the invoice has no transfer details.`, 'info')} style={({ pressed }) => [styles.billPill, styles.billPillGhost, pressed && styles.pressed]}>
                 <Ionicons color="#111111" name="card-outline" size={17} />
-                <Text style={[styles.billPillText, { color: '#111111' }]}>Pay</Text>
+                <Text style={[styles.billPillText, { color: '#111111' }]}>Payment details</Text>
               </Pressable>
             </View>
           </View>

@@ -4,7 +4,7 @@ import type { Point3 } from './home-equipment';
 export const STAR_COUNT = 420;
 export const METEOR_INTERVAL = 4;
 export const HOME_GROUND_RADIUS = 1.7;
-export const WEATHER_BUDGET = { stars: STAR_COUNT, rain: 72, snow: 64, fireflies: 12, birds: 3, butterflies: 3 } as const;
+export const WEATHER_BUDGET = { stars: STAR_COUNT, rain: 72, snow: 64, fireflies: 12, birds: 3, butterflies: 3, grass: 720, clouds: 4 } as const;
 /** Seeded variation without allocating/spawning objects each frame. */
 export function sceneRandom(seed: number) { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 export function starPositions(): Point3[] {
@@ -21,10 +21,46 @@ export function meteorFrame(seconds: number) {
   return { cycle, from, to, t, opacity: age < 0.95 ? Math.sin(Math.PI * t) * 0.85 : 0 };
 }
 export function wildlifeFrame(seconds: number, slot: number, butterfly: boolean) {
-  const lifetime = butterfly ? 7 : 11, clock = seconds + slot * lifetime / 3;
-  const cycle = Math.floor(clock / lifetime), age = clock % lifetime, t = age / lifetime, seed = cycle * 31 + slot * 17;
-  const fade = Math.min(1, t / 0.16, (1 - t) / 0.2);
-  return { x: (sceneRandom(seed) - 0.5) * 2.3 + (butterfly ? Math.sin(t * 4) * 0.14 : (t - 0.5) * 1.8), y: (butterfly ? 0.0 : 0.62) + sceneRandom(seed + 1) * 0.25 + Math.sin(t * 9 + slot) * 0.07, z: butterfly ? 0.7 + sceneRandom(seed + 2) * 0.3 : -1.7 - sceneRandom(seed + 2) * 0.5, opacity: Math.max(0, fade) * (butterfly ? 0.85 : 0.7) };
+  const window = butterfly ? 19 : 25, clock = Math.max(0, seconds) + slot * window / 3;
+  const cycle = Math.floor(clock / window), age = clock % window, seed = cycle * 31 + slot * 17 + (butterfly ? 1000 : 0);
+  // Vary arrival, lifetime and direction, with a quiet gap before each visitor.
+  // Reuse three slots rather than growing a React/Three object list over time.
+  const arrival = 0.8 + sceneRandom(seed + 3) * 4.5;
+  const lifetime = (butterfly ? 6 : 9) + sceneRandom(seed + 4) * 4;
+  const t = Math.max(0, Math.min(1, (age - arrival) / lifetime));
+  const fade = Math.max(0, Math.min(1, t / 0.18, (1 - t) / 0.22));
+  const direction = sceneRandom(seed + 5) < 0.5 ? -1 : 1;
+  return {
+    x: butterfly ? (sceneRandom(seed) - 0.5) * 2.1 + Math.sin(t * 5 + slot) * 0.12 : direction * (t - 0.5) * 3.4,
+    y: (butterfly ? -0.27 : 0.62) + sceneRandom(seed + 1) * (butterfly ? 0.14 : 0.25) + Math.sin(t * 9 + slot) * (butterfly ? 0.045 : 0.035),
+    z: butterfly ? 1.18 + sceneRandom(seed + 2) * 0.18 : -1.7 - sceneRandom(seed + 2) * 0.5,
+    opacity: fade * (butterfly ? 0.9 : 0.8),
+  };
+}
+
+/** Grass stays on the outer lawn, clear of the original house and driveway. */
+export function grassBlades() {
+  const blades = [];
+  for (let seed = 1; blades.length < WEATHER_BUDGET.grass; seed++) {
+    const angle = sceneRandom(seed * 5) * Math.PI * 2;
+    const radius = Math.sqrt(sceneRandom(seed * 5 + 1)) * (HOME_GROUND_RADIUS - 0.05);
+    const x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
+    if (Math.abs(x) < 0.97 && Math.abs(z) < 1.15) continue;
+    blades.push({ x, z, height: 0.035 + sceneRandom(seed * 5 + 2) * 0.035, angle, shade: sceneRandom(seed * 5 + 3) });
+  }
+  return blades;
+}
+
+export function cloudFrame(seconds: number, slot: number) {
+  const period = 45 + sceneRandom(slot + 400) * 20;
+  const t = ((Math.max(0, seconds) / period + slot / WEATHER_BUDGET.clouds) % 1);
+  return {
+    x: (t - 0.5) * 5.6,
+    y: 0.85 + sceneRandom(slot + 401) * 0.38,
+    z: -2.1 - sceneRandom(slot + 402) * 0.6,
+    opacity: Math.max(0, Math.min(1, t / 0.15, (1 - t) / 0.15)),
+    scale: 0.8 + sceneRandom(slot + 403) * 0.55,
+  };
 }
 export function weatherPalette(isDay: boolean, condition: AucklandWeather['condition']) {
   if (!isDay) return { top: '#10162E', horizon: '#344460', mist: '#7689A2', body: '#DCE9F5', ground: condition === 'snow' ? '#697D8B' : '#28352F' };

@@ -45,6 +45,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class ClientStateRow(Base):
+    __tablename__ = "client_state"
+    __table_args__ = {"schema": "app"}
+    account_ref: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 class OutageSnapshotRow(Base):
     __tablename__ = "outage_snapshot"
     __table_args__ = {"schema": "app"}

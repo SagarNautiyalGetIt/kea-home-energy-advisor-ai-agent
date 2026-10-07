@@ -35,7 +35,7 @@ export type PlansViewData = {
 };
 
 const plansPath = process.env.EXPO_PUBLIC_PLANS_PATH?.trim() || '/api/households/{customer_id}/plans';
-const switchPath = process.env.EXPO_PUBLIC_PLAN_SWITCH_PATH?.trim();
+const switchPath = process.env.EXPO_PUBLIC_PLAN_SWITCH_PATH?.trim() || '/api/households/{customer_id}/plan-change-requests';
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Plans response has an invalid ${label}.`);

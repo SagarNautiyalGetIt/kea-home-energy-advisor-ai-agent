@@ -6,15 +6,8 @@ import { singleFlight } from './single-flight';
 
 // Pin both the model revision and its actual file hash. A newer model is an
 // explicit update, never a silent change to a customer's offline assistant.
-export const PHONE_MODEL = {
-  name: 'Qwen3 0.6B · compact',
-  revision: 'b5f37287796e5be0ea3dab2e7430873fb3f73e49',
-  filename: 'Qwen3-0.6B-Q4_0.gguf',
-  bytes: 428_970_080,
-  sha256: 'da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4',
-} as const;
-
-const MODEL_URL = `https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/${PHONE_MODEL.revision}/${PHONE_MODEL.filename}`;
+import { PHONE_MODEL, resolvePhoneModelUrl, verifiedPhoneModel } from './phone-model-config';
+export { PHONE_MODEL } from './phone-model-config';
 const ENABLED_KEY = 'kea:sparky-phone-model-enabled';
 const MIN_RAM_BYTES = 3 * 1024 ** 3;
 const MIN_FREE_BYTES = PHONE_MODEL.bytes + 512 * 1024 ** 2;
@@ -72,7 +65,7 @@ export async function phoneModelStatus(): Promise<PhoneModelStatus> {
       }
       if (verifiedPath !== path) {
         const hash = await files.FileSystem.hash(path, 'SHA-256');
-        if (hash.toLowerCase() !== PHONE_MODEL.sha256) {
+        if (!verifiedPhoneModel(stat.size, hash)) {
           return { phase: 'error', detail: 'The model did not pass its integrity check. Remove it and install again.' };
         }
         verifiedPath = path;
@@ -97,13 +90,14 @@ export const installPhoneModel = (onProgress: (status: PhoneModelStatus) => void
   if (status.phase === 'installed') return status;
   if (status.phase !== 'available' && status.phase !== 'update') throw new Error(status.detail);
   if (activeDownload) throw new Error('The phone model is already downloading.');
+  const modelUrl = resolvePhoneModelUrl(process.env.EXPO_PUBLIC_PHONE_MODEL_URL);
   const files = await nativeFiles();
   const target = await modelPath(files);
   const temporary = `${target}.part`;
   try {
     if (await files.FileSystem.exists(temporary)) await files.FileSystem.unlink(temporary);
     onProgress({ phase: 'downloading', detail: 'Downloading on-phone model…', progress: 0 });
-    activeDownload = files.FileSystem.fetchManaged(MODEL_URL, { path: temporary, network: 'unmetered' }, (read) => {
+    activeDownload = files.FileSystem.fetchManaged(modelUrl, { path: temporary, network: 'unmetered' }, (read) => {
       onProgress({ phase: 'downloading', detail: 'Downloading on-phone model…', progress: Math.min(1, read / PHONE_MODEL.bytes) });
     });
     const response = await activeDownload.result;
@@ -112,7 +106,7 @@ export const installPhoneModel = (onProgress: (status: PhoneModelStatus) => void
     const stat = await files.FileSystem.stat(temporary);
     if (stat.size !== PHONE_MODEL.bytes) throw new Error('Model download was incomplete.');
     const hash = await files.FileSystem.hash(temporary, 'SHA-256');
-    if (hash.toLowerCase() !== PHONE_MODEL.sha256) throw new Error('Model integrity check failed.');
+    if (!verifiedPhoneModel(stat.size, hash)) throw new Error('Model integrity check failed.');
     await files.FileSystem.mv(temporary, target);
     verifiedPath = target;
     const older = (await files.FileSystem.ls(files.Dirs.DocumentDir)).filter((name) => name.startsWith('kea-sparky-') && name.endsWith('.gguf') && name !== modelFile);

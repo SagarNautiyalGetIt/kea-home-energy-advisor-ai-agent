@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAppTheme } from '@/theme';
+import { ClashHue, useClashColors } from './ClashHue';
 
 export function SuburbLeagueHeader({ district, rank, total, score }: { district: string; rank: number; total: number; score: number }) {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   return (
     <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <ClashHue color={colors.icons.money} />
       <View style={styles.topLine}>
         <View style={[styles.demoBadge, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           <Text style={[styles.demoBadgeText, { color: colors.text }]}>MONTHLY DEMO</Text>
@@ -30,7 +31,7 @@ export function SuburbLeagueHeader({ district, rank, total, score }: { district:
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: 22, borderWidth: 1, padding: 20 },
+  hero: { borderRadius: 22, overflow: 'hidden', borderWidth: 1, padding: 20 },
   topLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   demoBadge: { borderWidth: 1, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5 },
   demoBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7 },

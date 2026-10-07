@@ -37,6 +37,7 @@ import asyncio
 import datetime as dt
 import json
 import logging
+import os
 import re
 import time
 from collections.abc import AsyncIterator
@@ -300,7 +301,17 @@ async def run_agent(
         )
 
     today = dt.datetime.now(ZoneInfo("Pacific/Auckland")).date()
-    calendar = f"Current date in Pacific/Auckland: {today.isoformat()}.\n\n"
+    if os.getenv("KEA_AS_OF", "").strip():
+        today = dt.date.fromisoformat(os.environ["KEA_AS_OF"])
+    latest = max((day.date for day in ctx.account.days), default=None)
+    calendar = f"Current date in Pacific/Auckland: {today.isoformat()}.\n"
+    if latest is not None:
+        calendar += (
+            f"Account readings are available only through {latest.isoformat()}. "
+            "Resolve latest/this billing cycle against the supplied account period, not today's "
+            "calendar month. Do not imply that missing recent readings are zero or current.\n"
+        )
+    calendar += "\n"
     messages.append({"role": "user", "content": calendar + preamble + build_user_turn(question)})
 
     for round_number in range(1, MAX_ROUNDS + 1):

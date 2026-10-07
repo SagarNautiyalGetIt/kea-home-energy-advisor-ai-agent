@@ -3,8 +3,8 @@ import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { G, Polygon, Text as SvgText } from 'react-native-svg';
 import Animated, { cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { demoScoreParts, demoScoring, metricDetails, type DemoMetrics, type MetricKey } from '@/lib/clash-preview';
-import { useAppTheme } from '@/theme';
 import { ARENA_PILLARS, arenaGestureMoved, arenaPillarAt, arenaTilt } from '@/lib/clash-arena';
+import { ClashHue, useClashColors } from './ClashHue';
 
 function Pillar({ x, baseY, height, glyph, selected, tint }: { x: number; baseY: number; height: number; glyph: string; selected: boolean; tint: string }) {
   const topY = baseY - height - (selected ? 5 : 0);
@@ -20,7 +20,7 @@ function Pillar({ x, baseY, height, glyph, selected, tint }: { x: number; baseY:
 }
 
 export function EnergyArena({ metrics, selected, onSelect, motion = true, onInteractionChange }: { metrics: DemoMetrics; selected: MetricKey; onSelect: (key: MetricKey) => void; motion?: boolean; onInteractionChange?: (interacting: boolean) => void }) {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   const reducedMotion = useReducedMotion();
   const tints = { ev: colors.icons.info, solar: colors.icons.money, conservation: colors.icons.success, offPeak: colors.icons.warm };
   const parts = demoScoreParts(metrics);
@@ -83,6 +83,7 @@ export function EnergyArena({ metrics, selected, onSelect, motion = true, onInte
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <ClashHue color={tints[selected]} />
       <View style={styles.heading}>
         <View>
           <Text style={[styles.title, { color: colors.text }]}>The score arena</Text>
@@ -92,6 +93,7 @@ export function EnergyArena({ metrics, selected, onSelect, motion = true, onInte
       </View>
       <View ref={board} collapsable={false} {...pan.panHandlers} style={styles.gestureFrame}>
         <Animated.View accessibilityLabel="Interactive isometric energy score board. Use the score categories below for accessible details." accessibilityRole="image" style={[styles.boardFrame, { backgroundColor: colors.surfaceRaised }, tiltStyle]}>
+          <ClashHue color={tints[selected]} />
           <Svg height="100%" viewBox="0 0 300 245" width="100%">
             <Polygon fill={colors.border} points="15,105 150,211 150,230 15,124" />
             <Polygon fill={colors.border} points="150,211 285,105 285,124 150,230" />
@@ -121,7 +123,7 @@ export function EnergyArena({ metrics, selected, onSelect, motion = true, onInte
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 22, padding: 18 },
+  card: { borderRadius: 22, overflow: 'hidden', padding: 18 },
   heading: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   title: { fontSize: 18, fontWeight: '800' },
   hint: { fontSize: 12, lineHeight: 18, marginTop: 5 },

@@ -2,24 +2,54 @@ import '../solar.css'
 import { CalendarClock, Check, Info, Receipt, ShieldCheck } from 'lucide-react'
 import SparkyIcon from '../components/SparkyIcon'
 import SolarSunArt from '../components/SolarSunArt'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
-import { commitmentTerms, currentPlan, planInclusions, pricingStyles, type CommitmentTermId, type PricingStyleId } from '../data/mockData'
+import type { CommitmentTerm, PricingStyle, CommitmentTermId, PricingStyleId } from '../data/mockData'
+import { accountRequest, type Plans } from '../lib/account-client'
+import { loadSession } from '../lib/session'
+import FeedbackState from '../components/FeedbackState'
+const planInclusions: string[] = []
 
 // The row of plan inclusions under the solar card (AI usage tracking, saving tips, digital
 // bills, smart meter required) is hidden for now: it read as unrelated to choosing a plan.
 const SHOW_PLAN_INCLUSIONS = false
 
-const rateSummary = (styleId: PricingStyleId) => {
-  const style = pricingStyles.find((item) => item.id === styleId)
-  return style?.rates ?? []
-}
-
 export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'success'|'info'|'warning')=>void }) {
   const navigate = useNavigate()
-  const [styleId, setStyleId] = useState<PricingStyleId>(currentPlan.pricingStyle)
-  const [termId, setTermId] = useState<CommitmentTermId>(currentPlan.term)
+  const [catalogue, setCatalogue] = useState<Plans | null>(null)
+  const [error, setError] = useState('')
+  const [requesting, setRequesting] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    void accountRequest<Plans>('plans', controller.signal).then(data => {
+      setCatalogue(data)
+      setStyleId((data.current_plan.pricing_style ?? data.pricing_styles[0]?.id ?? 'anytime') as PricingStyleId)
+      setTermId((data.current_plan.term ?? 'flexible') as CommitmentTermId)
+    }).catch((failure: Error) => { if (!controller.signal.aborted) setError(failure.message) })
+    return () => controller.abort()
+  }, [])
+  const currentPlan = { pricingStyle: catalogue?.current_plan.pricing_style, term: catalogue?.current_plan.term }
+  const pricingStyles: PricingStyle[] = (catalogue?.pricing_styles ?? []).map(item => ({
+    id: item.id as PricingStyleId, name:item.name, eyebrow:item.eyebrow,
+    summary:item.best_for, dailyCharge:item.daily, rates:item.rates.map(rate => ({...rate, window:rate.window ?? undefined})),
+    highlights:item.highlights, bestFor:item.best_for,
+  }))
+  const commitmentTerms: CommitmentTerm[] = (catalogue?.commitment_terms ?? []).map(item => ({
+    id:item.id as CommitmentTermId, name:item.name, priceTreatment:item.price_treatment,
+    monthlyCredit:item.monthly_credit, creditNote:item.credit_note, totalCredit:item.total_credit, earlyExitFee:item.early_exit_fee,
+  }))
+  const rateSummary = (id: PricingStyleId) => pricingStyles.find(item => item.id === id)?.rates ?? []
+  const requestSwitch = async () => {
+    setRequesting(true)
+    try {
+      await accountRequest('plan-change-requests', undefined, {customer_id:loadSession()?.customerId, pricing_style:styleId, commitment_term:termId})
+      onToast('Plan request recorded for Customer Care review. Your current plan remains active.', 'info')
+    } catch (failure) { onToast(failure instanceof Error ? failure.message : 'Request could not be saved.', 'warning') }
+    finally { setRequesting(false) }
+  }
+  const [styleId, setStyleId] = useState<PricingStyleId>('anytime')
+  const [termId, setTermId] = useState<CommitmentTermId>('flexible')
   const [ratesOpen, setRatesOpen] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
   const termStepRef = useRef<HTMLElement>(null)
@@ -42,6 +72,8 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
     navigate('/assistant')
   }
 
+  if (error) return <FeedbackState state="error" message={error}/>
+  if (!catalogue || !style || !term) return <FeedbackState state="loading" title="Loading plans" message="Reading the published catalogue…"/>
   return <>
     <div className="page-heading plans-heading">
       <div>
@@ -124,7 +156,7 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
     <div className="plan-closing">
       <section className="plan-summary" aria-live="polite">
         <div className="plan-summary-main">
-          <span>Your plan</span>
+          <span>{isCurrent ? 'Your current plan' : 'Your selection'}</span>
           <strong>{style.name}</strong>
           <small>{term.name} · {term.priceTreatment.toLowerCase()}</small>
         </div>
@@ -138,9 +170,9 @@ export default function PlansPage({ onToast }: { onToast:(message:string,tone?:'
         <div className="plan-summary-actions">
           <button
             className="plan-summary-cta"
-            disabled={isCurrent}
-            onClick={() => onToast(`Switch to ${style.name} on the ${term.name} term requested`)}
-          >{isCurrent ? "You're on this plan" : 'Switch to this plan'}</button>
+            disabled={isCurrent || requesting}
+            onClick={() => void requestSwitch()}
+          >{isCurrent ? "You're on this plan" : requesting ? 'Sending request…' : 'Request this plan'}</button>
           <span className="plan-summary-links">
             <button onClick={() => setRatesOpen(true)}>Compare all rates</button>
             <button onClick={() => setTermsOpen(true)}>Terms &amp; Conditions</button>

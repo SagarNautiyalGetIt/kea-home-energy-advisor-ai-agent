@@ -3,10 +3,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAppTheme } from '@/theme';
+import { ClashHue, useClashColors } from './ClashHue';
 
 export function NextMoveCard() {
-  const { colors } = useAppTheme();
+  const colors = useClashColors();
   const router = useRouter();
   const open = (route: '/usage' | '/assistant') => {
     if (Platform.OS !== 'web') tactile();
@@ -14,6 +14,7 @@ export function NextMoveCard() {
   };
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <ClashHue color={colors.icons.info} />
       <View style={styles.heading}>
         <Ionicons color={colors.icons.info} name="compass-outline" size={21} />
         <Text style={[styles.title, { color: colors.text }]}>Make your next move</Text>
@@ -33,7 +34,7 @@ export function NextMoveCard() {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 22, padding: 18 },
+  card: { borderRadius: 22, overflow: 'hidden', padding: 18 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   title: { fontSize: 17, fontWeight: '800' },
   body: { fontSize: 14, lineHeight: 21, marginTop: 10 },

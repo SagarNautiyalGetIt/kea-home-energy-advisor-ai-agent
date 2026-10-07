@@ -45,11 +45,11 @@ class MobilePlansView(BaseModel):
     pricing_styles: list[MobilePricingStyle]
     commitment_terms: list[MobileCommitmentTerm]
     current_plan: MobileCurrentPlan
-    change_requests_available: bool = False
+    change_requests_available: bool = True
     limitation: str = Field(
         default=(
-            "Plan switches are not available in the mobile API. "
-            "Contact Customer Care to change plans."
+            "A switch records a request for Customer Care review; your current plan "
+            "stays active until the retailer confirms an effective date."
         )
     )
 
