@@ -287,11 +287,11 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
             </div>
           </div>
 
-          {capabilities?.instant_power_available ? <EnergyHouse
+          <EnergyHouse
             snapshot={energy}
             onDeviceSelect={setSelectedDevice}
             activeDevice={selectedDevice}
-          /> : <div className="account-energy-home" style={{minHeight:280,display:'grid',placeContent:'center',textAlign:'center',gap:12}}><strong>Your home · grid connected</strong><p>{capabilities?.has_solar ? 'Solar installed' : 'Grid electricity'}</p><small>Instant power readings are unavailable. Explore your dated usage below.</small></div>}
+          />
 
           <div className="energy-home-bottomline">
             <div className="energy-home-weather">
@@ -301,7 +301,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
                 <small>{Math.round(sceneWeather.temperatureC)}°C · {Math.round(sceneWeather.cloudCoverPercent)}% clouds</small>
               </div>
             </div>
-            {capabilities?.instant_power_available && <div className={`energy-home-weather energy-home-now energy-home-now--${statusSource}`}>
+            <div className={`energy-home-weather energy-home-now energy-home-now--${statusSource}`}>
               <div>
                 {/* Always shown, never behind a flag. The flow and this status are worked out
                     from fixed demo figures (DEMO_*), not this household's meters, and the
@@ -316,7 +316,7 @@ export default function EnergyHomePanel({ summary, billShock, billShockStatus = 
                 </small>
               </div>
               <span className="energy-home-weather-icon"><StatusIcon size={19} /></span>
-            </div>}
+            </div>
           </div>
         </div>
       </section>

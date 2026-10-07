@@ -182,6 +182,18 @@ Every piece of work has an issue. The issue ID is the `KEA-##` used in branches 
 
 ## 6. Local setup
 
+### Temporary CI pause — 7 October 2026
+
+At the maintainer's request, automated CI tests, lint, builds and validation jobs
+are paused. The workflow retains only the required `check` status, which explicitly
+reports that validation is paused. A green status during this pause is an
+acknowledgement, not evidence that tests passed. Run the relevant checks locally
+and include their results in the PR. Test sources and local commands remain available.
+
+To resume the original CI suite, restore `.github/workflows/ci.yml` from commit
+`12aab63306b9e2694b9afdd4414b95a7ffba3a1a` in a PR. Keep the stable `check` name
+required by branch protection.
+
 ```bash
 make setup         # installs every service — python venv and node modules
 cp .env.example .env
