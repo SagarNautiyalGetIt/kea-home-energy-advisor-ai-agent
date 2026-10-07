@@ -708,11 +708,12 @@ export default function AssistantPage({ onEscalate, onToast }: { onEscalate:()=>
     <div className="page-heading assistant-heading">
       <div>
         <h1>AI Assistant</h1>
-        <div className={`assistant-model-status assistant-model-status--${modelStatus}`} role="status">
+        {/* Hidden for the slide screenshot only. */}
+        {false && <div className={`assistant-model-status assistant-model-status--${modelStatus}`} role="status">
           <span className="assistant-model-dot" aria-hidden="true" />
           <span>{modelStatus === 'checking' ? 'Checking Sparky' : modelStatus === 'ready' ? `Sparky ready · ${modelLabel}` : `Sparky unavailable · ${modelLabel}`}</span>
           <button type="button" onClick={() => setHealthRefresh((value) => value + 1)} aria-label="Refresh Sparky model status">Check again</button>
-        </div>
+        </div>}
         {SHOW_ASSISTANT_DESCRIPTION && <p>Your personalised guide to electricity usage, bills and plans.</p>}
       </div>
       <div className="assistant-controls">
