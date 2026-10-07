@@ -400,7 +400,7 @@ button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
 .search-results{left:0;right:auto}.search-results>button{width:100%;min-height:56px;display:flex;align-items:center;gap:12px;padding:10px 16px;border:0;border-bottom:1px solid #f0f2f7;color:#556489;background:#fff;text-align:left}.search-results>button:hover{background:#f7f6ff;transform:none}.search-results>button>svg{width:20px;height:20px;color:#5d42f1}.search-results>button span,.search-results>button strong,.search-results>button small{display:block}.search-results>button small{margin-top:2px;color:#8a97b5;font-size:10px}.search-results>p{padding:16px;color:#7180a4}
 .notifications-panel>button{width:100%;min-height:64px;display:flex;gap:10px;padding:12px 16px;border:0;border-bottom:1px solid #f0f2f7;background:#fff;text-align:left}.notifications-panel>button:hover{background:#fafaff;transform:none}.notifications-panel>button>span{width:8px;height:8px;flex:0 0 8px;margin-top:5px;border-radius:50%;background:#d9deeb}.notifications-panel>button.unread>span{background:#5c40ff;box-shadow:0 0 0 4px #ece9ff}.notifications-panel>button div,.notifications-panel>button strong,.notifications-panel>button small{display:block}.notifications-panel>button small{margin-top:3px;color:#7a88aa;font-size:11px;line-height:1.4}
 .profile-menu{width:250px}.profile-menu header{justify-content:flex-start}.profile-menu header img{width:48px;height:48px;border-radius:50%}.profile-menu header strong,.profile-menu header small{display:block}.profile-menu header small{color:#7f8caf}.profile-menu>button{width:100%;display:flex;align-items:center;gap:10px;padding:9px 16px;border:0;color:#536184;background:#fff;text-align:left}.profile-menu>button:hover{color:var(--purple);background:#f8f7ff;transform:none}.profile-menu>button svg{width:18px}.profile-menu>.profile-logout{color:#d94e61;border-top:1px solid #edf0f6}
-.sidebar-utilities{display:flex;flex-direction:column;gap:2px;margin-top:auto;padding:8px 0;border-top:1px solid #eef1fa}.sidebar-utilities button{height:44px;display:flex;align-items:center;gap:15px;padding:0 30px;border:0;color:#8290b3;background:transparent;text-align:left}.sidebar-utilities button.active{color:#4318ff;background:#f7f5ff}.sidebar .logout-button{margin-top:8px;border-radius:10px}.mobile-drawer-close,.mobile-menu-backdrop{display:none}
+.sidebar-utilities{display:flex;flex-direction:column;gap:2px;margin-top:auto;padding:8px 0;border-top:1px solid #eef1fa}.sidebar-utilities button{height:44px;display:flex;align-items:center;gap:15px;padding:0 30px;border:0;color:#8290b3;background:transparent;text-align:left}.sidebar-utilities button.active{color:#4318ff;background:#f7f5ff}.sidebar .logout-button{margin-top:8px;border-radius:10px}
 .sidebar-collapsed{grid-template-columns:84px minmax(0,1fr)}.sidebar-collapsed .brand strong,.sidebar-collapsed .sidebar nav button span,.sidebar-collapsed .sidebar-utilities button span{display:none}.sidebar-collapsed .brand{padding:0}.sidebar-collapsed .brand-orbit{width:46px;height:46px}.sidebar-collapsed .sidebar nav button,.sidebar-collapsed .sidebar-utilities button{justify-content:center;padding:0}.sidebar-collapsed .sidebar nav button.active::after{height:34px}.sidebar-collapsed .logout-button{min-width:44px;width:44px;margin:8px auto 18px;padding:0}.sidebar-collapsed .logout-button span{display:none}
 
 /* Modal, toast and onboarding */
@@ -453,10 +453,6 @@ html[data-reduced-motion=true] *,html[data-reduced-motion=true] *::before,html[d
 
 @media(max-width:900px){
   .sidebar-collapse{display:none}.hamburger{display:grid;margin-right:2px}.mobile-brand{margin-right:auto}
-  .sidebar.mobile-open{position:fixed;z-index:70;top:0;bottom:0;left:0;width:min(300px,86vw);height:100svh;display:flex;box-shadow:20px 0 60px rgb(17 22 48 / 28%)}
-  .sidebar.mobile-open .brand{justify-content:flex-start;padding-left:24px}.sidebar.mobile-open nav{overflow-y:auto}.sidebar.mobile-open .sidebar-utilities{margin-top:auto}
-  .mobile-drawer-close{position:absolute;top:18px;right:14px;width:40px;height:40px;min-height:40px;display:grid;place-items:center;border:0;border-radius:10px;color:#7380a1;background:#f3f5fa}.mobile-drawer-close svg{width:20px}
-  .mobile-menu-backdrop{position:fixed;z-index:65;inset:0;display:block;width:100%;height:100%;border:0;background:rgb(24 31 64 / 48%);backdrop-filter:blur(2px)}
   .search-control{margin-left:0}.search-box{width:min(42vw,280px)}
   .help-grid{grid-template-columns:1fr}.help-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
   .billing-summary-grid{grid-template-columns:1fr 1fr}
@@ -1731,7 +1727,7 @@ html[data-theme=dark] :where(.page-heading p,.billing-heading p,.assistant-headi
 }
 
 @media(prefers-reduced-transparency:reduce){
-  html:not([data-theme=dark]) :where(.sidebar,.topbar-cluster,.mobile-nav,.card,.metric-row article,.article-card,.pricing-card,.term-card,.assistant-start .prompt-grid>button,.assistant-bubble,.chat-composer){
+  html:not([data-theme=dark]) :where(.sidebar,.mobile-drawer,.topbar-cluster,.mobile-nav,.card,.metric-row article,.article-card,.pricing-card,.term-card,.assistant-start .prompt-grid>button,.assistant-bubble,.chat-composer){
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
@@ -1810,7 +1806,6 @@ html:not([data-theme=dark]) .logout-modal.logout-confirmation-modal button:focus
    unaffected: it drops the name and centres the logo. */
 .brand:not(.brand-compact){--brand-inset:30px;justify-content:flex-start;padding-left:var(--brand-inset)}
 @media(min-width:761px){.brand:not(.brand-compact){--brand-inset:clamp(22px,2.3vw,30px)}}
-.sidebar.mobile-open .brand:not(.brand-compact){--brand-inset:24px}
 .brand:not(.brand-compact) .brand-orbit{left:var(--brand-inset);right:auto}
 .brand:not(.brand-compact) .brand-name{align-items:flex-end;text-align:right}
 
@@ -2520,3 +2515,53 @@ html[data-theme=dark] .solar-advisor-leave{color:#aab5d2}
    height, there is nothing left to shift. */
 .app-main:has(.assistant-page) .tariff-note{display:none}
 @media(min-width:761px){.app-main:has(.assistant-page) .page-content{padding-bottom:22px}}
+
+/* Mobile navigation drawer (900px and below, where AppShell renders it in place of the rail).
+   Laid out like an app's menu rather than the desktop rail pushed off-canvas: a 72px brand bar
+   level with the top bar, rows grouped under small captions, a filled pill for the current page
+   instead of the rail's edge marker, and the signed-in account with Logout pinned to the foot.
+   It slides in from the left; `visibility` waits for the slide-out to finish before hiding it. */
+.mobile-drawer-backdrop{position:fixed;z-index:65;inset:0;background:rgb(24 31 64 / 42%);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .28s ease}
+.mobile-drawer-backdrop.open{opacity:1;pointer-events:auto}
+.mobile-drawer{position:fixed;z-index:70;top:0;bottom:0;left:0;width:min(320px,86vw);display:flex;flex-direction:column;overflow:hidden;border-radius:0 24px 24px 0;background:rgb(255 255 255 / 94%);-webkit-backdrop-filter:blur(24px) saturate(130%);backdrop-filter:blur(24px) saturate(130%);box-shadow:24px 0 64px rgb(17 22 48 / 22%);transform:translateX(-105%);visibility:hidden;transition:transform .34s cubic-bezier(.32,.72,0,1),visibility 0s linear .34s}
+.mobile-drawer.open{transform:none;visibility:visible;transition:transform .34s cubic-bezier(.32,.72,0,1),visibility 0s}
+.mobile-drawer-head{flex:0 0 auto;height:72px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px 0 20px;border-bottom:1px solid rgb(226 231 245 / 90%)}
+.mobile-drawer-brand{min-width:0;display:flex;align-items:center;gap:10px}
+.mobile-drawer-brand img{width:34px;height:34px;flex:0 0 34px}
+.mobile-drawer-brand strong{font-size:19px;font-weight:800;letter-spacing:-.03em;white-space:nowrap;background:linear-gradient(135deg,#4318ff 0%,#5f45ff 50%,#868cff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.mobile-drawer-close{width:40px;height:40px;min-height:40px;flex:0 0 40px;display:grid;place-items:center;padding:0;border:0;border-radius:12px;color:#5d6a92;background:#f1f3fa}
+.mobile-drawer-close:hover{transform:none;background:#e8ebf6}
+.mobile-drawer-close svg{width:20px;height:20px}
+.mobile-drawer-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 12px 16px}
+.mobile-drawer-label{margin:18px 12px 8px;color:#8b97b8;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.mobile-drawer-label:first-child{margin-top:10px}
+.mobile-drawer-body nav{display:flex;flex-direction:column;gap:2px}
+.mobile-drawer-body nav button{width:100%;min-height:50px;display:flex;align-items:center;gap:14px;padding:0 12px;border:0;border-radius:14px;color:#33416f;background:transparent;font-size:15px;font-weight:600;text-align:left;transition:background-color .2s ease,color .2s ease}
+.mobile-drawer-body nav button:hover{transform:none;background:rgb(67 24 255 / 5%)}
+.mobile-drawer-body nav button:active{background:rgb(67 24 255 / 9%)}
+.mobile-drawer-body nav button:focus-visible{outline-offset:-2px}
+.mobile-drawer-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:10px;color:#6371a0;background:#f1f3fa;transition:background-color .2s ease,color .2s ease}
+.mobile-drawer-icon svg{width:19px;height:19px}
+.mobile-drawer-body nav button.active{color:#4318ff;background:rgb(67 24 255 / 8%)}
+.mobile-drawer-body nav button.active .mobile-drawer-icon{color:#fff;background:linear-gradient(135deg,#765fff,#4a25ff);box-shadow:0 6px 14px rgb(67 24 255 / 26%)}
+.mobile-drawer-account{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:14px 16px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgb(226 231 245 / 90%)}
+.mobile-drawer-account img{width:42px;height:42px;flex:0 0 42px;border:2px solid #fff;border-radius:50%;object-fit:cover;box-shadow:0 4px 12px rgb(38 49 105 / 14%)}
+.mobile-drawer-account div{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.mobile-drawer-account strong{overflow:hidden;color:#263574;font-size:15px;white-space:nowrap;text-overflow:ellipsis}
+.mobile-drawer-account small{color:#7d8ab0;font-size:12px}
+.mobile-drawer-account button{min-height:40px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 14px;border:1.5px solid #e3e7f3;border-radius:999px;color:#4b5884;background:#fff;font-size:14px;font-weight:600}
+.mobile-drawer-account button:hover{transform:none;color:#4318ff;border-color:#c6bcff}
+.mobile-drawer-account button svg{width:16px;height:16px}
+html[data-theme=dark] .mobile-drawer{background:rgb(26 32 57 / 97%);box-shadow:24px 0 64px rgb(0 0 0 / 40%)}
+html[data-theme=dark] :where(.mobile-drawer-head,.mobile-drawer-account){border-color:#303953}
+html[data-theme=dark] .mobile-drawer-brand strong{background:linear-gradient(135deg,#7a68ff 0%,#9d95ff 50%,#c4c6ff 100%);-webkit-background-clip:text;background-clip:text}
+html[data-theme=dark] .mobile-drawer-close,html[data-theme=dark] .mobile-drawer-icon{color:#aab5d2;background:#232a47}
+html[data-theme=dark] .mobile-drawer-label{color:#8792b3}
+html[data-theme=dark] .mobile-drawer-body nav button{color:#d5dbef}
+html[data-theme=dark] .mobile-drawer-body nav button:hover{background:rgb(155 135 255 / 8%)}
+html[data-theme=dark] .mobile-drawer-body nav button.active{color:#fff;background:rgb(155 135 255 / 16%)}
+html[data-theme=dark] .mobile-drawer-account img{border-color:#1a2039}
+html[data-theme=dark] .mobile-drawer-account strong{color:#eef1ff}
+html[data-theme=dark] .mobile-drawer-account small{color:#aab5d2}
+html[data-theme=dark] .mobile-drawer-account button{color:#d5dbef;border-color:#38415c;background:#141a30}
+@media(prefers-reduced-motion:reduce){.mobile-drawer,.mobile-drawer.open,.mobile-drawer-backdrop{transition:none}}

@@ -17,6 +17,9 @@ const SHOW_PROFILE_NAV_ITEM = false
 // The top-bar light/dark shortcut. Settings also switches the theme; set this to false to
 // leave that as the only way.
 const SHOW_THEME_TOGGLE = true
+// At this width and below the rail gives way to the slide-out drawer; index.css hides the
+// rail at the same breakpoint.
+const DRAWER_QUERY = '(max-width: 900px)'
 
 // Any icon that takes lucide's props: lucide's own, or the site's Sparky icon.
 type NavItem = { id: PageId; label: string; icon: ComponentType<LucideProps>; description: string; keywords: string }
@@ -57,8 +60,11 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   const customerId = session?.customerId ?? '110733ap'
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(localStorage.getItem('kea-sidebar-collapsed') === 'true')
+  const [isDrawer, setIsDrawer] = useState(() => window.matchMedia(DRAWER_QUERY).matches)
   const [openPanel, setOpenPanel] = useState<'search' | 'notifications' | 'profile' | null>(null)
   const topbarRef = useRef<HTMLElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const drawerCloseRef = useRef<HTMLButtonElement>(null)
   const [query, setQuery] = useState('')
   const [theme, setTheme] = useState(localStorage.getItem('kea-theme') ?? 'light')
   const [notifications, setNotifications] = useState([
@@ -74,6 +80,31 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
     window.addEventListener('kea-theme-change', syncTheme)
     return () => window.removeEventListener('kea-theme-change', syncTheme)
   }, [theme])
+
+  useEffect(() => {
+    const query = window.matchMedia(DRAWER_QUERY)
+    // Widening past the breakpoint also shuts the drawer, so it does not reappear on the
+    // next narrow resize.
+    const sync = () => { setIsDrawer(query.matches); if (!query.matches) setMobileOpen(false) }
+    query.addEventListener('change', sync)
+    return () => query.removeEventListener('change', sync)
+  }, [])
+
+  // While the drawer is open the page behind it stays put, focus starts on its close
+  // button, and Escape shuts it and hands focus back to the menu button.
+  useEffect(() => {
+    if (!mobileOpen) return
+    const root = document.documentElement
+    root.style.overflow = 'hidden'
+    drawerCloseRef.current?.focus({ preventScroll: true })
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileOpen(false) }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      root.style.overflow = ''
+      document.removeEventListener('keydown', closeOnEscape)
+      menuButtonRef.current?.focus({ preventScroll: true })
+    }
+  }, [mobileOpen])
 
   useEffect(() => {
     const closePanels = (event: PointerEvent) => {
@@ -136,6 +167,33 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
     </div>
   </>
 
+  // At 900px and below the rail is replaced by a drawer built for touch: a one-line brand bar,
+  // grouped rows with a filled active state, and the signed-in account with Logout at the foot.
+  // The desktop collapse preference never reaches it. It stays mounted so it can slide out as
+  // well as in; while shut, `visibility` keeps it out of the tab order.
+  const drawerRow = (item: NavItem) => <button type="button" key={item.id} className={active === item.id ? 'active' : ''} aria-current={active === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span className="mobile-drawer-icon"><item.icon aria-hidden="true"/></span><span>{item.label}</span></button>
+  const drawer = <>
+    <div className={`mobile-drawer-backdrop ${mobileOpen ? 'open' : ''}`} aria-hidden="true" onClick={() => setMobileOpen(false)}/>
+    <aside id="mobile-menu" className={`mobile-drawer ${mobileOpen ? 'open' : ''}`} aria-label="Menu">
+      <header className="mobile-drawer-head">
+        <div className="mobile-drawer-brand"><img src="/assets/brand/kea-brand-blue.svg" alt=""/><strong>KEA ENERGY</strong></div>
+        <button type="button" ref={drawerCloseRef} className="mobile-drawer-close" aria-label="Close menu" onClick={() => setMobileOpen(false)}><X aria-hidden="true"/></button>
+      </header>
+      <div className="mobile-drawer-body">
+        <p className="mobile-drawer-label">Menu</p>
+        <nav aria-label="Primary navigation">{nav.map(drawerRow)}</nav>
+        <p className="mobile-drawer-label">More</p>
+        <nav aria-label="Settings and help">{utilityPages.map(drawerRow)}</nav>
+      </div>
+      <footer className="mobile-drawer-account">
+        <img src={CUSTOMER_PROFILE_PHOTO} alt=""/>
+        <div><strong>{customerName}</strong><small>CID: {customerId}</small></div>
+        {/* Shut the drawer first: the logout dialog sits below it in the stacking order. */}
+        <button type="button" onClick={() => { setMobileOpen(false); onLogout() }}><LogOut aria-hidden="true"/>Logout</button>
+      </footer>
+    </aside>
+  </>
+
   return (
     <div className={`app-shell page-${active ?? 'default'} ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <div className="kea-energy-decor" aria-hidden="true">
@@ -143,13 +201,12 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
         {/* On every page, like the right-hand burst; it used to be drawn on the dashboard only. */}
         <span className="kea-energy-burst kea-energy-burst-left"><img src="/assets/backgrounds/electric-energy-burst.svg" alt="" /></span>
       </div>
-      <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>{sidebarContent}<button className="mobile-drawer-close" aria-label="Close menu" onClick={() => setMobileOpen(false)}><X/></button></aside>
+      {isDrawer ? drawer : <aside className="sidebar">{sidebarContent}</aside>}
       {collapsed && navTip && createPortal(<div className="nav-tooltip" role="tooltip" style={{ left: navTip.x, top: navTip.y }}>{navTip.label}</div>, document.body)}
-      {mobileOpen && <button className="mobile-menu-backdrop" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
 
       <div className="app-main">
         <header className="topbar" ref={topbarRef}>
-          <button className="hamburger" aria-label="Open menu" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu/></button>
+          <button ref={menuButtonRef} className="hamburger" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu/></button>
           <div className="mobile-brand"><BrandMark compact /></div>
 
           <div className="topbar-cluster">
