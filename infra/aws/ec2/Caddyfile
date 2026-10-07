@@ -15,6 +15,10 @@
 	handle /api/* {
 		reverse_proxy api:8000
 	}
+	redir /metabase /metabase/ 308
+	handle_path /metabase/* {
+		reverse_proxy metabase:3000
+	}
 	handle_path /download/* {
 		root * /downloads
 		@apk path *.apk

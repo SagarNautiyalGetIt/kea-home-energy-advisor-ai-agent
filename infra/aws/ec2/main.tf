@@ -37,8 +37,9 @@ variable "web_cidrs" {
   # Current public demo uses 0.0.0.0/0; choose narrower CIDRs for private tests.
 }
 variable "instance_type" {
-  type    = string
-  default = "t3.small"
+  type = string
+  # 4 GiB: Metabase's 1 GiB heap does not fit beside the API on t3.small.
+  default = "t3.medium"
 }
 variable "resource_name" {
   type        = string

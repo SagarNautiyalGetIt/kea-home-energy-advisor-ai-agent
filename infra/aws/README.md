@@ -3,8 +3,9 @@
 The [deployment plan](deployment-plan.md) describes the Sydney architecture.
 The [Makefile](Makefile) is the executable deploy, maintenance and teardown
 workflow. It retains one Sydney Elastic IP between sessions and creates one
-disposable EC2 host running Caddy, the website, API/Piper and an hourly
-evaluator, alongside private RDS PostgreSQL 16. The data pipeline stays local;
+disposable EC2 host running Caddy, the website, API/Piper, an hourly
+evaluator and Metabase with the demo walkthrough dashboard, alongside private
+RDS PostgreSQL 16. The data pipeline stays local;
 only the local serving database export is restored into RDS.
 
 ## Prerequisites
@@ -59,8 +60,26 @@ subnets and the IP association. It issues
 a trusted certificate for that IP, builds and transfers the images, exports
 temporary SSO credentials for Sydney Bedrock, restores RDS over verified TLS,
 checks every exported table count and sequence state, verifies
-HTTPS and row counts, then builds the Android APK. Installing the APK is an
+HTTPS and row counts, pins the served data to the story date and starts
+Metabase with the walkthrough dashboard (see [Metabase](#metabase)), then
+builds the Android APK. Installing the APK is an
 optional, separate command. Resume local writes after the export has completed.
+
+If `apply-create` stops with `InsufficientDBInstanceCapacity` for
+`ap-southeast-2a`, AWS has no `db.t4g.micro` there at the moment. Put the
+database in the other subnet's zone and continue the same session:
+
+```bash
+export TF_VAR_db_availability_zone=ap-southeast-2b
+make -C infra/aws plan-create SESSION_ID=<session-id>
+make -C infra/aws apply-create SESSION_ID=<session-id>
+```
+
+Add `export TF_VAR_db_availability_zone=ap-southeast-2b` to that session's
+`operator.env` too, so later plans and the teardown agree with it. The re-plan
+also replaces the still-empty EC2 instance (once the Elastic IP is attached,
+Terraform sees `associate_public_ip_address` change); that is expected before
+`host` has run.
 
 Terraform state, SSH keys, credentials and dumps stay in the ignored
 `infra/aws/.work/` directory. Never commit them. The retained address has its
@@ -121,6 +140,26 @@ The `mobile` step builds for `arm64-v8a` by default, which covers practically
 every Android phone in use and keeps the download small. Set `ANDROID_ABIS=all`
 for every architecture (older 32-bit phones, x86 emulators), or a comma list
 such as `ANDROID_ABIS=arm64-v8a,armeabi-v7a`.
+
+## Metabase
+
+The `metabase` step (run by the deploy after `verify`) serves Metabase at
+`https://<ip>/metabase/` with the demo walkthrough dashboard. It:
+
+1. pins the served data to the newest forecast date with
+   [`serving_as_of.sql`](../../data/pipeline/scripts/ops/serving_as_of.sql), so
+   the app opens on the walkthrough's billing cycle; it removes the observed
+   rows after that date from the serving marts;
+2. grants the read-only `kea_metabase` login (created during `restore`) SELECT
+   on the `kea`, `billing`, `metering` and `catalogue` schemas;
+3. restarts the API, starts Metabase, connects it to RDS over TLS and builds
+   the walkthrough with the `data/analysis/metabase` builders.
+
+Sign in as `admin@kea.example`; the password is `metabase-admin-password` in
+the session directory (`pbcopy < infra/aws/.work/public-<session-id>/metabase-admin-password`).
+The step is safe to repeat: `make -C infra/aws metabase SESSION_ID=<session-id>`.
+Metabase keeps its questions in an H2 file on the host, so a teardown deletes
+them with the instance and the next deploy builds them again.
 
 ## Backend database access
 
@@ -241,6 +280,13 @@ matched, as did the extensions. TLS verified the RDS certificate and hostname,
 and the local SSH tunnel reached the private database and completed PostgreSQL
 TLS negotiation. The subsequent teardown deleted all 13 session resources,
 including RDS and its backups, and the Sydney audit found no remnants.
+
+On 6 October 2026 session `20261004231334` was torn down (14 resources, audit
+clear) and session `20261005222619` deployed from main with the database in
+`ap-southeast-2b`; all 118 records matched again. The instance was moved to
+`t3.medium` and the `metabase` step was run against it twice: the second run
+removed no rows and updated the 11 walkthrough questions in place, every one
+returning data.
 
 RDS adds separate compute and storage costs. Stopping it continues storage
 charges, and AWS restarts it after seven days; explicit teardown is needed to

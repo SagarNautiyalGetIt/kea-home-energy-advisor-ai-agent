@@ -13,12 +13,13 @@ timer.
 | --- | --- |
 | Account / region | Team account `022499038388`, Sydney `ap-southeast-2` |
 | Operator identity | `kea-energy` AWS SSO profile |
-| Application compute | Amazon Linux x86-64 EC2 `t3.small`, no IAM instance profile |
+| Application compute | Amazon Linux x86-64 EC2 `t3.medium` (4 GiB, sized for Metabase beside the API), no IAM instance profile |
 | Application storage | 20 GiB encrypted gp3 EBS, deleted with the EC2 session |
-| Database | RDS PostgreSQL `16.15`, `db.t4g.micro`, Single-AZ |
+| Database | RDS PostgreSQL `16.15`, `db.t4g.micro`, Single-AZ in `a` by default (`TF_VAR_db_availability_zone`) |
 | Database storage | 20 GiB encrypted gp3; no storage autoscaling configured |
 | Database network | Private endpoint, port 5432 allowed only from the application security group |
-| Database authentication | Ordinary PostgreSQL login `kea` and password, certificate-verified TLS |
+| Database authentication | Ordinary PostgreSQL login `kea` and password, certificate-verified TLS; read-only `kea_metabase` for Metabase |
+| Reporting | Metabase `v0.63.15` at `https://<ip>/metabase/` with the demo walkthrough dashboard; its own H2 store on the host |
 | Database administration | Separate `kea_admin` login used only for setup and import |
 | Backend debugging | SSH tunnel through EC2 to local `127.0.0.1:15432`; separate teammate SSH and PostgreSQL accounts |
 | Backups | One-day automated backup retention while the database exists |
@@ -49,12 +50,17 @@ draw.io -x -f png -s 1.5 -b 20 -o architecture.png architecture.drawio
 VPC, public application subnet, two private database subnets, internet gateway,
 route table, security groups, SSH key, EC2 instance, RDS subnet group and RDS
 instance. The database subnet group spans Sydney AZs `a` and `b`, while the
-Single-AZ database itself runs in `a`. The private subnets need no NAT gateway.
+Single-AZ database itself runs in `a` unless `TF_VAR_db_availability_zone`
+moves it to `b`: on 6 October 2026 AWS had no `db.t4g.micro` capacity in `a`
+(`InsufficientDBInstanceCapacity`). The private subnets need no NAT gateway.
 A separate [address/](address/) Terraform state retains the Elastic IP between
 future deployments.
 
-[ec2/compose.yml](ec2/compose.yml) runs the website, API/Piper and evaluator.
-The PostgreSQL container image is used only as a short-lived client for
+[ec2/compose.yml](ec2/compose.yml) runs the website, API/Piper, evaluator and
+Metabase. Caddy serves Metabase at `/metabase/` on the same port 443, so it
+needs no security-group rule. Metabase reads RDS as the read-only
+`kea_metabase` login and never receives the API's runtime file or its AWS
+credentials. The PostgreSQL container image is used only as a short-lived client for
 `psql` and `pg_restore`; it does not run the deployed database server. The
 API port remains private to Docker. EC2 permits HTTP 80 for certificate
 validation, HTTPS 443 for clients, and SSH 22 from the owner's IPv4 `/32`.
@@ -108,7 +114,8 @@ ControlTower or CloudHealth resources.
    PostgreSQL 16 serving database. `SOURCE_PAUSED=1` confirms that the owner
    has performed that pause; it does not pause writers automatically.
 3. Allocate or reuse the retained Elastic IP, create the session directory and
-   SSH key, and generate separate administrator and application database passwords.
+   SSH key, and generate separate administrator, application and Metabase
+   passwords.
 4. Review and apply Terraform to create EC2, private RDS and the session network.
    Terraform 1.11+ supplies the administrator password through an ephemeral
    variable and the provider's write-only `password_wo` argument. Neither state
@@ -120,7 +127,8 @@ ControlTower or CloudHealth resources.
 7. Install mode-0600, root-owned runtime and database client files over SSH.
    The API runtime contains its PostgreSQL login and temporary Sydney Bedrock
    credentials. The administrator client file is separate from the API runtime.
-8. Create the ordinary PostgreSQL application owner `kea`. Restore with
+8. Create the ordinary PostgreSQL application owner `kea` and the login
+   `kea_metabase`, which has no privileges yet. Restore with
    PostgreSQL 16 `pg_restore --role=kea --no-owner --no-acl --exit-on-error`,
    then remove the administrator client file from EC2. Verify every exported
    table count, sequence state, extension and encrypted connection before
@@ -129,7 +137,14 @@ ControlTower or CloudHealth resources.
    and verify HTTPS, login and database-backed usage. Bedrock and voice checks
    also require current model credentials. Alert delivery remains disabled
    (see [Alert delivery](#alert-delivery)).
-10. Build the Android APK for the HTTPS API URL. Install it only through the
+10. Pin the served data to the story date with
+    `data/pipeline/scripts/ops/serving_as_of.sql` (the newest forecast date), so
+    the app opens on the walkthrough's billing cycle rather than the end of the
+    generated span. As `kea`, grant `kea_metabase` read access to the `kea`,
+    `billing`, `metering` and `catalogue` schemas, start Metabase, then connect
+    it and build the walkthrough dashboard with the `data/analysis/metabase`
+    builders. `make -C infra/aws metabase` is safe to repeat.
+11. Build the Android APK for the HTTPS API URL. Install it only through the
     separate `install-apk` command when requested. Keep the deployment running
     until the Cloud Owner requests teardown.
 

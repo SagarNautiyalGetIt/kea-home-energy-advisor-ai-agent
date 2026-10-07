@@ -29,6 +29,10 @@ def prepare(directory: Path, host: str | None = None) -> None:
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     master = password(directory / "db-master-password")
     app = password(directory / "db-app-password")
+    # Metabase's read-only RDS login, and its own administrator. Neither reaches
+    # runtime.env, so the API never holds them and Metabase never holds the API's.
+    password(directory / "metabase-db-password")
+    password(directory / "metabase-admin-password")
     if host is None:
         return
     if not re.fullmatch(r"[a-z0-9.-]+\.ap-southeast-2\.rds\.amazonaws\.com", host):

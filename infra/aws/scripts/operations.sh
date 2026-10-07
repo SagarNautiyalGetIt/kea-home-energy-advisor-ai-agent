@@ -269,6 +269,37 @@ step_verify() {
   printf '\nHTTPS and %s daily usage rows verified.\n' "$actual"
 }
 
+step_metabase() {
+  kea_load_session "$SESSION_ID"
+  [[ -f "$SESSION_DIR/restore.complete" ]] || { echo 'Run restore first.' >&2; exit 1; }
+  : "${DB_HOST:?Apply the RDS configuration first}"
+  local psql='sudo docker run --rm -i --env-file /opt/kea/db-client.env -v /opt/kea/certs/rds:/certs:ro postgres:16-alpine psql -X -v ON_ERROR_STOP=1'
+  local compose='sudo docker compose --env-file /opt/kea/runtime.env -f /opt/kea/compose.yml'
+  # The served span runs a year past the story; pin it to the newest forecast
+  # date so the app opens on the walkthrough's cycle. Safe to repeat.
+  kea_ssh "$psql" < "$KEA_ROOT/data/pipeline/scripts/ops/serving_as_of.sql"
+  # configure_rds.py created kea_metabase; the tables' owner grants it reads.
+  kea_ssh "$psql" <<'SQL'
+GRANT CONNECT ON DATABASE kea TO kea_metabase;
+GRANT USAGE ON SCHEMA kea, billing, metering, catalogue TO kea_metabase;
+GRANT SELECT ON ALL TABLES IN SCHEMA kea, billing, metering, catalogue TO kea_metabase;
+SQL
+  kea_ssh "$compose restart api && $compose up -d metabase"
+  local admin_password metabase_password
+  admin_password="$(<"$SESSION_DIR/metabase-admin-password")"
+  metabase_password="$(<"$SESSION_DIR/metabase-db-password")"
+  METABASE_URL="https://$PUBLIC_IP/metabase" METABASE_SERVING_ONLY=1 \
+    METABASE_ADMIN_EMAIL=admin@kea.example METABASE_ADMIN_PASSWORD="$admin_password" \
+    KEA_APP_PASSWORD="$metabase_password" KEA_BACKEND_DB_HOST="$DB_HOST" \
+    KEA_BACKEND_DB_USER=kea_metabase KEA_BACKEND_DB_SSL=1 \
+    python3 "$KEA_ROOT/data/analysis/metabase/metabase_setup.py"
+  METABASE_URL="https://$PUBLIC_IP/metabase" \
+    METABASE_ADMIN_EMAIL=admin@kea.example METABASE_ADMIN_PASSWORD="$admin_password" \
+    python3 "$KEA_ROOT/data/analysis/metabase/build_demo_dashboard.py"
+  printf 'Metabase: https://%s/metabase/ as admin@kea.example; the password is in %s/metabase-admin-password\n' \
+    "$PUBLIC_IP" "$SESSION_DIR"
+}
+
 step_mobile() {
   kea_load_session "$SESSION_ID"
   cd "$KEA_ROOT/services/mobile"
@@ -476,7 +507,7 @@ step_deploy() {
   id="${SESSION_ID:-$(date -u +%Y%m%d%H%M%S)}"
   kea_require_id "$id"
   printf 'Deploying session %s. Keep this ID for teardown.\n' "$id"
-  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify mobile publish-apk; do
+  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify metabase mobile publish-apk; do
     printf '\n==> %s\n' "$step"
     make -C "$KEA_ROOT/infra/aws" "$step" SESSION_ID="$id" SOURCE_PAUSED=1 || {
       printf 'Stopped at %s. Session %s files and any state were retained; inspect them before continuing.\n' "$step" "$id" >&2

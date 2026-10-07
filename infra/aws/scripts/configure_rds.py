@@ -15,10 +15,18 @@ def main() -> int:
     directory = args.directory
     app_password = (directory / "db-app-password").read_text().strip()
     escaped = app_password.replace("'", "''")
+    metabase_password = (directory / "metabase-db-password").read_text().strip()
+    metabase_escaped = metabase_password.replace("'", "''")
+    # kea_metabase is created here because only the administrator may create
+    # roles; its SELECT grants follow the restore (make metabase), once the
+    # tables exist, and are given by their owner, kea.
     sql = f"""
 DO $body$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='kea') THEN
         CREATE ROLE kea LOGIN PASSWORD '{escaped}';
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='kea_metabase') THEN
+        CREATE ROLE kea_metabase LOGIN PASSWORD '{metabase_escaped}';
     END IF;
 END $body$;
 GRANT kea TO kea_admin;
@@ -33,7 +41,8 @@ ALTER SCHEMA public OWNER TO kea;
     result = subprocess.run(command, input=sql, text=True, capture_output=True)
     if result.returncode:
         # PostgreSQL error context may repeat a statement; never expose its password.
-        print(result.stderr.replace(app_password, "[REDACTED]"), file=sys.stderr)
+        print(result.stderr.replace(app_password, "[REDACTED]")
+              .replace(metabase_password, "[REDACTED]"), file=sys.stderr)
         return result.returncode
     print("RDS application PostgreSQL owner configured.")
     return 0

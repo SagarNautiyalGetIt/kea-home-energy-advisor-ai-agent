@@ -14,6 +14,17 @@ variable "db_engine_version" {
   type    = string
   default = "16.15"
 }
+# Either database subnet. AWS can run out of db.t4g.micro capacity in one zone
+# (InsufficientDBInstanceCapacity, 2a on 6 Oct 2026); TF_VAR_db_availability_zone
+# moves the instance without editing this file.
+variable "db_availability_zone" {
+  type    = string
+  default = "ap-southeast-2a"
+  validation {
+    condition     = contains(["ap-southeast-2a", "ap-southeast-2b"], var.db_availability_zone)
+    error_message = "The database subnets exist only in ap-southeast-2a and ap-southeast-2b."
+  }
+}
 
 resource "aws_subnet" "database" {
   for_each          = { a = 1, b = 2 }
@@ -64,7 +75,7 @@ resource "aws_db_instance" "demo" {
   port                                = 5432
   db_subnet_group_name                = aws_db_subnet_group.demo.name
   vpc_security_group_ids              = [aws_security_group.database.id]
-  availability_zone                   = "ap-southeast-2a"
+  availability_zone                   = var.db_availability_zone
   multi_az                            = false
   publicly_accessible                 = false
   monitoring_interval                 = 0

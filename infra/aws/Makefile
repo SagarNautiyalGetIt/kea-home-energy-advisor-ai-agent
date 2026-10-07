@@ -14,7 +14,7 @@ ENABLE_VOICE_ALERTS ?= 0
 export SESSION_ID SOURCE_PAUSED RELEASE_IP DB_LOCAL_PORT SSH_HOST SSH_KEY DB_HOST ENABLE_VOICE_ALERTS
 
 .PHONY: help validate export-local login ip-allocate ip-status ip-release session-id session export-db plan-create apply-create host cert images runtime \
-	restore verify mobile publish-apk install-apk db-tunnel renew-cert refresh-credentials destroy-plan destroy-apply audit \
+	restore verify metabase mobile publish-apk install-apk db-tunnel renew-cert refresh-credentials destroy-plan destroy-apply audit \
 	clean-session deploy teardown
 
 help:
@@ -23,7 +23,7 @@ help:
 	  'For individual deployment steps, choose a unique 8-16 character lowercase/digit ID.' \
 	  '' \
 	  'Complete workflows:' \
-	  '  make -C infra/aws deploy SOURCE_PAUSED=1             # Provision, restore, verify and build APK' \
+	  '  make -C infra/aws deploy SOURCE_PAUSED=1             # Provision, restore, verify, Metabase and build APK' \
 	  '    add ENABLE_VOICE_ALERTS=1                          # Also create Amazon Connect voice alerts (billed)' \
 	  '  make -C infra/aws teardown                          # Destroy saved session; keep Elastic IP' \
 	  '' \
@@ -50,6 +50,7 @@ help:
 	  '  make -C infra/aws runtime SESSION_ID=<id>            # Install protected runtime credentials' \
 	  '  make -C infra/aws restore SESSION_ID=<id>            # Restore private RDS, verify inventory, start services' \
 	  '  make -C infra/aws verify SESSION_ID=<id>             # Check HTTPS and restored row count' \
+	  '  make -C infra/aws metabase SESSION_ID=<id>           # Pin to the story date; Metabase and the walkthrough at /metabase/' \
 	  '  make -C infra/aws mobile SESSION_ID=<id>             # Build APK; installation is separate' \
 	  '  make -C infra/aws publish-apk SESSION_ID=<id>        # Serve the APK at https://<ip>/download/kea-energy.apk' \
 	  '' \
@@ -122,6 +123,9 @@ restore:
 
 verify:
 	@bash scripts/operations.sh verify
+
+metabase:
+	@bash scripts/operations.sh metabase
 
 mobile:
 	@bash scripts/operations.sh mobile
