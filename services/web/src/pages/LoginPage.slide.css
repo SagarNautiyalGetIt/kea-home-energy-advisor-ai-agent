@@ -1,30 +1,78 @@
-/* Slide-screenshot skin for the login page: black-and-blue so it sits on the deck's dark
-   slides next to the mobile app. Scoped to .login-page.slide-shot so it also beats the
-   html[data-theme=dark] overrides. Screenshot branch only. */
+/* Slide-screenshot skins for the login page. Screenshot branch only.
+   .slide-light (default, /login): matches the light-mode app — warm off-white page, orange
+   and purple glows, the transmission-tower art and the purple energy burst.
+   .slide-dark (/login?skin=dark): black-and-blue, for the deck's dark slides.
+   Both are scoped to .login-page.<skin> so they also beat the html[data-theme=dark] rules. */
 
-.login-page.slide-shot{--ink:#0f1b3d;--purple:#1f6bff;--purple2:#38bdf8}
+/* Shared: "Keep me logged in" and "Forgot password?" on one row */
+.login-page .login-options{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 clamp(24px,3.5vh,34px)}
+.login-page .login-options .remember-row,
+.login-page .login-options .forgot-link{margin:0;align-self:auto}
+.login-page .login-options .remember-row{gap:10px;font-size:15px}
+.login-page .login-options .remember-row input{width:18px;height:18px}
+.login-page .login-options .remember-row span{color:#56668f}
+.login-page .login-options .forgot-link{font-size:15px}
+
+/* ---------- Light ---------- */
+
+.login-page.slide-light{--purple:#4318ff;--purple2:#7b61ff;background-color:#f7f8fa;background-image:
+  radial-gradient(circle at 3% 96%,rgb(90 67 238 / 11%),transparent 32rem),
+  url('/assets/backgrounds/energy-flow-pattern.svg'),
+  linear-gradient(145deg,#fbfaf7 0%,#f5f7fc 50%,#faf7f3 100%);
+  background-size:auto,cover,cover;background-position:center;background-repeat:no-repeat}
+
+/* Left: dashboard-style heading (bold navy + orange line), glassy fields, gradient CTA */
+.login-page.slide-light .login-content h1{font-weight:800;letter-spacing:-.04em}
+.login-page.slide-light .login-content header p{color:var(--kea-orange-ink);font-weight:600}
+.login-page.slide-light .login-content input[type=email],
+.login-page.slide-light .password-field{border:1.5px solid #e3e7f3;background:rgb(255 255 255 / 88%);box-shadow:0 1px 2px rgb(38 49 105 / 4%),0 8px 24px rgb(38 49 105 / 4%)}
+.login-page.slide-light .login-content input[type=email]:focus,
+.login-page.slide-light .password-field:focus-within{border-color:#7b61ff;box-shadow:0 0 0 4px rgb(67 24 255 / 10%)}
+.login-page.slide-light .login-button{border:0;color:#fff;background:linear-gradient(110deg,#1b2559 0%,#4318ff 55%,#8f7bff 100%);box-shadow:0 12px 28px rgb(67 24 255 / 26%),inset 0 1px 0 rgb(255 255 255 / 18%)}
+.login-page.slide-light .login-button:hover,
+.login-page.slide-light .login-button:focus-visible{background:linear-gradient(110deg,#22307a 0%,#5230ff 50%,#a08fff 100%);box-shadow:0 14px 34px rgb(67 24 255 / 34%),0 0 0 4px rgb(67 24 255 / 10%)}
+.login-page.slide-light .social-row button{border-color:#e3e7f3;background:rgb(255 255 255 / 82%);box-shadow:0 6px 18px rgb(38 49 105 / 5%)}
+
+/* Right: luminous lavender with the app's orange (top-right) and purple (bottom-left) glows */
+.login-page.slide-light .brand-panel{position:relative;overflow:hidden;isolation:isolate;color:var(--ink);box-shadow:-18px 0 50px rgb(67 24 255 / 6%);background:
+  radial-gradient(34% 26% at 50% 45%,rgb(255 255 255 / 95%),transparent 75%),
+  radial-gradient(50% 40% at 96% 4%,rgb(254 102 1 / 26%),transparent 70%),
+  radial-gradient(60% 48% at 0% 100%,rgb(90 67 238 / 30%),transparent 70%),
+  radial-gradient(55% 45% at 85% 90%,rgb(134 140 255 / 28%),transparent 70%),
+  linear-gradient(160deg,#f4f2ff 0%,#eeeaff 50%,#f8f1fb 100%)}
+/* Transmission tower rising from the bottom-right, faded out around the logo */
+.login-page.slide-light .brand-panel::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.8;background:url('/assets/backgrounds/transmission-tower-lines.svg') no-repeat right -40px bottom 0/115% auto;-webkit-mask-image:radial-gradient(42% 30% at 50% 45%,transparent 0%,#000 100%);mask-image:radial-gradient(42% 30% at 50% 45%,transparent 0%,#000 100%)}
+/* Purple energy burst sitting behind the logo (logo centre ≈ 50% minus half the text block) */
+.login-page.slide-light .brand-panel::after{content:"";position:absolute;z-index:-1;top:calc(50% - 50px);left:50%;width:360px;height:360px;transform:translate(-50%,-50%);opacity:.9;background:url('/assets/backgrounds/electric-energy-burst.svg') no-repeat center/contain}
+.login-page.slide-light .energy-mark{filter:drop-shadow(0 10px 24px rgb(67 24 255 / 30%))}
+.login-page.slide-light .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(100deg,#1b2559 0%,#4318ff 60%,#7b61ff 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 8px 22px rgb(67 24 255 / 22%))}
+@media(max-width:760px){.login-page.slide-light .brand-panel::after{display:none}}
+
+/* ---------- Dark ---------- */
+
+.login-page.slide-dark{--ink:#0f1b3d;--purple:#1f6bff;--purple2:#38bdf8}
 
 /* Left: same layout, purple accents swapped for the panel's blue */
-.login-page.slide-shot .login-panel{color:var(--ink)}
-.login-page.slide-shot .login-content header p{color:#8a97b2}
-.login-page.slide-shot .login-content input[type=email]:focus,
-.login-page.slide-shot .password-field:focus-within{border-color:#1f6bff;box-shadow:0 0 0 4px rgb(31 107 255 / 12%)}
-.login-page.slide-shot .login-button{border:0;color:#fff;background:linear-gradient(110deg,#000 0%,#0a1a3d 45%,#1f6bff 100%);box-shadow:0 12px 28px rgb(31 107 255 / 28%),inset 0 1px 0 rgb(255 255 255 / 12%)}
-.login-page.slide-shot .login-button:hover,
-.login-page.slide-shot .login-button:focus-visible{background:linear-gradient(110deg,#000 0%,#0d2350 40%,#2f7dff 100%);box-shadow:0 14px 34px rgb(31 107 255 / 38%),0 0 0 1px rgb(34 211 238 / 40%)}
-.login-page.slide-shot .social-row button:hover,
-.login-page.slide-shot .social-row button:focus-visible{border-color:#1f6bff;color:#1f6bff;box-shadow:0 9px 20px rgb(31 107 255 / 14%)}
-.login-page.slide-shot .forgot-link:hover,
-.login-page.slide-shot .auth-switch button:hover,
-.login-page.slide-shot .auth-switch button:focus-visible{color:#0b55e6}
+.login-page.slide-dark .login-panel{color:var(--ink)}
+.login-page.slide-dark .login-content header p{color:#8a97b2}
+.login-page.slide-dark .login-content input[type=email]:focus,
+.login-page.slide-dark .password-field:focus-within{border-color:#1f6bff;box-shadow:0 0 0 4px rgb(31 107 255 / 12%)}
+.login-page.slide-dark .login-button{border:0;color:#fff;background:linear-gradient(110deg,#000 0%,#0a1a3d 45%,#1f6bff 100%);box-shadow:0 12px 28px rgb(31 107 255 / 28%),inset 0 1px 0 rgb(255 255 255 / 12%)}
+.login-page.slide-dark .login-button:hover,
+.login-page.slide-dark .login-button:focus-visible{background:linear-gradient(110deg,#000 0%,#0d2350 40%,#2f7dff 100%);box-shadow:0 14px 34px rgb(31 107 255 / 38%),0 0 0 1px rgb(34 211 238 / 40%)}
+.login-page.slide-dark .social-row button:hover,
+.login-page.slide-dark .social-row button:focus-visible{border-color:#1f6bff;color:#1f6bff;box-shadow:0 9px 20px rgb(31 107 255 / 14%)}
+.login-page.slide-dark .forgot-link:hover,
+.login-page.slide-dark .auth-switch button:hover,
+.login-page.slide-dark .auth-switch button:focus-visible{color:#0b55e6}
 
 /* Right: near-black base, cyan glow top-left like the slide, blue glow bottom-right */
-.login-page.slide-shot .brand-panel{position:relative;overflow:hidden;isolation:isolate;color:#fff;background:
+.login-page.slide-dark .brand-panel{position:relative;overflow:hidden;isolation:isolate;color:#fff;background:
   radial-gradient(55% 45% at 6% 2%,rgb(34 211 238 / 55%),transparent 70%),
   radial-gradient(60% 50% at 100% 100%,rgb(31 107 255 / 55%),transparent 70%),
   radial-gradient(38% 30% at 50% 46%,rgb(0 150 255 / 22%),transparent 75%),
   linear-gradient(160deg,#06142e 0%,#020617 50%,#000 100%)}
 /* Faint blueprint grid that fades out toward the edges */
-.login-page.slide-shot .brand-panel::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgb(148 197 255 / 8%) 1px,transparent 1px),linear-gradient(90deg,rgb(148 197 255 / 8%) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%);mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%)}
-.login-page.slide-shot .energy-mark{filter:drop-shadow(0 0 14px rgb(34 211 238 / 60%)) drop-shadow(0 0 40px rgb(31 107 255 / 45%))}
-.login-page.slide-shot .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(180deg,#fff 35%,#9fdcff 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 24px rgb(31 107 255 / 45%))}
+.login-page.slide-dark .brand-panel::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgb(148 197 255 / 8%) 1px,transparent 1px),linear-gradient(90deg,rgb(148 197 255 / 8%) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%);mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%)}
+.login-page.slide-dark .energy-mark{filter:drop-shadow(0 0 14px rgb(34 211 238 / 60%)) drop-shadow(0 0 40px rgb(31 107 255 / 45%))}
+.login-page.slide-dark .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(180deg,#fff 35%,#9fdcff 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 24px rgb(31 107 255 / 45%))}
