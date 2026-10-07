@@ -96,7 +96,8 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
             {errors.form&&<small className="field-error" role="alert">{errors.form}</small>}
             <button className="login-button" type="submit" disabled={busy}>{busy?'Signing in…':'Login'}</button>
           </form>
-          {accounts.length>0&&(
+          {/* Hidden for the slide screenshot only. */}
+          {false&&accounts.length>0&&(
             <div className="demo-accounts">
               <button type="button" className="demo-accounts-toggle" aria-expanded={showAccounts} onClick={()=>setShowAccounts((open)=>!open)}>
                 <Users aria-hidden="true"/>{showAccounts?'Hide demo accounts':`Demo accounts (${accounts.length})`}
@@ -121,7 +122,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
         </div>
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
-      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
+      <aside className="brand-panel" aria-label="Kea Energy" style={{background:'linear-gradient(150deg,#3b3f47 0%,#17191e 45%,#000 100%)'}}><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
       {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={sendResetLink}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" className={resetEmailError?'field-invalid':undefined} aria-invalid={Boolean(resetEmailError)} aria-describedby={resetEmailError?'reset-email-error':undefined} onChange={(event)=>{setEmail(event.target.value);setResetEmailError('')}}/>{resetEmailError&&<small className="field-error" id="reset-email-error" role="alert">{resetEmailError}</small>}</div></Modal>}
     </main>
   )
