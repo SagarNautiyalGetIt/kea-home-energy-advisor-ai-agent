@@ -1,6 +1,6 @@
 import { Eye, EyeOff, Mail, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
 import SocialSignIn from '../components/SocialSignIn'
 import { getDemoAccounts, login as apiLogin, type DemoAccountCard } from '../lib/client'
@@ -21,9 +21,6 @@ import './LoginPage.slide.css'
  */
 export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Session) => void; onToast: (message: string, tone?: 'success' | 'info' | 'warning') => void }) {
   const navigate = useNavigate()
-  // Screenshot branch: /login is the light look, /login?skin=dark the black-and-blue one.
-  const [searchParams] = useSearchParams()
-  const darkSkin = searchParams.get('skin') === 'dark'
   const [showPassword, setShowPassword] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const [resetEmailError, setResetEmailError] = useState('')
@@ -84,7 +81,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
   }
 
   return (
-    <main className={`login-page ${darkSkin?'slide-dark':'slide-light'}`}>
+    <main className="login-page slide-shot">
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-content">
           <header><h1 id="login-title">Login</h1><p>Enter your email and password to log in!</p></header>
@@ -95,10 +92,8 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
             <label htmlFor="password">Password<span>*</span></label>
             <div className={`password-field ${errors.password?'field-invalid':''}`}><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder="Min. 8 characters" autoComplete="current-password" value={password} aria-invalid={Boolean(errors.password)} aria-describedby={errors.password?'password-error':undefined} onChange={(event)=>setPassword(event.target.value)} /><button type="button" className="eye-button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></div>
             {errors.password&&<small className="field-error" id="password-error">{errors.password}</small>}
-            <div className="login-options">
-              <label className="remember-row"><input type="checkbox" name="remember" defaultChecked /><span>Keep me logged in</span></label>
-              <button type="button" className="forgot-link" onClick={()=>{setResetEmailError('');setShowForgot(true)}}>Forgot password?</button>
-            </div>
+            <button type="button" className="forgot-link" onClick={()=>{setResetEmailError('');setShowForgot(true)}}>Forgot password?</button>
+            <label className="remember-row"><input type="checkbox" name="remember" defaultChecked /><span>Keep me logged in</span></label>
             {errors.form&&<small className="field-error" role="alert">{errors.form}</small>}
             <button className="login-button" type="submit" disabled={busy}>{busy?'Signing in…':'Login'}</button>
           </form>
@@ -128,7 +123,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
         </div>
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
-      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src={darkSkin?'/assets/brand/kea-brand-white.svg':'/assets/brand/kea-brand-blue.svg'} alt="" /><strong>KEA ENERGY</strong></aside>
+      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
       {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={sendResetLink}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" className={resetEmailError?'field-invalid':undefined} aria-invalid={Boolean(resetEmailError)} aria-describedby={resetEmailError?'reset-email-error':undefined} onChange={(event)=>{setEmail(event.target.value);setResetEmailError('')}}/>{resetEmailError&&<small className="field-error" id="reset-email-error" role="alert">{resetEmailError}</small>}</div></Modal>}
     </main>
   )
