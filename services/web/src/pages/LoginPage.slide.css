@@ -1,6 +1,6 @@
 /* Slide-screenshot skins for the login page. Screenshot branch only.
    .slide-light (default, /login): matches the light-mode app — warm off-white page, orange
-   and purple glows, the transmission-tower art and the purple energy burst.
+   and purple glows and the purple energy burst.
    .slide-dark (/login?skin=dark): black-and-blue, for the deck's dark slides.
    Both are scoped to .login-page.<skin> so they also beat the html[data-theme=dark] rules. */
 
@@ -17,9 +17,8 @@
 
 .login-page.slide-light{--purple:#4318ff;--purple2:#7b61ff;background-color:#f7f8fa;background-image:
   radial-gradient(circle at 3% 96%,rgb(90 67 238 / 11%),transparent 32rem),
-  url('/assets/backgrounds/energy-flow-pattern.svg'),
   linear-gradient(145deg,#fbfaf7 0%,#f5f7fc 50%,#faf7f3 100%);
-  background-size:auto,cover,cover;background-position:center;background-repeat:no-repeat}
+  background-size:auto,cover;background-position:center;background-repeat:no-repeat}
 
 /* Left: dashboard-style heading (bold navy + orange line), glassy fields, gradient CTA */
 .login-page.slide-light .login-content h1{font-weight:800;letter-spacing:-.04em}
@@ -40,8 +39,6 @@
   radial-gradient(60% 48% at 0% 100%,rgb(90 67 238 / 30%),transparent 70%),
   radial-gradient(55% 45% at 85% 90%,rgb(134 140 255 / 28%),transparent 70%),
   linear-gradient(160deg,#f4f2ff 0%,#eeeaff 50%,#f8f1fb 100%)}
-/* Transmission tower rising from the bottom-right, faded out around the logo */
-.login-page.slide-light .brand-panel::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.8;background:url('/assets/backgrounds/transmission-tower-lines.svg') no-repeat right -40px bottom 0/115% auto;-webkit-mask-image:radial-gradient(42% 30% at 50% 45%,transparent 0%,#000 100%);mask-image:radial-gradient(42% 30% at 50% 45%,transparent 0%,#000 100%)}
 /* Purple energy burst sitting behind the logo (logo centre ≈ 50% minus half the text block) */
 .login-page.slide-light .brand-panel::after{content:"";position:absolute;z-index:-1;top:calc(50% - 50px);left:50%;width:360px;height:360px;transform:translate(-50%,-50%);opacity:.9;background:url('/assets/backgrounds/electric-energy-burst.svg') no-repeat center/contain}
 .login-page.slide-light .energy-mark{filter:drop-shadow(0 10px 24px rgb(67 24 255 / 30%))}
