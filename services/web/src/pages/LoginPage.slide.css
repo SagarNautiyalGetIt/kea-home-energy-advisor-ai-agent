@@ -28,9 +28,9 @@
 .login-page.slide-light .password-field{border:1.5px solid #e3e7f3;background:rgb(255 255 255 / 88%);box-shadow:0 1px 2px rgb(38 49 105 / 4%),0 8px 24px rgb(38 49 105 / 4%)}
 .login-page.slide-light .login-content input[type=email]:focus,
 .login-page.slide-light .password-field:focus-within{border-color:#7b61ff;box-shadow:0 0 0 4px rgb(67 24 255 / 10%)}
-.login-page.slide-light .login-button{border:0;color:#fff;background:linear-gradient(110deg,#1b2559 0%,#4318ff 55%,#8f7bff 100%);box-shadow:0 12px 28px rgb(67 24 255 / 26%),inset 0 1px 0 rgb(255 255 255 / 18%)}
+.login-page.slide-light .login-button{border:0;color:#fff;background:linear-gradient(110deg,#8f7bff 0%,#4318ff 45%,#1b2559 100%);box-shadow:0 12px 28px rgb(67 24 255 / 26%),inset 0 1px 0 rgb(255 255 255 / 18%)}
 .login-page.slide-light .login-button:hover,
-.login-page.slide-light .login-button:focus-visible{background:linear-gradient(110deg,#22307a 0%,#5230ff 50%,#a08fff 100%);box-shadow:0 14px 34px rgb(67 24 255 / 34%),0 0 0 4px rgb(67 24 255 / 10%)}
+.login-page.slide-light .login-button:focus-visible{background:linear-gradient(110deg,#a08fff 0%,#5230ff 50%,#22307a 100%);box-shadow:0 14px 34px rgb(67 24 255 / 34%),0 0 0 4px rgb(67 24 255 / 10%)}
 .login-page.slide-light .social-row button{border-color:#e3e7f3;background:rgb(255 255 255 / 82%);box-shadow:0 6px 18px rgb(38 49 105 / 5%)}
 
 /* Right: luminous lavender with the app's orange (top-right) and purple (bottom-left) glows */
