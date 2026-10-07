@@ -1,19 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { InteractiveHomeScene } from './interactive-home-scene';
 import { GltfHomeScene } from './gltf-home-scene';
 import { OutageNotice } from './outage-notice';
 import { EnergyReadingRail } from './energy-reading-rail';
-import { homeCardReading } from '@/lib/home-card-reading';
-import { homeFlows, freshHomePower } from '@/lib/home-flows';
+import { homeFlows } from '@/lib/home-flows';
+import { MOBILE_PRESENTATION_HOME_POWER, mobilePresentationHomeReading } from '@/lib/mobile-presentation-home';
 import { toggleHomeSelection } from '@/lib/home-camera';
 import { useExperience } from '@/lib/experience-preferences';
 import { AccessibilityInfo, Animated, AppState, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { fetchHouseholdWeather, restoreWeatherCache, isWeatherFresh, WEATHER_REFRESH_MS, type AucklandWeather } from '@/lib/auckland-weather';
-import { loadLiveHomePower, type LivePower } from '@/lib/home-assistant';
 import { loadHomeScene, type HomeSceneData } from '@/lib/home-scene-data';
 import { useAppTheme } from '@/theme';
 import { AnimatedLogo } from './animated-logo';
@@ -33,6 +32,7 @@ type Props = {
 };
 
 const POWER_COLOR = HIGHLIGHT_COLOR.home;
+const PRESENTATION_HOME_FLOWS = homeFlows(MOBILE_PRESENTATION_HOME_POWER, false);
 
 function weatherIcon(weather: AucklandWeather | null): keyof typeof Ionicons.glyphMap {
   if (!weather) return 'cloud-outline';
@@ -60,11 +60,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const scene = sceneState?.customerId === customerId ? sceneState : null;
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(timer); }, []);
-  const [liveState, setLiveState] = useState<{ customerId: string; power: LivePower; fetchedAt: number } | null>(null);
-  // The periodic clock triggers expiry, but a new async poll may be newer than
-  // that snapshot. Evaluate against receipt/current wall time to avoid flicker.
-  const liveNow = Math.max(now, liveState?.fetchedAt ?? 0);
-  const live = useMemo(() => liveState?.customerId === customerId ? freshHomePower(liveState.power, liveState.fetchedAt, liveNow) : {}, [customerId, liveState, liveNow]);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [weatherState, setWeather] = useState<{ region: string; data: AucklandWeather } | null>(null);
   const weather = weatherState && weatherState.region === scene?.region ? weatherState.data : null;
@@ -73,9 +68,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
   const currentWeather = weather && isWeatherFresh(weather, now) ? weather : null;
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<Device>();
-  const [previewFlows, setPreviewFlows] = useState<boolean | null>(null);
-  const isPreviewingFlows = previewFlows ?? scene?.dateSource === 'demo';
-  const flows = useMemo(() => homeFlows(live, isPreviewingFlows), [live, isPreviewingFlows]);
   const [reduceMotion, setReduceMotion] = useState(true);
   const sceneTop = useRef(0);
   const weatherBottom = useRef(40);
@@ -97,29 +89,12 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     void loadHomeScene(customerId, controller.signal).then((next) => {
       if (!controller.signal.aborted) { setScene(next); setSceneError(null); }
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted) setSceneError(error instanceof Error ? error.message : 'Home readings unavailable.');
+      if (!controller.signal.aborted) setSceneError(error instanceof Error ? error.message : 'Home location unavailable.');
     });
     return () => controller.abort();
     // reload deliberately invalidates the focused screen's request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, reload]));
-
-  useEffect(() => {
-    if (!customerId) return;
-    let active = true;
-    async function refresh() {
-      try {
-        const next = await loadLiveHomePower(customerId!);
-        if (active) setLiveState({ customerId: customerId!, power: next, fetchedAt: Date.now() });
-      } catch {
-        if (active) setLiveState({ customerId: customerId!, power: {}, fetchedAt: Date.now() });
-      }
-    }
-    void refresh();
-    const interval = setInterval(() => { void refresh(); }, 30_000);
-    const appSubscription = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh(); });
-    return () => { active = false; clearInterval(interval); appSubscription.remove(); };
-  }, [customerId, reload]);
 
   useEffect(() => {
     const region = scene?.region;
@@ -160,10 +135,6 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => subscription.remove();
   }, []);
-  const dayLabel = scene?.day
-    ? new Date(`${scene.day}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
-    : null;
-
   return <View style={[styles.container, { backgroundColor: colors.background }]}>
     <View style={styles.topBar}>
       <View style={styles.logoContainer}><AnimatedLogo color={colors.text} size={36} /><Text style={[styles.topTitle, { color: colors.text }]}>Kea Energy</Text></View>
@@ -196,27 +167,27 @@ export function DemoHomeView({ customerId, onOpenInfo, onOpenNotifications, onOp
           />
           <InteractiveHomeScene reduceMotion={reduceMotion} pinnedHolographic={preferences.holographic} onInteractionChange={onSceneInteractionChange}>
             {(camera, onReady, holographicMix) => <View style={[styles.sceneArt, { height: sceneHeight, width: sceneWidth }]}>
-              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} skyExtension={skyExtension} weather={currentWeather} sunProgress={sunProgress} selected={selected} flows={flows} reduceMotion={reduceMotion} />
+              <GltfHomeScene onReady={onReady} holographicMix={holographicMix} camera={camera} width={sceneWidth} height={sceneHeight} skyExtension={skyExtension} weather={currentWeather} sunProgress={sunProgress} selected={selected} flows={PRESENTATION_HOME_FLOWS} reduceMotion={reduceMotion} />
             </View>}
           </InteractiveHomeScene>
           <LinearGradient colors={mode === 'dark' ? ['rgba(17,17,17,0)', '#111111'] : ['rgba(238,238,238,0)', '#EEEEEE']} pointerEvents="none" style={[styles.bottomFade, { height: bottomFadeHeight }]} />
         </View>
       </Animated.View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Regional weather. ${weatherError ?? 'Refresh weather'}. Tap to retry.`} onPress={() => setWeatherReload(value => value + 1)} onLayout={({ nativeEvent: { layout } }) => { weatherBottom.current = layout.y + layout.height; reportProtectedHeader(); }} style={[styles.weatherInScene, { top: skyExtension + 12 }]}><View style={[styles.weatherLabel, { backgroundColor: mode === 'dark' ? 'rgba(17,17,17,0.88)' : 'rgba(255,255,255,0.94)', maxWidth: sceneWidth * 0.62 }]}><Ionicons name={weatherIcon(currentWeather)} color={colors.text} size={15} /><Text numberOfLines={1} style={[styles.weatherInSceneText, { color: colors.text }]}>{scene?.region ? `${scene.region} · ${weather ? `${weather.temperatureC.toFixed(0)}° · ${weather.description}${!currentWeather || weatherError ? ' · Last known · tap to retry' : ''}` : weatherError ? 'Weather unavailable · tap to retry' : 'Finding weather'}` : 'Location unavailable'}</Text>{weatherError ? <Ionicons name="refresh-outline" size={13} color={colors.text} /> : null}</View></Pressable>
-      <Text style={[styles.readingDate, { color: colors.textMuted }]}>{dayLabel ? `${scene?.dateSource === 'demo' ? 'Demo period' : 'Meter'} · ${dayLabel}` : 'Daily energy unavailable'}{scene?.deviceDay ? ` · Devices · ${new Date(`${scene.deviceDay}T12:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}</Text>
+      <Text style={[styles.readingDate, { color: colors.textMuted }]}>Energy overview</Text>
       <EnergyReadingRail cardWidth={chipWidth} selected={selected} onSelect={(device) => setSelected(current => toggleHomeSelection(current, device as Device))} readings={(['solar', 'home', 'car', 'battery', 'grid'] as const).map((device) => {
-        const metric = homeCardReading(scene, live, device);
-        return { id: device, label: device === 'car' ? 'EV' : device.toUpperCase(), value: metric.value, color: HIGHLIGHT_COLOR[device], detail: sceneError ? 'Readings unavailable' : !scene ? 'Loading readings…' : metric.detail };
+        const metric = mobilePresentationHomeReading(device);
+        return { id: device, label: device === 'car' ? 'EV' : device.toUpperCase(), value: metric.value, color: HIGHLIGHT_COLOR[device], detail: metric.detail };
       })} />
-      <Pressable accessibilityRole="button" accessibilityLabel={isPreviewingFlows ? 'Stop illustrative flow preview' : 'Preview illustrative energy flows'} onPress={() => setPreviewFlows(!isPreviewingFlows)} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, paddingHorizontal: 18 }}><Ionicons name="git-network-outline" color={POWER_COLOR} size={15} /><Text style={{ color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 17 }}>{flows.some(flow => flow.watts !== null) ? 'Live sensor flow · illustrative paths' : isPreviewingFlows ? 'Illustrative flows · no live power readings' : 'Preview energy flows · connect live sensors'}</Text></Pressable>
-      <Pressable accessibilityRole="button" onPress={() => router.push(!selected || selected === 'home' || selected === 'grid' ? '/usage' : '/settings')} style={[styles.readingAction, { borderColor: colors.border }]}>
-        <Ionicons name={!selected || selected === 'home' || selected === 'grid' ? 'bar-chart-outline' : 'link-outline'} color={colors.text} size={18} />
-        <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>{!selected || selected === 'home' || selected === 'grid' ? 'View dated household imports' : `Connect or sync ${selected === 'car' ? 'EV charger' : selected} sensors`}</Text>
+      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, paddingHorizontal: 18 }}><Ionicons name="git-network-outline" color={POWER_COLOR} size={15} /><Text style={{ color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 17 }}>Solar generation · Battery charging · EV charging</Text></View>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/usage')} style={[styles.readingAction, { borderColor: colors.border }]}>
+        <Ionicons name="bar-chart-outline" color={colors.text} size={18} />
+        <Text style={{ color: colors.text, fontSize: 12, flex: 1 }}>View energy usage</Text>
         <Ionicons name="chevron-forward" color={colors.textMuted} size={16} />
       </Pressable>
-      {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home readings unavailable · Retry</Text></Pressable> : null}
+      {sceneError ? <Pressable accessibilityRole="button" onPress={() => setReload((current) => current + 1)} style={styles.retry}><Ionicons color={POWER_COLOR} name="refresh-outline" size={16} /><Text style={[styles.retryText, { color: colors.text }]}>Home location unavailable · Retry</Text></Pressable> : null}
       <OutageNotice />
-      <Text style={[styles.demoNote, { color: colors.textMuted }]}>{selected ? `Selected reading: ${selected === 'car' ? 'the EV' : `the ${selected}`}. Tap again to clear.` : 'Tap an energy card to highlight its equipment; tap again to clear.'} Model paths are illustrative. Energy cards show available meter and sensor readings.</Text>
+      <Text style={[styles.demoNote, { color: colors.textMuted }]}>{selected ? `Selected reading: ${selected === 'car' ? 'the EV' : `the ${selected}`}. Tap again to clear.` : 'Tap an energy card to highlight its equipment; tap again to clear.'}</Text>
     </View>
   </View>;
 }

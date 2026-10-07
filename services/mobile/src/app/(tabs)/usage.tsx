@@ -1,7 +1,7 @@
 import { tactile } from '@/lib/haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { CalendarPicker, type CalendarSelectionMode } from '@/components/calendar-picker';
@@ -13,7 +13,8 @@ import { UsageChart } from '@/components/usage-chart';
 import { usageChartValues } from '@/lib/usage-chart-path';
 import { UsageChartLoader } from '@/components/usage-chart-loader';
 import { loadEnergyBreakdown, type EnergyBreakdown } from '@/lib/energy-breakdown-data';
-import { getUsageView, type UsageBand, type UsagePeriod, type UsageViewData } from '@/lib/usage-data';
+import type { UsageBand, UsagePeriod, UsageViewData } from '@/lib/usage-data';
+import { getMobilePresentationUsage } from '@/lib/mobile-presentation-usage';
 import { useAuth } from '@/providers/auth';
 import { palette, useAppTheme } from '@/theme';
 
@@ -95,7 +96,7 @@ function shiftMonth(selected: string, amount: number) {
 }
 
 function previousPeriodDate(period: Period, selected: string) {
-  if (period === 'monthly') return shiftMonth(selected, -4);
+  if (period === 'monthly') return shiftMonth(selected, -1);
   return toDateValue(addDays(parseDate(selected), period === 'weekly' ? -7 : -1));
 }
 
@@ -157,7 +158,6 @@ export default function UsageScreen() {
   const [data, setData] = useState<UsageViewData | null>(null);
   const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const initialDateCustomer = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [animationRun, setAnimationRun] = useState(0);
@@ -171,25 +171,29 @@ export default function UsageScreen() {
   const canShowCost = !data || data.totalCostNzd !== null || data.points.some((point) => point.costNzd !== null);
   const unitOptions: readonly Unit[] = canShowCost ? ['cost', 'kwh'] : ['kwh'];
   const displayUnit: Unit = canShowCost ? unit : 'kwh';
+  const chartPointCount = Math.max(data?.points.length ?? 0, data?.comparisonPoints?.length ?? 0);
   const chartValues = useMemo(() => {
     if (!data) return [];
-    const values = data.points.map(point => displayUnit === 'cost' ? point.costNzd : point.kwh);
+    const values = Array.from({ length: chartPointCount }, (_, index) => {
+      const point = data.points[index];
+      return point ? displayUnit === 'cost' ? point.costNzd : point.kwh : null;
+    });
     const previous = data.comparisonPoints?.map(point => displayUnit === 'cost' ? point.costNzd : point.kwh);
     return usageChartValues(values, previous);
-  }, [data, displayUnit]);
+  }, [chartPointCount, data, displayUnit]);
   const chartPrevious = useMemo(() => {
     if (!data?.comparisonPoints) return undefined;
-    const values = displayUnit === 'cost'
-      ? data.comparisonPoints.some((point) => point.costNzd !== null) ? data.comparisonPoints.map((point) => point.costNzd) : []
-      : data.comparisonPoints.map((point) => point.kwh);
-    return values;
-  }, [data, displayUnit]);
+    return Array.from({ length: chartPointCount }, (_, index) => {
+      const point = data.comparisonPoints?.[index];
+      return point ? displayUnit === 'cost' ? point.costNzd : point.kwh : null;
+    });
+  }, [chartPointCount, data, displayUnit]);
   const suffix = displayUnit === 'cost' ? 'NZD' : 'kWh';
-  const chartLabels = useMemo(() => data?.points.map((point) => point.axisLabel) ?? [], [data?.points]);
-  // Day points come only from the dated hourly endpoint; week/month stay dated totals.
+  const chartLabels = useMemo(() => Array.from({ length: chartPointCount }, (_, index) => data?.points[index]?.axisLabel ?? data?.comparisonPoints?.[index]?.axisLabel ?? ''), [chartPointCount, data]);
+  // Pad chart slots only: a shorter comparison month retains its actual days and total.
   const chartAxisLabels = chartLabels;
-  const tooltipLabels = data?.points.map((point) => point.tooltipLabel);
-  const previousTooltipLabels = data?.comparisonPoints?.map((point) => point.tooltipLabel);
+  const tooltipLabels = Array.from({ length: chartPointCount }, (_, index) => data?.points[index]?.tooltipLabel ?? 'Outside selected month');
+  const previousTooltipLabels = data?.comparisonPoints ? Array.from({ length: chartPointCount }, (_, index) => data.comparisonPoints?.[index]?.tooltipLabel ?? 'Outside comparison month') : undefined;
   const selectedPeriodLabel = comparison ? comparisonSelectionLabel(period, comparison) : selectionLabel(period, date);
   const bands = data?.bands ?? unavailableBands;
   const periodTitle = period === 'daily' ? "Selected day's total" : period === 'weekly' ? "Selected week's total" : "Selected month's total";
@@ -223,18 +227,9 @@ export default function UsageScreen() {
       setData(null);
       setLoadError(null);
       try {
-        const result = await getUsageView({ customerId: session?.customerId ?? '', period, date, compareDate: comparison?.second, signal: controller.signal });
+        const result = await getMobilePresentationUsage({ period, date: comparison?.first ?? date, compareDate: comparison?.second, signal: controller.signal });
         if (!controller.signal.aborted) {
           setData(result);
-          // Settle the initial default date once per account. Never replace a
-          // user's later selection just because some days or bands are missing.
-          const initialSelection = initialDateCustomer.current !== session?.customerId;
-          initialDateCustomer.current = session?.customerId ?? null;
-          if (initialSelection && !comparison && result.totalKwh === null && result.availableTo) {
-            // Choose a populated window even with less than a week of history.
-            const fallbackDate = result.availableTo;
-            if (fallbackDate !== date) setDate(fallbackDate);
-          }
         }
       } catch (error: unknown) {
         if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Usage could not be loaded.');
@@ -244,7 +239,7 @@ export default function UsageScreen() {
     };
     void load();
     return () => controller.abort();
-  }, [comparison, date, period, reloadToken, session?.customerId]);
+  }, [comparison, date, period, reloadToken]);
 
   const shiftGraph = useCallback((direction: 'previous' | 'next') => {
     if (swipeInProgress) return;
@@ -526,7 +521,7 @@ export default function UsageScreen() {
             </View>
           </Animated.View>
           ) : <View style={styles.usageStatus}><Ionicons name="bar-chart-outline" size={30} color={colors.textMuted} style={{ alignSelf: 'center' }} /><Text style={[styles.usageStatusText, { color: colors.textMuted }]}>{period === 'daily' ? displayUnit === 'cost' && data.points.some(point => point.kwh !== null) ? 'Hourly costs are unavailable. Select kWh to view the energy chart.' : 'Hourly meter readings are unavailable for this day. Your available daily total is shown above.' : 'No dated readings are available for this selection.'}</Text></View>}
-          {chartValues.length > 0 ? <Text style={[styles.usageSource, { color: colors.textMuted, textAlign: 'center' }]}>{period === 'daily' ? 'Tap the chart to explore each hour · New Zealand time' : 'Tap the chart to explore each reading'}{chartValues.includes(null) ? ' · gaps mean unavailable readings' : ''}</Text> : null}
+          {chartValues.length > 0 ? <Text style={[styles.usageSource, { color: colors.textMuted, textAlign: 'center' }]}>{period === 'daily' ? 'Tap the chart to explore each hour · New Zealand time' : 'Tap the chart to explore each reading'}</Text> : null}
           </>
           )}
         </Animated.View>

@@ -111,7 +111,7 @@ export default function DashboardScreen() {
             <Text style={[styles.navigationSubtitle, { color: glassDetailColor[mode] }]}>Your energy, ideas and account — all in one place.</Text>
           </View>
           <View style={styles.cardArea}>
-            {dashboard ? <Text style={{ color: glassDetailColor[mode], fontSize: 12, lineHeight: 17 }}>{dashboard.sourceLabel}</Text> : null}
+            {dashboard ? <Text style={{ color: glassDetailColor[mode], fontSize: 12, lineHeight: 17 }}>Your account overview</Text> : null}
             {dashboardError ? <Pressable accessibilityRole="button" onPress={() => { setDashboardError(null); setReloadKey((key) => key + 1); }} style={[styles.dataError, { borderColor: palette.red }]}><Ionicons color={palette.red} name="warning-outline" size={18} /><Text style={[styles.dataErrorText, { color: colors.text }]}>{dashboardError} Tap to retry.</Text></Pressable> : null}
           </View>
           <BottomNavigation listMode includeHome={false} detailColor={glassDetailColor[mode]}
@@ -163,7 +163,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.welcomeModal}>
           <Text style={[styles.welcomeSubtitle, { color: colors.textMuted }]}>
-            This scene uses current modelled Auckland weather to illustrate how solar, the Kea battery, your home, and an electric car might share power. Energy values are examples, not readings from your home.
+            Explore how solar, your battery, your home, and your electric car share energy. Tap an energy card to highlight its equipment, or drag the house to change your view.
           </Text>
 
           <View style={styles.welcomeFeatures}>

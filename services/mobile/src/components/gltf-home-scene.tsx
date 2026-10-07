@@ -189,7 +189,7 @@ export function GltfHomeScene({ camera, width, height, skyExtension = 0, hologra
   const { colors } = useAppTheme();
   const mix = holographicMix ?? ((override ?? preferences.holographic) ? 1 : 0);
   const fallback = <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Home model unavailable on this device. Your energy readings are below.</Text></View>;
-  return <View accessibilityRole="image" accessibilityLabel={`Interactive smart home model${selected ? `, illustrative ${selected} highlight` : ''}`} style={{ width, height }}>
+  return <View accessibilityRole="image" accessibilityLabel={`Interactive smart home model${selected ? `, ${selected === 'car' ? 'EV' : selected} highlight` : ''}`} style={{ width, height }}>
     {model?.status === 'ready' && preferences.natureSounds ? <HomeNatureSound birds={atmosphere.birds} /> : null}
     {model?.status === 'unavailable' ? fallback : !model ? <View style={{ height, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.textMuted }}>Opening your home…</Text></View> : <ModelBoundary fallback={fallback}>
       <Canvas frameloop="demand" dpr={homeRenderDpr(width, height, PixelRatio.get())} camera={{ fov: 42, near: 0.01, far: 20 }} gl={{ alpha: true, antialias: false }} style={{ width, height }}>
