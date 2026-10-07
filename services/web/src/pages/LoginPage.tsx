@@ -97,8 +97,7 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
             {errors.form&&<small className="field-error" role="alert">{errors.form}</small>}
             <button className="login-button" type="submit" disabled={busy}>{busy?'Signing in…':'Login'}</button>
           </form>
-          {/* Hidden for the slide screenshot only. */}
-          {false&&accounts.length>0&&(
+          {accounts.length>0&&(
             <div className="demo-accounts">
               <button type="button" className="demo-accounts-toggle" aria-expanded={showAccounts} onClick={()=>setShowAccounts((open)=>!open)}>
                 <Users aria-hidden="true"/>{showAccounts?'Hide demo accounts':`Demo accounts (${accounts.length})`}
