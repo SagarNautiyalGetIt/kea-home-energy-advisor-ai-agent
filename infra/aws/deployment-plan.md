@@ -46,6 +46,26 @@ CLI is `/Applications/draw.io.app/Contents/MacOS/draw.io`):
 draw.io -x -f png -s 1.5 -b 20 -o architecture.png architecture.drawio
 ```
 
+That diagram shows how a session is wired. The layered view below shows what
+Kea Energy is made of, from the bottom up: the data sources (the half-hourly
+smart-meter feed from LCL, the billing system, the plan catalogue and NIWA
+weather); the ELT pipeline that moves them through bronze, silver and gold (one
+extract DAG per source, Spark into S3, dbt, then Soda gates and the export, all
+run by Airflow); the RDS PostgreSQL serving database it publishes to, shown by
+kind of data rather than by table (meter reads, accounts and bills, the plan
+catalogue, usage marts, and bill marts for the bill explanation and plan
+pricing); the AI agent and backend services in the Kea API on EC2 (the Bedrock
+agent, FastAPI and the hourly bill-shock evaluator), with the notification
+services (SES for email, SNS for SMS and Connect for voice) as a shared part of
+that backend; and five of the core features on top, with DevOps and security
+and governance on the sides.
+Its source is [architecture-layers.drawio](architecture-layers.drawio),
+exported the same way to `architecture-layers.png`.
+
+![Kea Energy layered architecture: data sources, the ELT pipeline, the serving
+database, the AI agent and backend with its shared notification services, and
+five core features on top](architecture-layers.png)
+
 [ec2/main.tf](ec2/main.tf) and [ec2/rds.tf](ec2/rds.tf) manage one session's
 VPC, public application subnet, two private database subnets, internet gateway,
 route table, security groups, SSH key, EC2 instance, RDS subnet group and RDS
