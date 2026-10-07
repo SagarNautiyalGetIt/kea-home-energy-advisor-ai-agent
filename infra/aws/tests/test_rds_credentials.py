@@ -52,8 +52,13 @@ class RDSCredentialTests(unittest.TestCase):
                 "KEA_DATABASE_URL": "postgresql+asyncpg://kea:app-secret@demo.ap-southeast-2.rds.amazonaws.com:5432/kea",
                 "KEA_CORS_ORIGINS": "https://192.0.2.10",
                 "KEA_DATABASE_SSL_CA": "/certs/rds/global-bundle.pem",
+                "KEA_BEDROCK_MODEL": "approved-model",
+                "KEA_BEDROCK_MODEL_SSM_PARAMETER": "/kea/approved-model",
+                "KEA_ALERT_ACCOUNT_REFS": "H-001,H-002",
             }
-            target.write_text("".join(f"{key}={value}\n" for key, value in original.items()))
+            target.write_text("".join(f"{key}={value}\n" for key, value in original.items())
+                              + "AWS_ACCESS_KEY_ID=old-access\nAWS_SECRET_ACCESS_KEY=old-secret\n"
+                              + "AWS_SESSION_TOKEN=old-token\n")
             output = io.StringIO()
             with patch("sys.argv", ["runtime_credentials", str(target), "--refresh"]), \
                     patch.object(runtime, "temporary_credentials", return_value=(
@@ -63,6 +68,9 @@ class RDSCredentialTests(unittest.TestCase):
             refreshed = dict(line.split("=", 1) for line in target.read_text().splitlines())
             for key, value in original.items():
                 self.assertEqual(refreshed[key], value)
+            self.assertEqual(refreshed["AWS_ACCESS_KEY_ID"], "test-access")
+            self.assertEqual(refreshed["AWS_SECRET_ACCESS_KEY"], "test-secret")
+            self.assertEqual(refreshed["AWS_SESSION_TOKEN"], "test-token")
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
             for secret in ["app-secret", "test-access", "test-secret", "test-token"]:
                 self.assertNotIn(secret, output.getvalue())

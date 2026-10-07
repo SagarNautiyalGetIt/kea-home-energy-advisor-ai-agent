@@ -12,15 +12,54 @@ from pathlib import Path
 from urllib.parse import quote
 
 
-def temporary_credentials() -> tuple[dict[str, str], datetime]:
+#: A refresh wants a full credential lifetime; anything older than an hour is re-fetched.
+FRESH = timedelta(hours=3)
+CLI_CACHE = Path.home() / ".aws/cli/cache"
+
+
+def export_credentials() -> dict[str, str]:
     result = subprocess.run(
         ["aws", "configure", "export-credentials", "--profile", "kea-energy", "--format", "process"],
         capture_output=True,
         text=True,
         check=True,
     )
-    exported = json.loads(result.stdout)
+    return json.loads(result.stdout)
+
+
+def drop_cached(expiration: str, cache: Path = CLI_CACHE) -> int:
+    """Remove the CLI's cached SSO role credentials that expire at `expiration`.
+
+    The CLI reuses cached role credentials until minutes before they expire, so a
+    refresh 45 minutes early would upload the same short-lived keys. Only the
+    matching SSO entry is removed; the SSO sign-in itself (~/.aws/sso/cache) is
+    untouched, and the next export fetches new role credentials with it.
+    """
+    target = parse_time(expiration)
+    removed = 0
+    for path in cache.glob("*.json"):
+        try:
+            entry = json.loads(path.read_text())
+            cached = parse_time(entry["Credentials"]["Expiration"])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        # The export prints "+00:00" and the cache stores "Z": compare instants.
+        if entry.get("ProviderType") == "sso" and cached == target:
+            path.unlink(missing_ok=True)
+            removed += 1
+    return removed
+
+
+def parse_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def temporary_credentials(*, fresh: bool = False) -> tuple[dict[str, str], datetime]:
+    exported = export_credentials()
     expires = datetime.fromisoformat(exported["Expiration"].replace("Z", "+00:00"))
+    if fresh and expires < datetime.now(timezone.utc) + FRESH and drop_cached(exported["Expiration"]):
+        exported = export_credentials()
+        expires = datetime.fromisoformat(exported["Expiration"].replace("Z", "+00:00"))
     if expires < datetime.now(timezone.utc) + timedelta(minutes=30):
         raise RuntimeError("SSO credentials expire within 30 minutes; refresh the SSO login")
     values = {
@@ -52,9 +91,9 @@ def main() -> None:
         for key in ("KEA_PG_PASSWORD", "KEA_DATABASE_URL", "KEA_CORS_ORIGINS"):
             if not existing.get(key):
                 parser.error(f"runtime file is missing {key}")
-        values = {key: existing[key] for key in ("KEA_PG_PASSWORD", "KEA_DATABASE_URL", "KEA_CORS_ORIGINS")}
-        if existing.get("KEA_DATABASE_SSL_CA"):
-            values["KEA_DATABASE_SSL_CA"] = existing["KEA_DATABASE_SSL_CA"]
+        # Refresh credentials without discarding the cloud owner's model, SSM
+        # or feature configuration. Only temporary credential values change.
+        values = existing.copy()
     else:
         if args.runtime_file.exists():
             parser.error("runtime file already exists")
@@ -69,7 +108,7 @@ def main() -> None:
             "KEA_DATABASE_SSL_CA": "/certs/rds/global-bundle.pem",
             "KEA_CORS_ORIGINS": f"https://{args.public_ip}",
         }
-    credentials, expires = temporary_credentials()
+    credentials, expires = temporary_credentials(fresh=args.refresh)
     values.update(credentials)
     args.runtime_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(prefix=".runtime-", dir=args.runtime_file.parent)
@@ -82,6 +121,11 @@ def main() -> None:
     finally:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)
+    # Read by credentials_timer.py to decide when the next refresh is due.
+    expires_file = args.runtime_file.with_name(args.runtime_file.name + ".expires")
+    fd = os.open(expires_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as output:
+        output.write(expires.isoformat() + "\n")
     print(f"Temporary Sydney SSO credentials expire at {expires.isoformat()}.")
 
 

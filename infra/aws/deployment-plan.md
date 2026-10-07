@@ -24,7 +24,7 @@ timer.
 | Backend debugging | SSH tunnel through EC2 to local `127.0.0.1:15432`; separate teammate SSH and PostgreSQL accounts |
 | Backups | One-day automated backup retention while the database exists |
 | Public application address | Retained Sydney Elastic IP; released only by `ip-release` |
-| Model | Sydney Bedrock Nova Lite, using temporary team SSO credentials |
+| Model | Sydney Bedrock Nova Lite, using temporary team SSO credentials (four hours; the account cannot create IAM roles), kept fresh by a LaunchAgent on the Cloud Owner's Mac |
 | Alert email | Amazon SES, sandbox; verified recipients only |
 | Alert SMS | Amazon SNS, sandbox; verified numbers only, USD 1 monthly spend cap |
 | Alert phone calls | Amazon Connect instance, claimed NZ number and call flow; optional per session (`ENABLE_VOICE_ALERTS=1`), off by default |
@@ -144,7 +144,10 @@ ControlTower or CloudHealth resources.
     `billing`, `metering` and `catalogue` schemas, start Metabase, then connect
     it and build the walkthrough dashboard with the `data/analysis/metabase`
     builders. `make -C infra/aws metabase` is safe to repeat.
-11. Build the Android APK for the HTTPS API URL. Install it only through the
+11. Install the session's credential refresh LaunchAgent on the Cloud Owner's
+    Mac. Every 30 minutes it refreshes the API's temporary SSO credentials when
+    under 45 minutes remain; teardown removes it first.
+12. Build the Android APK for the HTTPS API URL. Install it only through the
     separate `install-apk` command when requested. Keep the deployment running
     until the Cloud Owner requests teardown.
 

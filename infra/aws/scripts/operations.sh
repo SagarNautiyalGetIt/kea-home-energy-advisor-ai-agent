@@ -432,6 +432,47 @@ step_refresh_credentials() {
   kea_ssh 'sudo docker compose --env-file /opt/kea/runtime.env -f /opt/kea/compose.yml up -d --force-recreate api'
 }
 
+# The account cannot create IAM roles or users, so the API runs on the operator's
+# four-hour SSO credentials. The LaunchAgent installed by credentials-timer runs
+# this every 30 minutes; it refreshes only when under 45 minutes remain.
+step_keep_credentials() {
+  kea_load_session "$SESSION_ID"
+  local timer="$KEA_ROOT/infra/aws/scripts/credentials_timer.py" status=0
+  # 0 is due and 3 (NOT_DUE) is fresh. Anything else is a failed check, which
+  # refreshes rather than passing for fresh credentials.
+  python3 "$timer" due "$SESSION_DIR" || status=$?
+  case "$status" in
+    0) ;;
+    3)
+      printf '%s credentials still fresh\n' "$(date -u +%FT%TZ)"
+      return 0
+      ;;
+    *)
+      printf '%s due check failed (exit %s); refreshing anyway\n' "$(date -u +%FT%TZ)" "$status"
+      python3 "$timer" notify "Kea AWS demo: the credential due check failed (exit $status), so the timer refreshed anyway. See $SESSION_DIR/keep-credentials.log."
+      ;;
+  esac
+  printf '%s refreshing credentials\n' "$(date -u +%FT%TZ)"
+  # A separate make, so the refresh keeps `set -e` and a failure stops it whole.
+  if ! make -C "$KEA_ROOT/infra/aws" refresh-credentials SESSION_ID="$SESSION_ID"; then
+    # The local export records expiry before SSH installs it. A failed upload
+    # must not make the next timer run mistake remote credentials for fresh.
+    rm -f -- "$SESSION_DIR/runtime.env.expires"
+    python3 "$timer" notify "Kea AWS demo credentials could not be refreshed. Run make -C infra/aws login, then make -C infra/aws refresh-credentials SESSION_ID=$SESSION_ID."
+    exit 1
+  fi
+}
+
+step_credentials_timer() {
+  kea_load_session "$SESSION_ID"
+  python3 "$KEA_ROOT/infra/aws/scripts/credentials_timer.py" install "$SESSION_ID" "$SESSION_DIR"
+}
+
+step_credentials_timer_stop() {
+  kea_require_id "$SESSION_ID"
+  python3 "$KEA_ROOT/infra/aws/scripts/credentials_timer.py" uninstall "$SESSION_ID"
+}
+
 step_destroy_plan() {
   kea_load_session "$SESSION_ID"
   kea_check_account
@@ -507,7 +548,7 @@ step_deploy() {
   id="${SESSION_ID:-$(date -u +%Y%m%d%H%M%S)}"
   kea_require_id "$id"
   printf 'Deploying session %s. Keep this ID for teardown.\n' "$id"
-  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify metabase mobile publish-apk; do
+  for step in login ip-allocate session export-db plan-create apply-create host cert images runtime restore verify metabase credentials-timer mobile publish-apk; do
     printf '\n==> %s\n' "$step"
     make -C "$KEA_ROOT/infra/aws" "$step" SESSION_ID="$id" SOURCE_PAUSED=1 || {
       printf 'Stopped at %s. Session %s files and any state were retained; inspect them before continuing.\n' "$step" "$id" >&2
@@ -525,7 +566,7 @@ step_teardown() {
   kea_require_id "$SESSION_ID"
   kea_load_session "$SESSION_ID"
   [[ -s "$STATE" ]] || { echo 'Terraform state missing; teardown cannot proceed.' >&2; exit 1; }
-  for step in login destroy-plan destroy-apply audit clean-session; do
+  for step in login credentials-timer-stop destroy-plan destroy-apply audit clean-session; do
     printf '\n==> %s\n' "$step"
     make -C "$KEA_ROOT/infra/aws" "$step" SESSION_ID="$SESSION_ID" || {
       printf 'Teardown stopped at %s. Session %s state was retained.\n' "$step" "$SESSION_ID" >&2

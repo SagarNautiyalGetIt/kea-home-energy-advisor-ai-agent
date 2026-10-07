@@ -90,11 +90,7 @@ with an ephemeral input: it is absent from state and saved plans. Separate
 application and administrator passwords stay in mode-0600 session files.
 The administrator client file is removed from EC2 once the import finishes.
 The API uses the `kea` PostgreSQL login, not the RDS administrator account.
-The certificate lasts roughly six days and the temporary SSO credentials
-expire at the time printed by `runtime`. Read that time: the `login` step can
-reuse credentials the CLI already cached, so it may be well under the SSO
-session's full length. Plan a credential refresh before a demo that runs past
-it. A fresh EC2 host needs a certificate
+The certificate lasts roughly six days. A fresh EC2 host needs a certificate
 for the retained IP; an already-installed Android app can keep using that URL.
 The first switch from an old auto-assigned IP needs one new Android build.
 
@@ -140,6 +136,29 @@ The `mobile` step builds for `arm64-v8a` by default, which covers practically
 every Android phone in use and keeps the download small. Set `ANDROID_ABIS=all`
 for every architecture (older 32-bit phones, x86 emulators), or a comma list
 such as `ANDROID_ABIS=arm64-v8a,armeabi-v7a`.
+
+## Credentials
+
+The team account cannot create IAM roles or users, so the API calls Bedrock (and
+SES, SNS and Connect once alerts are on) with the Cloud Owner's temporary SSO
+credentials, which last four hours. `deploy` therefore ends by installing a
+macOS LaunchAgent for the session (`credentials-timer`): every 30 minutes, and
+when the Mac wakes, it runs `make -C infra/aws keep-credentials`, which refreshes
+only when under 45 minutes remain. A refresh fetches new four-hour credentials
+(dropping the CLI's cached ones), uploads them and restarts the API, which is
+down for about ten seconds.
+
+- It needs the Mac awake and online, and a live SSO sign-in. The sign-in renews
+  itself with its refresh token until the university's session limit; after that
+  a macOS notification asks you to run `make -C infra/aws login` and then
+  `make -C infra/aws refresh-credentials SESSION_ID=<session-id>`.
+- The log is `infra/aws/.work/public-<session-id>/keep-credentials.log`; the
+  current expiry is in `runtime.env.expires` beside it.
+- Before a demo, check the expiry is not inside the talk, or refresh by hand so
+  the ten-second restart happens beforehand.
+- `teardown` removes the LaunchAgent first. To remove it by hand:
+  `make -C infra/aws credentials-timer-stop SESSION_ID=<session-id>`.
+- On Linux or Windows `credentials-timer` only prints the manual refresh command.
 
 ## Metabase
 

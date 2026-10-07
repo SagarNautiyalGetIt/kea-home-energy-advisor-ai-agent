@@ -14,7 +14,8 @@ ENABLE_VOICE_ALERTS ?= 0
 export SESSION_ID SOURCE_PAUSED RELEASE_IP DB_LOCAL_PORT SSH_HOST SSH_KEY DB_HOST ENABLE_VOICE_ALERTS
 
 .PHONY: help validate export-local login ip-allocate ip-status ip-release session-id session export-db plan-create apply-create host cert images runtime \
-	restore verify metabase mobile publish-apk install-apk db-tunnel renew-cert refresh-credentials destroy-plan destroy-apply audit \
+	restore verify metabase mobile publish-apk install-apk db-tunnel renew-cert refresh-credentials keep-credentials \
+	credentials-timer credentials-timer-stop destroy-plan destroy-apply audit \
 	clean-session deploy teardown
 
 help:
@@ -58,10 +59,14 @@ help:
 	  '  make -C infra/aws db-tunnel SESSION_ID=<id>          # Open private RDS at localhost:15432' \
 	  '  make -C infra/aws install-apk SESSION_ID=<id>        # Install an already-built APK' \
 	  '  make -C infra/aws renew-cert SESSION_ID=<id>        # Renew certificate for unchanged IP' \
-	  '  make -C infra/aws refresh-credentials SESSION_ID=<id> # Refresh Bedrock SSO credentials' \
+	  '  make -C infra/aws refresh-credentials SESSION_ID=<id> # Refresh the API AWS SSO credentials now' \
+	  '  make -C infra/aws credentials-timer SESSION_ID=<id>  # (Re)install the automatic refresh (deploy does this)' \
+	  '  make -C infra/aws credentials-timer-stop SESSION_ID=<id> # Remove it (teardown does this)' \
+	  '  make -C infra/aws keep-credentials SESSION_ID=<id>   # What the timer runs: refresh only if due' \
 	  '' \
 	  'Individual teardown steps, in order:' \
 	  '  make -C infra/aws login                             # Sign in and check the Sydney account' \
+	  '  make -C infra/aws credentials-timer-stop SESSION_ID=<id> # Stop the automatic credential refresh' \
 	  '  make -C infra/aws destroy-plan SESSION_ID=<id>       # Review Terraform destruction plan' \
 	  '  make -C infra/aws destroy-apply SESSION_ID=<id>      # Delete EC2/RDS and session network; keep IP' \
 	  '  make -C infra/aws audit SESSION_ID=<id>              # Check Sydney for remaining resources' \
@@ -144,6 +149,15 @@ renew-cert:
 
 refresh-credentials:
 	@bash scripts/operations.sh refresh-credentials
+
+keep-credentials:
+	@bash scripts/operations.sh keep-credentials
+
+credentials-timer:
+	@bash scripts/operations.sh credentials-timer
+
+credentials-timer-stop:
+	@bash scripts/operations.sh credentials-timer-stop
 
 destroy-plan:
 	@bash scripts/operations.sh destroy-plan
