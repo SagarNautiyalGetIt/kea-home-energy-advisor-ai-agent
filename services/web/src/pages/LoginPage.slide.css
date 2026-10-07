@@ -23,7 +23,7 @@
 
 /* Left: dashboard-style heading (bold navy + orange line), glassy fields, gradient CTA */
 .login-page.slide-light .login-content h1{font-weight:800;letter-spacing:-.04em}
-.login-page.slide-light .login-content header p{color:var(--kea-orange-ink);font-weight:600}
+.login-page.slide-light .login-content header p{width:fit-content;color:transparent;background:linear-gradient(90deg,#00c2ff 0%,#2f6bff 50%,#4318ff 100%);-webkit-background-clip:text;background-clip:text;font-weight:600}
 .login-page.slide-light .login-content input[type=email],
 .login-page.slide-light .password-field{border:1.5px solid #e3e7f3;background:rgb(255 255 255 / 88%);box-shadow:0 1px 2px rgb(38 49 105 / 4%),0 8px 24px rgb(38 49 105 / 4%)}
 .login-page.slide-light .login-content input[type=email]:focus,
@@ -45,7 +45,7 @@
 /* Purple energy burst sitting behind the logo (logo centre ≈ 50% minus half the text block) */
 .login-page.slide-light .brand-panel::after{content:"";position:absolute;z-index:-1;top:calc(50% - 50px);left:50%;width:360px;height:360px;transform:translate(-50%,-50%);opacity:.9;background:url('/assets/backgrounds/electric-energy-burst.svg') no-repeat center/contain}
 .login-page.slide-light .energy-mark{filter:drop-shadow(0 10px 24px rgb(67 24 255 / 30%))}
-.login-page.slide-light .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(100deg,#1b2559 0%,#4318ff 60%,#7b61ff 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 8px 22px rgb(67 24 255 / 22%))}
+.login-page.slide-light .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(100deg,#7b61ff 0%,#4318ff 40%,#1b2559 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 8px 22px rgb(67 24 255 / 22%))}
 @media(max-width:760px){.login-page.slide-light .brand-panel::after{display:none}}
 
 /* ---------- Dark ---------- */
