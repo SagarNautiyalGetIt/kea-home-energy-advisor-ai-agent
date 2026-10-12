@@ -23,46 +23,123 @@ def _next_event(stream: Any) -> Any:
     return next(stream, _END)
 
 
-def _wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _wire(messages: list[dict[str, Any]], *, tools_offered: bool = True) -> list[dict[str, Any]]:
+    """Translate the neutral history into Converse messages.
+
+    Converse rejects toolUse and toolResult blocks in a request without a toolConfig,
+    and the agent's final round offers no tools. On that round the earlier calls and
+    results travel as plain text, so the model still sees what it looked up.
+    """
     from app.agent.loop import tool_result_to_text
 
     out: list[dict[str, Any]] = []
+    merging_results = False
     for message in messages:
         role = message["role"]
         if role == "tool":
-            result = {
-                "toolResult": {
-                    "toolUseId": message["tool_call_id"],
-                    "content": [{"text": tool_result_to_text(message["content"])}],
+            text = tool_result_to_text(message["content"])
+            if tools_offered:
+                result = {
+                    "toolResult": {
+                        "toolUseId": message["tool_call_id"],
+                        "content": [{"text": text}],
+                    }
                 }
-            }
-            if (
-                out
-                and out[-1]["role"] == "user"
-                and any("toolResult" in block for block in out[-1]["content"])
-            ):
+            else:
+                result = {"text": f"Result of {message.get('name', 'tool')}: {text}"}
+            if merging_results:
                 out[-1]["content"].append(result)
             else:
                 out.append({"role": "user", "content": [result]})
+                merging_results = True
             continue
 
+        merging_results = False
         blocks: list[dict[str, Any]] = []
         if message.get("content"):
             blocks.append({"text": str(message["content"])})
         if role == "assistant":
-            blocks.extend(
-                {
-                    "toolUse": {
-                        "toolUseId": call.id,
-                        "name": call.name,
-                        "input": call.arguments,
-                    }
-                }
-                for call in message.get("tool_calls", ())
-            )
+            for call in message.get("tool_calls", ()):
+                if tools_offered:
+                    blocks.append(
+                        {
+                            "toolUse": {
+                                "toolUseId": call.id,
+                                "name": call.name,
+                                "input": call.arguments,
+                            }
+                        }
+                    )
+                else:
+                    arguments = json.dumps(call.arguments, default=str)
+                    blocks.append({"text": f"Called {call.name} with {arguments}"})
         if blocks:
             out.append({"role": role, "content": blocks})
     return out
+
+
+_OPEN = "<thinking>"
+_CLOSE = "</thinking>"
+
+
+def _partial_tag(text: str, tag: str) -> int:
+    """Length of the longest end of `text` that could be the start of `tag`."""
+    for size in range(min(len(tag) - 1, len(text)), 0, -1):
+        if text.endswith(tag[:size]):
+            return size
+    return 0
+
+
+class _ThinkingFilter:
+    """Drop the `<thinking>…</thinking>` reasoning Nova writes inline before an answer.
+
+    Nova emits it as ordinary text whenever tools are offered, so without this the
+    customer reads the model talking to itself. Tags arrive split across deltas
+    ("<thinking", ">"), so a possible partial tag is held back until the next delta
+    settles it.
+    """
+
+    def __init__(self) -> None:
+        self.buffer = ""
+        self.inside = False
+        self.after_close = False
+
+    def feed(self, text: str) -> str:
+        self.buffer += text
+        visible: list[str] = []
+        while True:
+            if self.inside:
+                end = self.buffer.find(_CLOSE)
+                if end < 0:
+                    self.buffer = self.buffer[-(len(_CLOSE) - 1) :]
+                    break
+                self.buffer = self.buffer[end + len(_CLOSE) :]
+                self.inside = False
+                self.after_close = True
+                continue
+            if self.after_close:
+                # The answer follows the closing tag after a blank line.
+                self.buffer = self.buffer.lstrip()
+                if not self.buffer:
+                    break
+                self.after_close = False
+            start = self.buffer.find(_OPEN)
+            if start >= 0:
+                visible.append(self.buffer[:start])
+                self.buffer = self.buffer[start + len(_OPEN) :]
+                self.inside = True
+                continue
+            held = _partial_tag(self.buffer, _OPEN)
+            visible.append(self.buffer[: len(self.buffer) - held])
+            self.buffer = self.buffer[len(self.buffer) - held :]
+            break
+        return "".join(visible)
+
+    def flush(self) -> str:
+        # Unclosed reasoning is still reasoning, not answer text.
+        text = "" if self.inside else self.buffer
+        self.buffer = ""
+        return text
 
 
 class BedrockNovaProvider:
@@ -120,7 +197,7 @@ class BedrockNovaProvider:
         request: dict[str, Any] = {
             "modelId": self.model,
             "system": [{"text": system}],
-            "messages": _wire(messages),
+            "messages": _wire(messages, tools_offered=bool(tools)),
             "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
         }
         if tools:
@@ -141,6 +218,7 @@ class BedrockNovaProvider:
         event_stream = response["stream"]
         stream = iter(event_stream)
         text_parts: list[str] = []
+        thinking = _ThinkingFilter()
         pending: dict[int, dict[str, str]] = {}
         completed: list[ToolCall] = []
 
@@ -159,9 +237,9 @@ class BedrockNovaProvider:
                 elif "contentBlockDelta" in event:
                     block = event["contentBlockDelta"]
                     delta = block["delta"]
-                    if "text" in delta:
-                        text_parts.append(delta["text"])
-                        yield TextDelta(delta["text"])
+                    if "text" in delta and (visible := thinking.feed(delta["text"])):
+                        text_parts.append(visible)
+                        yield TextDelta(visible)
                     if "toolUse" in delta:
                         pending[block["contentBlockIndex"]]["input"] += delta["toolUse"].get(
                             "input", ""
@@ -192,6 +270,9 @@ class BedrockNovaProvider:
                     )
                 ):
                     raise RuntimeError("Bedrock Nova streaming request failed")
+            if tail := thinking.flush():
+                text_parts.append(tail)
+                yield TextDelta(tail)
 
         finally:
             close = getattr(event_stream, "close", None)

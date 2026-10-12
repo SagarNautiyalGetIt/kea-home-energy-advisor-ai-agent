@@ -15,6 +15,10 @@ from urllib.parse import quote
 #: A refresh wants a full credential lifetime; anything older than an hour is re-fetched.
 FRESH = timedelta(hours=3)
 CLI_CACHE = Path.home() / ".aws/cli/cache"
+#: The API's own default is a Claude model, which the account's SCP blocks in Sydney.
+#: Nova Pro is the model the demo is verified on; the cloud owner may change the line
+#: in runtime.env, and a refresh keeps it.
+DEFAULT_MODEL = "amazon.nova-pro-v1:0"
 
 
 def export_credentials() -> dict[str, str]:
@@ -78,6 +82,7 @@ def main() -> None:
     parser.add_argument("--public-ip")
     parser.add_argument("--db-host")
     parser.add_argument("--db-password-file", type=Path)
+    parser.add_argument("--bedrock-model", default=DEFAULT_MODEL)
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
     if args.refresh:
@@ -107,6 +112,7 @@ def main() -> None:
             "KEA_DATABASE_URL": f"postgresql+asyncpg://kea:{quote(password, safe='')}@{args.db_host}:5432/kea",
             "KEA_DATABASE_SSL_CA": "/certs/rds/global-bundle.pem",
             "KEA_CORS_ORIGINS": f"https://{args.public_ip}",
+            "KEA_BEDROCK_MODEL": args.bedrock_model,
         }
     credentials, expires = temporary_credentials(fresh=args.refresh)
     values.update(credentials)

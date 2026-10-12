@@ -127,3 +127,90 @@ async def test_incomplete_response_never_reports_success(stop_reason):
             system="Test", messages=[{"role": "user", "content": "Hi"}]
         ):
             assert not isinstance(event, TurnComplete)
+
+
+def test_tool_free_round_carries_tool_history_as_text():
+    # Converse rejects toolUse/toolResult blocks without a toolConfig, which the
+    # agent's final round never sends.
+    call = ToolCall("tool-1", "read_bill", {"period": "July"})
+    result = _wire(
+        [
+            {"role": "user", "content": "What changed?"},
+            {"role": "assistant", "content": "", "tool_calls": [call]},
+            {
+                "role": "tool",
+                "tool_call_id": "tool-1",
+                "name": "read_bill",
+                "content": {"kwh": 42},
+            },
+        ],
+        tools_offered=False,
+    )
+    blocks = [block for message in result for block in message["content"]]
+    assert all(set(block) == {"text"} for block in blocks)
+    assert [message["role"] for message in result] == ["user", "assistant", "user"]
+    assert "read_bill" in result[1]["content"][0]["text"]
+    assert '"kwh":42' in result[2]["content"][0]["text"]
+
+
+async def test_tool_free_request_sends_no_tool_blocks():
+    client = FakeRuntime(
+        [
+            {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": "Done"}}},
+            {"messageStop": {"stopReason": "end_turn"}},
+        ]
+    )
+    provider = BedrockNovaProvider("amazon.nova-pro-v1:0")
+    provider._client = client
+    call = ToolCall("tool-1", "read_bill", {})
+    messages = [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "", "tool_calls": [call]},
+        {"role": "tool", "tool_call_id": "tool-1", "name": "read_bill", "content": {}},
+    ]
+    async for _ in provider.converse(system="Test", messages=messages, tools=None):
+        pass
+    assert "toolConfig" not in client.request
+    assert "toolUse" not in str(client.request["messages"])
+
+
+async def test_inline_thinking_is_hidden_even_when_tags_split_across_deltas():
+    pieces = ["<thinking", ">", " I should", " check.", " </think", "ing>", "\n\n", "The ", "plan."]
+    client = FakeRuntime(
+        [
+            {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": piece}}}
+            for piece in pieces
+        ]
+        + [{"messageStop": {"stopReason": "end_turn"}}]
+    )
+    provider = BedrockNovaProvider("amazon.nova-pro-v1:0")
+    provider._client = client
+    events = [
+        event
+        async for event in provider.converse(
+            system="Test", messages=[{"role": "user", "content": "Which plan?"}]
+        )
+    ]
+    streamed = "".join(event.text for event in events if isinstance(event, TextDelta))
+    assert streamed == "The plan."
+    assert events[-1].text == "The plan."
+
+
+async def test_text_that_merely_looks_like_a_tag_is_kept():
+    client = FakeRuntime(
+        [
+            {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": "Usage <"}}},
+            {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": " 5 kWh"}}},
+            {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": " <thin"}}},
+            {"messageStop": {"stopReason": "end_turn"}},
+        ]
+    )
+    provider = BedrockNovaProvider("amazon.nova-pro-v1:0")
+    provider._client = client
+    events = [
+        event
+        async for event in provider.converse(
+            system="Test", messages=[{"role": "user", "content": "Hi"}]
+        )
+    ]
+    assert events[-1].text == "Usage < 5 kWh <thin"

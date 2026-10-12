@@ -75,6 +75,20 @@ class RDSCredentialTests(unittest.TestCase):
             for secret in ["app-secret", "test-access", "test-secret", "test-token"]:
                 self.assertNotIn(secret, output.getvalue())
 
+    def test_new_runtime_selects_a_model_callable_in_sydney(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "runtime.env"
+            password = Path(temporary) / "db-app-password"
+            password.write_text("app-secret\n")
+            with patch("sys.argv", ["runtime_credentials", str(target), "--public-ip", "192.0.2.10",
+                                    "--db-host", "demo.rds.amazonaws.com", "--db-password-file", str(password)]), \
+                    patch.object(runtime, "temporary_credentials", return_value=(
+                        {"AWS_ACCESS_KEY_ID": "a", "AWS_SECRET_ACCESS_KEY": "s", "AWS_SESSION_TOKEN": "t"},
+                        datetime(2030, 1, 1, tzinfo=timezone.utc))), redirect_stdout(io.StringIO()):
+                runtime.main()
+            created = dict(line.split("=", 1) for line in target.read_text().splitlines())
+            self.assertEqual(created["KEA_BEDROCK_MODEL"], "amazon.nova-pro-v1:0")
+
 
 if __name__ == "__main__":
     unittest.main()
