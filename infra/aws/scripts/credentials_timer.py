@@ -10,6 +10,7 @@ about once per credential lifetime, not on every check.
     credentials_timer.py uninstall <session-id>
     credentials_timer.py due       <session-dir>      # exit 0 when due, NOT_DUE when not
     credentials_timer.py notify    <message>
+    credentials_timer.py login                        # aws sso login, given up after LOGIN_TIMEOUT
 
 `due` answers "not due" with its own exit status, NOT_DUE, rather than 1:
 Python exits 1 on any uncaught error, so a crashed check must never read as
@@ -30,6 +31,10 @@ INTERVAL_SECONDS = 30 * 60
 MARGIN = timedelta(minutes=45)
 EXPIRES_FILE = "runtime.env.expires"
 NOT_DUE = 3
+#: The CLI's SSO token lapses after a few hours while the browser's portal sign-in
+#: lasts longer, so `aws sso login` approves itself in the browser without a click.
+#: When the browser sign-in has lapsed too, nobody is there to click; give up then.
+LOGIN_TIMEOUT = 120
 
 
 def label(session_id: str) -> str:
@@ -108,6 +113,16 @@ def notify(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def login() -> int:
+    try:
+        result = subprocess.run(["aws", "sso", "login", "--profile", "kea-energy"],
+                                timeout=LOGIN_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        print(f"aws sso login was not approved within {LOGIN_TIMEOUT} seconds", file=sys.stderr)
+        return 1
+    return result.returncode
+
+
 def main(argv: list[str]) -> int:
     command, *args = argv
     if command == "install":
@@ -118,6 +133,8 @@ def main(argv: list[str]) -> int:
         return 0 if due(Path(args[0])) else NOT_DUE
     elif command == "notify":
         notify(" ".join(args))
+    elif command == "login":
+        return login()
     else:
         raise SystemExit(f"unknown command {command!r}")
     return 0

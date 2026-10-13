@@ -164,7 +164,8 @@ class KeepCredentialsTests(unittest.TestCase):
                          (ROOT / "scripts/operations.sh").read_text(), re.S | re.M).group(0)
 
     def keep(self, expires: str | None = None, fake_timer: str | None = None,
-             fail_refresh: bool = False) -> str:
+             fail_refresh: bool = False, make_stub: str | None = None,
+             expect_code: int | None = None) -> str:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             session = base / "session"
@@ -178,6 +179,7 @@ class KeepCredentialsTests(unittest.TestCase):
             program = "\n".join([
                 "set -euo pipefail",
                 "kea_load_session() { :; }",
+                make_stub or
                 ('make() { echo "MAKE $*"; printf "2030-01-01T00:00:00Z\\n" '
                  '> "$SESSION_DIR/runtime.env.expires"; return 1; }'
                  if fail_refresh else 'make() { echo "MAKE $*"; }'),
@@ -188,7 +190,9 @@ class KeepCredentialsTests(unittest.TestCase):
                 ["bash", "-c", program], capture_output=True, text=True,
                 env={"PATH": os.environ["PATH"], "KEA_ROOT": temporary,
                      "SESSION_DIR": str(session), "SESSION_ID": "test"})
-            self.assertEqual(result.returncode, 1 if fail_refresh else 0, result.stderr)
+            if expect_code is None:
+                expect_code = 1 if fail_refresh else 0
+            self.assertEqual(result.returncode, expect_code, result.stderr)
             if fail_refresh:
                 self.assertFalse((session / timer.EXPIRES_FILE).exists())
                 self.assertTrue(timer.due(session))
@@ -223,6 +227,53 @@ class KeepCredentialsTests(unittest.TestCase):
         output = self.keep(fake_timer=fake, fail_refresh=True)
         self.assertIn("MAKE -C", output)
         self.assertIn("could not be refreshed", output)
+        self.assertNotIn("signing in to AWS again", output)
+
+    # The first make fails as the AWS CLI does once the SSO token lapses; later ones pass.
+    SSO_EXPIRED_ONCE = (
+        'make() { echo "MAKE $*"; '
+        'if [[ ! -e "$SESSION_DIR/tried" ]]; then touch "$SESSION_DIR/tried"; '
+        'printf "2030-01-01T00:00:00Z\\n" > "$SESSION_DIR/runtime.env.expires"; '
+        'echo "aws: [ERROR]: Error when retrieving token from sso: Token has expired and refresh failed"; '
+        'return 255; fi; }')
+
+    @staticmethod
+    def fake_timer(login_exit: int) -> str:
+        return ("import sys\n"
+                "if sys.argv[1] == 'notify':\n"
+                "    print('NOTIFY ' + ' '.join(sys.argv[2:]))\n"
+                "elif sys.argv[1] == 'login':\n"
+                "    print('LOGIN')\n"
+                f"    sys.exit({login_exit})\n")
+
+    def test_an_expired_sso_sign_in_logs_in_again_and_retries(self):
+        output = self.keep("2026-10-07T12:00:00+00:00", fake_timer=self.fake_timer(0),
+                           make_stub=self.SSO_EXPIRED_ONCE, expect_code=0)
+        self.assertIn("LOGIN", output)
+        self.assertEqual(output.count("MAKE -C"), 2)
+        self.assertIn("refreshed after signing in again", output)
+        self.assertNotIn("NOTIFY", output)
+
+    def test_an_unapproved_sign_in_notifies_without_retrying(self):
+        output = self.keep("2026-10-07T12:00:00+00:00", fake_timer=self.fake_timer(1),
+                           make_stub=self.SSO_EXPIRED_ONCE, expect_code=1)
+        self.assertIn("LOGIN", output)
+        self.assertEqual(output.count("MAKE -C"), 1)
+        self.assertIn("NOTIFY Kea AWS demo credentials could not be refreshed", output)
+
+
+class LoginTests(unittest.TestCase):
+    def test_login_uses_the_demo_profile(self):
+        with patch.object(timer.subprocess, "run",
+                          return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(timer.login(), 0)
+        self.assertEqual(run.call_args.args[0], ["aws", "sso", "login", "--profile", "kea-energy"])
+        self.assertEqual(run.call_args.kwargs["timeout"], timer.LOGIN_TIMEOUT)
+
+    def test_a_login_nobody_approves_gives_up(self):
+        with patch.object(timer.subprocess, "run",
+                          side_effect=subprocess.TimeoutExpired("aws", timer.LOGIN_TIMEOUT)):
+            self.assertEqual(timer.login(), 1)
 
 
 if __name__ == "__main__":

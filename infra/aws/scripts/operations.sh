@@ -454,13 +454,28 @@ step_keep_credentials() {
   esac
   printf '%s refreshing credentials\n' "$(date -u +%FT%TZ)"
   # A separate make, so the refresh keeps `set -e` and a failure stops it whole.
-  if ! make -C "$KEA_ROOT/infra/aws" refresh-credentials SESSION_ID="$SESSION_ID"; then
-    # The local export records expiry before SSH installs it. A failed upload
-    # must not make the next timer run mistake remote credentials for fresh.
-    rm -f -- "$SESSION_DIR/runtime.env.expires"
-    python3 "$timer" notify "Kea AWS demo credentials could not be refreshed. Run make -C infra/aws login, then make -C infra/aws refresh-credentials SESSION_ID=$SESSION_ID."
-    exit 1
+  local output
+  if output="$(make -C "$KEA_ROOT/infra/aws" refresh-credentials SESSION_ID="$SESSION_ID" 2>&1)"; then
+    printf '%s\n' "$output"
+    return 0
   fi
+  printf '%s\n' "$output"
+  # The local export records expiry before SSH installs it. A failed upload
+  # must not make the next timer run mistake remote credentials for fresh.
+  rm -f -- "$SESSION_DIR/runtime.env.expires"
+  # An expired CLI sign-in is the usual overnight failure. The browser still
+  # holds the portal sign-in, so a fresh login approves itself; retry once.
+  if grep -Eiq 'token from sso|sso session|sso login|sso token' <<<"$output"; then
+    printf '%s signing in to AWS again\n' "$(date -u +%FT%TZ)"
+    if python3 "$timer" login &&
+        make -C "$KEA_ROOT/infra/aws" refresh-credentials SESSION_ID="$SESSION_ID"; then
+      printf '%s refreshed after signing in again\n' "$(date -u +%FT%TZ)"
+      return 0
+    fi
+    rm -f -- "$SESSION_DIR/runtime.env.expires"
+  fi
+  python3 "$timer" notify "Kea AWS demo credentials could not be refreshed. Run make -C infra/aws login, then make -C infra/aws refresh-credentials SESSION_ID=$SESSION_ID."
+  exit 1
 }
 
 step_credentials_timer() {
