@@ -22,9 +22,11 @@ DEFAULT_MODEL = "amazon.nova-pro-v1:0"
 
 
 def export_credentials() -> dict[str, str]:
+    # stderr is not captured: the CLI's "Token has expired" message must reach the
+    # log, where keep-credentials looks for it to decide whether to sign in again.
     result = subprocess.run(
         ["aws", "configure", "export-credentials", "--profile", "kea-energy", "--format", "process"],
-        capture_output=True,
+        stdout=subprocess.PIPE,
         text=True,
         check=True,
     )

@@ -262,6 +262,27 @@ class KeepCredentialsTests(unittest.TestCase):
         self.assertIn("NOTIFY Kea AWS demo credentials could not be refreshed", output)
 
 
+class ExportErrorTests(unittest.TestCase):
+    def test_an_expired_sso_token_message_reaches_the_log(self):
+        # keep-credentials signs in again only when it sees the CLI's SSO error, so the
+        # export must not swallow it on the first failed refresh.
+        with tempfile.TemporaryDirectory() as temporary:
+            fake = Path(temporary) / "aws"
+            fake.write_text("#!/bin/sh\n"
+                            "echo 'aws: [ERROR]: Error when retrieving token from sso: "
+                            "Token has expired and refresh failed' >&2\n"
+                            "exit 255\n")
+            fake.chmod(0o755)
+            code = ("import sys; sys.path.insert(0, sys.argv[1]); "
+                    "import runtime_credentials; runtime_credentials.export_credentials()")
+            result = subprocess.run(
+                [sys.executable, "-c", code, str(ROOT / "scripts")],
+                capture_output=True, text=True,
+                env={"PATH": f"{temporary}:{os.environ['PATH']}", "HOME": temporary})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Token has expired", result.stderr)
+
+
 class LoginTests(unittest.TestCase):
     def test_login_uses_the_demo_profile(self):
         with patch.object(timer.subprocess, "run",
