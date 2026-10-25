@@ -2,7 +2,7 @@
 #
 # GitHub automatically requests a review from the owner when a PR touches a matching
 # path. Combined with the "Require review from Code Owners" ruleset, these paths
-# cannot merge without that person's approval.
+# require approval from at least one listed owner.
 #
 # Syntax: <path pattern>  <@github-user>
 # Last matching rule wins, so order matters — general first, specific last.
@@ -11,7 +11,7 @@
 # There is no warning. If reviews stop being requested, check repo access first.
 
 # Everything, unless a more specific rule below overrides it.
-*                                   @nair-akash
+*                                   @nair-akash @nanhangfei
 
 # --- Critical paths ----------------------------------------------------------
 #
@@ -23,27 +23,27 @@
 
 # The trust claim of the whole product. If this breaks, "0 fabricated figures"
 # stops being true and nobody notices.
-/services/api/app/verification/     @nair-akash
+/services/api/app/verification/     @nair-akash @nanhangfei
 
 # Every headline number in the pitch comes out of here.
-/services/api/app/analytics/        @nair-akash
+/services/api/app/analytics/        @nair-akash @nanhangfei
 
 # The contract the frontend generates types from. Breaking it blocks four people.
-/services/api/app/schemas.py        @nair-akash
-/services/api/app/api/              @nair-akash
-/contracts/                         @nair-akash
+/services/api/app/schemas.py        @nair-akash @nanhangfei
+/services/api/app/api/              @nair-akash @nanhangfei
+/contracts/                         @nair-akash @nanhangfei
 
 # Migrations are close to irreversible once data exists.
-/services/api/alembic/              @nair-akash
-/services/api/app/db/               @nair-akash
+/services/api/alembic/              @nair-akash @nanhangfei
+/services/api/app/db/               @nair-akash @nanhangfei
 
 # Decisions of record and the rules themselves.
-/docs/adr/                          @nair-akash
-/CONTRIBUTING.md                    @nair-akash
-/SECURITY.md                        @nair-akash
-/.github/                           @nair-akash
+/docs/adr/                          @nair-akash @nanhangfei
+/CONTRIBUTING.md                    @nair-akash @nanhangfei
+/SECURITY.md                        @nair-akash @nanhangfei
+/.github/                           @nair-akash @nanhangfei
 
 # Client services
-/services/web/                      @nair-akash
-/services/mobile/                   @nair-akash
+/services/web/                      @nair-akash @nanhangfei
+/services/mobile/                   @nair-akash @nanhangfei
 
