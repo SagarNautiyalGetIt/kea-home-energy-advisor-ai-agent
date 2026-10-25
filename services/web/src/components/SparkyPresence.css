@@ -132,13 +132,21 @@
 .sparky-presence .sparky-presence__squash{transform-origin:50% 82%;translate:calc(var(--look-x,0) * 1.6%) calc(var(--look-y,0) * 1.4%);transition:translate .5s cubic-bezier(.16,1,.3,1)}
 .sparky-presence .sparky-presence__gaze{translate:calc(var(--look-x,0) * 7%) calc(var(--look-y,0) * 6%);transition:translate .5s cubic-bezier(.16,1,.3,1),rotate .5s cubic-bezier(.16,1,.3,1)}
 .sparky-presence .sparky-presence__pupils{translate:calc(var(--look-x,0) * 2.6px) calc(var(--look-y,0) * 4px);transition:translate .5s cubic-bezier(.16,1,.3,1)}
+/* The resting faces park the pupils a touch right of and below centre (2, 1). Following the
+   cursor from there took them to the right edge of the eye but barely left of centre, so
+   while looking they set out from the centre instead and reach as far either way. */
+.sparky-presence--looking .sparky-presence__pupils--idle,
+.sparky-presence--looking .sparky-presence__pupils--replying,
+.sparky-presence--looking .sparky-presence__pupils--static{translate:calc(var(--look-x,0) * 3.4px - 2px) calc(var(--look-y,0) * 4px - 1px)}
 /* Thinking's and pondering's pupils are already up at the edge of the eye; following the
    cursor as well would take them out of it. The face still turns. */
 .sparky-presence .sparky-presence__pupils--thinking,
 .sparky-presence .sparky-presence__pupils--pondering{translate:none}
-/* While it is looking at the cursor the idle glance pauses where it is, rather than
-   drifting the eyes off the cursor, and picks up again from there when it looks back. */
-.sparky-presence--looking .sparky-presence__gaze{animation-play-state:paused}
+/* While it is looking at the cursor the idle glance stops, rather than drifting the eyes off
+   the cursor, and starts again from the centre when it looks back. Stopped, not paused: a
+   paused glance kept its sideways offset (up to 2.2%), which added to the look offset, so
+   Sparky looked half as far one way as the other. */
+.sparky-presence--looking .sparky-presence__gaze{animation:none}
 
 /* The button itself adds nothing to the picture, and keeps the site's own focus ring,
    rounded to match. Two classes on :hover to beat the site's button:hover lift. */

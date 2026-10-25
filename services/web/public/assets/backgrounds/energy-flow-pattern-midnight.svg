@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" fill="none">
+  <!-- energy-flow-pattern.svg for the midnight dark palette: the same paths, with the warm
+       and violet flows turned to cyan and electric blue, a touch stronger to read on navy. -->
+  <defs>
+    <linearGradient id="warm-flow" x1="1410" y1="0" x2="1900" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#9FDCFF"/>
+    </linearGradient>
+    <linearGradient id="cool-flow" x1="0" y1="850" x2="600" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#1F6BFF"/>
+    </linearGradient>
+    <linearGradient id="mixed-flow" x1="1450" y1="880" x2="1910" y2="1160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#2F7BFF"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke="url(#warm-flow)" stroke-linecap="round" opacity=".16">
+    <path d="M1330 12C1466 32 1534 102 1621 112C1734 125 1815 56 1932 84" stroke-width="3"/>
+    <path d="M1391 53C1510 76 1570 147 1662 153C1770 161 1834 105 1937 127" stroke-width="1.8"/>
+    <path d="M1496 -26C1558 58 1580 207 1706 234C1781 250 1844 202 1937 220" stroke-width="2.4"/>
+    <path d="M1697 -20C1660 72 1700 122 1760 151C1822 181 1883 167 1945 190" stroke-width="1.5"/>
+  </g>
+
+  <g stroke="url(#cool-flow)" stroke-linecap="round" opacity=".15">
+    <path d="M-35 1007C91 933 179 936 270 1012C355 1084 431 1102 585 1038" stroke-width="3.2"/>
+    <path d="M-28 1061C102 988 202 1000 290 1071C377 1141 474 1134 625 1072" stroke-width="2"/>
+    <path d="M-28 1123C104 1058 222 1080 320 1143C405 1198 522 1191 664 1133" stroke-width="1.6"/>
+    <path d="M27 879C117 928 177 908 246 853C318 795 383 800 471 851" stroke-width="2.2"/>
+  </g>
+
+  <g stroke="url(#mixed-flow)" stroke-linecap="round" opacity=".12">
+    <path d="M1483 1093C1556 1024 1631 1007 1714 1041C1797 1075 1867 1064 1947 996" stroke-width="3"/>
+    <path d="M1438 1154C1535 1069 1632 1070 1732 1107C1810 1135 1885 1112 1947 1056" stroke-width="1.8"/>
+  </g>
+
+  <g opacity=".2">
+    <g fill="#22D3EE">
+      <circle cx="1531" cy="67" r="5"/>
+      <circle cx="1621" cy="112" r="6"/>
+      <circle cx="1760" cy="151" r="4"/>
+      <circle cx="1840" cy="103" r="3"/>
+    </g>
+    <g fill="#2F7BFF">
+      <circle cx="63" cy="985" r="5"/>
+      <circle cx="177" cy="962" r="4"/>
+      <circle cx="290" cy="1071" r="6"/>
+      <circle cx="451" cy="1085" r="4"/>
+    </g>
+  </g>
+
+  <g stroke="#4F8DFF" stroke-width="1.5" opacity=".1">
+    <path d="M0 203H88L119 172H210"/>
+    <path d="M0 240H56L84 268H184"/>
+    <path d="M1743 905H1813L1844 874H1920"/>
+    <path d="M1770 943H1838L1864 969H1920"/>
+    <circle cx="119" cy="172" r="5" fill="#4F8DFF" stroke="none"/>
+    <circle cx="84" cy="268" r="5" fill="#4F8DFF" stroke="none"/>
+    <circle cx="1844" cy="874" r="5" fill="#4F8DFF" stroke="none"/>
+    <circle cx="1864" cy="969" r="5" fill="#4F8DFF" stroke="none"/>
+  </g>
+</svg>

@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Mail, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AnimatedLogo from '../components/AnimatedLogo'
 import Modal from '../components/Modal'
 import SocialSignIn from '../components/SocialSignIn'
 import { getDemoAccounts, login as apiLogin, type DemoAccountCard } from '../lib/client'
@@ -121,8 +122,8 @@ export default function LoginPage({ onLogin, onToast }: { onLogin: (session: Ses
         </div>
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
-      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
-      {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<button className="primary-action" onClick={sendResetLink}>Send reset link</button>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" className={resetEmailError?'field-invalid':undefined} aria-invalid={Boolean(resetEmailError)} aria-describedby={resetEmailError?'reset-email-error':undefined} onChange={(event)=>{setEmail(event.target.value);setResetEmailError('')}}/>{resetEmailError&&<small className="field-error" id="reset-email-error" role="alert">{resetEmailError}</small>}</div></Modal>}
+      <aside className="brand-panel" aria-label="Kea Energy"><AnimatedLogo tone="white" className="energy-mark" /><strong>KEA ENERGY</strong></aside>
+      {showForgot&&<Modal title="Reset your password" onClose={()=>setShowForgot(false)} footer={<><button className="secondary-action" onClick={()=>setShowForgot(false)}>Cancel</button><button className="primary-action" onClick={sendResetLink}>Send reset link</button></>}><div className="forgot-panel"><Mail/><p>Enter your account email and we’ll prepare password reset instructions.</p><label htmlFor="reset-email" className="sr-only">Email address</label><input id="reset-email" type="email" value={email} placeholder="name@example.com" className={resetEmailError?'field-invalid':undefined} aria-invalid={Boolean(resetEmailError)} aria-describedby={resetEmailError?'reset-email-error':undefined} onChange={(event)=>{setEmail(event.target.value);setResetEmailError('')}}/>{resetEmailError&&<small className="field-error" id="reset-email-error" role="alert">{resetEmailError}</small>}</div></Modal>}
     </main>
   )
 }

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Kea Energy</title>
+  <desc id="desc">The Kea cycle logo in white on a round navy badge, for the browser tab in the dark theme.</desc>
+
+  <!-- The tab icon while the site is dark, and the logo on the downloaded invoice: a navy disc lit from the upper left. The mark is kea-brand-blue.svg's in white, like the sign-in panel's logo, at
+       0.8 on the disc, with a heavier ring (19 rather than 15, arrowheads 8 rather than 5) and a
+       wider rounding stroke on the bolt so it still reads at 16 and 32 pixels. -->
+  <defs>
+    <radialGradient id="badge" cx="0.34" cy="0.28" r="0.85">
+      <stop offset="0" stop-color="#1d4fa8"/>
+      <stop offset="0.55" stop-color="#0e2350"/>
+      <stop offset="1" stop-color="#071228"/>
+    </radialGradient>
+  </defs>
+
+  <circle cx="128" cy="128" r="128" fill="url(#badge)"/>
+
+  <g transform="translate(128 128) scale(0.8) translate(-128 -128)" fill="#fff" stroke="#fff">
+    <path d="M33 128A95 95 0 0 1 208.6 77.6" fill="none" stroke-width="19" stroke-linecap="round"/>
+    <path d="M226 96L222 68L197 85Z" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M223 128A95 95 0 0 1 47.4 178.4" fill="none" stroke-width="19" stroke-linecap="round"/>
+    <path d="M30 160L34 188L59 171Z" stroke-width="8" stroke-linejoin="round"/>
+    <path
+      d="M143 54L137 110L166.5 119.4Q178 123 170.1 131.9L109 201L117 149L89 139.4Q79 136 87 125.8Z"
+      stroke-width="6"
+      stroke-linejoin="round"
+      transform="translate(-12.8 -12.8) scale(1.1)"
+    />
+  </g>
+</svg>

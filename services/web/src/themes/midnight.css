@@ -1,0 +1,353 @@
+/* Midnight — the dark theme's palette, taken from the black-and-blue login skin made for the
+   slide deck: near-black navy, an electric-blue accent, ice-blue light accents and cyan light.
+   midnight-dark.generated.css re-colours every classic dark rule; this sheet holds what a
+   colour map can't: the accent that filled buttons need, the page atmosphere, the sidebar mark
+   and the sign-in pages.
+
+   It is the default dark palette, and the sign-in and sign-up pages always wear it, whatever
+   theme the customer picked inside (see login-midnight.css for the opt-outs). The classic
+   palette (lavender on navy) is untouched: put data-dark-palette="classic" on <html> in
+   index.html and every midnight rule switches off.
+
+   One gate wraps the whole sheet, matching the generated one: dark theme or a sign-in page,
+   not the classic palette, and no login skin chosen unless the theme itself is dark. It weighs
+   the same as html[data-theme=dark], so these rules meet the classic ones on equal terms and
+   win by loading last. */
+html:is([data-theme=dark],:has(.login-page)):where(:not([data-dark-palette=classic]):is([data-theme=dark],:not([data-login-skin]))){
+  /* Blue as type and as a fill pull opposite ways on the navy: 4.5:1 for link text wants a
+     light blue, 4.5:1 for white type on a fill wants a deep one, and no single blue does both.
+     So --purple and --purple2 are the type blues (links, outlines, icons; #4d94ff is 5.9:1 on
+     the cards), and the fills have their own variables: --midnight-fill for buttons,
+     --midnight-accent-fill for everything else the accent fills (chosen options, switches,
+     bars, bubbles), a bright blue that keeps white type at 4.9:1 and up. */
+  --purple:#4d94ff;
+  --purple2:#5aa9ff;
+  --midnight-accent-fill:linear-gradient(135deg,#2569ee 0%,#1747c8 100%);
+  /* Filled buttons: electric blue fading to black, left to right — the light theme's buttons
+     run light to deep the same way. The generated sheet puts it on every filled button. */
+  --midnight-fill:linear-gradient(110deg,#1f6bff 0%,#0a1a3d 55%,#000 100%);
+  --midnight-fill-hover:linear-gradient(110deg,#2f7dff 0%,#0d2350 60%,#000 100%);
+  /* Orange is the one warm note against all the blue, in the same two parts as the light
+     theme (see --kea-orange-label in index.css), mirrored: on dark, small type needs the
+     LIGHTER orange for contrast, so the labels take the pale #ffa766 (9.6:1) and the
+     subtitles and large headings the more saturated #ff8a3d (7.8:1) — the subtitle is the
+     deeper of the two here, the lighter on light. */
+  --kea-orange-display:#ff8a3d;
+  --kea-orange-label:#ffa766;
+
+  & body{background:#040a1b}
+
+  /* The page atmosphere, matched one-for-one to the light theme's so switching theme feels
+     like the same room with the lights down: the same tower line art top-left of the content,
+     the same flow lines round the edges, the same two corner glows and sparks. Only the
+     colours change — the orange glow top right turns cyan, the violet glow bottom left
+     electric blue — over the login skin's deep navy-to-black. */
+  & .app-shell{
+    position:relative;
+    isolation:isolate;
+    background-color:#040a1b;
+    background-image:
+      radial-gradient(circle at 88% 3%,rgb(34 211 238 / 13%),transparent 30rem),
+      radial-gradient(circle at 3% 96%,rgb(31 107 255 / 17%),transparent 35rem),
+      url('/assets/backgrounds/energy-flow-pattern-midnight.svg'),
+      linear-gradient(160deg,#06142e 0%,#030919 52%,#01040c 100%);
+    background-position:center;
+    background-size:auto,auto,cover,cover;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
+  }
+  /* The tower art is drawn through its own shape (a mask) in ice blue, rather than shipping a
+     recoloured copy of the 330 KB file. z-index -1 keeps it under the page inside the shell. */
+  & .app-shell::before{
+    content:"";
+    position:fixed;
+    z-index:-1;
+    top:-7rem;
+    left:clamp(220px,18vw,330px);
+    width:min(35vw,540px);
+    aspect-ratio:981/669;
+    background:linear-gradient(160deg,rgb(159 220 255 / 34%),rgb(47 123 255 / 20%));
+    -webkit-mask:url('/assets/backgrounds/transmission-tower-lines.svg') center/contain no-repeat;
+    mask:url('/assets/backgrounds/transmission-tower-lines.svg') center/contain no-repeat;
+    pointer-events:none;
+  }
+  /* The two sparks, likewise shown through their own shape, in a cyan-to-blue glow. */
+  & .kea-energy-decor{display:block;position:fixed;inset:0;z-index:-1;pointer-events:none}
+  & .kea-energy-burst{
+    position:absolute;
+    display:block;
+    background:radial-gradient(circle,#e6f6ff 0%,#5ccfff 38%,#2f7bff 72%);
+    -webkit-mask:url('/assets/backgrounds/electric-energy-burst.svg') center/contain no-repeat;
+    mask:url('/assets/backgrounds/electric-energy-burst.svg') center/contain no-repeat;
+  }
+  & .kea-energy-burst img{visibility:hidden}
+  & .kea-energy-burst-right{top:7.5rem;right:clamp(24px,4vw,70px);width:132px;height:128px;opacity:.5}
+  & .kea-energy-burst-left{top:29px;left:calc(clamp(220px,18vw,330px) - 50px);width:96px;height:94px;opacity:.42}
+  @media(max-width:760px){
+    & .app-shell{background-attachment:scroll}
+    & .app-shell::before{position:absolute;top:-3rem;left:-8rem;width:430px}
+    & .kea-energy-burst-right{top:7rem;right:8px;width:86px;height:84px}
+    & .kea-energy-burst-left{display:none}
+  }
+
+  /* Sign-in and sign-up: the form half takes the page's navy, beside the slide-deck brand
+     panel (login-midnight.css). The classic dark rules only ever darkened some of the form,
+     leaving light type on a white page. */
+  & .login-page{background:#040a1b}
+  & .login-content input[type=email],
+  & .login-content input[type=text],
+  & .password-field{border-color:#182849;color:#eef8ff;background:#050f21}
+  /* Login (and sign-up's Create account) as the site's filled buttons (Edit profile, the
+     invoice's Download): blue to black under white text at rest, turning on hover into the
+     accent outline on a blue tint. border-box on the fill: under a transparent edge it would
+     otherwise repeat from its opposite end down each side. */
+  & .login-page .login-button{border:1.5px solid transparent;color:#fff;background:var(--midnight-fill) border-box;box-shadow:0 12px 28px rgb(31 107 255 / 28%);transition:color .3s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+  & .login-page .login-button:not(:disabled):hover,
+  & .login-page .login-button:not(:disabled):focus-visible{border-color:#1869ff;color:#528eff;background:rgb(47 123 255 / 14%);box-shadow:0 9px 20px rgb(24 105 255 / 18%);transform:translateY(-1px);outline:none}
+  & .login-page .login-button:not(:disabled):focus-visible{outline:1.5px solid #1869ff;outline-offset:2px}
+  & .forgot-panel>svg{background:rgb(47 123 255 / 14%)}
+  /* The demo-account list never had dark rules: its white cards become navy ones. */
+  & .demo-accounts{border-top-color:#182849}
+  & .demo-accounts-list button{border-color:#182849;background:#09142a}
+  & .demo-accounts-list button:hover:not(:disabled){border-color:#2f7bff;background:#0c1b38}
+  & .demo-accounts-list strong{color:#eef8ff}
+  & .demo-accounts-list small{color:#93a6c4}
+  & .demo-accounts-list code{color:#5aa9ff}
+
+  /* The top bar's dropdown rows (search results, notifications, profile menu) hovered to the
+     light theme's near-white wash, which no dark rule replaced, so their light type vanished
+     into it. A faint blue lift instead, the way dark menus usually mark the row under the
+     pointer; the type keeps its colour. */
+  & .search-results>button:hover,
+  & .notifications-panel>button:hover,
+  & .profile-menu>button:hover{background:rgb(47 123 255 / 14%)}
+
+  /* Sparky: the suggested questions and the message box kept the light theme's white — the
+     classic dark rule for the questions sits in :where() and loses to it, and the box had
+     none — so the typed text, already light for dark, all but vanished. Navy cards like the
+     rest, with the menus' blue lift under the pointer; the listening state keeps its red ring. */
+  & .assistant-start .prompt-grid>button{color:#e5f0f8;background:#09142a;border-color:#182849;box-shadow:none}
+  & .assistant-start .prompt-grid>button:hover,
+  & .assistant-start .prompt-grid>button:focus-visible{background:#0e2248;border-color:rgb(47 123 255 / 45%)}
+  & .chat-composer{background:#09142a;box-shadow:0 8px 28px rgb(0 0 0 / 30%)}
+  & .chat-composer:not(.listening){border-color:#182849}
+  & .chat-composer:not(.listening):focus-within{border-color:rgb(47 123 255 / 55%)}
+  & .chat-composer textarea{color:#eef8ff}
+  & .chat-composer textarea::placeholder{color:#7d8ba6}
+  /* The customer's bubble ran light to deep, the accent fill's way, and on a short message
+     read as one flat electric blue. Like the light theme's violet bubble it now runs deep to
+     light from left to right: a royal blue into the accent blue, white type 4.8:1 or better
+     all the way across, with the profile banner's hairline for an edge. */
+  & .assistant-panel .user-bubble{background:linear-gradient(135deg,#143a94 0%,#1d55cf 55%,#2569ee 100%) border-box;box-shadow:inset 0 0 0 1px rgb(143 200 255 / 16%)}
+
+  /* Plans' solar button hovers as on light: its edge goes and it fills with the light theme's
+     deeper orange gradient under white type (4.6:1 at the lighter end), lifting 1px. */
+  & .plan-solar-cta:hover,
+  & .plan-solar-cta:focus-visible{color:#fff;border-color:transparent;background:linear-gradient(135deg,#c95004,#a83f00);background-origin:border-box;box-shadow:0 9px 20px rgb(232 93 4 / 24%);transform:translateY(-1px);outline:none}
+  & .plan-solar-cta:focus-visible{outline:1.5px solid var(--kea-orange-label);outline-offset:2px}
+  /* The logout dialog's two corner glows, as on light. The generated copy had them, but the
+     dialog's plain navy came later and painted over them. Lake blue rising from the lower left,
+     electric blue from the upper right, as the sign-in panel's glows are, at the light theme's
+     reach (46% and 43%). */
+  & .logout-modal.logout-confirmation-modal{background:
+    radial-gradient(circle at 0 100%,rgb(34 182 238 / 32%),transparent 46%),
+    radial-gradient(circle at 100% 0,rgb(47 123 255 / 34%),transparent 43%),
+    linear-gradient(145deg,#0c1a36 0%,#0a1630 50%,#0c1a36 100%)}
+
+  /* The buttons the light theme draws outlined until hover: Solar's two actions, the "Done"
+     closing the privacy, rates, terms and Sparky terms dialogs, and the logout dialog's pair.
+     Here they had kept the blue-to-black fill at rest. Now they are the bill shock buttons:
+     navy, a blue edge and blue text, filling blue to black under white text on hover. */
+  & .solar-page .primary-action,
+  & :is(.app-modal:has(.privacy-info),.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms),.app-modal:has(.sparky-terms))>footer .primary-action,
+  & .logout-modal.logout-confirmation-modal button{border:1.5px solid #1869ff;color:#528eff;background:#0c1a36;box-shadow:none;transform:none;outline:none}
+  & .solar-page .primary-action{box-shadow:0 9px 20px rgb(24 105 255 / 12%)}
+  & .solar-page .primary-action:not(:disabled):hover,
+  & .solar-page .primary-action:focus-visible,
+  & :is(.app-modal:has(.privacy-info),.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms),.app-modal:has(.sparky-terms))>footer .primary-action:hover,
+  & :is(.app-modal:has(.privacy-info),.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms),.app-modal:has(.sparky-terms))>footer .primary-action:focus-visible,
+  & .logout-modal.logout-confirmation-modal button:hover,
+  & .logout-modal.logout-confirmation-modal button:focus-visible{color:#fff;border-color:transparent;background:var(--midnight-fill) border-box;box-shadow:0 9px 20px rgb(24 105 255 / 22%);transform:translateY(-1px);outline:none}
+  & .solar-page .primary-action:focus-visible,
+  & :is(.app-modal:has(.privacy-info),.app-modal:has(.plan-rate-tables),.app-modal:has(.plan-terms),.app-modal:has(.sparky-terms))>footer .primary-action:focus-visible,
+  & .logout-modal.logout-confirmation-modal button:focus-visible{outline:1.5px solid #1869ff;outline-offset:2px}
+
+  /* Settings > Appearance as on light: the selected option wears what the other one shows on
+     hover (a blue edge, blue text and icon, a faint blue wash and glow) rather than a solid
+     fill; hovering it deepens the glow and lifts it 1px. */
+  & .settings-list .theme-options button.active{color:#528eff;border-color:#1869ff;background:rgb(47 123 255 / 14%);box-shadow:0 7px 18px rgb(24 105 255 / 12%)}
+  & .settings-list .theme-options button.active:hover,
+  & .settings-list .theme-options button.active:focus-visible{box-shadow:0 9px 20px rgb(24 105 255 / 18%);transform:translateY(-1px)}
+  /* Settings' switches, on, in the accent fill the master switch already had. */
+  & .setting-row input:checked,
+  & .threshold-head input[type=checkbox]:checked{background:var(--midnight-accent-fill) border-box}
+  /* Plans' plan-card buttons as on light: the chosen card's "Selected" in the accent (here
+     the bill shock buttons' blue outline, with a soft glow), the others quiet grey that only
+     lift on hover. They were the other way round, "Selected" a dark pill and the unchosen
+     "Choose …" buttons edged in bright blue. */
+  & .pricing-card-selected .pricing-choose,
+  & .pricing-card-selected .pricing-choose:hover,
+  & .pricing-card-selected .pricing-choose:focus-visible{border:1.5px solid #1869ff;color:#528eff;background:#0c1a36;box-shadow:0 9px 20px rgb(24 105 255 / 18%);transform:none;outline:none;cursor:default}
+  & .pricing-card:not(.pricing-card-selected) .pricing-choose{border:1.5px solid #182849;color:#aac1d2;background:#09142a;box-shadow:none;outline:none}
+  & .pricing-card:not(.pricing-card-selected) .pricing-choose:hover,
+  & .pricing-card:not(.pricing-card-selected) .pricing-choose:focus-visible{border-color:#182849;color:#aac1d2;background:#09142a;box-shadow:0 6px 14px rgb(0 0 0 / 30%);transform:translateY(-1px);outline:none}
+  & .pricing-card .pricing-choose:focus-visible{outline:1.5px solid #528eff;outline-offset:2px}
+  /* Plans' "Your selection" bar was a full band of electric blue with a glow, louder than
+     anything above it, and its button turned to the classic palette's peach on hover. It
+     pairs with the solar card under it instead, as the light theme pairs them: navy into a
+     deep blue where the solar card runs navy into burnt orange, the plan name in the display
+     blue where the solar title is orange, an outlined button that fills blue to black on hover,
+     as light's fills violet. */
+  & .plan-summary{color:#e5f0f8;background:linear-gradient(110deg,#09142a 0%,#0e1d3e 50%,#15367a 100%);box-shadow:inset 0 0 0 1px #213a6e}
+  & .plan-summary-main span{color:#7fa8e8}
+  & .plan-summary-main strong{color:var(--purple2)}
+  & .plan-summary-main small{color:#a8b8d4}
+  & .plan-summary-stats dt{color:#93a6c4}
+  & .plan-summary-stats dd{color:#e5f0f8}
+  & .plan-summary-cta{border-color:#7fb2ff;color:#7fb2ff;background:transparent;box-shadow:none}
+  & .plan-summary-cta:hover:not(:disabled),
+  & .plan-summary-cta:focus-visible:not(:disabled){color:#fff;border-color:transparent;background:var(--midnight-fill) border-box;box-shadow:0 9px 20px rgb(24 105 255 / 22%);transform:translateY(-1px);outline:none}
+  & .plan-summary-cta:focus-visible:not(:disabled){outline:1.5px solid #7fb2ff;outline-offset:2px}
+  & .plan-summary-cta:disabled{border-color:rgb(127 178 255 / 35%);color:#93a6c4;background:transparent}
+  & .plan-summary-links button{color:#a8c8ff}
+  & .plan-summary-links button:hover{color:#fff}
+  /* Power Clash's "+5 planning XP" kept the light theme's deep green (3.8:1). */
+  & .power-clash-page .clash-quest-xp{color:#6ddba8}
+  /* Help & Support's buttons as the light theme draws them: every one rests like the topic
+     chips (a 1.5px navy edge, grey-blue text and icon on the card's navy), and every one and
+     every chip hovers alike (a blue edge, blue text and icon, a soft blue glow, a 1px lift).
+     Ask Sparky, Call now and Write email had kept the blue-to-black fill, so beside the Copy
+     buttons the two themes no longer matched. */
+  & .help-actions .contact-actions a,
+  & .help-actions .contact-actions button{border:1.5px solid #182849;color:#aac1d2;background:#09142a;box-shadow:none;transform:none;outline:none}
+  & .help-actions .contact-actions a:hover,
+  & .help-actions .contact-actions button:hover,
+  & .help-actions .contact-actions a:focus-visible,
+  & .help-actions .contact-actions button:focus-visible,
+  & .help-faq .faq-chips button:not(.active):hover,
+  & .help-faq .faq-chips button:not(.active):focus-visible{border-color:#528eff;color:#528eff;background:#09142a;box-shadow:0 9px 20px rgb(24 105 255 / 18%);transform:translateY(-1px);outline:none}
+  & .help-actions .contact-actions a:focus-visible,
+  & .help-actions .contact-actions button:focus-visible,
+  & .help-faq .faq-chips button:focus-visible{outline:1.5px solid #528eff;outline-offset:2px}
+
+  /* The heading's own button, Plans' "Ask Sparky to recommend a plan" and Solar's "Back to
+     plans", likewise as on light: resting grey on navy with the search bar's soft shadow, and
+     turning blue with a glow and a 1px lift on hover. It had kept the blue-to-black fill. */
+  & .compare-action{border:1.5px solid #182849;color:#aac1d2;background:#09142a;box-shadow:0 6px 16px rgb(0 0 0 / 28%);outline:none;font-weight:600}
+  & .compare-action:hover,
+  & .compare-action:focus-visible{border-color:#528eff;color:#528eff;background:#09142a;box-shadow:0 9px 20px rgb(24 105 255 / 18%);transform:translateY(-1px);outline:none}
+  & .compare-action:focus-visible{outline:1.5px solid #528eff;outline-offset:2px}
+
+  /* Power Clash's tabs as Usage's toggles are here, and its actions as the bill shock
+     popover's: navy pills edged in blue that fill blue to black on hover or focus. */
+  & .clash-tabs{border-color:#182849;background:#050f21}
+  & .clash-tabs button{color:#e5f0f8}
+  & .clash-tabs button:hover{color:var(--purple);background:rgb(47 123 255 / 14%)}
+  & .clash-tabs button[aria-selected=true]{color:#fff;background:var(--midnight-accent-fill) border-box;box-shadow:0 6px 14px rgb(37 113 255 / 20%)}
+  & .clash-button{border-color:#1869ff;color:#528eff;background:#0c1a36;box-shadow:none}
+  & .clash-button:not(:disabled):hover,
+  & .clash-button:focus-visible{color:#fff;border-color:transparent;background:var(--midnight-fill) border-box;box-shadow:0 9px 20px rgb(24 105 255 / 22%)}
+  & .power-clash-page .clash-button:focus-visible{outline-color:#1869ff}
+  /* Its section titles in the grey-blue of Plans' "Your selection", its data notes in the
+     orange pill of Step labels: neither is a control, so neither wears the buttons' blue. */
+  & .clash-eyebrow{color:#7fa8e8}
+  & .clash-badge{color:#ffa766;background:rgb(254 102 1 / 14%)}
+  /* The selected arena pillar's ring in deep blue rather than the lake blue it had. */
+  & .clash-pillar:focus-visible,
+  & .clash-pillar[aria-pressed=true]:focus{outline-color:#1f5fe0}
+  /* The XP badge's offset shadow kept the light theme's pale blue, a bright sliver beside it. */
+  & .clash-token{box-shadow:5px 7px 0 #182849}
+
+  /* Billing history's column header kept the light theme's near-white band, which the classic
+     :where() rule was too light to replace. A navy a shade above the card instead. */
+  & .invoice-table .invoice-table-head{color:#93a6c4;background:#0c1a36}
+
+  /* The energy home's dark glass (the device chips on the house, the bill-shock popover and
+     the usage tiles) is the phone's green-black at 84%, made for the light sky, where see-
+     through dark glass reads as glass. On the night scene the clouds showed through and the
+     green turned muddy against the navy, so here it is the cards' navy and nearly solid, with
+     a faint blue edge that brightens under the pointer as the old one did. */
+  & .kea-house-chip-back{fill:#0a1630;fill-opacity:.94;stroke:#5a8dff;stroke-opacity:.3}
+  & .kea-house-chip:hover .kea-house-chip-back,
+  & .kea-house-chip:focus-visible .kea-house-chip-back{fill-opacity:1;stroke-opacity:.75}
+  & .kea-house-chip:focus-visible .kea-house-chip-back{stroke:#8fd0ff}
+  & .kea-house-chip-title{fill:#a8b8d4}
+  & .summary-tiles article,
+  & .energy-home-alert-detail{border-color:rgb(90 141 255 / 30%);background:rgb(10 22 48 / 95%)}
+  & .summary-tiles article:hover,
+  & .energy-home-alert-detail:hover{border-color:rgb(90 141 255 / 75%);background:rgb(10 22 48)}
+  & .summary-tiles span{color:#a8b8d4}
+  & .energy-home-alert-detail::before{border-top-color:rgb(90 141 255 / 30%);border-left-color:rgb(90 141 255 / 30%)}
+  & .energy-home-alert-detail:hover::before{border-top-color:rgb(90 141 255 / 75%);border-left-color:rgb(90 141 255 / 75%)}
+
+  /* Usage. The chart's hover tooltip kept the light theme's violet gradient. It is the same navy
+     panel as the popover now, edged in blue; CSS fill outranks the rect's fill attribute. */
+  & .chart-tooltip rect{fill:#0a1630;stroke:rgb(90 141 255 / 55%);stroke-width:1;filter:drop-shadow(0 8px 18px rgb(0 0 0 / 45%))}
+  /* "How was this worked out?" opened a wash of white over the navy that read as a grey slab.
+     It is framed like the Selected period card instead: the card's own navy, a navy line.
+     Under the list as well, to outrank the generated :root copy of that wash. */
+  & .breakdown-list .breakdown-basis{padding:14px 16px;border:1px solid #182849;border-radius:18px;color:#c8d6e8;background:#09142a}
+
+  /* Profile's banner: a full band of saturated blue shouted over the details beneath it, the
+     loudest thing on the page. The electric blue now stays behind the title and fades into
+     the card's navy, the way the buttons fade into black, with a hairline in place of the
+     blue glow under it. The avatar overlapping its right end sits on the navy. */
+  & .profile-card header{background:linear-gradient(100deg,#1a4cb5 0%,#12336f 32%,#0c1a36 64%) border-box;box-shadow:inset 0 0 0 1px rgb(47 123 255 / 18%)}
+  /* Billing's Total row had the same full band of electric blue, with a glow, and outshone
+     everything else on the page. It takes the banner's fade instead: blue behind the label,
+     navy under the amount, and the hairline for an edge. */
+  & .invoice-totals .total:last-child{background:linear-gradient(100deg,#1a4cb5 0%,#12336f 32%,#0c1a36 64%) border-box;box-shadow:inset 0 0 0 1px rgb(47 123 255 / 18%)}
+
+  /* Sparky in deep blue. Its palette note (components/sparky/theme.ts) has it belong to the
+     interface rather than stand beside it, so on light it wears the app's violet; here the
+     interface is navy and electric blue, and the violet was the one purple thing left. The
+     lake-blue alternative, midnight's cyan light: body #9eeaff / #1aa3d9 / #0b3f78, rim
+     #aeeaff, halo #22c7ee, arcs #8ee3ff / #2f7bff. */
+  & .sparky-presence__body linearGradient stop:nth-child(1){stop-color:#7fb2ff}
+  & .sparky-presence__body linearGradient stop:nth-child(2){stop-color:#1f5fe0}
+  & .sparky-presence__body linearGradient stop:nth-child(3){stop-color:#0a1f6b}
+  & .sparky-presence__body>circle:nth-of-type(1){stroke:#9ec4ff}
+  & .sparky-presence__halo radialGradient stop{stop-color:#2f7bff}
+  & .sparky-presence__halo>path:nth-of-type(1){stroke:#8fb8ff}
+  & .sparky-presence__halo>path:nth-of-type(2){stroke:#1f6bff}
+
+  /* (Each hover below also drops the generated .primary-action:hover outline, an inset 1.5px
+     blue ring that otherwise stayed on top of the fill, so a hovered button kept an edge.) */
+  /* Settings' two action buttons, Save alert settings and Scan my network, as on light: an
+     outlined pill with a soft glow at rest (here the bill shock buttons' navy, blue edge and
+     blue text) that fills blue to black under white text on hover. They had a solid fill. */
+  & .threshold-actions .primary-action,
+  & .settings-list .device-scan button.primary{border:1.5px solid #1869ff;color:#528eff;background:#0c1a36;box-shadow:0 9px 20px rgb(24 105 255 / 18%)}
+  & .threshold-actions .primary-action:not(:disabled):hover,
+  & .threshold-actions .primary-action:not(:disabled):focus-visible,
+  & .settings-list .device-scan button.primary:not(:disabled):hover,
+  & .settings-list .device-scan button.primary:not(:disabled):focus-visible{border-color:transparent;color:#fff;background:var(--midnight-fill) border-box;box-shadow:0 9px 20px rgb(24 105 255 / 22%);transform:translateY(-1px);outline:none}
+  & .threshold-actions .primary-action:not(:disabled):focus-visible,
+  & .settings-list .device-scan button.primary:not(:disabled):focus-visible{outline:1.5px solid #1869ff;outline-offset:2px}
+  & .threshold-actions .primary-action:disabled,
+  & .settings-list .device-scan button.primary:disabled,
+  & .threshold-actions .primary-action:disabled:hover,
+  & .settings-list .device-scan button.primary:disabled:hover{color:#528eff;background:#0c1a36;box-shadow:none;transform:none;outline:none}
+
+  /* Page subtitles back in orange, as on light. The classic palette made them lavender with
+     a heavier !important rule than its own orange one, and the map turned that blue. */
+  & .page-heading p,
+  & :where(.billing-heading p,.assistant-heading p){color:var(--kea-orange-display)!important}
+  & .solar-entry.plan-solar h2,
+  & .solar-page .solar-hero strong{color:var(--kea-orange-display)}
+  /* Plans' Step 1 / Step 2 pills kept the light theme's pale peach behind pale orange type
+     (1.5:1); a dark orange tint instead. */
+  & .plan-step-index{color:var(--kea-orange-label);background:rgb(254 102 1 / 14%)}
+
+  /* The sidebar wordmark, light to deep like the light theme's: ice blue into the electric
+     blue of the mark's bolt. The classic ramp it was mapped from ended near white (#c4e6ff),
+     which washed the name out beside the mark. */
+  & .brand:not(.brand-compact) .brand-name{background:linear-gradient(135deg,#86c8ff 0%,#4b95ff 50%,#2870ff 100%);-webkit-background-clip:text;background-clip:text}
+
+  /* The sidebar mark in the wordmark's ice-to-electric blue, with a faint cyan glow. */
+  & .brand-orbit .kea-logo{filter:drop-shadow(0 0 8px rgb(34 211 238 / 35%))}
+  & .brand-orbit .kea-logo-ring{color:#8fd0ff}
+  & .brand-orbit .kea-logo-bolt stop:nth-child(1){stop-color:#2f7bff}
+  & .brand-orbit .kea-logo-bolt stop:nth-child(2){stop-color:#5aa9ff}
+  & .brand-orbit .kea-logo-bolt stop:nth-child(3){stop-color:#9fdcff}
+}

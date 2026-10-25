@@ -17,6 +17,8 @@
 
 html[data-theme='dark'] .energy-home-scene-shell {
   border-color: var(--line);
+  background: #1c2246;
+  box-shadow: 0 18px 52px rgb(0 0 0 / 32%);
 }
 
 .energy-home-scene {
@@ -441,6 +443,123 @@ html[data-theme='dark'] .energy-home-scene-shell {
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+
+/* Dark theme. The light scene is lilac over pale blue; this is the same pair at night: a
+   navy just above the page's own (#11162b) deepening to indigo at the ground, with the
+   theme's violet glowing behind and under the house. The house's roof and timber are
+   dark, so without that glow it would sink into the sky. Stars and clouds take the sky
+   component's own night look, and the corner chips turn light-on-glass. The bill-shock
+   chip keeps its meaning (red when triggered, green when calm, grey when unknown), only
+   as a tint on the glass rather than a pale card. */
+html[data-theme='dark'] .energy-home-scene {
+  background: #1c2246;
+}
+
+html[data-theme='dark'] .energy-home-scene .weather-environment .weather-sky {
+  background:
+    radial-gradient(ellipse 48% 54% at 52% 66%, rgb(124 108 255 / 26%), transparent 76%),
+    linear-gradient(180deg, #151a35 0%, #1d2348 46%, #2b2c5f 100%);
+}
+
+html[data-theme='dark'] .energy-home-scene .weather-sky .weather-sky__haze {
+  background: radial-gradient(ellipse at 50% 62%, rgb(155 135 255 / 12%), transparent 68%);
+}
+
+html[data-theme='dark'] .energy-home-scene .weather-sky .weather-sky__cloud {
+  filter: blur(18px) brightness(.48) saturate(.8);
+}
+
+html[data-theme='dark'] .energy-home-scene .weather-sky__star {
+  background: #e8ebff;
+  box-shadow: 0 0 6px 1px rgb(200 210 255 / 55%);
+}
+
+html[data-theme='dark'] .energy-home-scene .weather-sky__shooting-star {
+  background: linear-gradient(90deg, transparent, rgb(214 222 255 / 55%) 58%, #fff 100%);
+}
+
+html[data-theme='dark'] .energy-home-ground {
+  background:
+    radial-gradient(ellipse 55% 30% at 50% 77%, rgb(124 108 255 / 18%), transparent 76%),
+    linear-gradient(180deg, transparent 0%, rgb(43 44 95 / 10%) 48%, rgb(10 13 32 / 42%) 100%);
+}
+
+html[data-theme='dark'] .energy-home-ground::before {
+  background: radial-gradient(ellipse at 50% 100%, rgb(110 96 230 / 18%), transparent 72%);
+}
+
+html[data-theme='dark'] .energy-home-ground::after {
+  background: radial-gradient(ellipse 42% 24% at 52% 77%, rgb(190 178 255 / 16%), transparent 72%);
+}
+
+html[data-theme='dark'] .energy-home-ground > span {
+  background: rgb(4 6 18 / 50%);
+}
+
+html[data-theme='dark'] .energy-home-weather {
+  color: #e6e9f5;
+  text-shadow: 0 1px 3px rgb(6 9 24 / 60%);
+}
+
+html[data-theme='dark'] .energy-home-weather-icon {
+  border-color: rgb(255 255 255 / 16%);
+  background: rgb(255 255 255 / 8%);
+}
+
+html[data-theme='dark'] .energy-home-summary-trigger svg,
+html[data-theme='dark'] .energy-home-summary-trigger .energy-home-action-hint {
+  color: var(--purple2);
+}
+
+html[data-theme='dark'] .energy-home-summary-trigger:hover .energy-home-weather-icon,
+html[data-theme='dark'] .energy-home-summary-trigger:focus-visible .energy-home-weather-icon {
+  border-color: rgb(182 166 255 / 55%);
+  background: rgb(255 255 255 / 14%);
+}
+
+html[data-theme='dark'] .energy-home-summary-trigger:focus-visible,
+html[data-theme='dark'] .energy-home-alert-trigger:focus-visible {
+  outline-color: var(--purple2);
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger {
+  --bill-status-color: #aab5d2;
+  --bill-status-fill: rgb(255 255 255 / 7%);
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger--alert {
+  border-color: rgb(255 138 138 / 55%);
+  --bill-status-color: #ff8a8a;
+  --bill-status-fill: rgb(185 28 28 / 22%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger--normal {
+  --bill-status-color: #6ee7a0;
+  --bill-status-fill: rgb(22 101 52 / 24%);
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger strong {
+  color: #eef1ff;
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger small {
+  color: #c8cfe4;
+}
+
+html[data-theme='dark'] .energy-home-alert-trigger:hover .energy-home-weather-icon,
+html[data-theme='dark'] .energy-home-alert-trigger:focus-visible .energy-home-weather-icon {
+  background: rgb(255 255 255 / 14%);
+}
+
+/* On the glass the routes' own colours read, so the status icon goes back to them. */
+html[data-theme='dark'] .energy-home-now--solar .energy-home-weather-icon { color: #63f09a; }
+html[data-theme='dark'] .energy-home-now--battery .energy-home-weather-icon { color: #5ab8ff; }
+html[data-theme='dark'] .energy-home-now--grid .energy-home-weather-icon { color: #ff9f43; }
+
+html[data-theme='dark'] .energy-home-illustrative {
+  color: var(--muted);
 }
 
 /* Settings stays part of this feature, but the dialog is shown only on demand. */

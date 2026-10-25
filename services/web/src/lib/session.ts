@@ -12,6 +12,8 @@
  * there is one place to change.
  */
 
+import { resetTheme } from './theme'
+
 const KEY = 'kea-demo-session'
 
 export interface Session {
@@ -45,10 +47,23 @@ export function loadSession(): Session | null {
   }
 }
 
+/** Stores the session and nothing else: a refreshed token or name keeps the chosen theme. */
 export function saveSession(session: Session): void {
   localStorage.setItem(KEY, JSON.stringify(session))
 }
 
 export function clearSession(): void {
   localStorage.removeItem(KEY)
+}
+
+/** A sign-in starts in light, whoever signed in before. */
+export function signIn(session: Session): void {
+  saveSession(session)
+  resetTheme()
+}
+
+/** Signing out returns the sign-in page to light. */
+export function signOut(): void {
+  clearSession()
+  resetTheme()
 }

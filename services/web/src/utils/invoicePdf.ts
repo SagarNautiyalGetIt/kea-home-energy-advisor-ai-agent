@@ -37,13 +37,40 @@ const PAGE_H = 842
 const MARGIN = 48
 const CONTENT_W = PAGE_W - MARGIN * 2
 
-const INK = '#263574'
-const MUTED = '#68779F'
-const PURPLE = '#4318FF'
-const GREY_FILL = '#F4F5F8'
-const GREY_EDGE = '#E4E7EE'
-const GREY_LABEL = '#8A93A6'
-const RULE = '#ECEEF3'
+// The colours both themes share on white paper, at depths that print (the dark theme's lake
+// blues and light oranges are made for a navy ground and all but vanish on white). Every text
+// colour here and in the palettes below is at least 4.5:1 on what it sits on.
+const MUTED = '#5B6A8F'
+const GREY_FILL = '#F3F6FB'
+const GREY_EDGE = '#E1E7F2'
+const GREY_LABEL = '#5B6A8F'
+const RULE = '#E8EDF5'
+const ORANGE = '#BD4700'
+
+/**
+ * The colours that follow the site's theme when the invoice is downloaded: navy and electric
+ * blue from the dark theme, ink and violet from the light one, each with the tab icon of that
+ * theme as the logo (kea-favicon.svg, kea-favicon-light.svg). The white page, the grey cards
+ * and the status and orange colours are the same in both.
+ */
+export interface InvoicePalette {
+  ink: string
+  accent: string
+  /** The header wash, before its status tint. */
+  wash: [string, string]
+  washEdge: string
+  disc: [string, string, string]
+  totalBar: [string, string]
+}
+export const INVOICE_DARK: InvoicePalette = {
+  ink: '#13254D', accent: '#1747C8', wash: ['#E8F0FF', '#F7FAFF'], washEdge: '#E3EAF6',
+  disc: ['#1D4FA8', '#0E2350', '#071228'], totalBar: ['#2569EE', '#1747C8'],
+}
+// White on the bar's lighter end is 5.0:1.
+export const INVOICE_LIGHT: InvoicePalette = {
+  ink: '#263574', accent: '#4318FF', wash: ['#F1EEFF', '#FBFAFF'], washEdge: '#E9ECF7',
+  disc: ['#868CFF', '#5A45FF', '#3B1FD9'], totalBar: ['#6248FF', '#4318FF'],
+}
 
 // Standard Helvetica and Helvetica-Bold advance widths (1/1000 em) for ASCII 32–126, for the
 // fallback when Geist cannot be loaded.
@@ -164,14 +191,15 @@ function quad(from: [number, number], control: [number, number], to: [number, nu
   return `${c1.map(num).join(' ')} ${c2.map(num).join(' ')} ${to.map(num).join(' ')} c`
 }
 
-/** A linear shading through colour stops, as a PDF axial shading dictionary. */
+/** A shading through colour stops: axial for four coords (x0 y0 x1 y1), radial for six
+ *  (x0 y0 r0 x1 y1 r1). */
 function shading(coords: number[], stops: [number, string][]): string {
   const fn = (from: string, to: string) => `<< /FunctionType 2 /Domain [0 1] /C0 [${rgb(from)}] /C1 [${rgb(to)}] /N 1 >>`
   const pieces = stops.slice(1).map(([, color], i) => fn(stops[i]![1], color))
   const bounds = stops.slice(1, -1).map(([at]) => num(at)).join(' ')
   const encode = pieces.map(() => '0 1').join(' ')
   const func = pieces.length === 1 ? pieces[0] : `<< /FunctionType 3 /Domain [0 1] /Functions [${pieces.join(' ')}] /Bounds [${bounds}] /Encode [${encode}] >>`
-  return `<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [${coords.map(num).join(' ')}] /Function ${func} /Extend [true true] >>`
+  return `<< /ShadingType ${coords.length === 6 ? 3 : 2} /ColorSpace /DeviceRGB /Coords [${coords.map(num).join(' ')}] /Function ${func} /Extend [true true] >>`
 }
 
 // The byte arrays here are typed as backed by a plain ArrayBuffer: a Blob will not take a view
@@ -181,7 +209,9 @@ async function deflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<Array
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
-export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts): Promise<Uint8Array<ArrayBuffer>> {
+export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts, palette: InvoicePalette = INVOICE_DARK): Promise<Uint8Array<ArrayBuffer>> {
+  const INK = palette.ink
+  const BLUE = palette.accent
   const metrics = fonts ? { regular: readOpenType(fonts.regular), bold: readOpenType(fonts.bold) } : undefined
   const widthTable = (font: Font) => metrics ? metrics[font].widths : font === 'bold' ? HELVETICA_BOLD : HELVETICA
   const textWidth = (value: string, font: Font, size: number, spacing = 0) =>
@@ -231,7 +261,9 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   const fillAndEdge = (path: string, color: string, edge: string) => ops.push(`${rgb(color)} rg ${rgb(edge)} RG 0.8 w ${path} B`)
   const rule = (top: number) => ops.push(`${rgb(RULE)} RG 0.8 w ${MARGIN} ${num(y(top))} m ${PAGE_W - MARGIN} ${num(y(top))} l S`)
 
-  // The Kea cycle mark, in its own 256-unit, y-down space (kea-brand-blue.svg).
+  // The Kea cycle mark as the browser tab draws it (kea-favicon.svg): the mark of
+  // kea-brand-blue.svg in white, at 0.8 on a navy disc, with the tab icon's heavier ring and
+  // the wider stroke that rounds the bolt's corners. In its own 256-unit, y-down space.
   const logo = (x: number, top: number, size: number) => {
     const s = size / 256
     const bolt = [
@@ -243,33 +275,34 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
     ].join(' ')
     ops.push(
       `q ${num(s)} 0 0 ${num(-s)} ${num(x)} ${num(y(top))} cm`,
-      `${rgb('#868CFF')} RG ${rgb('#868CFF')} rg 1 J 1 j`,
-      `15 w ${arc(128, 128, 95, 180, 328)} S ${arc(128, 128, 95, 0, 148)} S`,
-      '5 w 226 96 m 222 68 l 197 85 l h B 30 160 m 34 188 l 59 171 l h B',
-      // The bolt's soft corners come from a thin stroke under the gradient fill.
-      `q 1.1 0 0 1.1 -12.8 -12.8 cm ${rgb('#5F45FF')} RG 3.5 w ${bolt} S ${bolt} W n /Sh2 sh Q`,
-      'Q',
+      `q ${arc(128, 128, 128, 0, 360)} h W n /Sh3 sh Q`,
+      'q 0.8 0 0 0.8 25.6 25.6 cm',
+      `${rgb('#FFFFFF')} RG ${rgb('#FFFFFF')} rg 1 J 1 j`,
+      `19 w ${arc(128, 128, 95, 180, 328)} S ${arc(128, 128, 95, 0, 148)} S`,
+      '8 w 226 96 m 222 68 l 197 85 l h B 30 160 m 34 188 l 59 171 l h B',
+      `q 1.1 0 0 1.1 -12.8 -12.8 cm 6 w ${bolt} B Q`,
+      'Q Q',
     )
   }
 
   const paid = data.status === 'Paid'
   const right = PAGE_W - MARGIN
 
-  // Header: the Billing page's invoice-header wash (lavender, near-white, then light red
-  // while due or light green once paid), the logo as it is, title, status and amount.
+  // Header: a pale blue wash (blue, near-white, then light red while due or light green once
+  // paid, as the Billing page's invoice header turns), the logo, title, status and amount.
   const headerH = 140
   ops.push(`q 0 ${num(y(headerH))} ${PAGE_W} ${headerH} re W n /Sh1 sh Q`)
-  ops.push(`${rgb('#E9ECF7')} RG 0.8 w 0 ${num(y(headerH))} m ${PAGE_W} ${num(y(headerH))} l S`)
+  ops.push(`${rgb(palette.washEdge)} RG 0.8 w 0 ${num(y(headerH))} m ${PAGE_W} ${num(y(headerH))} l S`)
   logo(MARGIN, 40, 60)
   const title = data.estimated ? 'KEA ENERGY USAGE ESTIMATE' : 'KEA ENERGY INVOICE'
   text(title, 124, 70, { font: 'bold', size: 20 })
   const pillX = 124 + textWidth(title, 'bold', 20) + 12
   const pillW = textWidth(data.status, 'bold', 8.5) + 18
   fill(roundedRect(pillX, 56, pillW, 18, 9), paid ? '#E3F6EC' : '#FFE6EB')
-  text(data.status, pillX + 9, 68.5, { font: 'bold', size: 8.5, color: paid ? '#1E9E5A' : '#E0445A' })
+  text(data.status, pillX + 9, 68.5, { font: 'bold', size: 8.5, color: paid ? '#157544' : '#C42B45' })
   text(`Plan: ${data.planName}`, 124, 92, { color: MUTED })
   text(paid ? 'AMOUNT PAID' : 'AMOUNT DUE', right, 60, { font: 'bold', size: 7.5, color: GREY_LABEL, spacing: 1.4, align: 'right' })
-  text(data.amount, right, 94, { font: 'bold', size: 28, color: PURPLE, align: 'right' })
+  text(data.amount, right, 94, { font: 'bold', size: 28, color: BLUE, align: 'right' })
   text(paid ? 'Paid - thank you' : `Due ${data.due}`, right, 112, { size: 10, color: MUTED, align: 'right' })
 
   // Two light grey cards: who the bill is for, and the invoice itself.
@@ -298,7 +331,8 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   card(MARGIN, 'BILL TO', billTo)
   card(MARGIN + cardW + 16, 'INVOICE DETAILS', details)
 
-  // Charges: a grey header row, the two lines, then the total on a grey bar.
+  // Charges: a grey header row, the two lines, then the total on a blue bar, as the Billing
+  // page's Total row is drawn.
   const tableTop = cardTop + cardH + 28
   fill(roundedRect(MARGIN, tableTop, CONTENT_W, 30, 8), GREY_FILL)
   text('DESCRIPTION', MARGIN + 16, tableTop + 19, { font: 'bold', size: 7.5, color: GREY_LABEL, spacing: 1.4 })
@@ -313,24 +347,25 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
     rule(baseline + 12)
   })
   const totalTop = tableTop + 30 + rows.length * 36 + 12
-  fill(roundedRect(MARGIN, totalTop, CONTENT_W, 48, 12), GREY_FILL)
-  text(paid ? 'Paid in full' : `Amount due by ${data.due}`, MARGIN + 16, totalTop + 29)
-  text(`Total: ${data.amount}`, right - 16, totalTop + 30, { font: 'bold', size: 15, color: PURPLE, align: 'right' })
+  ops.push(`q ${roundedRect(MARGIN, totalTop, CONTENT_W, 48, 12)} W n /Sh4 sh Q`)
+  text(paid ? 'Paid in full' : `Amount due by ${data.due}`, MARGIN + 16, totalTop + 29, { color: '#FFFFFF' })
+  text(`Total: ${data.amount}`, right - 16, totalTop + 30, { font: 'bold', size: 15, color: '#FFFFFF', align: 'right' })
 
-  // The same orange payment note the invoice card on the page carries.
+  // The same orange payment note the invoice card on the page carries; the label in the
+  // light theme's label orange, since the bar's bright orange is too faint for text.
   const noteTop = totalTop + 48 + 24
   fill(roundedRect(MARGIN, noteTop, CONTENT_W, 40, 8), '#FFF5EC')
   fill(`${MARGIN} ${num(y(noteTop + 40))} 3 40 re`, '#FE6601')
-  text('Payment:', MARGIN + 16, noteTop + 25, { font: 'bold', color: '#FE6601' })
+  text('Payment:', MARGIN + 16, noteTop + 25, { font: 'bold', color: ORANGE })
   const note = paid ? 'Paid according to account records.' : 'Use the verified payment details on your issued bill.'
-  text(note, MARGIN + 16 + textWidth('Payment: ', 'bold', 10.5), noteTop + 25, { color: '#5B6A8F' })
+  text(note, MARGIN + 16 + textWidth('Payment: ', 'bold', 10.5), noteTop + 25, { color: MUTED })
 
   text(data.estimated ? 'Usage estimate; not an issued tax invoice.' : 'Based on issued account records.', MARGIN, noteTop + 40 + 28, { size: 9.5, color: MUTED })
-  text('Thank you for choosing Kea Energy.', MARGIN, noteTop + 40 + 48, { font: 'bold', size: 11, color: PURPLE })
+  text('Thank you for choosing Kea Energy.', MARGIN, noteTop + 40 + 48, { font: 'bold', size: 11, color: BLUE })
 
   // Footer.
   rule(790)
-  text('Kea Energy', MARGIN, 808, { font: 'bold', size: 9, color: PURPLE })
+  text('Kea Energy', MARGIN, 808, { font: 'bold', size: 9, color: BLUE })
   text(`Invoice ${data.number}`, right, 808, { size: 9, color: MUTED, align: 'right' })
 
   // The header wash runs along the CSS gradient's 120° line across the header box.
@@ -341,23 +376,30 @@ export async function buildInvoicePdf(data: InvoicePdfData, fonts?: InvoiceFonts
   const cx = PAGE_W / 2
   const cy = y(headerH / 2)
   const headerWash = shading([cx - dx * half, cy + dy * half, cx + dx * half, cy - dy * half], [
-    [0, '#F1EEFF'], [0.58, '#FBFAFF'], [1, paid ? '#E9F8F0' : '#FFEFF2'],
+    [0, palette.wash[0]], [0.58, palette.wash[1]], [1, paid ? '#E9F8F0' : '#FFEFF2'],
   ])
-  const boltGradient = shading([102, 61, 158, 197], [[0, '#4318FF'], [0.54, '#5F45FF'], [1, '#868CFF']])
+  // No longer painted (the bolt is white now), but kept as object 8 so the numbering holds.
+  const boltGradient = shading([102, 61, 158, 197], [[0, '#2F7BFF'], [0.54, '#5AA9FF'], [1, '#9FDCFF']])
+  // The tab icon's disc: lit from the upper left (kea-favicon.svg's radial gradient).
+  const logoDisc = shading([87, 71.7, 0, 87, 71.7, 217.6], [[0, palette.disc[0]], [0.55, palette.disc[1]], [1, palette.disc[2]]])
+  // The Billing page's accent blue, left to right along the total bar.
+  const totalBar = shading([MARGIN, y(totalTop + 24), PAGE_W - MARGIN, y(totalTop + 24)], [[0, palette.totalBar[0]], [1, palette.totalBar[1]]])
 
-  // Objects: 1–9 fixed, then a descriptor and a compressed font program per embedded weight.
+  // Objects: 1–11 fixed, then a descriptor and a compressed font program per embedded weight.
   type PdfObject = string | { dict: string; stream: Uint8Array<ArrayBuffer> }
   const content = ops.join('\n')
   const objects: PdfObject[] = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> /Shading << /Sh1 7 0 R /Sh2 8 0 R >> >> /Contents 4 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> /Shading << /Sh1 7 0 R /Sh2 8 0 R /Sh3 10 0 R /Sh4 11 0 R >> >> /Contents 4 0 R >>`,
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
     '', // F1, filled in below
     '', // F2
     headerWash,
     boltGradient,
     `<< /Title (Kea Energy invoice ${escape(ascii(data.number))}) >>`,
+    logoDisc,
+    totalBar,
   ]
   const fontDict = (slot: number, font: Font, name: string) => {
     if (!metrics || !fonts) {
@@ -429,7 +471,9 @@ async function loadFonts(): Promise<InvoiceFonts | undefined> {
 }
 
 export async function downloadInvoicePdf(data: InvoicePdfData) {
-  const pdf = await buildInvoicePdf(data, await loadFonts())
+  // In the colours of the theme the customer is looking at when they download it.
+  const palette = document.documentElement.dataset.theme === 'light' ? INVOICE_LIGHT : INVOICE_DARK
+  const pdf = await buildInvoicePdf(data, await loadFonts(), palette)
   const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
   const link = document.createElement('a')
   link.href = url

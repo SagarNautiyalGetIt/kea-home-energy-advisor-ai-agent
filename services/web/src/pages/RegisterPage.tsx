@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AnimatedLogo from '../components/AnimatedLogo'
 import PreviewAccountModal from '../components/PreviewAccountModal'
 import SocialSignIn from '../components/SocialSignIn'
 
@@ -47,7 +48,7 @@ export default function RegisterPage({ onToast }: { onToast: (message: string, t
         </div>
         <footer>© 2026 Kea Energy. All rights reserved. Made with love by HAKAS.</footer>
       </section>
-      <aside className="brand-panel" aria-label="Kea Energy"><img className="energy-mark" src="/assets/brand/kea-brand-white.svg" alt="" /><strong>KEA ENERGY</strong></aside>
+      <aside className="brand-panel" aria-label="Kea Energy"><AnimatedLogo tone="white" className="energy-mark" /><strong>KEA ENERGY</strong></aside>
     </main>
     </>
   )

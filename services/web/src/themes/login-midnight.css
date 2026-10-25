@@ -1,0 +1,43 @@
+/* The sign-in and sign-up pages' black-and-blue look, first made for the slide-deck screenshot
+   (branch chore/login-slide-screenshot, LoginPage.slide.css).
+
+   By default those pages are always dark: the midnight palette (midnight.css and the generated
+   sheet) applies while a .login-page is on screen, whatever theme the customer chose inside,
+   and its brand panel is the one below. A data-login-skin on <html> in index.html opts out:
+     data-login-skin="split"  the slide's own skin — the white form beside this dark panel
+     data-login-skin="theme"  the pages follow the theme again, purple in light
+   The left half below is the split skin's light half only; in dark the dark rules dress it. */
+
+/* Left: the same layout, with the purple accents swapped for the panel's blue */
+html[data-login-skin=split]:not([data-theme=dark]) .login-page{--ink:#0f1b3d;--purple:#1f6bff;--purple2:#38bdf8}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-panel{color:var(--ink)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-content header p{color:#8a97b2}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-content input[type=email]:focus,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .password-field:focus-within{border-color:#1f6bff;box-shadow:0 0 0 4px rgb(31 107 255 / 12%)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-button{border:0;color:#fff;background:linear-gradient(110deg,#000 0%,#0a1a3d 45%,#1f6bff 100%);box-shadow:0 12px 28px rgb(31 107 255 / 28%),inset 0 1px 0 rgb(255 255 255 / 12%)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-button:hover,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .login-button:focus-visible{background:linear-gradient(110deg,#000 0%,#0d2350 40%,#2f7dff 100%);box-shadow:0 14px 34px rgb(31 107 255 / 38%),0 0 0 1px rgb(34 211 238 / 40%)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .social-row button:hover,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .social-row button:focus-visible{border-color:#1f6bff;color:#1f6bff;box-shadow:0 9px 20px rgb(31 107 255 / 14%)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .forgot-link:hover,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .auth-switch button:hover,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .auth-switch button:focus-visible{color:#0b55e6}
+
+/* Demo accounts: the toggle and the expanded list in the same blue */
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-toggle{color:#1f6bff}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-toggle:hover,
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-toggle:focus-visible{color:#0b55e6}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-list button:hover:not(:disabled){border-color:#1f6bff;background:#f3f7ff}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-list strong{color:var(--ink)}
+html[data-login-skin=split]:not([data-theme=dark]) .login-page .demo-accounts-list code{color:#1f6bff}
+
+/* Right: near-black base, cyan glow top left like the slide, blue glow bottom right */
+:is(html[data-login-skin=split],html:is([data-theme=dark],:has(.login-page)):where(:not([data-dark-palette=classic]):is([data-theme=dark],:not([data-login-skin])))) .login-page .brand-panel{position:relative;overflow:hidden;isolation:isolate;color:#fff;background:
+  radial-gradient(55% 45% at 6% 2%,rgb(34 211 238 / 55%),transparent 70%),
+  radial-gradient(60% 50% at 100% 100%,rgb(31 107 255 / 55%),transparent 70%),
+  radial-gradient(38% 30% at 50% 46%,rgb(0 150 255 / 22%),transparent 75%),
+  linear-gradient(160deg,#06142e 0%,#020617 50%,#000 100%)}
+/* A faint blueprint grid that fades out towards the edges */
+:is(html[data-login-skin=split],html:is([data-theme=dark],:has(.login-page)):where(:not([data-dark-palette=classic]):is([data-theme=dark],:not([data-login-skin])))) .login-page .brand-panel::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgb(148 197 255 / 8%) 1px,transparent 1px),linear-gradient(90deg,rgb(148 197 255 / 8%) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%);mask-image:radial-gradient(70% 60% at 50% 45%,#000 20%,transparent 80%)}
+:is(html[data-login-skin=split],html:is([data-theme=dark],:has(.login-page)):where(:not([data-dark-palette=classic]):is([data-theme=dark],:not([data-login-skin])))) .login-page .energy-mark{filter:drop-shadow(0 0 14px rgb(34 211 238 / 60%)) drop-shadow(0 0 40px rgb(31 107 255 / 45%))}
+:is(html[data-login-skin=split],html:is([data-theme=dark],:has(.login-page)):where(:not([data-dark-palette=classic]):is([data-theme=dark],:not([data-login-skin])))) .login-page .brand-panel strong{padding:.06em 0;color:transparent;background:linear-gradient(180deg,#fff 35%,#9fdcff 100%);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 24px rgb(31 107 255 / 45%))}

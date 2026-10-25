@@ -1,9 +1,18 @@
 <!doctype html>
-<html lang="en-NZ">
+<!-- Palette switches, read by src/themes/:
+     data-dark-palette="classic"  the original lavender-on-navy dark theme (midnight is the default)
+     data-login-skin="split"      sign-in and sign-up in the slide deck's white-and-black skin
+     data-login-skin="theme"      sign-in and sign-up follow the theme (purple in light)
+     With no data-login-skin, sign-in and sign-up are always dark. The site is light by default,
+     so they follow the theme. -->
+
+<html lang="en-NZ" data-login-skin="theme">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/assets/brand/kea-brand-blue.svg" />
+    <!-- The tab icon is the white mark on a lilac disc (main.tsx and AppShell swap in the navy
+         kea-favicon.svg on the dark theme); the bare mark is still /assets/brand/kea-brand-blue.svg. -->
+    <link rel="icon" type="image/svg+xml" href="/assets/brand/kea-favicon-light.svg" />
     <title>Kea Energy</title>
   </head>
   <body>

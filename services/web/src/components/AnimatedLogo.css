@@ -1,0 +1,12 @@
+/* The Kea mark's motion, ported from the phone app's AnimatedLogo (animated-logo.tsx). The
+   ring there is one linear 5s turn on loop; the bolt is a 1.5s ease-in-out turn to 180deg
+   about its vertical axis and 1.5s back, under perspective 500, so here it is one 3s
+   keyframe list whose halves each ease in and out. Both layers are the full 256 box, so
+   each turns about the mark's centre. */
+.kea-logo{position:relative;display:block}
+.kea-logo svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.kea-logo-ring{animation:kea-logo-spin 5s linear infinite}
+.kea-logo-bolt{animation:kea-logo-flip 3s ease-in-out infinite}
+@keyframes kea-logo-spin{to{transform:rotate(360deg)}}
+@keyframes kea-logo-flip{0%,100%{transform:perspective(500px) rotateY(0deg)}50%{transform:perspective(500px) rotateY(180deg)}}
+@media (prefers-reduced-motion:reduce){.kea-logo svg{animation:none}}

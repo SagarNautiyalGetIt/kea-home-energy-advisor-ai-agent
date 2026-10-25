@@ -96,7 +96,9 @@ const faqs: Array<{ category: CategoryId; question: string; answer: string; note
 
 export default function HelpPage({ onToast }: { onToast:(message:string)=>void }) {
   const navigate = useNavigate()
-  const [open, setOpen] = useState(faqs[0]?.question ?? '')
+  // All closed at first: the page is scanned for a question, and the Ask Sparky card beside it
+  // already says what Sparky is, which is what the first answer, open by default, repeated.
+  const [open, setOpen] = useState('')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<CategoryId | 'all'>('all')
   const copy = (value:string, label:string) => { navigator.clipboard?.writeText(value); onToast(`${label} copied`) }

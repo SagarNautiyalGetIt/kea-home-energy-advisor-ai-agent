@@ -3,49 +3,77 @@
 .power-clash-page h2 { margin: 0; font-size: 21px; }
 .power-clash-page h3 { margin: 0; font-size: 17px; }
 .power-clash-page p { color: var(--clash-muted); font-size: 14px; line-height: 1.65; }
-.clash-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 20px 0; }
-.clash-tabs { display: flex; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 17px; background: var(--card); }
-.clash-tabs button { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 46px; padding: 10px 23px; border: 0; border-radius: 12px; color: var(--ink); background: transparent; font-weight: 700; }
-.clash-tabs button[aria-selected=true] { background: var(--purple); color: #fff; box-shadow: 0 4px 14px rgb(74 37 255 / 18%); }
+/* The page subtitle keeps the shared subtitle's line height, so the card below starts where
+   it does on Billing. */
+.power-clash-page .page-heading p { line-height: 1.5; }
+/* The page's one card, around the tabs and the open section, padded as Usage's card is. */
+.clash-shell { padding: clamp(var(--space-3), 2.2vw, var(--space-4)); }
+.clash-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 0 0 22px; }
+/* The section tabs in the frame, size and hover of Usage's $/kWh and range toggles. */
+.clash-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid #e4e8f5; border-radius: 14px; background: #f6f7fd; }
+.clash-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 18px; border: 0; border-radius: 10px; color: #5b6a8f; background: transparent; font-size: 13px; font-weight: 700; }
+.clash-tabs button svg { width: 17px; height: 17px; }
+.clash-tabs button:hover { color: var(--purple); background: #fff; }
+.clash-tabs button[aria-selected=true] { color: #fff; background: linear-gradient(135deg, var(--purple2), var(--purple)); box-shadow: 0 6px 14px rgb(74 37 255 / 20%); }
 .clash-motion-toggle { display: flex; align-items: center; gap: 8px; color: var(--clash-muted); font-size: 13px; }
 .clash-motion-toggle input { width: 17px; height: 17px; accent-color: var(--purple); }
-.clash-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr); gap: 22px; align-items: start; }
-.clash-card { padding: 25px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: 0 8px 26px rgb(41 53 100 / 4%); min-width: 0; }
+/* Cards side by side share their row's height, so each row's two boxes line up top and bottom.
+   In Arena the board's panel takes up the extra height, the board centred in it. */
+.clash-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr); gap: 22px; align-items: stretch; }
+.clash-card:has(> .clash-arena) { display: flex; flex-direction: column; }
+.clash-card > .clash-arena { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+/* Panels inside the page's card, framed by a line like Usage's Selected period card rather
+   than lifted on a shadow of their own. */
+.clash-card { padding: 25px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); min-width: 0; }
 .clash-card-heading, .clash-xp-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .clash-card-heading > span { color: var(--clash-muted); font-size: 13px; }
-.clash-eyebrow { color: var(--purple); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+/* Section titles aren't controls, so they leave the accent to the buttons and take the quieter
+   violet of Plans' "Your selection" label. */
+.clash-eyebrow { color: #5a48d0; font-size: 11px; font-weight: 800; letter-spacing: .1em; }
 .clash-xp-row > strong { margin-top: 16px; font-size: 38px; letter-spacing: -.04em; }
 .clash-token { display: grid; place-items: center; width: 65px; height: 65px; border: 3px solid #ddd4ff; border-radius: 23px; background: #ede7ff; color: #7045df; transform: rotate(-8deg); box-shadow: 5px 7px 0 #e1d9f9; }
 .clash-token svg { width: 33px; height: 33px; }
-.power-clash-page .clash-note { font-size: 12px; line-height: 1.6; }
+.power-clash-page .clash-note { font-size: 13px; line-height: 1.6; }
 .clash-verified { display: flex; align-items: center; gap: 12px; margin: 20px 0 10px; padding: 15px; border-radius: 14px; color: #166534; background: rgb(34 167 106 / 9%); font-size: 13px; line-height: 1.6; }
 .clash-verified svg { flex: none; }
 .clash-next-move { margin-top: 25px; padding-top: 24px; border-top: 1px solid var(--line); }
 .clash-next-move h3, .clash-location h3 { display: flex; align-items: center; gap: 9px; }
 .clash-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-.clash-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 17px; border: 1px solid transparent; border-radius: 12px; background: var(--purple); color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; }
-.clash-button-secondary { color: var(--ink); background: var(--card); border-color: var(--line); }
-.clash-button:hover { filter: brightness(.95); }
+/* Every action here is drawn like the bill shock popover's: an outlined pill that fills with
+   the accent on hover or keyboard focus. */
+.clash-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 18px; border: 1.5px solid #4318ff; border-radius: 12px; background: #fff; color: #4318ff; font-size: 13px; font-weight: 700; text-decoration: none; transition: color .3s ease, background .3s ease, border-color .3s ease, box-shadow .3s ease, transform .3s ease; }
+.clash-button:not(:disabled):hover, .clash-button:focus-visible { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--purple2), var(--purple)); background-origin: border-box; box-shadow: 0 9px 20px rgb(67 24 255 / 22%); transform: translateY(-1px); }
+.power-clash-page .clash-button:focus-visible { outline: 1.5px solid #4318ff; outline-offset: 2px; }
 .clash-button:disabled { opacity: .6; cursor: default; }
 .power-clash-page button:focus-visible, .power-clash-page a:focus-visible, .clash-pillar:focus-visible { outline: 3px solid #8c72f8; outline-offset: 3px; }
 .clash-quest-selector { display: flex; gap: 9px; margin: 20px 0 28px; }
-.clash-quest-selector button { display: flex; flex: 1; align-items: center; gap: 8px; min-height: 60px; padding: 9px; border: 1px solid var(--line); border-radius: 12px; color: var(--clash-muted); background: var(--card); font-size: 12px; font-weight: 700; text-align: left; }
+.clash-quest-selector button { display: flex; flex: 1; align-items: center; gap: 8px; min-height: 60px; padding: 9px; border: 1px solid var(--line); border-radius: 12px; color: var(--clash-muted); background: var(--card); font-size: 13px; font-weight: 700; text-align: left; }
 .clash-quest-selector button[aria-pressed=true] { border-color: var(--purple); color: var(--purple); background: rgb(74 37 255 / 5%); }
 .clash-mission-icon { display: grid; place-items: center; width: 50px; height: 50px; margin-bottom: 15px; border-radius: 16px; color: #3478c3; background: rgb(77 143 232 / 10%); }
 .clash-mission h3 { font-size: 24px; }
 .clash-sparky-tip { display: flex; align-items: center; gap: 13px; margin: 16px 0; }
 .clash-sparky-tip > svg { width: 24px; height: 24px; flex: none; color: var(--purple); }
 .clash-sparky-tip p { margin: 0; }
-.power-clash-page .clash-quest-xp { font-size: 12px; font-weight: 700; color: #218258; }
+.power-clash-page .clash-quest-xp { font-size: 13px; font-weight: 700; color: #218258; }
 .clash-notice { min-height: 20px; margin-bottom: 0; }
+/* Breathing room between parts that sat flush: a heading and its text, a button and the
+   status line it writes, and the closing notes under Arena's readout and method box. Notes
+   and small print are no smaller than 13px, meta text 12px. */
+.power-clash-page h3 + p { margin-top: 6px; }
+.clash-actions + .clash-notice, .clash-location > .clash-button + .clash-note { margin-top: 12px; }
+.clash-readout + .clash-note, .clash-method + .clash-note { margin-top: 14px; }
 .clash-empty { display: grid; justify-items: center; padding: 50px 10px; text-align: center; color: var(--clash-muted); }
 .clash-history { grid-column: 1 / -1; }
 .clash-history summary { cursor: pointer; font-weight: 700; }
-.clash-history summary span { float: right; font-size: 12px; color: var(--clash-muted); }
+.clash-history summary span { float: right; font-size: 13px; color: var(--clash-muted); }
 .clash-history ul { list-style: none; margin: 18px 0 0; padding: 0; }
 .clash-history li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); font-size: 13px; }
-.clash-history small { color: var(--clash-muted); }
-.clash-badge { display: inline-block; padding: 6px 9px; border-radius: 8px; background: rgb(74 37 255 / 7%); color: var(--purple); font-size: 10px; font-weight: 700; }
+.clash-history small { color: var(--clash-muted); font-size: 12px; }
+/* "Sample scores" and "Preview only" are notes on the data, in the orange pill of Plans' Step
+   labels and Solar's self-use badge rather than the blue of something to click. */
+.clash-badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #fff2e6; color: var(--kea-orange-label); font-size: 11px; font-weight: 700; }
+/* In the Arena card's heading row it also outranks the row's grey for side text. */
+.power-clash-page .clash-badge { color: var(--kea-orange-label); font-size: 11px; }
 .clash-arena { margin-top: 20px; padding: 16px; border-radius: 18px; background: linear-gradient(135deg, rgb(121 101 232 / 9%), rgb(77 143 232 / 7%)); }
 .clash-arena svg { display: block; width: 100%; max-height: 340px; transition: transform .12s ease-out; }
 .clash-arena { position: relative; padding-top: 58px; }
@@ -57,13 +85,17 @@
 .clash-board-line { fill: none; stroke: #d6d6ef; }
 .clash-pillar { cursor: pointer; }
 .clash-pillar:hover { filter: brightness(1.08); }
+/* A clicked pillar took the browser's own two-tone focus ring, pale blue around black. It is a
+   single deep ring instead, while the selected pillar has focus and for keyboard focus. */
+.clash-pillar:focus { outline: none; }
+.clash-pillar:focus-visible, .clash-pillar[aria-pressed=true]:focus { outline: 2px solid #4318ff; outline-offset: 4px; }
 .clash-readout { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding: 15px; border-radius: 12px; background: rgb(74 37 255 / 6%); font-size: 13px; }
 .clash-metrics { display: grid; gap: 9px; margin-top: 20px; }
 .clash-metrics button { display: grid; grid-template-columns: 26px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); text-align: left; }
 .clash-metrics button[aria-pressed=true] { border-color: var(--metric-tint); background: color-mix(in srgb, var(--metric-tint) 7%, var(--card)); }
 .clash-metrics svg { color: var(--metric-tint); width: 22px; }
 .clash-metrics strong { display: block; font-size: 13px; }
-.clash-metrics small { display: block; margin-top: 4px; font-size: 11px; color: var(--clash-muted); font-weight: 400; }
+.clash-metrics small { display: block; margin-top: 4px; font-size: 12px; color: var(--clash-muted); font-weight: 400; }
 .clash-metrics b { font-size: 14px; }
 .clash-metrics b small { display: inline; }
 .clash-track { grid-column: 1 / -1; height: 4px; border-radius: 4px; overflow: hidden; background: var(--line); }
@@ -73,11 +105,13 @@
 .clash-method p { margin-bottom: 0; }
 .clash-league-stats { display: flex; gap: 35px; padding: 24px 0; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
 .clash-league-stats strong { display: block; font-size: 38px; letter-spacing: -.04em; }
-.clash-league-stats span { display: block; margin-top: 6px; font-size: 12px; color: var(--clash-muted); }
+.clash-league-stats span { display: block; margin-top: 6px; font-size: 13px; color: var(--clash-muted); }
 .clash-districts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 .clash-districts button { padding: 10px 14px; min-height: 44px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: var(--card); font-size: 13px; }
 .clash-districts button[aria-pressed=true] { border-color: var(--purple); background: rgb(74 37 255 / 7%); color: var(--purple); font-weight: 700; }
 .clash-location { padding-top: 20px; margin-top: 25px; border-top: 1px solid var(--line); }
+/* The same 18px between a block's text and its button as Quests' "Make your next move". */
+.clash-location > .clash-button { margin-top: 18px; }
 .clash-leaderboard { list-style: none; padding: 0; margin: 22px 0; display: grid; gap: 8px; }
 .clash-leaderboard li { display: flex; align-items: center; gap: 14px; padding: 16px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
 .clash-leaderboard li.clash-you { border-color: #9c86f7; background: rgb(74 37 255 / 6%); }
@@ -87,13 +121,27 @@
 .clash-reward, .clash-boundary { display: flex; gap: 16px; }
 .clash-reward > svg, .clash-boundary > svg { color: var(--purple); flex: none; }
 .clash-reward h3 { margin-top: 8px; }
+.clash-reward .clash-badge { margin-top: 12px; }
 .clash-motion .clash-panel, .clash-motion .clash-mission { animation: clash-enter .22s ease-out; }
 @keyframes clash-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 [data-theme=dark] .power-clash-page { --clash-muted: #aebbd3; }
 [data-theme=dark] .clash-verified { color: #87dbb1; }
 [data-theme=dark] .clash-board-top { fill: #2c3455; }
 [data-theme=dark] .clash-board-side { fill: #1f2744; }
+/* The classic dark palette (data-dark-palette="classic" in index.html) has no midnight sheet,
+   so the fixed light colours above get its own values here. :where() keeps each rule at the
+   weight of the one it follows, so hover, focus and the chosen tab still win by order. */
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-tabs { border-color: var(--line); background: var(--card); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-tabs button { color: var(--ink); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-tabs button:hover { color: var(--purple); background: rgb(155 135 255 / 14%); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-tabs button[aria-selected=true] { color: #fff; background: linear-gradient(135deg, var(--purple2), var(--purple)); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-eyebrow { color: var(--purple); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-button { border-color: var(--purple); color: var(--purple); background: var(--card); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .power-clash-page .clash-button:focus-visible,
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-pillar:focus-visible,
+:where(html[data-dark-palette=classic][data-theme=dark]) .clash-pillar[aria-pressed=true]:focus { outline-color: var(--purple); }
+:where(html[data-dark-palette=classic][data-theme=dark]) .power-clash-page .clash-quest-xp { color: #87dbb1; }
 @media(max-width:1000px) { .clash-grid { grid-template-columns: 1fr; } .clash-history { grid-column: auto; } }
-@media(max-width:620px) { .clash-toolbar { flex-wrap: wrap; gap: 12px; } .clash-tabs { width: 100%; } .clash-tabs button { flex: 1; padding: 10px; } .clash-card { padding: 18px; } .clash-quest-selector button { flex-direction: column; align-items: flex-start; } .clash-mission h3 { font-size: 21px; } }
+@media(max-width:620px) { .clash-shell { padding: var(--space-2); } .clash-toolbar { flex-wrap: wrap; gap: 12px; } .clash-tabs { width: 100%; } .clash-tabs button { flex: 1; padding: 10px; } .clash-card { padding: 18px; } .clash-quest-selector button { flex-direction: column; align-items: flex-start; } .clash-mission h3 { font-size: 21px; } }
 @media(prefers-reduced-motion:reduce) { .power-clash-page * { animation: none !important; transition: none !important; } }
 [data-reduced-motion=true] .power-clash-page * { animation: none !important; transition: none !important; }

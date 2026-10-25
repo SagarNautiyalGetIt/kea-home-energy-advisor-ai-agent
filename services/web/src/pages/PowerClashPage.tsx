@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Car, Check, Compass, Crown, Cuboid, Gift, Leaf, MapPin, ShieldCheck, Sparkles, Sun, Timer, Trophy, Zap } from 'lucide-react'
+import { Car, Check, Compass, Crown, Cuboid, Gift, Leaf, MapPin, ShieldCheck, Sun, Timer, Trophy, Zap } from 'lucide-react'
 import SparkyIcon from '../components/SparkyIcon'
 import { ClashSignInError, getClashProgress, planClashQuest, type ClashProgress } from '../lib/clash-api'
 import { clashDay, plannedQuest, planningAcknowledgement } from '../lib/clash-quest'
@@ -74,7 +74,7 @@ function Quests({ onSignIn }: { onSignIn: () => void }) {
       <p className="clash-note">XP has no cash value. A saved plan is not proof of energy or money saved.</p>
       {data && <><div className="clash-verified"><ShieldCheck aria-hidden="true" /><span>Verified shifts<br/><strong>${Number(data.estimated_shift_savings_nzd).toFixed(2)}</strong> estimated tariff saving</span></div>{data.storage === 'memory' && <p className="clash-note">Development progress resets when the server restarts.</p>}</>}
       {error && <button className="clash-button" onClick={needsSignIn ? onSignIn : () => setRevision((v) => v + 1)}>{needsSignIn ? 'Sign in again' : 'Retry progress'}</button>}
-      <div className="clash-next-move"><h3><Compass aria-hidden="true" />Make your next move</h3><p>Start with your usage, then ask Sparky for an idea that fits your day. Your comfort and essential needs come first.</p><div className="clash-actions"><Link className="clash-button" to="/usage">View usage <ArrowRight size={16}/></Link><Link className="clash-button clash-button-secondary" to="/assistant">Ask Sparky AI</Link></div></div>
+      <div className="clash-next-move"><h3><Compass aria-hidden="true" />Make your next move</h3><p>Start with your usage, then ask Sparky for an idea that fits your day. Your comfort and essential needs come first.</p><div className="clash-actions"><Link className="clash-button" to="/usage">View usage</Link><Link className="clash-button clash-button-secondary" to="/assistant">Ask Sparky AI</Link></div></div>
     </section>
     <section className="clash-card clash-quest">
       <div className="clash-card-heading"><h2>Choose your next quest</h2>{data && <span>{index + 1} / {data.missions.length}</span>}</div>
@@ -85,7 +85,7 @@ function Quests({ onSignIn }: { onSignIn: () => void }) {
           <h3>{mission.title}</h3>
           <div className="clash-sparky-tip"><SparkyIcon aria-hidden="true" /><p>Let’s find a move that fits your day. Your comfort, essential needs and EV departure time come first.</p></div>
           <p className="clash-quest-xp">+{mission.planning_xp} planning XP · once per Auckland day</p>
-          <div className="clash-actions"><button className="clash-button" onClick={() => navigate(`/assistant?question=${encodeURIComponent(mission.question)}`)}><Sparkles size={17}/>Plan with Sparky</button><button className="clash-button clash-button-secondary" onClick={() => void plan()} disabled={saving || planned}>{planned ? <Check size={17}/> : null}{saving ? 'Saving…' : planned ? 'In your plan for today' : 'Add to my daily plan'}</button></div>
+          <div className="clash-actions"><button className="clash-button" onClick={() => navigate(`/assistant?question=${encodeURIComponent(mission.question)}`)}>Plan with Sparky</button><button className="clash-button clash-button-secondary" onClick={() => void plan()} disabled={saving || planned}>{planned ? <Check size={17}/> : null}{saving ? 'Saving…' : planned ? 'In your plan for today' : 'Add to my daily plan'}</button></div>
           <p className="clash-notice" role="status">{notice}</p>
           {needsSignIn && !error && <button className="clash-button" onClick={onSignIn}>Sign in again</button>}
         </div>
@@ -190,9 +190,13 @@ export default function PowerClashPage({ onSignIn }: { onSignIn: () => void }) {
   }
   return <div className={`power-clash-page${motion && !reduced ? ' clash-motion' : ''}`}>
     <div className="page-heading"><h1>Power Clash</h1><p>Small energy moves. Sparky quests. A sample suburb league.</p></div>
+    {/* One card holds the tabs and whichever section is open, as one card holds each other
+        page's content, so its top edge falls at the same height over the background. */}
+    <div className="card clash-shell">
     <div className="clash-toolbar"><div className="clash-tabs" role="tablist" aria-label="Power Clash sections">{sections.map((tab) => <button key={tab.id} id={`clash-tab-${tab.id}`} role="tab" tabIndex={view === tab.id ? 0 : -1} aria-selected={view === tab.id} aria-controls={`clash-panel-${tab.id}`} onKeyDown={moveTab} onClick={() => setView(tab.id)}><tab.icon size={19}/>{tab.label}</button>)}</div></div>
     <div role="tabpanel" id={`clash-panel-${view}`} aria-labelledby={`clash-tab-${view}`} className="clash-panel" key={view}>
       {view === 'quests' ? <Quests onSignIn={onSignIn}/> : view === 'arena' ? <Arena metrics={you.metrics} selected={metric} onSelect={setMetric} motion={motion && !reduced} reduced={reduced} onMotionChange={(enabled) => { setMotion(enabled); localStorage.setItem('kea.clash.motion.v1', enabled ? 'on' : 'off') }}/> : <League districtId={district} onDistrict={setDistrict}/>}
+    </div>
     </div>
   </div>
 }

@@ -19,7 +19,7 @@ import SettingsPage from './pages/SettingsPage'
 import UsagePage from './pages/UsagePage'
 import VerificationPage from './pages/VerificationPage'
 import type { PageId } from './types/navigation'
-import { clearSession, loadSession, saveSession, type Session } from './lib/session'
+import { loadSession, signIn, signOut, type Session } from './lib/session'
 import { clearThread } from './lib/thread'
 
 const routeFor: Record<PageId, string> = {
@@ -46,7 +46,7 @@ function App() {
   const go = (page: PageId) => navigate(routeFor[page])
   const active = (Object.entries(routeFor).find(([, path]) => location.pathname === path)?.[0] as PageId | undefined)
   const login = (next: Session) => {
-    saveSession(next)
+    signIn(next)
     setSession(next)
     navigate('/dashboard')
     if (localStorage.getItem('kea-onboarding-seen') !== 'true') setShowOnboarding(true)
@@ -55,7 +55,7 @@ function App() {
     addToast(`Welcome back, ${next.displayName}`)
   }
   const confirmLogout = () => {
-    clearSession()
+    signOut()
     // The saved assistant thread is this customer's conversation about their own bill.
     // It goes when they do, rather than waiting on the next sign-in to notice the id
     // no longer matches.
@@ -79,7 +79,7 @@ function App() {
       <Route path="/assistant" element={<AssistantPage onEscalate={() => navigate('/help')} onToast={addToast}/>}/>
       <Route path="/solar" element={<SolarPage/>}/>
       <Route path="/plans" element={<PlansPage onToast={addToast}/>}/>
-      <Route path="/clash" element={<PowerClashPage onSignIn={() => { clearSession(); setSession(null); navigate('/login') }} />}/>
+      <Route path="/clash" element={<PowerClashPage onSignIn={() => { signOut(); setSession(null); navigate('/login') }} />}/>
       <Route path="/profile" element={<ProfilePage onToast={addToast}/>}/>
       <Route path="/help" element={<HelpPage onToast={addToast}/>}/>
       <Route path="/settings" element={<SettingsPage onToast={addToast}/>}/>

@@ -7,31 +7,27 @@ import SmartDeviceScanner from '../components/SmartDeviceScanner'
 import { getAlertPreferences, saveAlertPreferences, type AlertPreferences } from '../lib/alerts'
 import { getCustomerProfile, type CustomerProfile } from '../lib/client'
 import { loadSession } from '../lib/session'
+import { getTheme, setTheme as updateTheme, THEME_CHANGE_EVENT, type Theme } from '../lib/theme'
 
 /**
  * Settings.
  *
- * **Everything on this screen is stored server-side.** Two controls were not, and both
- * failed the same way: the switch moved, the customer believed something had changed,
- * and nothing else in the system heard about it.
- *
- * * *Bill reminders* lived in React state. It reset on reload and the alerting engine
- *   never saw it — the same class of bug the threshold sliders had before they moved
- *   into `alert_preference`, which is what the warning at the top of
- *   `app/alerts/preferences.py` is about.
- * * *Theme* lived in `localStorage`, so it had to be set again on every device.
- *
- * Theme still writes `localStorage` first and the request follows, because a theme that
- * waits for a round trip flashes the wrong colours on load. The stored value is what a
- * second device reads.
+ * Alerts and reminders are account preferences. Appearance is local to this sign-in:
+ * it updates immediately, survives a refresh, and resets to light on the next login.
  */
 export default function SettingsPage({ onToast }: { onToast:(message:string)=>void }) {
   const [session] = useState(loadSession)
   const [prefs, setPrefs] = useState<AlertPreferences | null>(null)
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
-  const [theme, setTheme] = useState(localStorage.getItem('kea-theme') ?? 'light')
+  const [theme, setTheme] = useState(getTheme)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
+
+  useEffect(() => {
+    const syncTheme = () => setTheme(getTheme())
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme)
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncTheme)
+  }, [])
 
   useEffect(() => {
     if (!session) return
@@ -40,23 +36,15 @@ export default function SettingsPage({ onToast }: { onToast:(message:string)=>vo
       .then((loaded) => {
         if (!live) return
         setPrefs(loaded)
-        // The server is the record. If this device was last set to light and the
-        // account says dark, the account wins — that is the whole point of storing it.
-        if (loaded.theme && loaded.theme !== theme) applyTheme(loaded.theme, false)
       })
       .catch(() => undefined)
     getCustomerProfile(session.customerId).then((p) => live && setProfile(p)).catch(() => undefined)
     return () => { live = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
-  /** Paint immediately, persist in the background. */
-  const applyTheme = (next: string, persist = true) => {
-    setTheme(next)
-    localStorage.setItem('kea-theme', next)
-    document.documentElement.dataset.theme = next
-    window.dispatchEvent(new Event('kea-theme-change'))
-    if (persist) void persistPatch({ theme: next as 'light' | 'dark' }, `${next === 'dark' ? 'Dark' : 'Light'} theme enabled`)
+  const applyTheme = (next: Theme) => {
+    updateTheme(next)
+    onToast(`${next === 'dark' ? 'Dark' : 'Light'} theme enabled`)
   }
 
   /**
@@ -66,7 +54,7 @@ export default function SettingsPage({ onToast }: { onToast:(message:string)=>vo
    * change it did not manage to make is worse than one that refuses — the customer
    * walks away believing the reminders are off.
    */
-  const persistPatch = async (patch: Partial<AlertPreferences>, success: string) => {
+  const persistPatch = async (patch: Partial<Omit<AlertPreferences, 'theme'>>, success: string) => {
     if (!session || !prefs) return
     const previous = prefs
     const next = { ...prefs, ...patch }
@@ -76,13 +64,12 @@ export default function SettingsPage({ onToast }: { onToast:(message:string)=>vo
       onToast(success)
     } catch (error) {
       setPrefs(previous)
-      if (patch.theme) applyTheme(previous.theme, false)
       onToast(`Could not save: ${(error as Error).message}`)
     }
   }
 
   return <><div className="page-heading"><h1>Settings</h1><p className="settings-description">Manage your account preferences and privacy.</p></div><div className="settings-list card">
-    <section><div className="settings-section-title"><Palette/><div><h2>Appearance</h2><p>Choose how Kea Energy looks. Saved to your account, so it follows you to another device.</p></div></div><div className="theme-options"><button className={theme==='light'?'active':''} onClick={()=>applyTheme('light')}><Sun/>Light</button><button className={theme==='dark'?'active':''} onClick={()=>applyTheme('dark')}><Moon/>Dark</button></div></section>
+    <section><div className="settings-section-title"><Palette/><div><h2>Appearance</h2><p>Choose how Kea Energy looks for this visit. Each new sign-in starts in light mode.</p></div></div><div className="theme-options"><button className={theme==='light'?'active':''} onClick={()=>applyTheme('light')}><Sun/>Light</button><button className={theme==='dark'?'active':''} onClick={()=>applyTheme('dark')}><Moon/>Dark</button></div></section>
     <section>
       {/* The editor draws the section heading itself: its master switch sits beside the title. */}
       {session

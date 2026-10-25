@@ -5,6 +5,7 @@ import SolarSunArt from '../components/SolarSunArt'
 import SparkyIcon from '../components/SparkyIcon'
 import { pricingStyles } from '../data/mockData'
 import { getAnnualDemand, getCustomerProfile } from '../lib/client'
+import { glideIntoView } from '../lib/glideIntoView'
 import { loadSession } from '../lib/session'
 import { calculateSolar, centsToNzd, energy, money, numeric, solarConfig, type SolarContext } from '../lib/solar'
 import '../solar.css'
@@ -88,7 +89,14 @@ export default function SolarPage() {
       setContext({ customerId, result: calculated, tariffLabel: flat ? `${selectedPlan.name} demonstration catalog, editable rates` : `${selectedPlan.name}: example flat-rate calculation, not an account-specific forecast`,
         origins: { demand: demandOrigin, location: locationOrigin, capacityAndPrice: mode === 'example' ? 'S1 national example including standard installation and GST' : 'Customer quote including GST', generation: fields.generation.trim() ? 'Installer estimate; overrides city generation' : 'S2 city-site model', selfUse: 'Product assumption, not a researched average', importRate: 'Editable annual scenario; catalog rate for Anytime only', exportRate: 'Editable Kea example, not a commercial offer', chargesAndCredits: 'Catalog daily charge initially; user must confirm fees, credit eligibility and expiry' } })
       setStale(false); setError('')
-      requestAnimationFrame(() => { resultsRef.current?.focus({ preventScroll: true }); resultsRef.current?.scrollIntoView({ block: 'start' }) })
+      // Glides back up to the results over most of a second rather than jumping; reduced
+      // motion still jumps.
+      requestAnimationFrame(() => {
+        const results = resultsRef.current
+        if (!results) return
+        results.focus({ preventScroll: true })
+        glideIntoView(results)
+      })
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Check your inputs.'); setStale(true) }
   }
   return <div className="solar-page">

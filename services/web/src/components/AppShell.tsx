@@ -6,6 +6,7 @@ import BrandMark from './BrandMark'
 import SparkyIcon from './SparkyIcon'
 import { CUSTOMER_PROFILE_PHOTO } from '../lib/profileAssets'
 import { loadSession } from '../lib/session'
+import { getTheme, setTheme as updateTheme, THEME_CHANGE_EVENT } from '../lib/theme'
 import type { PageId } from '../types/navigation'
 
 // Plans is back in scope for Sprint 2, so its navigation and search entry are
@@ -60,7 +61,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   const [openPanel, setOpenPanel] = useState<'search' | 'notifications' | 'profile' | null>(null)
   const topbarRef = useRef<HTMLElement>(null)
   const [query, setQuery] = useState('')
-  const [theme, setTheme] = useState(localStorage.getItem('kea-theme') ?? 'light')
+  const [theme, setTheme] = useState(getTheme)
   const [notifications, setNotifications] = useState([
     { id: 1, title: 'High bill warning', detail: 'Projected bill is 29% above your usual range.', unread: true },
     { id: 2, title: 'Payment reminder', detail: 'Your current invoice is due on 1 Sep 2026.', unread: true },
@@ -68,12 +69,11 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   ])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
     document.documentElement.dataset.reducedMotion = localStorage.getItem('kea-reduced-motion') === 'true' ? 'true' : 'false'
-    const syncTheme = () => setTheme(localStorage.getItem('kea-theme') ?? 'light')
-    window.addEventListener('kea-theme-change', syncTheme)
-    return () => window.removeEventListener('kea-theme-change', syncTheme)
-  }, [theme])
+    const syncTheme = () => setTheme(getTheme())
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme)
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncTheme)
+  }, [])
 
   useEffect(() => {
     const closePanels = (event: PointerEvent) => {
@@ -96,7 +96,7 @@ export default function AppShell({ active, onNavigate, onLogout, children }: App
   }, [query])
   const unread = notifications.filter((item) => item.unread).length
   const go = (page: PageId) => { onNavigate(page); setMobileOpen(false); setOpenPanel(null); setQuery('') }
-  const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('kea-theme', next) }
+  const toggleTheme = () => updateTheme(theme === 'dark' ? 'light' : 'dark')
   const toggleSidebar = () => { const next = !collapsed; setCollapsed(next); localStorage.setItem('kea-sidebar-collapsed', String(next)) }
 
   // Collapsed, the labels are hidden, so a small tooltip names the button under the pointer,
