@@ -2,20 +2,28 @@
   "name": "@kea/e2e",
   "version": "0.1.0",
   "private": true,
-  "description": "End-to-end functional tests — drives the running Kea Energy stack through a real browser.",
+  "description": "Functional browser tests for the deployed Kea Energy customer website.",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug",
-    "report": "playwright show-report",
-    "codegen": "playwright codegen http://localhost:5173"
+    "test": "node --import tsx scripts/run-suite.ts",
+    "test:all": "node --import tsx scripts/run-suite.ts --include-ai",
+    "test:ai": "node --import tsx scripts/run-suite.ts --ai-only",
+    "test:headed": "node --import tsx scripts/run-suite.ts --headed",
+    "test:list": "node --import tsx scripts/run-suite.ts --list",
+    "typecheck": "tsc --noEmit",
+    "report": "playwright show-report reports/latest/html",
+    "report:allure": "allure generate reports/latest/allure-results --clean -o reports/latest/allure-report",
+    "report:allure:open": "allure open reports/latest/allure-report"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.4.1",
-    "@types/pg": "^8.23.1",
-    "pg": "^8.23.0"
+    "allure-commandline": "2.46.1",
+    "allure-playwright": "3.14.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
   }
 }
